@@ -5,7 +5,7 @@ Convert specified intent into solution structure. Own `design.md` and optional e
 ## Reads
 
 - `pipeline.md`
-- `idea.md`
+- `spec.md`
 - `decisions.md`
 - selected `loom/types/<type>.md`
 - optional `constitution.md`
@@ -21,21 +21,22 @@ Convert specified intent into solution structure. Own `design.md` and optional e
 1. Extract components, boundaries, interfaces, data shapes, states, and constraints.
 2. Produce mockup evidence only when it resolves structural ambiguity.
 3. Ask direct questions only for structure-critical ambiguity.
-4. Keep `idea.md` read-only; route contradictions back as open ambiguity.
+4. Keep `spec.md` read-only; route contradictions back as open ambiguity.
 
 ## `design.md`
 
-Required sections:
+Required sections (technical structure only — user-facing behaviour lives in `spec.md` `## User stories`, do NOT restate flows here):
 
-- System shape
-- User flows
-- Interfaces
-- Data model
-- Integration points
-- State and error handling
-- Constraints
-- Alternatives considered
-- Open ambiguity
+- System shape — components, ownership, boundaries
+- Interfaces — APIs, contracts, function/method signatures
+- Data model — schemas, persistence, state shape
+- Integration points — external systems, third-party services
+- State and error handling — state machines, failure modes, recovery
+- Constraints — technical envelope (libraries, runtime, language, performance, security)
+- Alternatives considered — structural options weighed and rejected
+- Open ambiguity — structural questions not resolved
+
+A user story or flow does **not** belong in `design.md`. The Spec phase owns user-facing behaviour via `US-NNN` stories with EARS acceptance criteria; Design's job is to specify how the system realises those stories, not to restate them.
 
 ## RETURN
 

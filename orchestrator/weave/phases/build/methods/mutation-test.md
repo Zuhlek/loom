@@ -14,7 +14,7 @@ Probe task test strength when `tests.md` enables mutation testing.
 - appended mutation section in `tasks/T-NNN.test-log.txt`
 - optional new tests that kill surviving mutants
 - `develop-log.md`
-- `loom/log/build.md`
+- `loom/orchestrator/log/build.md`
 
 ## Algorithm
 

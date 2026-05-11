@@ -1,6 +1,6 @@
 # ciso-tool Type
 
-Patterns for the CISO security documentation tool — shared between idea and build skills.
+Patterns for the CISO security documentation tool — shared between spec and build skills.
 
 ## Architecture
 

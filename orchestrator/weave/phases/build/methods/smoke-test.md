@@ -14,7 +14,7 @@ Verify runnable application behavior after Build tasks are green.
 
 - `smoke-report.md`
 - `develop-log.md`
-- `loom/log/build.md`
+- `loom/orchestrator/log/build.md`
 
 ## Checks
 

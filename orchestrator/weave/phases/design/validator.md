@@ -1,16 +1,16 @@
-# Spec Validator
+# Design Validator
 
-Opt-in subagent that analyzes Spec-phase artifacts and reports whether a rerun would meaningfully change the result.
+Opt-in subagent that analyzes Design-phase artifacts and reports whether a rerun would meaningfully change the result.
 
 The orchestrator dispatches this agent **only** when the user picks `Run quality check` at the rerun-or-continue surface. It is not part of the mandatory phase cycle; its purpose is to inform the user's rerun decision.
 
 ## Reads
 
 - `pipeline.md` (Current phase + Phase status)
-- The just-completed Spec RETURN block (passed by the orchestrator)
+- The just-completed Design RETURN block (passed by the orchestrator)
 - [`artifact.md`](artifact.md)
-- `spec.md`, `decisions.md` (read-only)
-- `seed.md` (to compare intent against the produced `spec.md`)
+- `spec.md`, `decisions.md`, `design.md` (read-only)
+- optional `mockup/` evidence
 
 ## Writes
 
@@ -23,22 +23,19 @@ The agent looks for evidence that a rerun is worth the token burn:
 
 | Check | What it surfaces |
 | --- | --- |
-| Holes | Required sections or contracts missing from the artifact (per [`artifact.md`](artifact.md)). |
-| Blind spots | Decisions implied by the seed that the artifact never addresses. |
-| Wrong assumptions | Statements in the artifact that contradict the seed or prior decisions. |
-| Contradicting answers | Decisions in `decisions.md` that conflict with each other or with `spec.md`. |
-| Briefing quality | Questions whose briefings don't satisfy the six "good question" criteria ([`methods/grilling.md`](methods/grilling.md) §1). |
-| Story shape | A story is malformed: missing `loom:story` opener / `loom:story-end` closer, missing `**Story:**` line, missing `**Acceptance criteria:**` block, or non-zero-padded ID. (See [`methods/stories.md`](methods/stories.md) §9.) |
-| EARS conformance | An acceptance criterion does not open with a valid EARS keyword (`When`, `While`, `If`, `Where`) or `The system shall` (ubiquitous), or an `If` clause is missing its paired `then`. |
-| Misplaced acceptance | A "story" body lacks a concrete user role/action/value triple (universal acceptance condition wedged into a story when it belongs under `## Constraints`). |
-| Stale ambiguity | "Open ambiguity" items that the next phase cannot consume. |
+| Required sections | Front matter or any required section from [`artifact.md`](artifact.md) (`System shape`, `Interfaces`, `Data model`, `Integration points`, `State and error handling`, `Constraints`, `Alternatives considered`, `Open ambiguity`) is missing. |
+| Decisions addressed | A resolved decision in `decisions.md` (Q01–QNN) is ignored or contradicted by `design.md`. |
+| Constraints respected | A constraint from `spec.md` Constraints section is violated by the design. |
+| Story coverage | A `US-NNN` story from `spec.md` `## User stories` has no corresponding structure in `design.md` that realises it (e.g. no component or interface that satisfies the story's acceptance criteria). |
+| Story duplication | `design.md` restates user-facing behaviour (a flow, a story, an acceptance criterion) that already lives in `spec.md`. Design specifies HOW, not WHAT — restating Spec content is a defect. |
+| Ambiguity actionable | An item in `design.md` Open ambiguity is too vague for Plan to consume (no concrete question, no decision frame). |
 
 If no finding lands in any category, status is `passed` and the agent recommends `Continue`.
 
 ## Output: `quality-review.md`
 
 ```markdown
-# Quality Review — spec
+# Quality Review — design
 **Run at:** <iso-timestamp>
 **Phase artifacts:** <artifact list>
 

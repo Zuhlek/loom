@@ -6,7 +6,7 @@ Implement one task from `tasks/T-*.md` in a fresh context.
 
 - `tasks/T-NNN.md`
 - related task files named by the task
-- `plan.md`, `design.md`, `idea.md`
+- `plan.md`, `design.md`, `spec.md`
 - `loom/principles.md`
 - selected `loom/types/<type>.md`
 - optional `constitution.md`
@@ -17,7 +17,7 @@ Implement one task from `tasks/T-*.md` in a fresh context.
 - `tasks/T-NNN.test-log.txt`
 - `tasks/T-NNN.done.md`
 - `develop-log.md`
-- `loom/log/build.md`
+- `loom/orchestrator/log/build.md`
 
 ## Contract (Lock → Red → Implement → Green → Done)
 
@@ -26,7 +26,7 @@ Implement one task from `tasks/T-*.md` in a fresh context.
 3. **Implement.** Make the smallest scoped change that satisfies the task acceptance criteria. Match prior art per `principles.md` P2. Do not touch files outside declared scope without recording why in `done.md`.
 4. **Green phase.** Re-run the tests. If green, append the green output to the test log. If red, return to step 3 and try again. Stop after **three** failed implementation attempts with `status: failed` in the done report.
 5. **Done report.** Write `tasks/T-NNN.done.md` per the schema below.
-6. **Logs.** Append a build-task entry to `develop-log.md` AND to `loom/log/build.md` (dual-write).
+6. **Logs.** Append a build-task entry to `develop-log.md` AND to `loom/orchestrator/log/build.md` (dual-write).
 7. **Release.** Release the task lock via `loom/lib/locks.sh release-task <project> T-NNN`.
 
 ## Hard Rules
@@ -49,7 +49,7 @@ A task is done only when all five of these have happened — partial completion 
 1. Green phase: every test in the task scope passes.
 2. `tasks/T-NNN.test-log.txt` contains both the red and the green output.
 3. `tasks/T-NNN.done.md` exists with `status: green` (or `failed` / `hitl-block` for terminal non-green states).
-4. `develop-log.md` and `loom/log/build.md` both have a matching entry.
+4. `develop-log.md` and `loom/orchestrator/log/build.md` both have a matching entry.
 5. The task lock has been released.
 
 ## Done Report Schema

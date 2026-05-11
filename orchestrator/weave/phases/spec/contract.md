@@ -1,11 +1,11 @@
-# Idea Contract
+# Spec Contract
 
-I/O contract between `/weave` and the Idea Grilling Agent.
+I/O contract between `/weave` and the Spec Grilling Agent.
 
 ## Invocation
 
 **Caller:** `/weave` orchestrator
-**Trigger:** `pipeline.md.Current phase == idea` AND `Phase status ∈ {Pending, blocked, failed}`
+**Trigger:** `pipeline.md.Current phase == spec` AND `Phase status ∈ {Pending, blocked, failed}`
 **Dispatch:** Fresh `Task` session with [`agent.md`](agent.md) as system prompt
 
 ## Inputs
@@ -14,7 +14,7 @@ I/O contract between `/weave` and the Idea Grilling Agent.
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
 | `seed.md` | `.loom/<project>/seed.md` | yes | Raw user input to clarify |
-| `idea.md` | `.loom/<project>/idea.md` | on rerun | Prior run's output (starting point, not blank slate) |
+| `spec.md` | `.loom/<project>/spec.md` | on rerun | Prior run's output (starting point, not blank slate) |
 | `decisions.md` | `.loom/<project>/decisions.md` | on rerun | Prior decision slots |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | when present | Validator findings to address |
 | `principles.md` | `loom/principles.md` | yes | Engineering principles P1–P7 |
@@ -23,19 +23,19 @@ I/O contract between `/weave` and the Idea Grilling Agent.
 
 ## State preconditions
 
-- `pipeline.md.Current phase` is `idea`.
+- `pipeline.md.Current phase` is `spec`.
 - `seed.md` exists in the workspace.
 
 ## Outputs
 
 | Artifact | Target path | Description |
 | --- | --- | --- |
-| `idea.md` | `.loom/<project>/idea.md` | Specified intent — required sections per [`artifact.md`](artifact.md) |
+| `spec.md` | `.loom/<project>/spec.md` | Specified intent — required sections per [`artifact.md`](artifact.md) |
 | `decisions.md` | `.loom/<project>/decisions.md` | Branching decisions with `loom:question` / `loom:answer-slot` markers |
 
 ## State postconditions
 
-- `idea.md` and `decisions.md` exist and validate against [`artifact.md`](artifact.md).
+- `spec.md` and `decisions.md` exist and validate against [`artifact.md`](artifact.md).
 - RETURN block conforms to the schema in [`agent.md`](agent.md).
 
 ## Success criteria
@@ -54,6 +54,7 @@ I/O contract between `/weave` and the Idea Grilling Agent.
 
 - [`methods/grilling.md`](methods/grilling.md) — six-rule question discipline, dispatch flow, slot conventions, revisit mechanic
 - [`methods/categories.md`](methods/categories.md) — per-category briefing templates and validation
+- [`methods/stories.md`](methods/stories.md) — user story format, EARS acceptance-criteria patterns, marker shape, IDs, status
 
 ## Validator
 

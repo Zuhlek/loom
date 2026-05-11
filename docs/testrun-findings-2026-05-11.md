@@ -63,7 +63,7 @@ file every phase agent updates. Three locations to touch:
 (step 3).
 
 ### Your answer
-<!-- fill in -->
+(a)
 
 
 ---
@@ -100,7 +100,7 @@ Affected references (grep `loom/log/`):
 phase agents read should match where the file actually is.
 
 ### Your answer
-<!-- fill in -->
+(a)
 
 
 ---
@@ -143,7 +143,7 @@ and should never be overwritten by an idempotent setup step.
 `seed.md` is not.
 
 ### Your answer
-<!-- fill in -->
+if it already exist, an error should be thronw and eventually the user asked how to proceed. 
 
 
 ---
@@ -179,7 +179,7 @@ usage example to `--help`. Combined cost is one commit, no caller
 breakage.
 
 ### Your answer
-<!-- fill in -->
+dont understand, just make it more clear. no help hints required, its not called by users directly. it must just work as intended consistenly
 
 
 ---
@@ -218,7 +218,7 @@ cares about. It also matches the existing
 pattern of "look for files; absence is a decision."
 
 ### Your answer
-<!-- fill in -->
+(a)
 
 
 ---
@@ -266,8 +266,7 @@ single-write deviations. The spec wording is the cheapest backstop;
 the field is auditability.
 
 ### Your answer
-<!-- fill in -->
-
+(a)
 
 ---
 
@@ -312,7 +311,7 @@ one new `VALID_LIFECYCLE_STATES = {"active", "complete"}` constant,
 plus the SKILL.md doc edit.
 
 ### Your answer
-<!-- fill in -->
+(b)
 
 
 ---
@@ -355,7 +354,7 @@ explicit, and Build gets a hard signal to stop instead of inventing
 a path forward silently.
 
 ### Your answer
-<!-- fill in -->
+(a) but we have to ensure that this does not change the fact, that neither the build nor the review should require hitl
 
 
 ---

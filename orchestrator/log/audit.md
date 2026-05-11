@@ -49,3 +49,61 @@ This is the design payoff: when the upstream phases produce concrete,
 verifiable specs, Build becomes mechanical and Review becomes short.
 Worth holding up as a reference shape for future small refactors.
 
+## 2026-05-11 - phase-validators - single-invocation-lifecycle-mid-project
+
+The orchestrator originally exited after each phase
+(one-decision-per-invocation). Mid-project the user edited
+`weave/SKILL.md` to loop until Review→done in a single invocation,
+adding a `Lifecycle state` framework with `active` / `complete`
+values. The phase-validators project spans both eras: Idea ran under
+the exit-after-phase model (separate `/weave` invocations), then
+Design / Plan / Build / Review ran under the loop-until-done model
+(single `/weave` invocation). The seam was crossed cleanly because
+`pipeline.md` is the canonical state surface and both orchestrator
+modes read/write the same sections — the only added field on the new
+model is `Lifecycle state`, which the existing parser was
+forward-compatible with. This validates the "pipeline.md is canonical
+state" architectural commitment: the orchestrator's own behavior can
+change while in-flight projects continue without state-loss. Reusable
+cue: when the orchestrator's loop semantics change, projects in
+flight survive iff every modified section is additive on
+`pipeline.md`.
+
+## 2026-05-11 - phase-validators - recursive-orchestrator-self-edit
+
+This project recursively edited the very orchestrator that drove
+it — the three new `validator.md` files live under the same
+`orchestrator/weave/phases/` tree that the orchestrator reads on
+dispatch. No reload cycle was needed at any point because
+`validator.md` is loaded by file presence (predicate-based dispatch:
+"if `phases/<phase>/validator.md` exists, the user gets the
+three-option rerun-or-continue surface"), not by code that requires
+re-import. The recursion is shallow — the orchestrator didn't
+dispatch the new validators against this project, it just authored
+them — but the architectural invariant ("orchestrator surface is
+file-presence-driven, not code-driven") is what made it safe to
+self-edit. Reusable cue: predicate-based file-presence dispatch is
+what enables an orchestrator to extend itself in-flight without a
+restart cycle.
+
+## 2026-05-11 - phase-validators - verbatim-duplication-as-deliberate-no-helper-tradeoff
+
+The seed forbade shared helper files (`no shared helpers; each
+validator.md is self-contained, like phases/idea/validator.md`). Q05
++ Q06 affirmed this — each new validator restates the same ~30 lines
+of Output template + severity rubric + User-Facing Decision paragraph
++ RETURN YAML block. This violates P3 (Zero Duplication) on a
+literal-line-count reading. The deliberate trade-off: extending the
+validator family in the future (or editing the boilerplate) requires
+touching all N files in lock-step, but the orchestrator dispatch path
+stays trivial (no include / partial mechanism) and each validator
+file is independently readable. The mitigation: T-007's grep gates
+re-assert all the boilerplate per-file, so drift is caught at
+next-rerun-or-CI time. Worth capturing because future contributors
+may want to extract a `templates/validator-frame.md`; this entry is
+the record that the current setup is *intentionally* duplicated, not
+accidentally so. Reusable cue: P3 is *negotiable when the duplication
+is by-design and gate-asserted*; flag for `/tune` re-evaluation if
+the boilerplate ever grows past one screen or starts to drift in
+practice.
+

@@ -13,10 +13,10 @@
 - Task IDs are stable `T-NNN`.
 - `blocked-by` references existing tasks only.
 - The graph is acyclic.
-- Every user story is covered by at least one task.
+- Every active `US-NNN` story from `spec.md` `## User stories` is covered by at least one task. Coverage is asserted by the task's `satisfies-stories` frontmatter field, which lists the story IDs the task delivers.
 - Task titles describe observable behavior.
 - Single-layer tasks require explicit justification.
-- `task.md` mirrors the task set and dependencies.
+- `task.md` mirrors the task set and dependencies, including the `T-NNN` → `US-NNN` mapping.
 
 ## `board.md`
 

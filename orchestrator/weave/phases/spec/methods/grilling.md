@@ -1,6 +1,6 @@
 # Grilling Rules
 
-Idea-phase grilling discipline. Every question is a structured artifact validated against the schema in [`categories.md`](categories.md). This file specifies the rules around HOW questions get generated, sequenced, answered, and revisited.
+Spec-phase grilling discipline. Every question is a structured artifact validated against the schema in [`categories.md`](categories.md). This file specifies the rules around HOW questions get generated, sequenced, answered, and revisited.
 
 ---
 
@@ -37,7 +37,7 @@ Every question — Y/N, Choice, Architecture, Background, Open — opens with a 
 
 Word caps (per [`categories.md`](categories.md) §"Validation summary") are hard limits. Briefings that overflow are rewritten before being shown.
 
-The briefing is what changes Idea from "the user has to interrogate the agent to understand each question" to "the user reads the briefing once and answers." Long briefings are fine; *unstructured* briefings are the thing to avoid.
+The briefing is what changes Spec from "the user has to interrogate the agent to understand each question" to "the user reads the briefing once and answers." Long briefings are fine; *unstructured* briefings are the thing to avoid.
 
 ---
 
@@ -90,7 +90,7 @@ The agent MAY re-enter Foundation mid-Branching if a Branching question reveals 
 
 ## 4. `AskUserQuestion` dispatch
 
-The Idea Grilling Agent surfaces every question via `AskUserQuestion` and runs the entire grilling loop inside a single Task dispatch — generate Q, surface, persist the answer, generate the next Q, surface, persist, … — exiting only on `phase-complete` (close branch) or `stop-requested` (user picked Stop).
+The Spec Grilling Agent surfaces every question via `AskUserQuestion` and runs the entire grilling loop inside a single Task dispatch — generate Q, surface, persist the answer, generate the next Q, surface, persist, … — exiting only on `phase-complete` (close branch) or `stop-requested` (user picked Stop).
 
 `decisions.md` is the audit / recovery surface, not the primary answer surface — every answer is mirrored into the matching `<!-- loom:answer-slot -->` region as it is captured.
 
@@ -100,7 +100,7 @@ The user's response options map onto picker entries and a free-text fallback:
 |---|---|
 | `(A)` / `(B)` / `YES` / `NO` / `Accept this direction` — direct answer | Picker entry. The recommended option's label carries a `(Recommended)` suffix. The agent strips the suffix and writes the option name to the slot via `loom/lib/atomic-write.sh`. Status flips to `answered`. |
 | `Explain more` | Picker entry. The agent composes a 2–4 sentence elaboration grounded in the existing briefing and re-calls `AskUserQuestion` with the same options + the elaboration appended. Hard cap: 2 elaborations per Q. On the 3rd, write `[push back: needs more context]` to the slot. |
-| `Stop` | Picker entry. The agent writes `[stop]` to the slot and exits the loop with `STATUS: stop-requested`. The next `/weave` kick force-ends Idea via the close branch, writes `idea.md` with whatever's resolved, and emits `phase-complete`. |
+| `Stop` | Picker entry. The agent writes `[stop]` to the slot and exits the loop with `STATUS: stop-requested`. The next `/weave` kick force-ends Spec via the close branch, writes `spec.md` with whatever's resolved, and emits `phase-complete`. |
 | `side requirement: <text>` | Free-text fallback. The agent appends `SR-<n>: <text>` to the `## Side requirements (running)` section and re-calls `AskUserQuestion` (same Q, no answer captured yet). |
 | `push back: <text>` | Free-text fallback. The agent writes `[push back: <text>]` to the slot and continues the loop. The next iteration parses the bracket-prefix, runs the consistency pass (§5), and generates a `Q<n>'` revisit. |
 | Any other free text | Treated as a direct answer. The agent writes the text verbatim to the slot. Status flips to `answered`. |
@@ -254,16 +254,18 @@ Design phase reads only `Status: active` and `Status: answered` entries (and cha
 | Ambiguity stable across 2 consecutive answers | Return artifacts; orchestrator surfaces the rerun-or-continue decision. |
 | User says `stop`, `enough`, `let's move on`, `go` | Write current state, return artifacts. |
 | Ambiguity still surfacing after many turns | RETURN `STATUS: needs_more_grilling` to the orchestrator; let the user decide whether to extend. |
-| User clicks `Stop` before answering N≥3 questions in a row | Force-end Idea: write the resolved Qs to decisions.md, capture the unanswered ones in the "Deferred clarifications" section (these become `[NEEDS CLARIFICATION]` markers when plan.md is generated), return artifacts. |
+| User clicks `Stop` before answering N≥3 questions in a row | Force-end Spec: write the resolved Qs to decisions.md, capture the unanswered ones in the "Deferred clarifications" section (these become `[NEEDS CLARIFICATION]` markers when plan.md is generated), return artifacts. |
 
 ---
 
 ## 8. Required output of a grilling session
 
-When the Idea phase agent returns, it MUST have written:
+When the Spec phase agent returns, it MUST have written:
 
-1. `idea.md` — what the user is building, why, side requirements, scope, expected behavior, constraints, acceptance boundaries, open ambiguity.
+1. `spec.md` — what the user is building, why, scope, out of scope, **user stories with EARS acceptance criteria** (per [`stories.md`](stories.md)), constraints, open ambiguity.
 2. `decisions.md` — every Q with its slot, status, recommendation, resolution. Side requirements section. Deferred clarifications section. Parseable by the rules in §6.
+
+Stories are distilled from grilling answers + seed at the end of the loop (Work Loop step 9 in [`agent.md`](../agent.md)). They are NOT user-answered questions; they are agent-produced outputs. Universal acceptance conditions go under `spec.md` `## Constraints`, not Stories.
 
 These two writes are non-negotiable. They are the contract Design inherits.
 

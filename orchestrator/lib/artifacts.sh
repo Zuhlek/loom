@@ -8,7 +8,7 @@ _kind_for_path() {
     case "$1" in
         pipeline.md) echo "state markdown false" ;;
         seed.md) echo "seed markdown false" ;;
-        idea.md) echo "idea markdown true" ;;
+        spec.md) echo "spec markdown true" ;;
         decisions.md) echo "decisions markdown false" ;;
         design.md) echo "design markdown true" ;;
         plan.md) echo "plan markdown true" ;;

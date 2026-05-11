@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 VALID_STATUSES = {
-    "idea": {"Pending", "blocked", "failed", "complete"},
+    "spec": {"Pending", "blocked", "failed", "complete"},
     "design": {"Pending", "blocked", "failed", "complete"},
     "plan": {"Pending", "blocked", "failed", "complete"},
     "build": {"Pending", "blocked", "failed", "complete", "green", "hitl-block"},
@@ -60,7 +60,7 @@ def main() -> int:
     if not status or status not in VALID_STATUSES[phase]:
         return block(f"invalid status for {phase}: {status!r}")
 
-    if phase in {"idea", "design", "plan", "build", "review"}:
+    if phase in {"spec", "design", "plan", "build", "review"}:
         if "artifacts" not in ret and "output" not in ret:
             return block(f"{phase} RETURN must include artifacts or output")
         if "summary" not in ret:

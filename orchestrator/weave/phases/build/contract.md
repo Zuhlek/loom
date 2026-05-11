@@ -13,7 +13,7 @@ I/O contract between `/weave` and the Build Coordinator Agent.
 | Name | Source path | Required | Description |
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
-| `idea.md` | `.loom/<project>/idea.md` | yes | Specified intent |
+| `spec.md` | `.loom/<project>/idea.md` | yes | Specified intent |
 | `design.md` | `.loom/<project>/design.md` | yes | Solution structure |
 | `plan.md` | `.loom/<project>/plan.md` | yes | Work graph narrative |
 | `board.md` | `.loom/<project>/board.md` | yes | Kanban (task readiness) |
@@ -38,8 +38,8 @@ I/O contract between `/weave` and the Build Coordinator Agent.
 | `tasks/T-*.done.md` | `.loom/<project>/tasks/T-NNN.done.md` | Per-task done report |
 | `test-report.md` | `.loom/<project>/test-report.md` | Aggregated verification |
 | `smoke-report.md` | `.loom/<project>/smoke-report.md` | Conditional — when project runnable |
-| `develop-log.md` | `.loom/<project>/develop-log.md` | Build observations (dual-write with `loom/log/build.md`) |
-| `loom/log/build.md` | `loom/log/build.md` | Build-task log shard |
+| `develop-log.md` | `.loom/<project>/develop-log.md` | Build observations (dual-write with `loom/orchestrator/log/build.md`) |
+| `loom/orchestrator/log/build.md` | `loom/orchestrator/log/build.md` | Build-task log shard |
 
 ## State postconditions
 

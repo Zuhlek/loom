@@ -23,9 +23,9 @@ Review writes learning observations to two surfaces. Both are required.
 | Stream | Path | Purpose |
 | --- | --- | --- |
 | Project-local | `.loom/<project>/develop-log.md` | Raw observations for this project |
-| Global shard | `loom/log/{audit,build,feedback,ideate}.md` | Curation source for `/tune review` |
+| Global shard | `loom/orchestrator/log/{audit,build,feedback,ideate}.md` | Curation source for `/tune review` |
 
-For every learning observation written to `develop-log.md`, a matching `## YYYY-MM-DD - <project> - <topic>` entry must exist in the appropriate `loom/log/<shard>.md`:
+For every learning observation written to `develop-log.md`, a matching `## YYYY-MM-DD - <project> - <topic>` entry must exist in the appropriate `loom/orchestrator/log/<shard>.md`:
 
 | Topic | Shard |
 | --- | --- |

@@ -22,3 +22,28 @@ would block legitimate work. Worth promoting to the build contract as
 "when the project has a non-zero error baseline, gate on delta not
 absolute."
 
+## 2026-05-11 - phase-validators - build-7-task-dag-first-try-green
+
+Build's task-builders implemented this in 7 parallel/sequential
+subagent dispatches with no failures across all 91 acceptance gates —
+every task green on attempt 1. The factors that produced this:
+
+- `design.md` specified verbatim replacement text for every surface
+  edit (SKILL.md / contract.md / README.md), and verbatim section
+  content for every Idea-validator stanza to copy.
+- `tests.md` specified the exact grep / `rg` / `test -f` assertion
+  for every gate, so the Build executor had no judgment calls to
+  make on what counts as PASS.
+- The Plan slicing was per-validator-file + per-edited-file with no
+  cross-file coupling; T-001 / T-002 / T-003 are sibling parallel
+  tasks, and T-004 / T-005 / T-006 each touch one file each.
+- The verification harness was pure `cli-shell` — no Node, no
+  browser, no Python — so the Build executor's environment had zero
+  setup friction.
+
+Pattern to log: "when Design specifies verbatim text and Plan slices
+one-file-per-task, Build becomes mechanical." Reusable shape for
+future small refactors that are mostly docs / orchestrator
+material. Worth holding up as a reference for "what shipping clean
+on first attempt looks like."
+

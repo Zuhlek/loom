@@ -35,7 +35,7 @@ I/O contract between `/weave` and the Review Audit Agent.
 | `review.md` | `.loom/<project>/review.md` | Findings (severity, evidence, expected, actual, impact, recommendation, owner phase) |
 | `feedback.md` | `.loom/<project>/feedback.md` | User-facing summary |
 | `develop-log.md` | `.loom/<project>/develop-log.md` | Process learnings |
-| Log appends | `loom/log/{audit,build,feedback,ideate}.md` | Routed by finding type |
+| Log appends | `loom/orchestrator/log/{audit,build,feedback,ideate}.md` | Routed by finding type |
 
 ## State postconditions
 

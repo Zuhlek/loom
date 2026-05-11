@@ -13,7 +13,7 @@ I/O contract between `/weave` and the Design Structuring Agent.
 | Name | Source path | Required | Description |
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
-| `idea.md` | `.loom/<project>/idea.md` | yes | Specified intent from Idea phase |
+| `spec.md` | `.loom/<project>/spec.md` | yes | Specified intent from Spec phase |
 | `decisions.md` | `.loom/<project>/decisions.md` | yes | Branching decisions from Idea |
 | `<type>.md` | `loom/types/<type>.md` | when typed | Domain guidance |
 | `constitution.md` | `.loom/<project>/constitution.md` | optional | Project-wide invariants |
@@ -22,7 +22,7 @@ I/O contract between `/weave` and the Design Structuring Agent.
 ## State preconditions
 
 - `pipeline.md.Current phase` is `design`.
-- Idea-phase artifacts (`idea.md`, `decisions.md`) exist.
+- Spec-phase artifacts (`spec.md`, `decisions.md`) exist.
 
 ## Outputs
 
@@ -34,7 +34,7 @@ I/O contract between `/weave` and the Design Structuring Agent.
 ## State postconditions
 
 - `design.md` exists and validates against [`artifact.md`](artifact.md).
-- `idea.md` is unchanged (kept read-only by the agent).
+- `spec.md` is unchanged (kept read-only by the agent).
 - RETURN block conforms to the schema in [`agent.md`](agent.md).
 
 ## Success criteria

@@ -5,9 +5,9 @@ Execute the work graph and aggregate verification evidence. Own build artifacts 
 ## Reads
 
 - `pipeline.md`
-- `idea.md`
+- `spec.md`
 - `design.md`
-- `plan.md`
+- `plan.md` (including the `Verification environment` declaration consumed by the pre-flight in step 0)
 - `board.md`
 - `tests.md`
 - `tasks/T-*.md`
@@ -24,13 +24,17 @@ Execute the work graph and aggregate verification evidence. Own build artifacts 
 - `test-report.md`
 - conditional `smoke-report.md`
 - `develop-log.md`
-- `loom/log/build.md`
+- `loom/orchestrator/log/build.md`
 
 ## Work Loop
 
+0. **Verification-environment pre-flight.** Read `plan.md.Verification environment` (see Plan agent spec). Compare the declared environment against the Coordinator's actual capability:
+   - If the environment is executable by the Coordinator (e.g. `node-test`, `headless-browser`, `cli-shell` with the required runtime installed): proceed.
+   - If the environment requires a harness the Coordinator does not have (e.g. `manual-browser-desktop` on a non-GUI Coordinator, or a `headless-browser` harness without the binary): return immediately with `status: blocked`, list the env mismatch as the blocker reason, and do NOT dispatch any task-builder.
+   The Coordinator MUST NOT substitute a different harness silently — this is a Plan-level contract. Surface the mismatch via the normal return path; the orchestrator handles it at the Build→Review gate. No in-phase HITL.
 1. Read `board.md`. Select ready tasks (`Backlog` cards whose `blocked-by` set is empty OR all blockers are in `Done`).
 2. Move each selected task from `Backlog` to `In Progress` in `board.md` before dispatching.
-3. Dispatch `methods/task-builder.md` one task at a time unless a declared parallel batch has disjoint file scope.
+3. **For each ready task, dispatch a fresh `Task` subagent running `methods/task-builder.md`.** The Coordinator MUST NOT implement task scope itself; per-task implementation work is exclusively the task-builder's responsibility, executed in its own fresh context per the framework's vertical-slice contract. The Coordinator's only outputs are board mutations, the aggregated `test-report.md`, the `develop-log.md` entries it owns, and the RETURN block. A declared parallel batch (multiple ready tasks with disjoint `files-likely-touched`) MAY be dispatched concurrently as separate subagents; they MUST still be separate subagents, not one batched implementation.
 4. Enforce locks and the three-attempt cap.
 5. On task return, transition the card in `board.md` per the table below.
 6. Run `methods/smoke-test.md` when the project is runnable.

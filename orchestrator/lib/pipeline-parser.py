@@ -17,6 +17,7 @@ SECTION_ORDER = [
     "Type hint",
     "Current phase",
     "Phase status",
+    "Lifecycle state",
     "Produced artifacts",
     "Pending user input",
     "Quality findings",
@@ -31,12 +32,14 @@ FENCED_FIELDS = {
     "Type hint",
     "Current phase",
     "Phase status",
+    "Lifecycle state",
     "Next valid action",
     "Resume point",
 }
 
-VALID_PHASES = {"idea", "design", "plan", "build", "review"}
+VALID_PHASES = {"spec", "design", "plan", "build", "review"}
 VALID_STATUSES = {"Pending", "blocked", "failed", "complete"}
+VALID_LIFECYCLE_STATES = {"active", "complete"}
 
 
 @dataclass
@@ -183,12 +186,17 @@ def initial_pipeline(project: str, ticket: str, type_hint: str) -> str:
 
 ## Current phase
 ```text
-idea
+spec
 ```
 
 ## Phase status
 ```text
 Pending
+```
+
+## Lifecycle state
+```text
+active
 ```
 
 ## Produced artifacts
@@ -204,35 +212,42 @@ Run /weave to advance
 
 ## Resume point
 ```text
-idea:foundation
+spec:foundation
 ```
 
 ## History
 
 | timestamp | phase | status | note |
 | --- | --- | --- | --- |
-| {now_iso()} | idea | Pending | project created |
+| {now_iso()} | spec | Pending | project created |
 """
 
 
-def init_workspace(project_dir: Path, project: str, seed: str, ticket: str, type_hint: str) -> None:
-    project_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write(project_dir / "pipeline.md", initial_pipeline(project, ticket, type_hint))
-    atomic_write(project_dir / "seed.md", seed.rstrip() + "\n")
-    if not (project_dir / "events.jsonl").exists():
-        atomic_write(project_dir / "events.jsonl", "")
-    if not (project_dir / "artifacts.json").exists():
-        atomic_write(project_dir / "artifacts.json", json.dumps({"schema-version": 1, "artifacts": []}, indent=2) + "\n")
+def init_workspace(parent_dir: Path, project: str, seed: str, ticket: str, type_hint: str) -> None:
+    workspace = parent_dir / ".loom" / project
+    if (workspace / "seed.md").exists():
+        raise SystemExit(
+            f"refusing to init: {workspace / 'seed.md'} already exists. "
+            "the workspace is already bootstrapped — resolve manually or use a different project name."
+        )
+    workspace.mkdir(parents=True, exist_ok=True)
+    atomic_write(workspace / "pipeline.md", initial_pipeline(project, ticket, type_hint))
+    atomic_write(workspace / "seed.md", seed.rstrip() + "\n")
+    if not (workspace / "events.jsonl").exists():
+        atomic_write(workspace / "events.jsonl", "")
 
 
 def validate_record(record: dict[str, object]) -> list[str]:
     errors: list[str] = []
     phase = str(record.get("Current phase", ""))
     status = str(record.get("Phase status", ""))
+    lifecycle = str(record.get("Lifecycle state", ""))
     if phase and phase not in VALID_PHASES:
         errors.append(f"invalid phase: {phase}")
     if status and status not in VALID_STATUSES:
         errors.append(f"invalid status: {status}")
+    if lifecycle and lifecycle not in VALID_LIFECYCLE_STATES:
+        errors.append(f"invalid lifecycle state: {lifecycle}")
     missing = [name for name in SECTION_ORDER if name not in record]
     for name in missing:
         errors.append(f"missing section: {name}")
@@ -264,7 +279,7 @@ def main() -> int:
     p_history.add_argument("--timestamp")
 
     p_init = sub.add_parser("init")
-    p_init.add_argument("project_dir")
+    p_init.add_argument("parent_dir")
     p_init.add_argument("project")
     p_init.add_argument("--seed", default="")
     p_init.add_argument("--ticket", default="")
@@ -293,7 +308,7 @@ def main() -> int:
         append_history(Path(args.path), args.phase, args.status, args.note, args.timestamp)
         return 0
     if args.cmd == "init":
-        init_workspace(Path(args.project_dir), args.project, args.seed, args.ticket, args.type_hint)
+        init_workspace(Path(args.parent_dir), args.project, args.seed, args.ticket, args.type_hint)
         return 0
     if args.cmd == "validate":
         errors = validate_record(parse(Path(args.path)))

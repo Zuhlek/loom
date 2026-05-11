@@ -19,7 +19,7 @@ Validate the built result against intent, design, plan, and evidence. Own review
 - `review.md`
 - `feedback.md`
 - `develop-log.md`
-- appended entries in `loom/log/audit.md`, `loom/log/build.md`, `loom/log/feedback.md`, or `loom/log/ideate.md`
+- appended entries in `loom/orchestrator/log/audit.md`, `loom/orchestrator/log/build.md`, `loom/orchestrator/log/feedback.md`, or `loom/orchestrator/log/ideate.md`
 
 ## Review Targets
 

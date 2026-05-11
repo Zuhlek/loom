@@ -13,8 +13,8 @@ I/O contract between `/weave` and the Work Graph Agent.
 | Name | Source path | Required | Description |
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
-| `idea.md` | `.loom/<project>/idea.md` | yes | Specified intent |
-| `decisions.md` | `.loom/<project>/decisions.md` | yes | Idea-phase decisions |
+| `spec.md` | `.loom/<project>/spec.md` | yes | Specified intent |
+| `decisions.md` | `.loom/<project>/decisions.md` | yes | Spec-phase decisions |
 | `design.md` | `.loom/<project>/design.md` | yes | Solution structure |
 | Evidence artifacts | `.loom/<project>/mockup/` etc. | optional | Design-phase evidence |
 | `<type>.md` | `loom/types/<type>.md` | when typed | Domain guidance |

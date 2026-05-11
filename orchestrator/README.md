@@ -12,13 +12,13 @@ State file: `.loom/<project>/pipeline.md`
 
 | Phase | Agent | Output |
 | --- | --- | --- |
-| Idea | Idea Grilling Agent | `idea.md`, `decisions.md` |
+| Spec | Spec Grilling Agent | `spec.md`, `decisions.md` |
 | Design | Design Structuring Agent | `design.md`, optional `mockup/` |
 | Plan | Work Graph Agent | `plan.md`, `board.md`, `task.md`, `tests.md`, `tasks/T-*.md` |
 | Build | Build Coordinator Agent | implementation, task logs, done reports, `test-report.md` |
 | Review | Review Audit Agent | `review.md`, `feedback.md`, `develop-log.md` |
 
-After every phase the orchestrator surfaces a rerun-or-continue decision to the user. Reruns are never automatic. The Idea phase additionally offers an opt-in Quality Check subagent that analyses artifacts for holes, blind spots, and contradictions to help the user decide whether a rerun is worth the token burn.
+After every phase the orchestrator surfaces a rerun-or-continue decision to the user. Reruns are never automatic. Four of the five phases (Spec, Design, Plan, Build) additionally offer an opt-in Quality Check subagent that analyses artifacts for holes, blind spots, and contradictions to help the user decide whether a rerun is worth the token burn. Review is itself the project validator and has no separate Quality Check.
 
 ## Layout
 
@@ -30,7 +30,7 @@ After every phase the orchestrator surfaces a rerun-or-continue decision to the 
 | `weave/phases/<phase>/agent.md` | Phase agent (RETURN schema inlined) |
 | `weave/phases/<phase>/artifact.md` | Per-phase artifact contract |
 | `weave/phases/<phase>/methods/` | Phase-internal methods (when present) |
-| `weave/phases/idea/validator.md` | Opt-in Idea Validator (quality check) |
+| `weave/phases/<phase>/validator.md` | Opt-in phase validator (quality check) — present for `spec`, `design`, `plan`, `build`; `review` has none (Review is itself the project validator) |
 | `tune/SKILL.md` | `/tune` meta-skill (feedback, review, insights) |
 | `lib/` | Workspace helpers (pipeline parser, events, artifacts, locks, atomic write) |
 | `hooks/` | Claude Code hooks |
@@ -50,7 +50,7 @@ Every phase under `weave/phases/<name>/` follows the same shape so the orchestra
 | `contract.md` | yes | I/O contract: what the orchestrator passes in, what comes back, success/failure modes |
 | `artifact.md` | yes | Shape and required sections of the artifact(s) the phase produces |
 | `methods/` | when needed | Phase-internal skills the agent dispatches (e.g. Build's `task-builder`, `smoke-test`, `mutation-test`) |
-| `validator.md` | optional | Opt-in phase quality check (currently only Idea has one) |
+| `validator.md` | optional | Opt-in phase quality check (present for spec, design, plan, build; review excluded) |
 
 Schemas are owned by the producer: the formal RETURN schema lives inline as a YAML block inside the producing `.md` file (agent, validator, or method). No separate `schema.yaml` files.
 

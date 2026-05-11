@@ -23,7 +23,7 @@ user feedback ──→ develop-log ←── transcript insights
 - **Develop-log** captures what the agent noticed (self-reported during Review) and what the user flagged (via `/tune <text>`).
 - **Transcripts** capture what actually happened — user corrections, friction, violations never logged.
 - **`/tune review`** is the single gatekeeper for SKILL.md and type file changes.
-- Cross-skill patterns (idea→design handoff, type confusion, post-build drift) only emerge when reviewing both sources.
+- Cross-skill patterns (spec→design handoff, type confusion, post-build drift) only emerge when reviewing both sources.
 
 ## Arguments
 
@@ -46,7 +46,7 @@ Interpret the user's feedback and write a structured develop-log entry.
 ```markdown
 ## [date] — <project-name or "general"> — Feedback
 **Skill:** user-feedback
-**About:** [idea/design/plan/build/review/tune/cross-skill/general]
+**About:** [spec/design/plan/build/review/tune/cross-skill/general]
 **Observation:** [the user's feedback, interpreted and structured]
 **Proposed change:** [if the feedback implies a specific change — or "none, observation only"]
 ```
@@ -142,19 +142,19 @@ The develop-log is sharded by source skill under `~/.claude/skills/log/`:
 
 | Shard | Written by | Entry types |
 |---|---|---|
-| `log/ideate.md` | `/weave` Idea / Design / Plan subagents (via Review dual-write) | Idea-phase entry, process entry |
+| `log/ideate.md` | `/weave` Spec / Design / Plan subagents (via Review dual-write) | Spec-phase entry, process entry |
 | `log/build.md` | `/weave` Build subagents (Task Builder, Smoke Test, Mutation Test, via Review dual-write) | Build-task entry, process entry |
 | `log/feedback.md` | `/tune <text>` (this skill, feedback mode) | User feedback entry |
 | `log/audit.md` | `/tune insights` (this skill, insights mode) | Audit-recovered entry |
 
 `/tune review` reads all four shards as one logical log.
 
-### Idea-phase entries
+### Spec-phase entries
 
 ```markdown
 ## [date] — <project-name> — Phase: <phase>
 **Skill:** weave
-**Phase:** [idea/design/plan]
+**Phase:** [spec/design/plan]
 **Task type:** [type or "untyped"]
 **Worked well:** [what went correctly]
 **Problems:** [what was unclear — be specific]
@@ -189,7 +189,7 @@ The develop-log is sharded by source skill under `~/.claude/skills/log/`:
 ```markdown
 ## [date] — <project-name or "general"> — Feedback
 **Skill:** user-feedback
-**About:** [idea/design/plan/build/review/tune/cross-skill/general]
+**About:** [spec/design/plan/build/review/tune/cross-skill/general]
 **Observation:** [the user's feedback, interpreted and structured]
 **Proposed change:** [if the feedback implies a specific change — or "none, observation only"]
 ```
