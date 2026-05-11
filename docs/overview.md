@@ -22,13 +22,13 @@ Primary state file: `.loom/<project>/pipeline.md`
 
 | Agent | Defined In | Scope |
 | ----- | ---------- | ----- |
-| `/weave` orchestrator | [`weave/weave.md`](weave/weave.md) | State, startup, phase invocation, rerun-or-continue decision, resume |
-| Idea Grilling Agent | [`weave/idea.md`](weave/idea.md) | Clarify seed into specified intent |
-| Design Structuring Agent | [`weave/design.md`](weave/design.md) | Convert specified intent into solution structure |
-| Work Graph Agent | [`weave/plan.md`](weave/plan.md) | Convert solution structure into executable work graph |
-| Build Coordinator Agent | [`weave/build.md`](weave/build.md) | Execute the work graph and verify realization |
-| Review Audit Agent | [`weave/review.md`](weave/review.md) | Validate outcome and capture feedback |
-| Quality Check Agent | [`weave/weave.md`](weave/weave.md) | Opt-in: analyse a phase's artifacts to inform a rerun decision (Idea phase only for now) |
+| `/weave` orchestrator | [`orchestrator/weave/SKILL.md`](../orchestrator/weave/SKILL.md) | State, startup, phase invocation, rerun-or-continue decision, resume |
+| Idea Grilling Agent | [`orchestrator/weave/phases/idea/agent.md`](../orchestrator/weave/phases/idea/agent.md) | Clarify seed into specified intent |
+| Design Structuring Agent | [`orchestrator/weave/phases/design/agent.md`](../orchestrator/weave/phases/design/agent.md) | Convert specified intent into solution structure |
+| Work Graph Agent | [`orchestrator/weave/phases/plan/agent.md`](../orchestrator/weave/phases/plan/agent.md) | Convert solution structure into executable work graph |
+| Build Coordinator Agent | [`orchestrator/weave/phases/build/agent.md`](../orchestrator/weave/phases/build/agent.md) | Execute the work graph and verify realization |
+| Review Audit Agent | [`orchestrator/weave/phases/review/agent.md`](../orchestrator/weave/phases/review/agent.md) | Validate outcome and capture feedback |
+| Idea Validator | [`orchestrator/weave/phases/idea/validator.md`](../orchestrator/weave/phases/idea/validator.md) | Opt-in: analyse Idea-phase artifacts to inform a rerun decision |
 
 ## Other Skills
 
@@ -85,9 +85,10 @@ flowchart TD
 
 | File | Scope |
 | ---- | ----- |
-| [`weave/weave.md`](weave/weave.md) | `/weave` orchestration contract |
-| [`weave/idea.md`](weave/idea.md) | Idea phase contract |
-| [`weave/design.md`](weave/design.md) | Design phase contract |
-| [`weave/plan.md`](weave/plan.md) | Plan phase contract |
-| [`weave/build.md`](weave/build.md) | Build phase contract |
-| [`weave/review.md`](weave/review.md) | Review phase contract |
+| [`orchestrator/weave/SKILL.md`](../orchestrator/weave/SKILL.md) | `/weave` orchestration contract |
+| [`orchestrator/weave/contract.md`](../orchestrator/weave/contract.md) | `/weave` I/O contract |
+| [`orchestrator/weave/phases/idea/agent.md`](../orchestrator/weave/phases/idea/agent.md) | Idea phase agent |
+| [`orchestrator/weave/phases/design/agent.md`](../orchestrator/weave/phases/design/agent.md) | Design phase agent |
+| [`orchestrator/weave/phases/plan/agent.md`](../orchestrator/weave/phases/plan/agent.md) | Plan phase agent |
+| [`orchestrator/weave/phases/build/agent.md`](../orchestrator/weave/phases/build/agent.md) | Build phase agent |
+| [`orchestrator/weave/phases/review/agent.md`](../orchestrator/weave/phases/review/agent.md) | Review phase agent |

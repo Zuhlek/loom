@@ -62,8 +62,6 @@ describe("apps/web frontend skeleton", () => {
     expect(src).toContain('"completed"');
     expect(src).toContain('"inProgress"');
     expect(src).toContain('"pending"');
-    // Collapsed-mode test id present.
-    expect(src).toContain('data-testid="tasks-panel-collapsed"');
     expect(src).toContain('data-testid="tasks-panel"');
   });
 

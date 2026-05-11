@@ -22,8 +22,5 @@
     "tsx": "^4.21.0",
     "typescript": "^5.5.0",
     "vitest": "^2.1.9"
-  },
-  "dependencies": {
-    "node-pty": "^1.1.0"
   }
 }

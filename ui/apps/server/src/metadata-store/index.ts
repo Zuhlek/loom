@@ -161,6 +161,7 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
     "setSessionId",
     "dismissResumeBanner",
     "markInert",
+    "markActive",
   ]) as ChatRepo;
   const wrappedProjects = wrap(projects, ["create", "addPath", "removePath", "update", "delete"]) as ProjectRepo;
   const wrappedPendingGates = wrap(pendingGates, ["upsert", "delete", "deleteByChat"]) as PendingGateRepo;

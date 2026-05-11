@@ -1,20 +1,22 @@
 /*
- * Hook installer — manages loom's append-with-marker block in
- * ~/.claude/settings.json. SR-39: pre-existing user-scope hooks are
- * never modified; loom's hooks live inside a marker block that uninstall
- * removes verbatim.
+ * Hook installer — manages loom's receiver entries in ~/.claude/settings.json.
  *
- * The marker block is JSON-comment-style:
- *   // loom:hooks:start
- *   ...loom's hooks...
- *   // loom:hooks:end
+ * Ownership model: a "loom-managed" hook entry is identified by its command
+ * containing both the loopback host (127.0.0.1) and loom's receiver path
+ * (/hooks/event). settings.json is parsed and rewritten as strict JSON —
+ * no comment markers (Claude Code's settings parser rejects // comments).
+ *
+ * Pre-existing user hooks are preserved across install/uninstall: install
+ * only adds/replaces loom's own entry within each wired event array;
+ * uninstall removes only loom's entries (and prunes loom-only sub-hooks
+ * from shared entries) leaving everything else intact.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const MARKER_START = "// loom:hooks:start";
-const MARKER_END = "// loom:hooks:end";
+const LOOM_HOST = "127.0.0.1";
+const LOOM_HOOK_PATH = "/hooks/event";
 
 export interface HookInstallerOptions {
   /** Path to settings.json. Defaults to ~/.claude/settings.json. */
@@ -26,6 +28,18 @@ export interface HookInstallerOptions {
 }
 
 const DEFAULT_EVENTS = ["PostToolUse", "SessionStart", "Stop", "SubagentStop", "PermissionRequest"] as const;
+
+interface HookCommand {
+  type?: string;
+  command?: string;
+  [k: string]: unknown;
+}
+
+interface HookEntry {
+  matcher?: string;
+  hooks?: HookCommand[];
+  [k: string]: unknown;
+}
 
 /** Resolve settings.json path with sensible default. */
 export function resolveSettingsPath(opts: HookInstallerOptions = {}): string {
@@ -39,24 +53,44 @@ export function settingsExists(opts: HookInstallerOptions = {}): boolean {
   return fs.existsSync(resolveSettingsPath(opts));
 }
 
-/** Detect if pre-existing user-scope hooks are present (without loom's marker). */
+/**
+ * Inspect settings.json. `hasMarker` means at least one loom-managed entry
+ * was detected (identified by URL match). `hasUserHooks` means non-loom
+ * hook entries exist outside loom's footprint.
+ */
 export function detectConflict(opts: HookInstallerOptions = {}): { hasMarker: boolean; hasUserHooks: boolean } {
   const filePath = resolveSettingsPath(opts);
   if (!fs.existsSync(filePath)) return { hasMarker: false, hasUserHooks: false };
   const text = fs.readFileSync(filePath, "utf8");
-  const hasMarker = text.includes(MARKER_START) && text.includes(MARKER_END);
-  const hasUserHooks = !hasMarker && /"hooks"\s*:/.test(text);
+  if (text.trim() === "") return { hasMarker: false, hasUserHooks: false };
+  const parsed = tryParse(text);
+  if (parsed === undefined) {
+    // Invalid JSON — surface as user-side state needing attention.
+    return { hasMarker: false, hasUserHooks: true };
+  }
+  const hooks = (parsed as { hooks?: Record<string, unknown> })?.hooks;
+  if (!hooks || typeof hooks !== "object") return { hasMarker: false, hasUserHooks: false };
+  let hasMarker = false;
+  let hasUserHooks = false;
+  for (const arr of Object.values(hooks)) {
+    if (!Array.isArray(arr)) continue;
+    for (const entry of arr as HookEntry[]) {
+      const loomCount = countLoomCommands(entry);
+      const subCount = Array.isArray(entry?.hooks) ? entry.hooks.length : 0;
+      if (loomCount > 0) hasMarker = true;
+      // An entry contributes to "user hooks" if it isn't a pure loom entry.
+      // A loom-only entry has all sub-hooks owned by loom (and at least one).
+      const isPureLoomEntry = loomCount > 0 && loomCount === subCount;
+      if (!isPureLoomEntry) hasUserHooks = true;
+    }
+  }
   return { hasMarker, hasUserHooks };
 }
 
 /**
- * Install loom's hook receiver into ~/.claude/settings.json. Idempotent —
- * if the marker block is already present, replaces only what's between
- * MARKER_START and MARKER_END.
- *
- * For new files, writes a freshly-templated settings.json.
- * For existing files with no marker, appends the marker block beneath
- * any existing "hooks" structure (SR-39 append-below-marker).
+ * Install loom's receiver into settings.json. Idempotent — replaces any
+ * pre-existing loom entry with the current port/command. Pre-existing
+ * non-loom hooks are preserved.
  */
 export function install(opts: HookInstallerOptions = {}): { wroteFreshFile: boolean; appendedBelowExisting: boolean } {
   const filePath = resolveSettingsPath(opts);
@@ -65,87 +99,121 @@ export function install(opts: HookInstallerOptions = {}): { wroteFreshFile: bool
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
-  if (!fs.existsSync(filePath) || fs.readFileSync(filePath, "utf8").trim() === "") {
-    fs.writeFileSync(filePath, freshSettings(port, events));
-    return { wroteFreshFile: true, appendedBelowExisting: false };
+  const exists = fs.existsSync(filePath);
+  const text = exists ? fs.readFileSync(filePath, "utf8") : "";
+  const isFresh = !exists || text.trim() === "";
+
+  let parsed: Record<string, unknown> = {};
+  if (!isFresh) {
+    const candidate = tryParse(text);
+    if (candidate === undefined) {
+      throw new Error(
+        `settings.json at ${filePath} is not valid JSON. Repair it (or delete it) before installing loom's hooks.`,
+      );
+    }
+    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+      parsed = candidate as Record<string, unknown>;
+    }
   }
 
-  const before = fs.readFileSync(filePath, "utf8");
-  const next = upsertMarkerBlock(before, port, events);
-  fs.writeFileSync(filePath, next);
-  return {
-    wroteFreshFile: false,
-    appendedBelowExisting: !before.includes(MARKER_START),
-  };
+  const hooks =
+    parsed.hooks && typeof parsed.hooks === "object" && !Array.isArray(parsed.hooks)
+      ? (parsed.hooks as Record<string, unknown>)
+      : {};
+
+  let hadOtherHooks = false;
+  for (const evt of events) {
+    const existing = Array.isArray(hooks[evt]) ? (hooks[evt] as HookEntry[]) : [];
+    const purged: HookEntry[] = [];
+    for (const entry of existing) {
+      const stripped = purgeLoomFromEntry(entry);
+      if (stripped !== null) {
+        purged.push(stripped);
+        hadOtherHooks = true;
+      }
+    }
+    purged.push(makeLoomEntry(port));
+    hooks[evt] = purged;
+  }
+  parsed.hooks = hooks;
+
+  fs.writeFileSync(filePath, `${JSON.stringify(parsed, null, 2)}\n`);
+  return { wroteFreshFile: isFresh, appendedBelowExisting: hadOtherHooks };
 }
 
-/** Uninstall loom's marker block. Pre-existing lines are preserved. */
+/** Uninstall loom's entries. Pre-existing non-loom hooks are preserved. */
 export function uninstall(opts: HookInstallerOptions = {}): { removed: boolean } {
   const filePath = resolveSettingsPath(opts);
   if (!fs.existsSync(filePath)) return { removed: false };
-  const before = fs.readFileSync(filePath, "utf8");
-  const next = stripAllMarkerBlocks(before);
-  if (next === before) return { removed: false };
-  fs.writeFileSync(filePath, next);
+  const text = fs.readFileSync(filePath, "utf8");
+  if (text.trim() === "") return { removed: false };
+  const parsed = tryParse(text);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { removed: false };
+  const root = parsed as Record<string, unknown>;
+  const hooks = root.hooks;
+  if (!hooks || typeof hooks !== "object" || Array.isArray(hooks)) return { removed: false };
+  const hookMap = hooks as Record<string, unknown>;
+
+  let removed = false;
+  for (const [evt, arr] of Object.entries(hookMap)) {
+    if (!Array.isArray(arr)) continue;
+    const next: HookEntry[] = [];
+    for (const entry of arr as HookEntry[]) {
+      const stripped = purgeLoomFromEntry(entry);
+      if (stripped === null) {
+        removed = true;
+        continue;
+      }
+      if (stripped !== entry) removed = true;
+      next.push(stripped);
+    }
+    hookMap[evt] = next;
+  }
+  if (!removed) return { removed: false };
+
+  fs.writeFileSync(filePath, `${JSON.stringify(root, null, 2)}\n`);
   return { removed: true };
 }
 
-function freshSettings(port: number, events: readonly string[]): string {
-  const eventEntries = Object.fromEntries(
-    events.map((evt) => [
-      evt,
-      [
-        {
-          matcher: "*",
-          hooks: [{ type: "command", command: `curl -s -X POST -H 'content-type: application/json' --data-binary @- http://127.0.0.1:${port}/hooks/event` }],
-        },
-      ],
-    ]),
-  );
-  // We embed the marker as JSON-with-comments — Claude Code's settings
-  // parser tolerates // comments. Pretty-printed for human review.
-  const lines: string[] = ["{", '  "hooks": {'];
-  events.forEach((evt, i) => {
-    lines.push(`    "${evt}": [`);
-    lines.push(`      ${MARKER_START}`);
-    lines.push(JSON.stringify(eventEntries[evt][0], null, 2).split("\n").map((l) => `      ${l}`).join("\n"));
-    lines.push(`      ${MARKER_END}`);
-    lines.push(i === events.length - 1 ? "    ]" : "    ],");
-  });
-  lines.push("  }", "}", "");
-  return lines.join("\n");
+function makeLoomEntry(port: number): HookEntry {
+  return {
+    matcher: "*",
+    hooks: [
+      {
+        type: "command",
+        command: `curl -s -X POST -H 'content-type: application/json' --data-binary @- http://${LOOM_HOST}:${port}${LOOM_HOOK_PATH}`,
+      },
+    ],
+  };
 }
 
-function upsertMarkerBlock(before: string, port: number, events: readonly string[]): string {
-  // Strategy: drop existing loom blocks, then append a fresh "hooks" override
-  // block at the file's end via JSONC-style merge. For real-world correctness
-  // a JSONC parser is preferred; we keep the simple text-edit approach for v1
-  // and document the limitation: if the user has an unusual settings shape
-  // we fall back to writing the marker at end-of-file.
-  const stripped = stripAllMarkerBlocks(before);
-  if (stripped.includes(`"hooks"`)) {
-    // Append marker at the end of each event array. Simple regex merge.
-    let out = stripped;
-    for (const evt of events) {
-      const re = new RegExp(`("${evt}"\\s*:\\s*\\[)([\\s\\S]*?)(\\])`, "m");
-      const insert = `\n      ${MARKER_START}\n      { "matcher": "*", "hooks": [{ "type": "command", "command": "curl -s -X POST -H 'content-type: application/json' --data-binary @- http://127.0.0.1:${port}/hooks/event" }] }\n      ${MARKER_END}\n    `;
-      out = out.replace(re, (_m, open, body: string, close) => {
-        const trimmed = body.trim();
-        const sep = trimmed.length > 0 && !trimmed.endsWith(",") ? "," : "";
-        return `${open}${body}${sep}${insert}${close}`;
-      });
-    }
-    return out;
+function isLoomCommand(h: HookCommand | undefined | null): boolean {
+  if (!h || h.type !== "command" || typeof h.command !== "string") return false;
+  return h.command.includes(LOOM_HOST) && h.command.includes(LOOM_HOOK_PATH);
+}
+
+function countLoomCommands(entry: HookEntry | undefined | null): number {
+  if (!entry || !Array.isArray(entry.hooks)) return 0;
+  return entry.hooks.filter(isLoomCommand).length;
+}
+
+/**
+ * Returns the entry with all loom-owned sub-hooks removed. Returns the
+ * input unchanged if no loom hooks were present, or null if the entry
+ * was loom-only and should be dropped entirely.
+ */
+function purgeLoomFromEntry(entry: HookEntry): HookEntry | null {
+  if (!entry || !Array.isArray(entry.hooks)) return entry;
+  const remaining = entry.hooks.filter((h) => !isLoomCommand(h));
+  if (remaining.length === entry.hooks.length) return entry;
+  if (remaining.length === 0) return null;
+  return { ...entry, hooks: remaining };
+}
+
+function tryParse(text: string): unknown | undefined {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
   }
-  // No "hooks" field at all — write a fresh block.
-  return freshSettings(port, events);
-}
-
-function stripAllMarkerBlocks(text: string): string {
-  const re = new RegExp(`\\s*${escapeRegex(MARKER_START)}[\\s\\S]*?${escapeRegex(MARKER_END)}\\s*`, "g");
-  return text.replace(re, "\n");
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

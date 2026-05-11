@@ -17,7 +17,7 @@
  */
 import * as fs from "node:fs";
 import type { MetadataStore } from "../metadata-store/index.ts";
-import type { ChatPtyBridge } from "../process-manager/chat-pty-bridge.ts";
+import type { ClaudeSessionBridge } from "../process-manager/claude-session-bridge.ts";
 import { invalidateLoomCache } from "./sidebar.ts";
 
 const NAME_RX = /^[A-Za-z0-9](?:[A-Za-z0-9-_ ]{0,62}[A-Za-z0-9])?$/;
@@ -25,7 +25,7 @@ const NAME_RX = /^[A-Za-z0-9](?:[A-Za-z0-9-_ ]{0,62}[A-Za-z0-9])?$/;
 export function mountProjectsRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   store: MetadataStore,
-  bridge?: ChatPtyBridge,
+  bridge?: ClaudeSessionBridge,
 ): void {
   routes["/projects"] = async (req) => {
     if (req.method === "GET") {

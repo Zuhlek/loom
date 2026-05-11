@@ -64,7 +64,7 @@ describe("hooks-admin route", () => {
     rmSync(dir, { recursive: true });
   });
 
-  test("POST install writes the marker block and returns installed=true", async () => {
+  test("POST install writes loom entries and returns installed=true", async () => {
     const dir = tmp();
     const settingsPath = path.join(dir, "settings.json");
     const routes = mount(settingsPath);
@@ -75,8 +75,8 @@ describe("hooks-admin route", () => {
     expect(s.hasMarker).toBe(true);
     expect(s.installedAt).not.toBeNull();
     const content = readFileSync(settingsPath, "utf8");
-    expect(content).toContain("// loom:hooks:start");
     expect(content).toContain("127.0.0.1:4242/hooks/event");
+    expect(() => JSON.parse(content)).not.toThrow();
     rmSync(dir, { recursive: true });
   });
 
@@ -88,7 +88,7 @@ describe("hooks-admin route", () => {
     rmSync(dir, { recursive: true });
   });
 
-  test("POST uninstall removes the marker block and returns installed=false", async () => {
+  test("POST uninstall removes loom entries and returns installed=false", async () => {
     const dir = tmp();
     const settingsPath = path.join(dir, "settings.json");
     const routes = mount(settingsPath);
@@ -98,7 +98,7 @@ describe("hooks-admin route", () => {
     expect(s.installed).toBe(false);
     expect(s.hasMarker).toBe(false);
     const content = readFileSync(settingsPath, "utf8");
-    expect(content).not.toContain("// loom:hooks:start");
+    expect(content).not.toContain("/hooks/event");
     rmSync(dir, { recursive: true });
   });
 

@@ -6,12 +6,14 @@
  * routes mounted.
  */
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { startServer } from "./http-ws-server.ts";
 import { resolveConfig } from "./config-loader/index.ts";
 import { initMetadataStore } from "./metadata-store/index.ts";
-import { ChatPtyBridge } from "./process-manager/chat-pty-bridge.ts";
+import { ClaudeSessionBridge } from "./process-manager/claude-session-bridge.ts";
+import { ensureClaudeOnboarded } from "./process-manager/claude-onboarding.ts";
 import { mountHookReceiver } from "./hook-receiver/index.ts";
 import { mountConfigRoute } from "./routes/config.ts";
 import { mountSidebarRoute } from "./routes/sidebar.ts";
@@ -36,71 +38,91 @@ function parseRootFlag(argv: string[]): string | undefined {
   return undefined;
 }
 
-/**
- * Some node-pty prebuilds ship the spawn-helper without an executable bit.
- * Without that, posix_spawnp fails with no error from libuv. We chmod the
- * helper at startup so the bridge "just works".
- */
-function ensureNodePtyHelperExecutable(): void {
-  const platforms = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"];
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  // Walk up to repo root to find node_modules folders.
-  let dir = __dirname;
-  for (let i = 0; i < 8; i++) {
-    const nm = path.join(dir, "node_modules");
-    if (fs.existsSync(nm)) {
-      // Direct dependency.
-      for (const platform of platforms) {
-        const p = path.join(nm, "node-pty", "prebuilds", platform, "spawn-helper");
-        chmodIfNotExec(p);
-      }
-      // pnpm cache layout: .pnpm/node-pty@<version>/node_modules/node-pty/...
-      try {
-        const pnpmDir = path.join(nm, ".pnpm");
-        if (fs.existsSync(pnpmDir)) {
-          for (const child of fs.readdirSync(pnpmDir)) {
-            if (!child.startsWith("node-pty@")) continue;
-            for (const platform of platforms) {
-              const p = path.join(
-                pnpmDir,
-                child,
-                "node_modules",
-                "node-pty",
-                "prebuilds",
-                platform,
-                "spawn-helper",
-              );
-              chmodIfNotExec(p);
-            }
-          }
-        }
-      } catch {}
-    }
-    const next = path.dirname(dir);
-    if (next === dir) break;
-    dir = next;
+function isExecutableFile(p: string): boolean {
+  try {
+    const stat = fs.statSync(p);
+    return stat.isFile() && (stat.mode & 0o111) !== 0;
+  } catch {
+    return false;
   }
 }
 
-function chmodIfNotExec(p: string): void {
+function findOnPath(name: string): string | null {
+  const PATH = process.env.PATH ?? "";
+  for (const dir of PATH.split(path.delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, name);
+    if (isExecutableFile(candidate)) return candidate;
+  }
+  return null;
+}
+
+function compareSemverDesc(a: string, b: string): number {
+  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pb[i] ?? 0) - (pa[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * Resolve the claude binary. Order:
+ *   1. $LOOM_CLAUDE_BIN (explicit override)
+ *   2. `claude` on $PATH
+ *   3. ~/.claude/local/claude (official local installer)
+ *   4. Newest VS Code extension bundle: ~/.vscode/extensions/anthropic.claude-code-*<platform>/resources/native-binary/claude
+ * Falls back to bare "claude" so we still surface a clean error if nothing works.
+ */
+function resolveClaudeBin(): string {
+  const env = process.env.LOOM_CLAUDE_BIN;
+  if (env) {
+    if (isExecutableFile(env)) return env;
+    console.warn(`[loom] LOOM_CLAUDE_BIN=${env} is not an executable file; ignoring.`);
+  }
+
+  const onPath = findOnPath("claude");
+  if (onPath) return onPath;
+
+  const local = path.join(os.homedir(), ".claude", "local", "claude");
+  if (isExecutableFile(local)) return local;
+
   try {
-    if (!fs.existsSync(p)) return;
-    const stat = fs.statSync(p);
-    if ((stat.mode & 0o111) === 0) {
-      fs.chmodSync(p, 0o755);
+    const extDir = path.join(os.homedir(), ".vscode", "extensions");
+    if (fs.existsSync(extDir)) {
+      const matches = fs
+        .readdirSync(extDir)
+        .filter((name) => name.startsWith("anthropic.claude-code-"))
+        .map((name) => {
+          // anthropic.claude-code-<version>-<platform>
+          const rest = name.slice("anthropic.claude-code-".length);
+          const dash = rest.indexOf("-");
+          const version = dash >= 0 ? rest.slice(0, dash) : rest;
+          return { name, version };
+        })
+        .sort((a, b) => compareSemverDesc(a.version, b.version));
+      for (const m of matches) {
+        const candidate = path.join(extDir, m.name, "resources", "native-binary", "claude");
+        if (isExecutableFile(candidate)) return candidate;
+      }
     }
   } catch {}
+
+  return "claude";
 }
 
 const isEntrypoint =
   import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
 
 if (isEntrypoint) {
-  ensureNodePtyHelperExecutable();
+  ensureClaudeOnboarded();
   const cliRoot = parseRootFlag(process.argv);
   const config = resolveConfig({ cliRoot });
   const store = await initMetadataStore();
-  const bridge = new ChatPtyBridge(store);
+  const claudeBin = resolveClaudeBin();
+  console.log(`[loom] using claude binary: ${claudeBin}`);
+  const bridge = new ClaudeSessionBridge(store, { pathToClaudeCodeExecutable: claudeBin });
   const routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>> = {};
   mountHookReceiver(routes, store);
   mountConfigRoute(routes, config);

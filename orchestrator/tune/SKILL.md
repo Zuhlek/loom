@@ -67,7 +67,7 @@ Interpret the user's feedback and write a structured develop-log entry.
 Curate the develop-log into skill and type improvements. This is the ONLY path to SKILL.md or type file changes.
 
 1. Read all four shards: `~/.claude/skills/log/{ideate,build,feedback,audit}.md`. Treat them as one logical log.
-2. Read all skill files: `~/.claude/skills/weave/SKILL.md`, `~/.claude/skills/tune/SKILL.md`, and every `~/.claude/skills/weave/<phase>/agent.md`.
+2. Read all skill files: `~/.claude/skills/weave/SKILL.md`, `~/.claude/skills/tune/SKILL.md`, and every `~/.claude/skills/weave/phases/<phase>/agent.md`.
 3. Read all type files in `~/.claude/skills/types/`.
 4. Group unapplied entries by theme. Identify patterns (2+ occurrences of the same issue).
 5. For each pattern, draft a specific change:

@@ -48,6 +48,7 @@ export interface ChatRepo {
   setSessionId(id: string, sessionId: string): void;
   dismissResumeBanner(id: string): void;
   markInert(id: string): void;
+  markActive(id: string): void;
 }
 
 export function chatRepo(storage: InMemoryStorage): ChatRepo {
@@ -132,6 +133,10 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
         r.inert = true;
         r.pid = null;
       }
+    },
+    markActive(id) {
+      const r = storage.chats.get(id);
+      if (r) r.inert = false;
     },
   };
 }

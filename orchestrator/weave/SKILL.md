@@ -14,16 +14,16 @@ Do not produce phase artifacts yourself. Phase agents own their artifacts.
 
 ## Load Order
 
-1. Read `find-project.md` when resolving an existing workspace.
-2. Read `create-project.md` when creating a workspace.
-3. Read `recovery.md` before redispatching after malformed output.
+1. Read `methods/find-project.md` when resolving an existing workspace.
+2. Read `methods/create-project.md` when creating a workspace.
+3. Read `methods/recovery.md` before redispatching after malformed output.
 4. Read the active phase agent:
-   - `idea/agent.md`
-   - `design/agent.md`
-   - `plan/agent.md`
-   - `build/agent.md`
-   - `review/agent.md`
-5. Read `quality-check/agent.md` only when the user opts into a quality check before deciding on a rerun (currently Idea phase only).
+   - `phases/idea/agent.md`
+   - `phases/design/agent.md`
+   - `phases/plan/agent.md`
+   - `phases/build/agent.md`
+   - `phases/review/agent.md`
+5. Read `phases/idea/validator.md` only when the user opts into a quality check before deciding on a rerun (currently Idea phase only).
 
 ## State Contract
 
@@ -49,7 +49,7 @@ Status values are exactly `Pending`, `blocked`, `failed`, and `complete`.
 1. Resolve project and read pipeline.md.
 2. Select the current phase.
 3. Dispatch the matching phase agent in a fresh Task session.
-4. Validate RETURN against weave/<phase>/schema.yaml.
+4. Validate RETURN against the schema block in weave/phases/<phase>/agent.md.
 5. Surface the rerun-or-continue decision (see below).
 6. On continue: update pipeline.md, append events.jsonl, refresh artifacts.json, advance phase, exit.
 7. On rerun: re-dispatch the same phase agent with prior artifacts (+ optional Quality Check findings), then return to step 4.
@@ -82,7 +82,7 @@ Phase <phase> returned. <one-line summary>.
 
 ### When the user picks `Run quality check`
 
-1. Dispatch `quality-check/agent.md` against the just-completed phase's artifacts.
+1. Dispatch the phase's validator (e.g. `phases/idea/validator.md`) against the just-completed phase's artifacts.
 2. Quality Check writes `quality-review.md` (per-phase scoped) and updates `pipeline.md` "Quality findings".
 3. Surface the findings preview in chat and re-ask:
 
