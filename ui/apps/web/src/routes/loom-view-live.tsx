@@ -44,26 +44,38 @@ interface LoomViewResponse {
 }
 
 const KNOWN_ARTIFACTS = [
+  // Idea
   "idea.md",
   "decisions.md",
+  // Design
+  "design.md",
+  // Plan
   "plan.md",
   "board.md",
   "task.md",
+  // Build
+  "tests.md",
+  "test-report.md",
+  "develop-log.md",
+  // Review
   "review.md",
+  "feedback.md",
+  "quality-review.md",
+  // Legacy / shared
   "summary.md",
   "seed.md",
   "constitution.md",
 ];
 
 const PHASE_ORDER: Array<{ key: string; phase: PhaseId }> = [
-  { key: "idea", phase: "idea" },
-  { key: "plan", phase: "plan" },
-  { key: "mockup", phase: "mockup" },
-  { key: "tasks", phase: "build" },
-  { key: "build", phase: "build" },
-  { key: "review", phase: "build" },
-  { key: "done", phase: "build" },
+  { key: "idea",   phase: "idea" },
+  { key: "design", phase: "design" },
+  { key: "plan",   phase: "plan" },
+  { key: "build",  phase: "build" },
+  { key: "review", phase: "review" },
 ];
+
+const PHASE_KEYS: readonly PhaseId[] = ["idea", "design", "plan", "build", "review"];
 
 function phaseFromPipeline(p: PipelineSummary | null): PhaseId {
   const cur = p?.current?.phase;
@@ -72,24 +84,26 @@ function phaseFromPipeline(p: PipelineSummary | null): PhaseId {
   return m?.phase ?? "idea";
 }
 
-function phaseStatesFor(currentKey: string | null | undefined): Partial<Record<PhaseId, "pending" | "complete" | "active" | "todo">> {
-  // The PhaseStepper only knows idea/plan/mockup/build, so multiple
-  // pipeline phases (tasks, build, review, done) collapse onto build.
-  const order = ["idea", "plan", "mockup", "tasks", "build", "review", "done"];
-  const idx = currentKey ? order.indexOf(currentKey) : -1;
+function phaseStatesFor(
+  currentKey: string | null | undefined,
+  currentStatus: string | null | undefined,
+): Partial<Record<PhaseId, "pending" | "complete" | "active" | "todo">> {
   const states: Partial<Record<PhaseId, "pending" | "complete" | "active" | "todo">> = {};
-  if (idx >= 0) {
-    if (idx > 0) states.idea = "complete";
-    else states.idea = "active";
-    if (idx > 1) states.plan = "complete";
-    else if (idx === 1) states.plan = "active";
-    if (idx > 2) states.mockup = "complete";
-    else if (idx === 2) states.mockup = "active";
-    if (idx > 6) states.build = "complete";
-    else if (idx >= 3) states.build = "active";
-  } else {
-    states.idea = "active";
+  // Review + complete = every lane shows the green check.
+  if (currentKey === "review" && currentStatus === "complete") {
+    for (const id of PHASE_KEYS) states[id] = "complete";
+    return states;
   }
+  const idx = currentKey ? PHASE_KEYS.indexOf(currentKey as PhaseId) : -1;
+  if (idx < 0) {
+    states.idea = "active";
+    return states;
+  }
+  PHASE_KEYS.forEach((id, i) => {
+    if (i < idx) states[id] = "complete";
+    else if (i === idx) states[id] = "active";
+    // i > idx → leave undefined; PhaseStepper renders it as "todo"
+  });
   return states;
 }
 
@@ -151,7 +165,10 @@ export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
   }, [projectId, loomName, fetchData]);
 
   const phase = phaseFromPipeline(data?.pipeline ?? null);
-  const phaseStates = useMemo(() => phaseStatesFor(data?.pipeline?.current?.phase ?? null), [data?.pipeline?.current?.phase]);
+  const phaseStates = useMemo(
+    () => phaseStatesFor(data?.pipeline?.current?.phase ?? null, data?.pipeline?.current?.status ?? null),
+    [data?.pipeline?.current?.phase, data?.pipeline?.current?.status],
+  );
   const selectedContent = data?.artifacts[selected] ?? "";
   const renderedHtml = useMemo(() => {
     if (!selectedContent) return "";

@@ -1,6 +1,6 @@
 import clsx from "clsx";
 
-export type PhaseId = "idea" | "plan" | "mockup" | "build";
+export type PhaseId = "idea" | "design" | "plan" | "build" | "review";
 
 export interface Phase {
   id: PhaseId;
@@ -10,15 +10,16 @@ export interface Phase {
 }
 
 const PHASES: Phase[] = [
-  { id: "idea", num: "1", label: "Idea", state: "todo" },
-  { id: "plan", num: "2", label: "Plan", state: "todo" },
-  { id: "mockup", num: "2.5", label: "Mockup", state: "todo" },
-  { id: "build", num: "3", label: "Build", state: "todo" },
+  { id: "idea",   num: "1", label: "Idea",   state: "todo" },
+  { id: "design", num: "2", label: "Design", state: "todo" },
+  { id: "plan",   num: "3", label: "Plan",   state: "todo" },
+  { id: "build",  num: "4", label: "Build",  state: "todo" },
+  { id: "review", num: "5", label: "Review", state: "todo" },
 ];
 
 export interface PhaseStepperProps {
   current: PhaseId;
-  /** Override states by id, e.g. { idea: "complete", plan: "complete", mockup: "active" } */
+  /** Override states by id, e.g. { idea: "complete", design: "complete", plan: "active" } */
   states?: Partial<Record<PhaseId, Phase["state"]>>;
 }
 

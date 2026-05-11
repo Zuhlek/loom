@@ -2,7 +2,6 @@ import { PhaseStepper, type PhaseId } from "../components/loom/PhaseStepper";
 import { FileTreeView, type LoomFile } from "../components/loom/FileTreeView";
 import { EventsTail } from "../components/loom/EventsTail";
 import { KanbanView, type KanbanColumn } from "../components/loom/KanbanView";
-import { MockupIframe } from "../components/loom/MockupIframe";
 
 const FILES: LoomFile[] = [
   { path: ".pipeline/", isDirectory: true, expanded: true },
@@ -62,14 +61,6 @@ const KANBAN: KanbanColumn[] = [
   },
 ];
 
-const MOCKUP_FILES = [
-  "01-discover-wizard.html",
-  "02-empty-home.html",
-  "03-spawn-chat-dialog.html",
-  "04-local-mode-chat.html",
-  "05-worktree-mode-chat-with-diff.html",
-];
-
 const SAMPLE_EVENTS = [
   { ts: "14:31:21", level: "info" as const, message: "build_started project=nora total=8" },
   { ts: "14:31:22", level: "ok" as const, message: "task_done id=t-001 duration=14m commit=abc123f" },
@@ -87,16 +78,13 @@ interface LoomViewProps {
 export function LoomView({ phase }: LoomViewProps) {
   const isIdea = phase === "idea";
   const isPlan = phase === "plan";
-  const isMockup = phase === "mockup";
   const isBuild = phase === "build";
 
-  const phaseId: PhaseId = isPlan ? "plan" : isMockup ? "mockup" : isBuild ? "build" : "idea";
+  const phaseId: PhaseId = isPlan ? "plan" : isBuild ? "build" : "idea";
   const states = isPlan
     ? { idea: "complete" as const, plan: "complete" as const }
-    : isMockup
-    ? { idea: "complete" as const, plan: "complete" as const, mockup: "active" as const }
     : isBuild
-    ? { idea: "complete" as const, plan: "complete" as const, mockup: "complete" as const, build: "active" as const }
+    ? { idea: "complete" as const, plan: "complete" as const, build: "active" as const }
     : { idea: "pending" as const };
 
   const fileList = isBuild ? SAMPLE_BUILD_FILES : isPlan ? SAMPLE_PLAN_FILES.map((f) => (f.path === "plan.md" ? { ...f, active: true, dimmed: false } : f)) : FILES;
@@ -120,9 +108,7 @@ export function LoomView({ phase }: LoomViewProps) {
 
         {isIdea && <PendingBanner />}
 
-        {isMockup ? (
-          <MockupIframe files={MOCKUP_FILES} active="01-discover-wizard.html" />
-        ) : isBuild ? (
+        {isBuild ? (
           <>
             <KanbanView columns={KANBAN} />
             <EventsTail events={SAMPLE_EVENTS} />

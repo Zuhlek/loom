@@ -7,10 +7,9 @@
  *                  `approvals`, and `pending` (no deep recursion).
  *   - tree:        flat directory listing at depth ≤ 2, sorted
  *                  (directories first, then files, alphabetically).
- *   - artifacts:   contents of well-known markdown artifacts (idea.md,
- *                  plan.md, decisions.md, board.md, task.md, review.md,
- *                  summary.md, seed.md, constitution.md). Each capped
- *                  at 200 KB; truncated entries carry a marker tail.
+ *   - artifacts:   contents of well-known markdown artifacts (see
+ *                  ARTIFACT_FILES below). Each capped at 200 KB;
+ *                  truncated entries carry a marker tail.
  *   - events:      last 200 lines of `events.jsonl`, parsed.
  *   - mockupPages: filenames in the `mockup/` subdir (rendered via the
  *                  existing /loom/mockup/file iframe route).
@@ -28,10 +27,16 @@ import type { MetadataStore } from "../metadata-store/index.ts";
 const ARTIFACT_FILES = [
   "idea.md",
   "decisions.md",
+  "design.md",
   "plan.md",
   "board.md",
   "task.md",
+  "tests.md",
+  "test-report.md",
+  "develop-log.md",
   "review.md",
+  "feedback.md",
+  "quality-review.md",
   "summary.md",
   "seed.md",
   "constitution.md",
