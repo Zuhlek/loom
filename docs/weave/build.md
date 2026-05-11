@@ -69,6 +69,21 @@
 | Checkpoint | Batch status updates after all batch tasks return |
 | Failed task | No automatic redispatch without new instruction or quality finding |
 
+## `board.md` Transitions
+
+The Build Coordinator owns every state change on `board.md`. Plan delivers the board with all tasks in `Backlog`; Build moves them through the columns as work progresses.
+
+| Trigger | Source | Target | Card annotation |
+| ------- | ------ | ------ | --------------- |
+| Coordinator picks a ready task | `Backlog` | `In Progress` | (none) |
+| Task Builder returns `status: green` | `In Progress` | `Review` | (none) |
+| Smoke + mutation gates pass for the task | `Review` | `Done` | (none) |
+| Task Builder returns `status: failed` after 3 attempts | `In Progress` | `In Progress` | `[failed]` after the ID |
+| Task Builder returns `status: hitl-block` | `In Progress` | `Backlog` | `[HITL-blocked: <reason>]` after the ID |
+| Blocker for a backlog task moves to `Done` | `Backlog` | `Backlog` | Remove `(blocked by ...)` segment |
+
+All board mutations go through `loom/lib/atomic-write.sh` under the project-level build lock. Per-task locks gate the implementation work, not the board mutation. A Build rerun does NOT reset the board; the Coordinator simply picks the next eligible `Backlog` cards.
+
 ## Verification Modes
 
 | Mode | Trigger | Rule |

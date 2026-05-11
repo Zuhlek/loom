@@ -78,6 +78,20 @@
 | DAG | Dependency graph has no cycles |
 | Story coverage | Every user story is covered by at least one task |
 | Flat index | `task.md` reflects the task graph |
+| Board shape | `board.md` has the four canonical columns and every task lives in exactly one |
+
+## `board.md` Shape
+
+| Element | Contract |
+| ------- | -------- |
+| Columns | Exactly `## Backlog`, `## In Progress`, `## Review`, `## Done`, in order |
+| Plan-time placement | Every task starts under `Backlog` |
+| Card line | `- T-NNN <title> (blocked by T-XXX)? — touches: <layers>?` |
+| HITL tag | `[HITL]` immediately after the ID for human-required tasks |
+| Empty column | `- (none)` placeholder |
+| Stale tag | `[stale]` immediately after the ID for tasks invalidated by a Plan rerun |
+
+Build Coordinator owns transitions (Backlog → In Progress → Review → Done) once the Plan handoff lands; see `build.md`.
 
 ## Plan Rules
 
