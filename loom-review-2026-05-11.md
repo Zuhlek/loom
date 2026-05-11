@@ -63,7 +63,7 @@ Structure, pipeline schema, phase contracts, SR-1/SR-2/SR-4 all clean. Three loa
 
 ### Answer
 
-<!-- user fills -->
+Generally agree with A. However, make sure the regression is not intentional, i.e. the features from the legacy principles.md are covered elsewhere.
 
 ---
 
@@ -104,7 +104,7 @@ forge/idea/categories.md (the contract)
 
 ### Answer
 
-<!-- user fills -->
+Generally agree with A. However, make sure the regression is not intentional, i.e. the features from the legacy categories.md are covered elsewhere.
 
 ---
 
@@ -139,7 +139,7 @@ forge/idea/categories.md (the contract)
 
 ### Answer
 
-<!-- user fills -->
+Restore full features, no regression. go with A.
 
 ---
 
@@ -172,7 +172,7 @@ forge/idea/categories.md (the contract)
 
 ### Answer
 
-<!-- user fills -->
+i dont like the skill, remove it. keep as is, i.e. even remove from docs.
 
 ---
 
@@ -216,7 +216,7 @@ forge/idea/categories.md (the contract)
 
 ### Answer
 
-<!-- user fills -->
+keep the one at root leve, delete the one inside the orchestrator project
 
 ---
 
@@ -252,7 +252,7 @@ Review agent ──writes──┬─→ review.md          ✓ contract require
 
 ### Answer
 
-<!-- user fills -->
+A
 
 ---
 
@@ -276,7 +276,7 @@ Review agent ──writes──┬─→ review.md          ✓ contract require
 
 ### Answer
 
-<!-- user fills -->
+A
 
 ---
 
@@ -300,7 +300,7 @@ Forge's stage-badge format `Q4 [Branching 2/8 · Y/N]: ...` is gone. Users have 
 
 ### Answer
 
-<!-- user fills -->
+I do not want this budget logic anymore. Remove it entirely and all its references.
 
 ---
 
@@ -324,7 +324,7 @@ Design §6.4 cascades: "user picks rerun → orchestrator either re-dispatches t
 
 ### Answer
 
-<!-- user fills -->
+The idea is the following: ideation phases run multiple times are generally more comprehensive and holeless. however, the rist of those loops is redundancy and overthinking otherwise simple issues. thus, i do not want to run iterations automatically, i rather want to run a process with a human in the loop. for now, this setup is only required in phases, were the human is actively answering questions, i.e. idea. when a idea subagent reutnr, he wrote his artifacts as per contract. the mainagent then asks the user if he is happy with it or if he wants to rerun the ideation phase (i.e. original input + the artifacts from the prior run). as option for the latter, he should also ask if a quality check agent should be run which is a subagent itself, task: analyze the artifacts form the ideation subagent and categorize the quality (any holes? obvious blidnspots? wrong assumptions? contractitng answers? etc.). then a qualitry review document is written and the proces goes back to the main agent. the main agent will then highlight the findings in chat and ask the user again, if he wants to continue or tirgger a rerun of the ideation phase. this setup should avoid useless reiterations of the ideation phase and reduce token burning, i.e. the quality check is a messurement for "is a reiteration worth it?"
 
 ---
 
@@ -345,7 +345,7 @@ Design §6.4 cascades: "user picks rerun → orchestrator either re-dispatches t
 
 ### Answer
 
-<!-- user fills -->
+only update on /tune, take over the original skill 1:1 we will adress/refactor this later
 
 ---
 
@@ -369,7 +369,7 @@ Design §6.4 cascades: "user picks rerun → orchestrator either re-dispatches t
 
 ### Answer
 
-<!-- user fills -->
+B
 
 ---
 
@@ -391,7 +391,7 @@ Design §6.4 cascades: "user picks rerun → orchestrator either re-dispatches t
 
 ### Answer
 
-<!-- user fills -->
+remove usage-diff logic and all its references thoughout the code and docs entirely, we will do that at a later stage.
 
 ---
 
