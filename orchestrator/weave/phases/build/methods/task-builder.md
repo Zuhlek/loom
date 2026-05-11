@@ -67,13 +67,27 @@ notes: <optional one-paragraph remarks>
 ## RETURN
 
 ```yaml
-phase: build
-ticket: T-NNN
-status: green | failed | hitl-block
-attempts: 1
-tests-passing: 0
-tests-failing: 0
-files-changed: 0
-artifacts:
-  - tasks/T-NNN.done.md
+type: object
+required: [phase, ticket, status, attempts, artifacts]
+properties:
+  phase:
+    enum: [build]
+  ticket:
+    pattern: ^T-[0-9]{3}$
+  status:
+    enum: [green, failed, hitl-block]
+  attempts:
+    type: integer
+    minimum: 1
+    maximum: 3
+  tests-passing:
+    type: integer
+  tests-failing:
+    type: integer
+  files-changed:
+    type: integer
+  artifacts:
+    type: array
+    items:
+      type: string
 ```

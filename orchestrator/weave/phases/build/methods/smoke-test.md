@@ -34,11 +34,21 @@ Verify runnable application behavior after Build tasks are green.
 ## RETURN
 
 ```yaml
-phase: smoke
-status: complete | failed | skipped
-artifacts:
-  - smoke-report.md
-passed: 0
-failed: 0
-skipped: 0
+type: object
+required: [phase, status, artifacts, passed, failed, skipped]
+properties:
+  phase:
+    enum: [smoke]
+  status:
+    enum: [complete, failed, skipped]
+  artifacts:
+    type: array
+    items:
+      type: string
+  passed:
+    type: integer
+  failed:
+    type: integer
+  skipped:
+    type: integer
 ```

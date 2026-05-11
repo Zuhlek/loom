@@ -40,10 +40,29 @@ Required sections:
 ## RETURN
 
 ```yaml
-phase: design
-status: Pending | blocked | failed | complete
-artifacts:
-  - design.md
-summary: <brief user-facing summary>
-open-ambiguity: []
+type: object
+required: [phase, status, artifacts, summary, open-ambiguity]
+properties:
+  phase:
+    enum: [design]
+  status:
+    enum: [Pending, blocked, failed, complete]
+  artifacts:
+    type: array
+    items:
+      type: string
+  summary:
+    type: string
+  open-ambiguity:
+    type: array
+    items:
+      type: object
+      required: [question, category]
+      properties:
+        question:
+          type: string
+        category:
+          enum: [Y/N, Choice, Architecture, Background, Open]
+  pending-user-input:
+    type: string
 ```

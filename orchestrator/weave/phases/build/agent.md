@@ -30,11 +30,11 @@ Execute the work graph and aggregate verification evidence. Own build artifacts 
 
 1. Read `board.md`. Select ready tasks (`Backlog` cards whose `blocked-by` set is empty OR all blockers are in `Done`).
 2. Move each selected task from `Backlog` to `In Progress` in `board.md` before dispatching.
-3. Dispatch `task-builder.md` one task at a time unless a declared parallel batch has disjoint file scope.
+3. Dispatch `methods/task-builder.md` one task at a time unless a declared parallel batch has disjoint file scope.
 4. Enforce locks and the three-attempt cap.
 5. On task return, transition the card in `board.md` per the table below.
-6. Run `smoke-test.md` when the project is runnable.
-7. Run `mutation-test.md` only when `tests.md` enables it.
+6. Run `methods/smoke-test.md` when the project is runnable.
+7. Run `methods/mutation-test.md` only when `tests.md` enables it.
 8. Write `test-report.md`.
 9. Return blockers, artifacts, and verification summary.
 
@@ -69,14 +69,27 @@ When the Coordinator returns, the orchestrator surfaces the rerun-or-continue de
 ## RETURN
 
 ```yaml
-phase: build
-status: Pending | blocked | failed | complete
-artifacts:
-  - board.md
-  - test-report.md
-summary: <verification summary>
-open-ambiguity: []
-completed: 0
-failed: 0
-hitl-pending: 0
+type: object
+required: [phase, status, artifacts, summary, open-ambiguity, completed, failed, hitl-pending]
+properties:
+  phase:
+    enum: [build]
+  status:
+    enum: [Pending, blocked, failed, complete]
+  artifacts:
+    type: array
+    items:
+      type: string
+  summary:
+    type: string
+  open-ambiguity:
+    type: array
+    items:
+      type: object
+  completed:
+    type: integer
+  failed:
+    type: integer
+  hitl-pending:
+    type: integer
 ```

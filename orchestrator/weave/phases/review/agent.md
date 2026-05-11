@@ -45,15 +45,27 @@ Validate the built result against intent, design, plan, and evidence. Own review
 ## RETURN
 
 ```yaml
-phase: review
-status: Pending | blocked | failed | complete
-artifacts:
-  - review.md
-  - feedback.md
-  - develop-log.md
-summary: <finding summary>
-open-ambiguity: []
-blockers: 0
-major: 0
-minor: 0
+type: object
+required: [phase, status, artifacts, summary, open-ambiguity, blockers, major, minor]
+properties:
+  phase:
+    enum: [review]
+  status:
+    enum: [Pending, blocked, failed, complete]
+  artifacts:
+    type: array
+    items:
+      type: string
+  summary:
+    type: string
+  open-ambiguity:
+    type: array
+    items:
+      type: object
+  blockers:
+    type: integer
+  major:
+    type: integer
+  minor:
+    type: integer
 ```

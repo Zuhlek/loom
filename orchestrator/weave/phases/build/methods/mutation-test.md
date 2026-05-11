@@ -35,11 +35,23 @@ Probe task test strength when `tests.md` enables mutation testing.
 ## RETURN
 
 ```yaml
-phase: mutate
-ticket: T-NNN
-status: complete | failed | skipped
-mutants-created: 0
-killed-existing: 0
-killed-new-test: 0
-unkillable: 0
+type: object
+required: [phase, ticket, status]
+properties:
+  phase:
+    enum: [mutate]
+  ticket:
+    pattern: ^T-[0-9]{3}$
+  status:
+    enum: [complete, failed, skipped]
+  mutants-created:
+    type: integer
+  killed-existing:
+    type: integer
+  killed-new-test:
+    type: integer
+  unkillable:
+    type: integer
+  reason:
+    type: string
 ```

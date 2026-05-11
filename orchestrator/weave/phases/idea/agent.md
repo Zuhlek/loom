@@ -8,8 +8,8 @@ Clarify the seed into specified intent. Own `idea.md` and `decisions.md`.
 - `seed.md`
 - existing `idea.md` and `decisions.md` (from prior runs of this phase, if any)
 - `quality-review.md` if present (Quality Check findings from the prior run — the rerun must address these)
-- `loom/weave/idea/grilling-rules.md`
-- `loom/weave/idea/categories.md`
+- `loom/weave/phases/idea/methods/grilling.md`
+- `loom/weave/phases/idea/methods/categories.md`
 - `loom/principles.md`
 - selected `loom/types/<type>.md`
 - optional `constitution.md`
@@ -23,13 +23,13 @@ Clarify the seed into specified intent. Own `idea.md` and `decisions.md`.
 
 1. Read the seed and existing decisions.
 2. If `quality-review.md` exists from a prior run, address its findings first.
-3. Run Foundation before Branching (see `grilling-rules.md` §2).
-4. Generate questions per `categories.md` templates; self-check each against the six G-rules in `grilling-rules.md` §1 before presenting.
-5. Ask via `AskUserQuestion` directly. Surface format per `grilling-rules.md` §4.
-6. Persist every branching decision in `decisions.md` with `loom:question` and `loom:answer-slot` markers per `grilling-rules.md` §6.
+3. Run Foundation before Branching (see `methods/grilling.md` §2).
+4. Generate questions per `categories.md` templates; self-check each against the six G-rules in `methods/grilling.md` §1 before presenting.
+5. Ask via `AskUserQuestion` directly. Surface format per `methods/grilling.md` §4.
+6. Persist every branching decision in `decisions.md` with `loom:question` and `loom:answer-slot` markers per `methods/grilling.md` §6.
 7. Update `idea.md` in place after each answered decision.
-8. Apply the revisit mechanic per `grilling-rules.md` §5 when a new answer flips a prior recommendation.
-9. Return when Design can proceed without redefining intent (stop rules in `grilling-rules.md` §7).
+8. Apply the revisit mechanic per `methods/grilling.md` §5 when a new answer flips a prior recommendation.
+9. Return when Design can proceed without redefining intent (stop rules in `methods/grilling.md` §7).
 
 ## Rerun Behavior
 
@@ -65,16 +65,34 @@ Marker shape:
 <!-- loom:answer-slot end id=Q01 -->
 ```
 
-Per-category briefing templates and validation live in [`categories.md`](categories.md). Dispatch flow, slot conventions, and the revisit mechanic live in [`grilling-rules.md`](grilling-rules.md).
+Per-category briefing templates and validation live in [`methods/categories.md`](methods/categories.md). Dispatch flow, slot conventions, and the revisit mechanic live in [`methods/grilling.md`](methods/grilling.md).
 
 ## RETURN
 
 ```yaml
-phase: idea
-status: Pending | blocked | failed | complete
-artifacts:
-  - idea.md
-summary: <brief user-facing summary>
-open-ambiguity: []
-pending-user-input: <optional>
+type: object
+required: [phase, status, artifacts, summary, open-ambiguity]
+properties:
+  phase:
+    enum: [idea]
+  status:
+    enum: [Pending, blocked, failed, complete]
+  artifacts:
+    type: array
+    items:
+      type: string
+  summary:
+    type: string
+  open-ambiguity:
+    type: array
+    items:
+      type: object
+      required: [question, category]
+      properties:
+        question:
+          type: string
+        category:
+          enum: [Y/N, Choice, Architecture, Background, Open]
+  pending-user-input:
+    type: string
 ```

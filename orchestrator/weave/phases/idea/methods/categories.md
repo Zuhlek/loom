@@ -170,7 +170,7 @@ with a "Suggested direction" paragraph that explains the agent's proposal.>
 Walk in order of preference (cheapest first):
 
 1. Can I answer this myself in < 2 min via an Explore subagent? → dispatch Explore, don't ask.
-2. Would either answer cause rework? (rule G1 in `grilling-rules.md`) → if no, skip the question entirely.
+2. Would either answer cause rework? (rule G1 in `grilling.md`) → if no, skip the question entirely.
 3. Exactly two viable options, implications fit in one line each? → **Y/N**.
 4. 3–5 options, pure list (no architecture needed)? → **Choice**.
 5. Needs architecture sketch to make sense? → **Architecture**.

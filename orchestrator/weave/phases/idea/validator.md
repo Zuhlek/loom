@@ -1,18 +1,16 @@
-# Quality Check Agent
+# Idea Validator
 
-Opt-in subagent that analyzes the artifacts a phase just produced and reports whether a rerun would meaningfully change the result.
+Opt-in subagent that analyzes Idea-phase artifacts and reports whether a rerun would meaningfully change the result.
 
 The orchestrator dispatches this agent **only** when the user picks `Run quality check` at the rerun-or-continue surface. It is not part of the mandatory phase cycle; its purpose is to inform the user's rerun decision.
-
-Currently supported for the **Idea** phase. Other phases may opt in later.
 
 ## Reads
 
 - `pipeline.md` (Current phase + Phase status)
-- The just-completed phase's RETURN block (passed by the orchestrator)
-- `weave/<phase>/artifact-contract.md`
-- The phase's artifacts (read-only)
-- `seed.md` (Idea only — to compare intent against the produced `idea.md`)
+- The just-completed Idea RETURN block (passed by the orchestrator)
+- [`artifact.md`](artifact.md)
+- `idea.md`, `decisions.md` (read-only)
+- `seed.md` (to compare intent against the produced `idea.md`)
 
 ## Writes
 
@@ -25,11 +23,11 @@ The agent looks for evidence that a rerun is worth the token burn:
 
 | Check | What it surfaces |
 | --- | --- |
-| Holes | Required sections or contracts missing from the artifact (per `artifact-contract.md`). |
-| Blind spots | Decisions implied by the seed / prior phases that the artifact never addresses. |
+| Holes | Required sections or contracts missing from the artifact (per [`artifact.md`](artifact.md)). |
+| Blind spots | Decisions implied by the seed that the artifact never addresses. |
 | Wrong assumptions | Statements in the artifact that contradict the seed or prior decisions. |
 | Contradicting answers | Decisions in `decisions.md` that conflict with each other or with `idea.md`. |
-| Briefing quality | Questions whose briefings don't satisfy the six "good question" criteria (`grilling-rules.md` §1). |
+| Briefing quality | Questions whose briefings don't satisfy the six "good question" criteria ([`methods/grilling.md`](methods/grilling.md) §1). |
 | Stale ambiguity | "Open ambiguity" items that the next phase cannot consume. |
 
 If no finding lands in any category, status is `passed` and the agent recommends `Continue`.
@@ -37,7 +35,7 @@ If no finding lands in any category, status is `passed` and the agent recommends
 ## Output: `quality-review.md`
 
 ```markdown
-# Quality Review — <phase>
+# Quality Review — idea
 **Run at:** <iso-timestamp>
 **Phase artifacts:** <artifact list>
 
@@ -66,15 +64,31 @@ The agent does NOT call `AskUserQuestion`. It writes `quality-review.md` and ret
 ## RETURN
 
 ```yaml
-phase: quality-check
-checked-phase: idea | design | plan | build | review
-status: passed | findings
-summary: <one-line preview of findings>
-recommendation: continue | rerun
-findings:
-  - severity: blocker | major | minor | note
-    title: <one-line>
-    suggested-focus: <what a rerun should address>
-artifacts:
-  - quality-review.md
+type: object
+required: [phase, status, summary, recommendation, findings, artifacts]
+properties:
+  phase:
+    enum: [quality-check]
+  status:
+    enum: [passed, findings]
+  summary:
+    type: string
+  recommendation:
+    enum: [continue, rerun]
+  findings:
+    type: array
+    items:
+      type: object
+      required: [severity, title]
+      properties:
+        severity:
+          enum: [blocker, major, minor, note]
+        title:
+          type: string
+        suggested-focus:
+          type: string
+  artifacts:
+    type: array
+    items:
+      type: string
 ```
