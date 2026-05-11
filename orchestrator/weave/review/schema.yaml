@@ -1,0 +1,23 @@
+type: object
+required: [phase, status, artifacts, summary, open-ambiguity, blockers, major, minor]
+properties:
+  phase:
+    enum: [review]
+  status:
+    enum: [Pending, blocked, failed, complete]
+  artifacts:
+    type: array
+    items:
+      type: string
+  summary:
+    type: string
+  open-ambiguity:
+    type: array
+    items:
+      type: object
+  blockers:
+    type: integer
+  major:
+    type: integer
+  minor:
+    type: integer

@@ -1,0 +1,21 @@
+type: object
+required: [phase, checked-phase, status, summary, findings]
+properties:
+  phase:
+    enum: [quality-check]
+  checked-phase:
+    enum: [idea, design, plan, build, review]
+  status:
+    enum: [passed, findings]
+  summary:
+    type: string
+  findings:
+    type: array
+    items:
+      type: object
+      required: [severity, issue]
+      properties:
+        severity:
+          enum: [blocker, major, minor, note]
+        issue:
+          type: string

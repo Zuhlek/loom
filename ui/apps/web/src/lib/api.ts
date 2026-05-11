@@ -1,0 +1,175 @@
+/**
+ * API client. All endpoints go through Vite's `/api` proxy in dev; in
+ * production a same-origin server would serve the bundle directly.
+ */
+
+const API_BASE = "/api";
+
+export interface ApiChat {
+  id: string;
+  project_id: string | null;
+  cwd: string;
+  permission_mode: "default" | "plan" | "accept-edits" | "trusted-vm";
+  worktree_mode: "local" | "worktree";
+  worktree_path: string | null;
+  session_id: string | null;
+  pid: number | null;
+  last_opened: string;
+  pinned: boolean;
+  inert: boolean;
+  created_at: string;
+}
+
+export interface ApiProject {
+  id: string;
+  name: string;
+  paths: string[];
+  created_at: string;
+}
+
+export interface SidebarLoomEntry {
+  /** Stable id: `<projectId>__<loom-name>__<path-hash>`. */
+  id: string;
+  projectId: string;
+  projectName: string;
+  /** The loom name (the directory name under .loom/). */
+  name: string;
+  /** Which of the project's paths this loom sits under. */
+  cwd: string;
+  /** Absolute path to the .loom/<name>/ directory. */
+  dotLoomPath: string;
+}
+
+export interface SidebarState {
+  groups: Array<{
+    project: ApiProject;
+    chats: ApiChat[];
+    looms: SidebarLoomEntry[];
+  }>;
+  unassigned: ApiChat[];
+  empty: boolean;
+}
+
+/**
+ * Error thrown by `apiFetch` for non-2xx responses. Exposes the parsed
+ * JSON body (when available) so callers can render a clean message
+ * instead of the wrapped "api /cwd 404: {...}" string.
+ */
+export class ApiError extends Error {
+  status: number;
+  body: any;
+  constructor(message: string, status: number, body: any) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+async function apiFetch<T>(pathname: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(API_BASE + pathname, init);
+  if (!res.ok) {
+    const text = await res.text();
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {}
+    const detail = parsed?.error ?? text;
+    throw new ApiError(`${detail || res.statusText}`, res.status, parsed);
+  }
+  return (await res.json()) as T;
+}
+
+export async function getSidebarState(): Promise<SidebarState> {
+  return apiFetch<SidebarState>("/sidebar/state");
+}
+
+export async function listChats(): Promise<{ chats: ApiChat[] }> {
+  return apiFetch<{ chats: ApiChat[] }>("/chats");
+}
+
+export async function getChat(id: string): Promise<{ chat: ApiChat }> {
+  return apiFetch<{ chat: ApiChat }>(`/chats/get?id=${encodeURIComponent(id)}`);
+}
+
+export interface CreateChatBody {
+  cwd: string;
+  permissionMode?: ApiChat["permission_mode"];
+  worktreeMode?: ApiChat["worktree_mode"];
+  /** New project-first contract: pin the chat to an existing project. */
+  projectId?: string | null;
+  /** Legacy: auto-create a project by name. UI no longer surfaces this. */
+  projectName?: string;
+}
+
+export async function createChat(body: CreateChatBody): Promise<{ chat: ApiChat }> {
+  return apiFetch<{ chat: ApiChat }>("/chats", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export interface CreateProjectBody {
+  name: string;
+  initialCwd: string;
+}
+
+export async function createProject(body: CreateProjectBody): Promise<{ project: ApiProject }> {
+  return apiFetch<{ project: ApiProject }>("/projects", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteChat(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/chats/delete?id=${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`api /chats/delete ${res.status}: ${await res.text()}`);
+  }
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/projects/delete?id=${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`api /projects/delete ${res.status}: ${await res.text()}`);
+  }
+}
+
+export interface CwdEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  hasGit: boolean;
+}
+
+export async function listCwd(parent: string): Promise<{ parent: string; entries: CwdEntry[] }> {
+  return apiFetch<{ parent: string; entries: CwdEntry[] }>(
+    `/cwd?parent=${encodeURIComponent(parent)}`,
+  );
+}
+
+export async function listCwdRoots(): Promise<{ home: string; roots: Array<{ label: string; path: string }> }> {
+  return apiFetch<{ home: string; roots: Array<{ label: string; path: string }> }>(
+    "/cwd/roots",
+  );
+}
+
+export async function listProjects(): Promise<{ projects: ApiProject[] }> {
+  return apiFetch<{ projects: ApiProject[] }>("/projects");
+}
+
+export async function listRecentCwds(limit = 10): Promise<{ cwds: string[] }> {
+  return apiFetch<{ cwds: string[] }>(`/cwd/recent?limit=${limit}`);
+}
+
+/** Resolve the WebSocket URL relative to the Vite dev server. */
+export function wsUrl(): string {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/ws`;
+}

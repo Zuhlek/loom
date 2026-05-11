@@ -1,0 +1,86 @@
+/*
+ * Nora visual identity tokens — verbatim from .loom/nora/mockup/shared/styles.html.
+ * Tailwind v3 is loaded via CDN in index.html; these CSS variables back the
+ * arbitrary-property utilities (e.g. text-[var(--foreground)]).
+ */
+
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+  --background: #ffffff;
+  --app-chrome-background: #ffffff;
+  --foreground: #292524;
+  --card: #ffffff;
+  --card-foreground: #292524;
+  --popover: #ffffff;
+  --popover-foreground: #292524;
+  --primary: oklch(0.488 0.217 264);
+  --primary-foreground: #ffffff;
+  --secondary: rgba(0, 0, 0, 0.04);
+  --secondary-foreground: #292524;
+  --muted: rgba(0, 0, 0, 0.04);
+  --muted-foreground: #57534e;
+  --accent: rgba(0, 0, 0, 0.04);
+  --accent-foreground: #292524;
+  --destructive: #ef4444;
+  --destructive-foreground: #b91c1c;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.10);
+  --ring: oklch(0.488 0.217 264);
+  --info: #3b82f6;
+  --info-foreground: #1d4ed8;
+  --success: #10b981;
+  --success-foreground: #047857;
+  --warning: #f59e0b;
+  --warning-foreground: #b45309;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: var(--app-chrome-background);
+  color: var(--foreground);
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+pre, code, .font-mono {
+  font-family: "SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  z-index: 9999;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+
+.diff-add { background: rgba(16, 185, 129, 0.08); }
+.diff-add-strong { background: rgba(16, 185, 129, 0.18); }
+.diff-del { background: rgba(239, 68, 68, 0.08); }
+.diff-del-strong { background: rgba(239, 68, 68, 0.18); }
+.diff-meta { color: var(--muted-foreground); }
+
+@keyframes nora-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.awaiting-pulse { animation: nora-pulse 2s ease-in-out infinite; }
+
+@keyframes nora-spin {
+  to { transform: rotate(360deg); }
+}
+.tasks-spinner { animation: nora-spin 1s linear infinite; transform-origin: center; }

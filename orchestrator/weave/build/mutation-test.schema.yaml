@@ -1,0 +1,19 @@
+type: object
+required: [phase, ticket, status]
+properties:
+  phase:
+    enum: [mutate]
+  ticket:
+    pattern: ^T-[0-9]{3}$
+  status:
+    enum: [complete, failed, skipped]
+  mutants-created:
+    type: integer
+  killed-existing:
+    type: integer
+  killed-new-test:
+    type: integer
+  unkillable:
+    type: integer
+  reason:
+    type: string

@@ -1,0 +1,23 @@
+type: object
+required: [phase, status, artifacts, summary, open-ambiguity, completed, failed, hitl-pending]
+properties:
+  phase:
+    enum: [build]
+  status:
+    enum: [Pending, blocked, failed, complete]
+  artifacts:
+    type: array
+    items:
+      type: string
+  summary:
+    type: string
+  open-ambiguity:
+    type: array
+    items:
+      type: object
+  completed:
+    type: integer
+  failed:
+    type: integer
+  hitl-pending:
+    type: integer

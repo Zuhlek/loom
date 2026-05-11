@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loom.local/schemas/artifacts.schema.json",
+  "title": "Loom artifacts.json manifest",
+  "type": "object",
+  "required": ["schema-version", "updated-at", "artifacts"],
+  "additionalProperties": false,
+  "properties": {
+    "schema-version": { "const": 1 },
+    "updated-at": { "type": "string", "format": "date-time" },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "renderer", "primary"],
+        "additionalProperties": true,
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "minLength": 1 },
+          "renderer": { "type": "string", "minLength": 1 },
+          "primary": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

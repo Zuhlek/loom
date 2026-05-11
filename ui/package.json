@@ -1,0 +1,24 @@
+{
+  "name": "nora",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun run scripts/dev.ts",
+    "dev:server": "bun run --watch apps/server/src/index.ts",
+    "dev:web": "cd apps/web && bun run vite",
+    "start": "bun run apps/server/src/index.ts",
+    "test": "bun test",
+    "build:web": "cd apps/web && bun run build",
+    "install-hooks": "bun run scripts/install-hooks.ts",
+    "reset-state": "bun run scripts/reset-state.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0",
+    "@types/bun": "latest"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  }
+}
