@@ -3,7 +3,7 @@
  * the user to confirm. Useful for clearing test/smoke chats from the
  * sidebar without touching config.json or running PTYs.
  *
- * Run with `bun run reset-state`. Stop the dev server first — this
+ * Run with `pnpm reset-state`. Stop the dev server first — this
  * script does NOT kill running PTYs.
  */
 import * as fs from "node:fs";

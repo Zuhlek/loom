@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
 const root = new URL("../", import.meta.url).pathname;

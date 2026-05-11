@@ -4,7 +4,11 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "test": "bun test"
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^11.2.0",
+    "fastify": "^5.8.5"
   }
 }

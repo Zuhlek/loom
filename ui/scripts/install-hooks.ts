@@ -1,5 +1,5 @@
 /**
- * Standalone hook-installer entrypoint. Run with `bun run install-hooks`.
+ * Standalone hook-installer entrypoint. Run with `pnpm install-hooks`.
  *
  * Wraps apps/server/src/hook-installer.ts so the user can opt in without
  * the dev script auto-installing.

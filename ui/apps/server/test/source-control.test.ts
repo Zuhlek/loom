@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { getProvider, listProviders } from "../src/source-control";
 
 describe("source-control provider registry", () => {

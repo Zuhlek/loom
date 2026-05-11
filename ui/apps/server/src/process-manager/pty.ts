@@ -2,12 +2,13 @@
  * PTY — child-process manager for spawning claude (or any other PTY peer)
  * and bridging bytes through the WebSocket layer.
  *
- * Bun + node-pty currently have a libuv async-hook bug that prevents data
- * events from firing in-process. Workaround: spawn a tiny node sidecar
- * (apps/server/src/process-manager/pty-helper.cjs) per chat that owns
- * node-pty and exchanges JSON line frames over stdin/stdout. The
- * exported `spawnPty` returns a `PtyProcess` whose surface matches what
- * the bridge expects, so callers don't need to know about the helper.
+ * We spawn a tiny node sidecar per chat that owns node-pty and
+ * exchanges JSON line frames over stdin/stdout (see
+ * apps/server/src/process-manager/pty-helper.cjs). The sidecar gives us
+ * crash isolation — if node-pty or claude misbehaves, only the helper
+ * dies, not the whole server. The exported `spawnPty` returns a
+ * `PtyProcess` whose surface matches what the bridge expects, so callers
+ * don't need to know about the helper.
  *
  * If `node` is not on PATH or node-pty fails to load, we fall back to
  * `child_process.spawn` (text-only — vt100 escapes are degraded but the

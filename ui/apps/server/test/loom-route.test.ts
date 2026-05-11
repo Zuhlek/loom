@@ -5,7 +5,7 @@
  * file and an `idea.md`; calls the registered handler directly and
  * verifies the parsed pipeline + artifact content come back.
  */
-import { describe, test, expect, afterAll } from "bun:test";
+import { describe, test, expect, afterAll } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";

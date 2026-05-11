@@ -7,7 +7,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { startServer } from "./http-ws-server.ts";
 import { resolveConfig } from "./config-loader/index.ts";
 import { initMetadataStore } from "./metadata-store/index.ts";
@@ -53,15 +53,15 @@ function ensureNodePtyHelperExecutable(): void {
         const p = path.join(nm, "node-pty", "prebuilds", platform, "spawn-helper");
         chmodIfNotExec(p);
       }
-      // Bun cache layout: .bun/node-pty@<version>/node_modules/node-pty/...
+      // pnpm cache layout: .pnpm/node-pty@<version>/node_modules/node-pty/...
       try {
-        const bunDir = path.join(nm, ".bun");
-        if (fs.existsSync(bunDir)) {
-          for (const child of fs.readdirSync(bunDir)) {
+        const pnpmDir = path.join(nm, ".pnpm");
+        if (fs.existsSync(pnpmDir)) {
+          for (const child of fs.readdirSync(pnpmDir)) {
             if (!child.startsWith("node-pty@")) continue;
             for (const platform of platforms) {
               const p = path.join(
-                bunDir,
+                pnpmDir,
                 child,
                 "node_modules",
                 "node-pty",
@@ -91,7 +91,10 @@ function chmodIfNotExec(p: string): void {
   } catch {}
 }
 
-if (import.meta.main) {
+const isEntrypoint =
+  import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
+
+if (isEntrypoint) {
   ensureNodePtyHelperExecutable();
   const cliRoot = parseRootFlag(process.argv);
   const config = resolveConfig({ cliRoot });

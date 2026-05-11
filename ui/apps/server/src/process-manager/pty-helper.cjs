@@ -2,18 +2,17 @@
 /*
  * pty-helper.cjs — sidecar node process that wraps node-pty.
  *
- * The main nora-server runs under Bun, which currently has a buggy
- * interaction with node-pty's libuv async hooks (events never fire). We
- * spawn this helper as a child node process and bridge it via JSON
- * line-delimited frames over stdin/stdout.
+ * Spawned by the nora-server parent process per chat. Owning node-pty
+ * in a sidecar gives us crash isolation — if a PTY misbehaves, only
+ * this helper dies, not the whole server.
  *
  * Frames (one JSON per line, terminated by \n):
- *   stdin (bun → helper):
+ *   stdin (parent → helper):
  *     {"kind":"start","shell":"claude","args":[],"cwd":"/path","cols":80,"rows":24}
  *     {"kind":"write","data":"<text>"}
  *     {"kind":"resize","cols":120,"rows":40}
  *     {"kind":"kill","signal":"SIGTERM"}
- *   stdout (helper → bun):
+ *   stdout (helper → parent):
  *     {"kind":"started","pid":1234}
  *     {"kind":"data","data":"<text>"}
  *     {"kind":"exit","exitCode":0,"signal":null}

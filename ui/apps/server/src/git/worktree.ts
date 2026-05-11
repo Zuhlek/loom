@@ -3,7 +3,7 @@
  *
  * Lifted-and-adapted from t3code's apps/server/src/vcs/GitVcsDriverCore.ts
  * (MIT License, copyright t3tools authors). The Effect-runtime layer has been
- * stripped; we use plain async/await over Bun.spawn for v1.
+ * stripped; we use plain async/await over node:child_process.spawn for v1.
  *
  * Original: https://github.com/t3tools/t3code  (apps/server/src/vcs/GitVcsDriverCore.ts)
  *

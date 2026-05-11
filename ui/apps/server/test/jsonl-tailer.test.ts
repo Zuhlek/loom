@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { mkdtempSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
@@ -31,7 +31,7 @@ describe("jsonl-tailer", () => {
     tailer.on("entry", (e) => seen.push(e));
     await tailer.start();
     appendFileSync(file, '{"c":3}\n');
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
     expect(seen).toEqual([{ c: 3 }]);
     tailer.stop();
     rmSync(dir, { recursive: true });
