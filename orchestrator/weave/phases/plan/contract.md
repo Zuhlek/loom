@@ -23,7 +23,7 @@ I/O contract between `/weave` and the Work Graph Agent.
 ## State preconditions
 
 - `pipeline.md.Current phase` is `plan`.
-- Idea and Design phase artifacts exist.
+- Spec and Design phase artifacts exist.
 
 ## Outputs
 

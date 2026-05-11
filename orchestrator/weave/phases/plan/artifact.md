@@ -32,5 +32,6 @@
 ## Verification
 
 - `tests.md` contains phase-wide verification strategy.
+- `tests.md` declares `**Mutation Testing:** yes` or `no` at the top of the file.
 - Each task contains a behavior-level test sketch.
 - Smoke and mutation gates are explicit.

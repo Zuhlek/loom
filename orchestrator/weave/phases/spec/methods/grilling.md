@@ -49,6 +49,8 @@ Grilling is **staged** — a direct application of the Double Diamond framework.
 
 Gather context. **No decisions yet.**
 
+Read `repo-context.md` (produced by the Spec agent's repository pre-flight — see `agent.md` Work Loop step 2) before generating Foundation questions. Never ask the user for a fact the repo states directly — pull it from `repo-context.md` and treat it as established. Foundation questions fill the gaps the repo cannot answer (team context, value bar, constraints not in code).
+
 - Existing situation — current architecture, team, prior choices, integration points.
 - Value bar — what does "done" mean? what is the success criterion?
 - Constraint envelope — performance, compliance, compatibility, regulatory.
@@ -94,15 +96,29 @@ The Spec Grilling Agent surfaces every question via `AskUserQuestion` and runs t
 
 `decisions.md` is the audit / recovery surface, not the primary answer surface — every answer is mirrored into the matching `<!-- loom:answer-slot -->` region as it is captured.
 
+### AskUserQuestion field mapping
+
+The agent populates the picker so the user can answer without opening `decisions.md`. Briefing fields fan out across the picker:
+
+| `AskUserQuestion` field | Loom briefing source |
+|---|---|
+| `question` | Question heading + the briefing block's `What's the issue:` sentence (the user reads this first). |
+| `options[].label` | Option letter / `YES` / `NO`. The recommended option's label carries a trailing ` (Recommended)` suffix. |
+| `options[].description` | The option's one-line outcome from the Options list (the `— <result ≤120 chars>` segment). Brings the per-option trade-off into the picker without forcing the user to expand. |
+| `preview` | The Architecture diagram (mermaid or ASCII) for Architecture-category questions; the per-option implication snippet for Choice questions when it materially differs from `description`; omitted otherwise. |
+
+The picker therefore carries the full *What's the issue / Current behavior / Options / Recommendation* surface — the user does NOT need to open `decisions.md` to answer. `decisions.md` is the audit trail and recovery surface only; users are not expected to edit it by hand.
+
 The user's response options map onto picker entries and a free-text fallback:
 
 | Action | Surface |
 |---|---|
 | `(A)` / `(B)` / `YES` / `NO` / `Accept this direction` — direct answer | Picker entry. The recommended option's label carries a `(Recommended)` suffix. The agent strips the suffix and writes the option name to the slot via `loom/lib/atomic-write.sh`. Status flips to `answered`. |
-| `Explain more` | Picker entry. The agent composes a 2–4 sentence elaboration grounded in the existing briefing and re-calls `AskUserQuestion` with the same options + the elaboration appended. Hard cap: 2 elaborations per Q. On the 3rd, write `[push back: needs more context]` to the slot. |
+| `Explain more` | Picker entry. The agent composes a 2–4 sentence elaboration grounded in the existing briefing and re-calls `AskUserQuestion` with the same options + the elaboration appended to the `question` field. Hard cap: **4 elaborations per Q** (raised from 2 — the user can iterate on understanding before being forced to commit). On the 5th attempt, write `[push back: needs more context]` to the slot. |
+| `Explain more: <focus>` | Free-text fallback. Same as `Explain more` but the agent focuses the elaboration on `<focus>` (the user's specific area of confusion — e.g., `Explain more: how does this affect deployment?`). Counted against the same 4-elab cap. |
 | `Stop` | Picker entry. The agent writes `[stop]` to the slot and exits the loop with `STATUS: stop-requested`. The next `/weave` kick force-ends Spec via the close branch, writes `spec.md` with whatever's resolved, and emits `phase-complete`. |
 | `side requirement: <text>` | Free-text fallback. The agent appends `SR-<n>: <text>` to the `## Side requirements (running)` section and re-calls `AskUserQuestion` (same Q, no answer captured yet). |
-| `push back: <text>` | Free-text fallback. The agent writes `[push back: <text>]` to the slot and continues the loop. The next iteration parses the bracket-prefix, runs the consistency pass (§5), and generates a `Q<n>'` revisit. |
+| `push back: <text>` | Free-text fallback. For genuine objection to the framing or recommendation — NOT for "I want more info" (use `Explain more: <focus>` instead). The agent writes `[push back: <text>]` to the slot and continues the loop. The next iteration parses the bracket-prefix, runs the consistency pass (§5), and generates a `Q<n>'` revisit. |
 | Any other free text | Treated as a direct answer. The agent writes the text verbatim to the slot. Status flips to `answered`. |
 
 `Show alternatives` is intentionally out of scope — the `AskUserQuestion` picker has a hard cap of 4 options, and once 1–3 answer choices + `Explain more` + `Stop` have taken slots, there is no room left.
@@ -179,7 +195,7 @@ Your move:
 
 ## 6. Answer slots in `decisions.md`
 
-Every question is written to `decisions.md` with explicit slot markers. The slot is the user's answer surface — the UI fills it via the `/api/projects/:project/answer` endpoint, or the user edits the file directly.
+Every question is written to `decisions.md` with explicit slot markers. The slot is the audit / recovery surface — the agent mirrors each answer into the matching `<!-- loom:answer-slot -->` region as the user picks it via `AskUserQuestion` (§4). The agent treats `AskUserQuestion` as the only primary answer surface; users are not expected to edit `decisions.md` by hand.
 
 ```markdown
 ## Q3 [Y/N]: Use TypeScript?

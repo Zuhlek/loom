@@ -13,7 +13,7 @@ I/O contract between `/weave` and the Review Audit Agent.
 | Name | Source path | Required | Description |
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
-| All phase artifacts | `.loom/<project>/{idea,design,plan,board,task,tests}.md` | yes | Read-only |
+| All phase artifacts | `.loom/<project>/{spec,design,plan,board,task,tests}.md` | yes | Read-only |
 | `tasks/T-*.done.md` | `.loom/<project>/tasks/T-NNN.done.md` | yes | Per-task done reports |
 | `tasks/T-*.test-log.txt` | `.loom/<project>/tasks/T-NNN.test-log.txt` | yes | Per-task test logs |
 | `test-report.md` | `.loom/<project>/test-report.md` | yes | Aggregated verification |

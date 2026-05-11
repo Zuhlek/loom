@@ -6,6 +6,7 @@ Clarify the seed into specified intent. Own `spec.md` and `decisions.md`.
 
 - `pipeline.md`
 - `seed.md`
+- `repo-context.md` (read if present; produced on first dispatch via Explore — see Work Loop step 2)
 - existing `spec.md` and `decisions.md` (from prior runs of this phase, if any)
 - `quality-review.md` if present (Quality Check findings from the prior run — the rerun must address these)
 - `loom/weave/phases/spec/methods/grilling.md`
@@ -19,19 +20,21 @@ Clarify the seed into specified intent. Own `spec.md` and `decisions.md`.
 
 - `spec.md`
 - `decisions.md`
+- `repo-context.md` (first dispatch only)
 
 ## Work Loop
 
 1. Read the seed and existing decisions.
-2. If `quality-review.md` exists from a prior run, address its findings first.
-3. Run Foundation before Branching (see `methods/grilling.md` §2).
-4. Generate questions per `categories.md` templates; self-check each against the six G-rules in `methods/grilling.md` §1 before presenting.
-5. Ask via `AskUserQuestion` directly. Surface format per `methods/grilling.md` §4.
-6. Persist every branching decision in `decisions.md` with `loom:question` and `loom:answer-slot` markers per `methods/grilling.md` §6.
-7. Update `spec.md` in place after each answered decision.
-8. Apply the revisit mechanic per `methods/grilling.md` §5 when a new answer flips a prior recommendation.
-9. **Distill user stories.** When grilling has resolved enough scope, sweep the seed + answered decisions + foundation context and emit `US-NNN` user stories with EARS-format acceptance criteria into `spec.md` `## User stories`, per [`methods/stories.md`](methods/stories.md). Stories are agent-produced distillations — they are NOT user-answered questions. Cross-reference supporting Q-IDs when non-obvious. Universal acceptance conditions go under `## Constraints`, not Stories.
-10. Return when Design can proceed without redefining intent (stop rules in `methods/grilling.md` §7) AND `spec.md` `## User stories` contains at least one valid story (or the project genuinely has none — rare; document in `## Open ambiguity`).
+2. **Repository pre-flight (first dispatch only).** Before Foundation, dispatch an Explore subagent against the working directory to map files relevant to the seed: prior art, conventions, naming patterns, integration points, dependencies, and files likely to be touched. Persist findings to `repo-context.md`. Subsequent dispatches read `repo-context.md` rather than re-exploring.
+3. If `quality-review.md` exists from a prior run, address its findings first.
+4. Run Foundation before Branching (see `methods/grilling.md` §2).
+5. Generate questions per `categories.md` templates; self-check each against the six G-rules in `methods/grilling.md` §1 before presenting.
+6. Ask via `AskUserQuestion` directly. Surface format per `methods/grilling.md` §4.
+7. Persist every branching decision in `decisions.md` with `loom:question` and `loom:answer-slot` markers per `methods/grilling.md` §6.
+8. Update `spec.md` in place after each answered decision.
+9. Apply the revisit mechanic per `methods/grilling.md` §5 when a new answer flips a prior recommendation.
+10. **Distill user stories.** When grilling has resolved enough scope, sweep the seed + answered decisions + foundation context and emit `US-NNN` user stories with EARS-format acceptance criteria into `spec.md` `## User stories`, per [`methods/stories.md`](methods/stories.md). Stories are agent-produced distillations — they are NOT user-answered questions. Cross-reference supporting Q-IDs when non-obvious. Universal acceptance conditions go under `## Constraints`, not Stories.
+11. Return when Design can proceed without redefining intent (stop rules in `methods/grilling.md` §7) AND `spec.md` `## User stories` contains at least one valid story (or the project genuinely has none — rare; document in `## Open ambiguity`).
 
 ## Rerun Behavior
 

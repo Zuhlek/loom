@@ -29,7 +29,7 @@ For every learning observation written to `develop-log.md`, a matching `## YYYY-
 
 | Topic | Shard |
 | --- | --- |
-| Idea / Design / Plan process notes | `ideate.md` |
+| Spec / Design / Plan process notes | `ideate.md` |
 | Build / Smoke / Mutation process notes | `build.md` |
 | Cross-phase audit observations | `audit.md` |
 | User-pushback or feedback patterns the user surfaced | `feedback.md` |

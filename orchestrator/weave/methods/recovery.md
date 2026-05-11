@@ -8,7 +8,7 @@ The orchestrator validates every phase return before surfacing the rerun-or-cont
 | --- | --- |
 | Malformed return | Redispatch once with the schema error and expected shape |
 | Missing artifact | Redispatch once with the missing path list |
-| Invalid artifact | Surface the rerun-or-continue decision; suggest `Run quality check` if Idea |
+| Invalid artifact | Surface the rerun-or-continue decision; suggest `Run quality check` when the phase has a validator |
 | Failed phase | Leave status `failed` and ask the user for next action |
 | HITL block | Leave status `blocked` and surface the blocking question |
 

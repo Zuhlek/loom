@@ -70,6 +70,7 @@ Each per-phase rerun-or-continue gate is a regular `AskUserQuestion` surfaced by
 | Workspace cannot be resolved or created | Dispatch `methods/find-project.md` or `methods/create-project.md` per Load Order; if both fail, report to user and exit |
 | Phase validator returns `findings` | Surface findings in chat; ask the user to choose `Continue` or `Rerun phase`; do not act unilaterally |
 | Phase agent returns `blocked` with `Pending user input` | Surface the relay question; write the answer back into the phase artifact on next dispatch |
+| User picks `Go back to <prior-phase>` at a gate | Set `Current phase` to the target; move current and downstream phase artifacts to `superseded/<timestamp>/`; append `phase-revert` to `events.jsonl`; re-dispatch the prior phase agent |
 
 ## Methods available
 

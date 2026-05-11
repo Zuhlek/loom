@@ -13,7 +13,7 @@ I/O contract between `/weave` and the Build Coordinator Agent.
 | Name | Source path | Required | Description |
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
-| `spec.md` | `.loom/<project>/idea.md` | yes | Specified intent |
+| `spec.md` | `.loom/<project>/spec.md` | yes | Specified intent |
 | `design.md` | `.loom/<project>/design.md` | yes | Solution structure |
 | `plan.md` | `.loom/<project>/plan.md` | yes | Work graph narrative |
 | `board.md` | `.loom/<project>/board.md` | yes | Kanban (task readiness) |

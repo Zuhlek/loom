@@ -8,3 +8,6 @@ _preamble.text
 
 validate-subagent-output-py
 - i noted that there are stati for each phase, but also the subphases of the build phase: smoke, mutate - that looks like mixing concerns, but maybe not, have a look
+
+general
+- validator would y agree or add sthg? oder als prompt für den rerun besser

@@ -18,7 +18,7 @@
     "Type hint": { "type": "string" },
     "Current phase": {
       "type": "string",
-      "enum": ["idea", "design", "plan", "build", "review"]
+      "enum": ["spec", "design", "plan", "build", "review"]
     },
     "Phase status": {
       "type": "string",

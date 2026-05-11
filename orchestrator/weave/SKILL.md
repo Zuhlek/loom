@@ -72,23 +72,36 @@ Reruns are user-driven, never automatic. Quality Check is opt-in and exists only
 
 The gate summary leads with the phase's purpose — the first sentence of `phases/<phase>/agent.md` (e.g. "Clarify the seed into specified intent." for Spec, "Convert specified intent into solution structure." for Design). Read that line at gate time and prepend it so the user knows what the phase was responsible for.
 
-For phases that support Quality Check (**Spec, Design, Plan, Build** — i.e. 4 of the 5 phases), surface a three-option `AskUserQuestion`:
+For phases that support Quality Check (**Spec, Design, Plan, Build** — i.e. 4 of the 5 phases), surface a three- or four-option `AskUserQuestion`. The `Continue` label is phase-aware so the user sees what continuing actually triggers. `Go back to <prior-phase>` is shown for every phase except Spec (Spec is first; nothing to go back to).
 
 ```
 Phase <phase> returned (<phase purpose>). <one-line summary of produced artifacts>.
 
-  Continue           accept the artifacts; advance to the next phase
-  Run quality check  dispatch the Quality Check subagent for holes / blind spots / contradictions
-  Rerun phase        re-dispatch <phase> with prior artifacts as additional context
+  Continue → <next-phase-verb>   accept the artifacts; advance to the next phase
+  Run quality check              dispatch the Quality Check subagent for holes / blind spots / contradictions
+  Rerun phase                    re-dispatch <phase> with prior artifacts as additional context
+  Go back to <prior-phase>       re-open <prior-phase>; move current + downstream artifacts to `superseded/<timestamp>/` (shown for Design, Plan, Build, Review)
 ```
 
-For Review, surface a two-option decision (Review is itself the project validator; no opt-in QC):
+Per-phase `Continue` labels:
+
+| Phase gate | `Continue` label |
+| --- | --- |
+| Spec | `Continue → enter Design` |
+| Design | `Continue → enter Plan` |
+| Plan | `Continue → start autonomous Build (modifies repository)` |
+| Build | `Continue → enter Review` |
+
+The Plan gate's label spells out `modifies repository` so the user cannot continue into Build without seeing the consequence. Free-text user input is never auto-interpreted as `Continue` — the user must pick the option.
+
+For Review, surface (Review is itself the project validator; no opt-in QC):
 
 ```
-Phase <phase> returned (<phase purpose>). <one-line summary>.
+Phase review returned (audit the built result against intent, design, plan, and evidence). <one-line summary>.
 
-  Continue     accept and advance
-  Rerun phase  re-dispatch with prior artifacts
+  Continue → mark lifecycle complete   accept and finalize
+  Rerun phase                          re-dispatch Review with prior artifacts
+  Go back to Build                     re-open Build; move review artifacts to `superseded/<timestamp>/`
 ```
 
 ### When the user picks `Run quality check`
@@ -114,6 +127,17 @@ Re-dispatch the same phase agent in a fresh Task session. The new dispatch reads
 - The latest `quality-review.md` if Quality Check was run (read as additional context — "what to address").
 
 The agent overwrites its owned artifacts in place.
+
+### When the user picks `Go back to <prior-phase>`
+
+Re-open the prior phase. The orchestrator handles the transition by:
+
+1. Setting `pipeline.md.Current phase` to the prior phase.
+2. Moving the current phase's artifacts AND any downstream phase artifacts into `.loom/<project>/superseded/<timestamp>/`. The prior phase's artifacts remain in place — the agent treats them as the starting point.
+3. Appending a `phase-revert` event to `events.jsonl` with `from`, `to`, and `superseded-paths`.
+4. Re-dispatching the prior phase agent. The agent reads its own prior artifacts (now the starting point) and may run a Quality Check pass if the user opts in at the new gate.
+
+Going back is destructive to downstream artifacts but non-destructive to history — `superseded/<timestamp>/` is preserved indefinitely so the user can recover earlier work if needed.
 
 ## Direct Questions
 

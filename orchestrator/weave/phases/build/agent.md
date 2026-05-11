@@ -38,7 +38,7 @@ Execute the work graph and aggregate verification evidence. Own build artifacts 
 4. Enforce locks and the three-attempt cap.
 5. On task return, transition the card in `board.md` per the table below.
 6. Run `methods/smoke-test.md` when the project is runnable.
-7. Run `methods/mutation-test.md` only when `tests.md` enables it.
+7. Run `methods/mutation-test.md` only when `tests.md` declares `**Mutation Testing:** yes` at the top of the file.
 8. Write `test-report.md`.
 9. Return blockers, artifacts, and verification summary.
 

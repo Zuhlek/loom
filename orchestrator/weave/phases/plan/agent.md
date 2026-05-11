@@ -30,9 +30,10 @@ Convert solution structure into an executable work graph. Own Plan artifacts.
 5. Mark tasks as `AFK` or `HITL`.
 6. Set each task's `satisfies-stories` field to the `US-NNN` IDs whose acceptance criteria the task delivers. Every active `US-NNN` story must be covered by at least one task.
 7. Include likely file scope, layer coverage, acceptance criteria, and behavior-level test sketches (per-task test sketches derive from the satisfied stories' EARS clauses).
-8. Validate graph coverage before returning — every story is covered; every `blocked-by` resolves; no cycles.
-9. Write `board.md` in the kanban shape below.
-10. Declare `Verification environment` in `plan.md` (see section below). Build reads this to pre-flight its capability before dispatching tasks.
+8. Declare `**Mutation Testing:** yes | no` at the top of `tests.md`. Default `no`. Set `yes` only when the work touches logic whose bug-impact justifies mutation cost (security boundaries, money, data integrity, irreversible operations).
+9. Validate graph coverage before returning — every story is covered; every `blocked-by` resolves; no cycles.
+10. Write `board.md` in the kanban shape below.
+11. Declare `Verification environment` in `plan.md` (see section below). Build reads this to pre-flight its capability before dispatching tasks.
 
 ## `plan.md` Verification environment
 

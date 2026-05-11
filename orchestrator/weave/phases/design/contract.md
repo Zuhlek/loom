@@ -14,7 +14,7 @@ I/O contract between `/weave` and the Design Structuring Agent.
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
 | `spec.md` | `.loom/<project>/spec.md` | yes | Specified intent from Spec phase |
-| `decisions.md` | `.loom/<project>/decisions.md` | yes | Branching decisions from Idea |
+| `decisions.md` | `.loom/<project>/decisions.md` | yes | Branching decisions from Spec |
 | `<type>.md` | `loom/types/<type>.md` | when typed | Domain guidance |
 | `constitution.md` | `.loom/<project>/constitution.md` | optional | Project-wide invariants |
 | `mockup/` | `.loom/<project>/mockup/` | optional | Evidence from prior Design iterations |
