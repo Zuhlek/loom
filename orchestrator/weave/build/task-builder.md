@@ -19,25 +19,50 @@ Implement one task from `tasks/T-*.md` in a fresh context.
 - `develop-log.md`
 - `loom/log/build.md`
 
-## Contract
+## Contract (Lock → Red → Implement → Green → Done)
 
-1. Acquire `.loom/<project>/.locks/T-NNN.lock`.
-2. Create stubs sufficient for tests to compile.
-3. Write behavior tests from the task test sketch.
-4. Run tests and confirm assertion failure.
-5. Implement the smallest scoped change.
-6. Re-run tests until green or three attempts are exhausted.
-7. Append red and green output to the test log.
-8. Write the done report.
-9. Release the lock.
+1. **Lock.** Acquire `.loom/<project>/.locks/T-NNN.lock` via `loom/lib/locks.sh acquire-task <project> T-NNN`.
+2. **Red phase.** Create stubs sufficient for tests to compile. Write behaviour tests from the task's test sketch. Run the tests and confirm every new test fails with a **runtime assertion error** (not a compile error, not a missing-import error). Append the red output to `tasks/T-NNN.test-log.txt`.
+3. **Implement.** Make the smallest scoped change that satisfies the task acceptance criteria. Match prior art per `principles.md` P2. Do not touch files outside declared scope without recording why in `done.md`.
+4. **Green phase.** Re-run the tests. If green, append the green output to the test log. If red, return to step 3 and try again. Stop after **three** failed implementation attempts with `status: failed` in the done report.
+5. **Done report.** Write `tasks/T-NNN.done.md` per the schema below.
+6. **Logs.** Append a build-task entry to `develop-log.md` AND to `loom/log/build.md` (dual-write).
+7. **Release.** Release the task lock via `loom/lib/locks.sh release-task <project> T-NNN`.
 
 ## Hard Rules
 
-- Red is runtime assertion failure, not compile failure.
-- Do not weaken or delete tests to pass.
-- Do not touch files outside declared scope without recording why.
-- Stop after three failed implementation attempts.
-- Use tail-sized command output.
+- **Red is runtime assertion failure**, not compile failure. A test that fails because the symbol doesn't exist is not red — stub the symbol first.
+- **Do not weaken or delete tests to pass.** Fix the implementation. If the test contract itself is wrong, return `status: hitl-block` and surface the contradiction; do not silently edit the test.
+- **Do not touch files outside the task's declared scope** without recording the reason in `done.md` under `out-of-scope-edits:`.
+- **Three-attempt cap is hard.** After the third failed green attempt, write `status: failed` and stop. The next dispatch can pick up where you left off.
+- **Tail-sized output.** Pipe verbose test runners through tail so the log stays consumable:
+  ```bash
+  npm test 2>&1 | tail -100 >> tasks/T-NNN.test-log.txt
+  pytest 2>&1 | tail -100 >> tasks/T-NNN.test-log.txt
+  ```
+- **No commits, pushes, deploys, hard resets, or destructive commands.** Build Coordinator gates those; Task Builder never invokes them.
+
+## "Done" means all five
+
+A task is done only when all five of these have happened — partial completion is not done:
+
+1. Green phase: every test in the task scope passes.
+2. `tasks/T-NNN.test-log.txt` contains both the red and the green output.
+3. `tasks/T-NNN.done.md` exists with `status: green` (or `failed` / `hitl-block` for terminal non-green states).
+4. `develop-log.md` and `loom/log/build.md` both have a matching entry.
+5. The task lock has been released.
+
+## Done Report Schema
+
+```yaml
+task: T-NNN
+status: green | failed | hitl-block
+attempts: 1
+duration-seconds: 0
+files-changed: []
+out-of-scope-edits: []     # path + one-line reason per edit
+notes: <optional one-paragraph remarks>
+```
 
 ## RETURN
 

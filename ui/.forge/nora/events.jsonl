@@ -1,5 +1,0 @@
-{"ts":"2026-05-10T12:06:57.432Z","project":"nora","type":"phase-completed","phase":null,"correlation-id":null,"payload":{"phase":"build","tasks-completed":"partial","frontend":"all-mockup-pages","backend":"foundation+lifted-modules","tests-passing":50}}
-{"ts":"2026-05-10T12:14:26.661Z","project":"nora","type":"phase-completed","phase":null,"correlation-id":null,"payload":{"phase":"review","blocking":0,"major":5,"minor":7,"followups":7}}
-{"ts":"2026-05-10T12:14:26.807Z","project":"nora","type":"pipeline-completed","phase":null,"correlation-id":null,"payload":{"verdict":"partial","tests":"50/50","blocking":0,"major":5}}
-{"ts":"2026-05-10T13:05:31.610Z","project":"nora","type":"phase-completed","phase":null,"correlation-id":null,"payload":{"phase":"build","mvp":"end-to-end-runnable","tests":"56/56","success-criteria":"8/8"}}
-{"ts":"2026-05-10T13:05:31.745Z","project":"nora","type":"pipeline-completed","phase":null,"correlation-id":null,"payload":{"verdict":"mvp-runnable","tests":"56/56","followups":"7"}}

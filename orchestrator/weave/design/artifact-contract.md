@@ -10,6 +10,4 @@
 
 ## Optional Evidence
 
-- `prototype-analysis.md` must label prototype-derived inference.
-- `prototype-screenshots/` files must be referenced from analysis or design.
 - `mockup/feedback.md` must capture user feedback when a mockup influenced structure.

@@ -10,16 +10,17 @@
 | Workspace | `.loom/<project>/` |
 | State file | `.loom/<project>/pipeline.md` |
 | Lifecycle | Idea -> Design -> Plan -> Build -> Review |
-| Owns | State, startup, phase invocation, quality gates, phase transitions, resume |
+| Owns | State, startup, phase invocation, rerun-or-continue surface, phase transitions, resume |
 | Does not own | Phase artifact content |
 
 ## State Files
 
 | File | Writer | Readers | Purpose |
 | ---- | ------ | ------- | ------- |
-| `pipeline.md` | `/weave` | `/weave`, Quality Check Agent | Lifecycle state and resume point |
-| `seed.md` | `/weave` | Idea Grilling Agent, Quality Check Agent | Normalized seed for Idea |
-| Phase artifacts | Current Phase Agent | `/weave`, Quality Check Agent, downstream phases | Phase output and handoff material |
+| `pipeline.md` | `/weave` | `/weave`, Quality Check Agent (opt-in) | Lifecycle state and resume point |
+| `seed.md` | `/weave` | Idea Grilling Agent, Quality Check Agent (opt-in) | Normalized seed for Idea |
+| Phase artifacts | Current Phase Agent | `/weave`, downstream phases, Quality Check Agent (when invoked) | Phase output and handoff material |
+| `quality-review.md` | Quality Check Agent (opt-in) | `/weave`, the rerun dispatch of the same phase | Holes / blind spots / contradictions summary used to inform the rerun decision |
 
 ## Runtime Support Files
 
@@ -28,7 +29,6 @@
 | `artifacts.json` | Runtime support | Manifest of project artifacts and render hints |
 | `events.jsonl` | Runtime support | Append-only lifecycle event stream |
 | `summary.md` | Runtime support | User-facing lifecycle roll-up |
-| `usage-<run-id>.jsonl` | Runtime support | Token, dispatch, and read telemetry |
 | `.lock` | Runtime support | Project-level advisory lock |
 | `.locks/` | Build Coordinator Agent | Task-level build locks |
 | `.in-flight/` | Runtime support | Active dispatch bookkeeping |
@@ -44,8 +44,7 @@
 | Phase status | Pending, blocked, failed, or complete |
 | Produced artifacts | Accepted artifact references |
 | Pending user input | Open user input required by active phase |
-| Quality findings | Latest failed gate findings |
-| Phase budget | Optional depth cap for the current phase |
+| Quality findings | Latest Quality Check findings preview (Idea phase, opt-in) |
 | Next valid action | Resume-safe next step |
 | Resume point | Invocation restart target |
 
@@ -114,9 +113,10 @@ Phase files name their agent. Example: Idea uses the Idea Grilling Agent.
 | 3 | Current Phase Agent | Run its interactive question loop through `AskUserQuestion` when needed |
 | 4 | Current Phase Agent | Persist answers in owned artifacts |
 | 5 | Current Phase Agent | Return artifact paths, summary, open ambiguity, and status |
-| 6 | Quality Check Agent | Validate artifacts against the phase contract |
-| 7 | `/weave` | Reinvoke the Current Phase Agent with quality findings on failure |
-| 8 | `/weave` | Update `pipeline.md` and advance on pass |
+| 6 | `/weave` | Validate RETURN against the phase schema |
+| 7 | `/weave` | Surface the rerun-or-continue decision to the user |
+| 8 | Quality Check Agent (opt-in) | If user picks `Run quality check`, analyse artifacts and write `quality-review.md` |
+| 9 | `/weave` | Re-dispatch the phase on rerun (with prior artifacts + optional `quality-review.md`), or advance on continue |
 
 ## Phase-Agnostic Flow
 
@@ -132,26 +132,31 @@ flowchart TD
     P --> D
 
     D -- phase artifacts --> A
-    A -- schema + contract check --> F[Quality Check Agent]
-    F -- findings --> A
-    A -- quality findings --> D
-    F -- pass --> A
-    A --> G[Update pipeline.md]
+    A -- ask user --> U{Continue / QC / Rerun?}
+    U -- Run quality check --> F[Quality Check Agent]
+    F -- quality-review.md --> A
+    A -- show findings, ask --> U2{Continue / Rerun?}
+    U -- Rerun --> D
+    U2 -- Rerun --> D
+    U -- Continue --> G[Update pipeline.md]
+    U2 -- Continue --> G
     G --> H[Advance or complete]
 ```
 
-## Quality Check Agent
+## Quality Check Agent (opt-in)
 
-| Check | Requirement |
-| ----- | ----------- |
-| Artifact presence | Required files exist |
-| Completeness | Required content is present |
-| Schema compliance | Artifact shape matches the expected schema |
-| Contract compliance | Output satisfies the phase contract |
-| Question validity | Asked questions are well formed and decision-relevant |
-| Parseability | Machine-read sections, markers, and statuses can be parsed |
-| Ambiguity | Open ambiguity is explicit and acceptable |
-| Handoff readiness | Next phase can consume the output |
+The Quality Check Agent is dispatched only when the user picks `Run quality check` at the rerun-or-continue decision. It does not gate the lifecycle automatically. Currently supported for the **Idea** phase only; other phases skip the QC option.
+
+| Check | Surfaces |
+| ----- | -------- |
+| Holes | Required sections or contract items missing from the artifact |
+| Blind spots | Decisions implied by the seed / prior phases the artifact never addresses |
+| Wrong assumptions | Statements that contradict the seed or prior decisions |
+| Contradicting answers | `decisions.md` entries that conflict with each other or with `idea.md` |
+| Briefing quality | Questions whose briefings fail the six "good question" rules |
+| Stale ambiguity | "Open ambiguity" items the next phase cannot consume |
+
+The agent writes `quality-review.md` with a `Continue` or `Rerun phase` recommendation and per-finding `suggested-focus`. The orchestrator surfaces the findings preview to the user and asks again whether to continue or rerun.
 
 ## Runtime Support
 
@@ -164,4 +169,3 @@ flowchart TD
 | Resume context | Active projects surface on fresh sessions |
 | Auto-advance | Mechanical phases may continue only when one project is active and no user surface is pending |
 | Return validation | Phase returns and declared artifacts are validated before state advance |
-| Usage telemetry | Dispatch, read, and run summaries are captured without blocking lifecycle work |

@@ -19,12 +19,13 @@
 | `seed.md` | Input | Yes | Read-only | `/weave` | Normalized opportunity or problem |
 | `decisions.md` | Iteration + output | Yes after first question | Append-only | Idea Grilling Agent | Parseable question, answer, and decision history |
 | `idea.md` | Iteration + output | Yes before handoff | Update in place | Idea Grilling Agent | Current specified intent |
+| `quality-review.md` | Optional rerun input | No | Read-only | Quality Check Agent | Findings from a prior opt-in Quality Check, used to focus the rerun |
 
 ## Agent Contract
 
 | Field | Contract |
 | ----- | -------- |
-| Reads | `seed.md`, optional `decisions.md`, optional `idea.md` |
+| Reads | `seed.md`, optional `decisions.md`, optional `idea.md`, optional `quality-review.md` (when present, the rerun must address its blocker / major findings) |
 | Writes | `decisions.md`, `idea.md` |
 | Returns | Artifact paths, summary, open ambiguity, status |
 | Primary task | Clarify intent until expected outcome is unambiguous |
@@ -35,8 +36,8 @@
 
 | Stage | Focus | Typical Question Categories | Exit Condition |
 | ----- | ----- | --------------------------- | -------------- |
-| Foundation | Problem space, value bar, constraints, existing context | Background, Open, Architecture | Budget reached or two consecutive answers add no new understanding |
-| Branching | Scope, behavior, alternatives, acceptance boundaries | Y/N, Choice, Architecture | Budget reached, ambiguity stops surfacing, or user stops grilling |
+| Foundation | Problem space, value bar, constraints, existing context | Background, Open, Architecture | Two consecutive answers add no new understanding |
+| Branching | Scope, behavior, alternatives, acceptance boundaries | Y/N, Choice, Architecture | Ambiguity stops surfacing, or user stops grilling |
 
 Foundation precedes Branching. Branching may return to Foundation only when a later answer exposes missing problem context.
 
@@ -142,15 +143,15 @@ No competing `idea-v2.md`.
 | Prior assumption is contradicted | Append revisit before normal questioning continues |
 | Prior scope decision becomes obsolete | Mark obsolete; do not create a competing idea file |
 
-Revisits are capped, count against the phase budget, and preserve the original decision chain.
+Revisits are capped and preserve the original decision chain.
 
 ## Stop Rules
 
 | Trigger | Result |
 | ------- | ------ |
-| Budget reached and ambiguity is stable | Return artifacts for quality check |
+| Ambiguity is stable across two consecutive answers | Return artifacts for quality check |
 | User indicates enough context | Return current artifacts and open ambiguity |
-| Ambiguity still grows after budget | Return `needs_more_grilling` in open ambiguity |
+| Ambiguity keeps growing | Return `needs_more_grilling` in open ambiguity |
 | Repeated unanswered questions | Move unresolved items to deferred clarifications |
 
 ## Completion Gate

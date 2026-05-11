@@ -9,22 +9,19 @@ Convert specified intent into solution structure. Own `design.md` and optional e
 - `decisions.md`
 - selected `loom/types/<type>.md`
 - optional `constitution.md`
-- optional prototype and mockup evidence
+- optional `mockup/` evidence from prior iterations
 
 ## Writes
 
 - `design.md`
-- optional `prototype-analysis.md`
-- optional `prototype-screenshots/`
 - optional `mockup/`
 
 ## Work Loop
 
 1. Extract components, boundaries, interfaces, data shapes, states, and constraints.
-2. Use `/explore-prototype` when a running prototype is relevant.
-3. Produce mockup evidence only when it resolves structural ambiguity.
-4. Ask direct questions only for structure-critical ambiguity.
-5. Keep `idea.md` read-only; route contradictions back as open ambiguity.
+2. Produce mockup evidence only when it resolves structural ambiguity.
+3. Ask direct questions only for structure-critical ambiguity.
+4. Keep `idea.md` read-only; route contradictions back as open ambiguity.
 
 ## `design.md`
 

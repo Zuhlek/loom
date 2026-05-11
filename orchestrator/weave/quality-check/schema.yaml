@@ -1,5 +1,5 @@
 type: object
-required: [phase, checked-phase, status, summary, findings]
+required: [phase, checked-phase, status, summary, recommendation, findings, artifacts]
 properties:
   phase:
     enum: [quality-check]
@@ -9,13 +9,21 @@ properties:
     enum: [passed, findings]
   summary:
     type: string
+  recommendation:
+    enum: [continue, rerun]
   findings:
     type: array
     items:
       type: object
-      required: [severity, issue]
+      required: [severity, title]
       properties:
         severity:
           enum: [blocker, major, minor, note]
-        issue:
+        title:
           type: string
+        suggested-focus:
+          type: string
+  artifacts:
+    type: array
+    items:
+      type: string

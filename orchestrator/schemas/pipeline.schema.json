@@ -24,7 +24,6 @@
       "type": "string",
       "enum": ["Pending", "blocked", "failed", "complete"]
     },
-    "Phase budget": { "type": "string" },
     "Produced artifacts": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 }

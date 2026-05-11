@@ -17,7 +17,6 @@ SECTION_ORDER = [
     "Type hint",
     "Current phase",
     "Phase status",
-    "Phase budget",
     "Produced artifacts",
     "Pending user input",
     "Quality findings",
@@ -32,7 +31,6 @@ FENCED_FIELDS = {
     "Type hint",
     "Current phase",
     "Phase status",
-    "Phase budget",
     "Next valid action",
     "Resume point",
 }
@@ -165,7 +163,7 @@ def append_history(path: Path, phase: str, status: str, note: str, timestamp: st
     atomic_write(path, text)
 
 
-def initial_pipeline(project: str, ticket: str, type_hint: str, budget: str) -> str:
+def initial_pipeline(project: str, ticket: str, type_hint: str) -> str:
     return f"""# Pipeline - {project}
 
 ## Project name
@@ -193,11 +191,6 @@ idea
 Pending
 ```
 
-## Phase budget
-```text
-{budget}
-```
-
 ## Produced artifacts
 
 ## Pending user input
@@ -222,9 +215,9 @@ idea:foundation
 """
 
 
-def init_workspace(project_dir: Path, project: str, seed: str, ticket: str, type_hint: str, budget: str) -> None:
+def init_workspace(project_dir: Path, project: str, seed: str, ticket: str, type_hint: str) -> None:
     project_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write(project_dir / "pipeline.md", initial_pipeline(project, ticket, type_hint, budget))
+    atomic_write(project_dir / "pipeline.md", initial_pipeline(project, ticket, type_hint))
     atomic_write(project_dir / "seed.md", seed.rstrip() + "\n")
     if not (project_dir / "events.jsonl").exists():
         atomic_write(project_dir / "events.jsonl", "")
@@ -276,7 +269,6 @@ def main() -> int:
     p_init.add_argument("--seed", default="")
     p_init.add_argument("--ticket", default="")
     p_init.add_argument("--type-hint", default="")
-    p_init.add_argument("--budget", default="3")
 
     p_validate = sub.add_parser("validate")
     p_validate.add_argument("path")
@@ -301,7 +293,7 @@ def main() -> int:
         append_history(Path(args.path), args.phase, args.status, args.note, args.timestamp)
         return 0
     if args.cmd == "init":
-        init_workspace(Path(args.project_dir), args.project, args.seed, args.ticket, args.type_hint, args.budget)
+        init_workspace(Path(args.project_dir), args.project, args.seed, args.ticket, args.type_hint)
         return 0
     if args.cmd == "validate":
         errors = validate_record(parse(Path(args.path)))

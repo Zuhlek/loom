@@ -25,7 +25,6 @@ link_skill() {
 
 link_skill weave "$ROOT/weave"
 link_skill tune "$ROOT/tune"
-link_skill explore-prototype "$ROOT/explore-prototype"
 
 mkdir -p "$(dirname "$SETTINGS")"
 if [ ! -f "$SETTINGS" ]; then

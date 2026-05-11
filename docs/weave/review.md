@@ -86,7 +86,16 @@
 | Repeated quality finding | Process observation |
 | Transcript or runtime evidence | Audit note |
 
-Review records learning signals. Shared framework or preference updates are outside the `/weave` lifecycle.
+Review writes learning observations to two surfaces (dual-write):
+
+| Stream | Path | Purpose |
+| --- | --- | --- |
+| Project-local | `.loom/<project>/develop-log.md` | Raw observations for this project |
+| Global shard | `loom/log/{ideate,build,feedback,audit}.md` | Curation source for `/tune review` |
+
+Every project-local learning entry must have a matching `## YYYY-MM-DD - <project> - <topic>` entry in the appropriate global shard (`ideate.md` for Idea / Design / Plan notes, `build.md` for Build notes, `audit.md` for cross-phase audit observations, `feedback.md` for user-pushback patterns). Review-cycle findings in `review.md` stay project-local.
+
+Shared framework or preference updates (curating the shards into SKILL.md / type edits) are outside the `/weave` lifecycle — that work happens via `/tune review`.
 
 ## Completion Gate
 
