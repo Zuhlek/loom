@@ -2,7 +2,7 @@
  * Tests for /projects POST + GET. Exercises the in-process route handler
  * directly (no HTTP).
  */
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import * as os from "node:os";
 import { initMetadataStore } from "../src/metadata-store/index.ts";
 import { mountProjectsRoute } from "../src/routes/projects.ts";

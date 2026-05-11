@@ -4,7 +4,7 @@
  *   - the supersede contract (later TodoWrite wins over earlier ones)
  *   - non-TodoWrite lines return null
  */
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { mkdtempSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
@@ -133,7 +133,7 @@ describe("TranscriptWatcher", () => {
     expect(seen.length).toBe(0);
 
     appendFileSync(file, TOOL_USE_LINE + "\n");
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
     expect(seen.length).toBe(1);
     expect(seen[0][0].step).toBe("Read files");
     w.stop();
@@ -165,7 +165,7 @@ describe("TranscriptWatcher", () => {
         },
       }) + "\n",
     );
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
 
     appendFileSync(
       file,
@@ -187,7 +187,7 @@ describe("TranscriptWatcher", () => {
         },
       }) + "\n",
     );
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
 
     expect(seen.length).toBe(2);
     // The latest task list, which the panel renders, is the second one.
@@ -266,7 +266,7 @@ describe("TranscriptWatcher", () => {
     appendFileSync(file, createResult("u1", "1", "Refactor auth") + "\n");
     appendFileSync(file, createUse("u2", "Fix flaky test", "Fixing flaky test") + "\n");
     appendFileSync(file, createResult("u2", "2", "Fix flaky test") + "\n");
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
 
     let latest = w.getLatestTasks();
     expect(latest).toEqual([
@@ -275,14 +275,14 @@ describe("TranscriptWatcher", () => {
     ]);
 
     appendFileSync(file, updateUse("1", "in_progress") + "\n");
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
     latest = w.getLatestTasks();
     expect(latest?.[0]?.status).toBe("inProgress");
     expect(latest?.[1]?.status).toBe("pending");
 
     appendFileSync(file, updateUse("1", "completed") + "\n");
     appendFileSync(file, updateUse("2", "in_progress") + "\n");
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
     latest = w.getLatestTasks();
     expect(latest?.[0]?.status).toBe("completed");
     expect(latest?.[1]?.status).toBe("inProgress");
@@ -318,7 +318,7 @@ describe("TranscriptWatcher", () => {
         },
       }) + "\n",
     );
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
     expect(seen.length).toBe(0);
     expect(w.getLatestTasks()).toBeNull();
     w.stop();

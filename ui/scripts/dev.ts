@@ -1,7 +1,7 @@
 /**
  * Concurrent dev script.
  *
- * Spawns nora-server (Bun watch) and the Vite dev server side-by-side,
+ * Spawns nora-server (tsx watch) and the Vite dev server side-by-side,
  * pipes their stdout/stderr with a label prefix, and forwards SIGINT /
  * SIGTERM to both children so Ctrl+C cleanly stops everything.
  */
@@ -75,8 +75,8 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 const server = startChild({
   label: "server",
   color: "\x1b[36m", // cyan
-  cmd: "bun",
-  args: ["run", "--watch", "apps/server/src/index.ts"],
+  cmd: "tsx",
+  args: ["watch", "apps/server/src/index.ts"],
   cwd: repoRoot,
   env: { NORA_PORT: process.env.NORA_PORT ?? "3737" },
 });
@@ -85,8 +85,8 @@ children.push(server);
 const web = startChild({
   label: "web",
   color: "\x1b[35m", // magenta
-  cmd: "bun",
-  args: ["run", "vite"],
+  cmd: path.join(repoRoot, "apps/web/node_modules/.bin/vite"),
+  args: [],
   cwd: path.join(repoRoot, "apps/web"),
 });
 children.push(web);

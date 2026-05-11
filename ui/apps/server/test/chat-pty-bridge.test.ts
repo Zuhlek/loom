@@ -4,7 +4,7 @@
  * client detaches. Uses /bin/sh so we don't depend on `claude` being
  * installed in CI.
  */
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import { initMetadataStore } from "../src/metadata-store/index.ts";
 import { ChatPtyBridge } from "../src/process-manager/chat-pty-bridge.ts";
 

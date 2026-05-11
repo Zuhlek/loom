@@ -27,6 +27,7 @@ export class JsonlTailer extends EventEmitter {
   private offset = 0;
   private watcher: fs.FSWatcher | null = null;
   private debounceTimer: NodeJS.Timeout | null = null;
+  private pollTimer: NodeJS.Timeout | null = null;
   private stopped = false;
 
   constructor(private readonly filePath: string, private readonly opts: JsonlTailerOptions = {}) {
@@ -38,40 +39,38 @@ export class JsonlTailer extends EventEmitter {
    * Each parsed line is emitted as `'entry'`.
    */
   async start(): Promise<void> {
-    if (!fs.existsSync(this.filePath)) {
-      // Nothing to tail yet; install a watcher on the parent directory and wait.
-      this.attachParentWatcher();
-      return;
+    if (fs.existsSync(this.filePath)) {
+      await this.readFromOffset();
     }
-    await this.readFromOffset();
     this.attachWatcher();
   }
 
   stop(): void {
     this.stopped = true;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    if (this.pollTimer) clearInterval(this.pollTimer);
     this.watcher?.close();
     this.watcher = null;
   }
 
+  // We pair fs.watch (low-latency notifications) with a 200 ms polling
+  // fallback. Node's fs.watch on macOS (FSEvents) can drop the first event
+  // after a directory is freshly created, and is unreliable when watching a
+  // single file rather than its parent directory. Polling guarantees we
+  // converge regardless.
   private attachWatcher(): void {
     if (this.watcher) return;
-    this.watcher = fs.watch(this.filePath, { persistent: false }, () => this.onChange());
-  }
-
-  private attachParentWatcher(): void {
     const parent = path.dirname(this.filePath);
-    if (!fs.existsSync(parent)) return;
-    this.watcher = fs.watch(parent, { persistent: false }, (_evt, filename) => {
-      if (filename && path.basename(this.filePath) === filename.toString()) {
-        this.watcher?.close();
-        this.watcher = null;
-        // re-attach to the file itself
-        if (fs.existsSync(this.filePath)) {
-          this.readFromOffset().then(() => this.attachWatcher());
-        }
-      }
-    });
+    if (fs.existsSync(parent)) {
+      const target = path.basename(this.filePath);
+      this.watcher = fs.watch(parent, { persistent: false }, (_evt, filename) => {
+        if (!filename) return;
+        if (filename.toString() !== target) return;
+        this.onChange();
+      });
+    }
+    this.pollTimer = setInterval(() => this.onChange(), 200);
+    this.pollTimer.unref?.();
   }
 
   private onChange(): void {

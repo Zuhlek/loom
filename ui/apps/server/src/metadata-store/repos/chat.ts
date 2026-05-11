@@ -5,8 +5,8 @@ import * as crypto from "node:crypto";
 import type { InMemoryStorage } from "../index.ts";
 
 function generateSessionId(): string {
-  // randomUUID is available on Node 14.17+ and Bun. It returns a v4 UUID,
-  // which is exactly what Claude Code expects for `--session-id`.
+  // randomUUID returns a v4 UUID — exactly what Claude Code expects
+  // for `--session-id`.
   return crypto.randomUUID();
 }
 

@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import { initMetadataStore } from "../src/metadata-store/index.ts";
 
 describe("metadata-store", () => {

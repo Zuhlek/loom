@@ -2,7 +2,7 @@
  * Tests for /chats POST + GET. Exercises the in-process route handler
  * directly (no HTTP) so we don't need to bind a port.
  */
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import { initMetadataStore } from "../src/metadata-store/index.ts";
 import { mountChatsRoute } from "../src/routes/chats.ts";
 

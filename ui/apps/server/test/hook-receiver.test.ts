@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import { normalizeHookEvent } from "../src/hook-receiver/normalize.ts";
 import { initMetadataStore } from "../src/metadata-store/index.ts";
 import { mountHookReceiver } from "../src/hook-receiver/index.ts";
