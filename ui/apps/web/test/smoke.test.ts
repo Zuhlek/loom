@@ -19,7 +19,7 @@ describe("apps/web frontend skeleton", () => {
     // /chat-mock/:variant (still string-matches "chat/:variant").
     expect(app).toContain("/chat/:id");
     expect(app).toContain("/chat-mock/:variant");
-    expect(app).toContain("/loom/:phase");
+    expect(app).toContain("/loom/:projectId/:loomName");
     expect(app).toContain("/settings/:variant");
   });
 
@@ -34,7 +34,6 @@ describe("apps/web frontend skeleton", () => {
       "src/routes/empty-home.tsx",
       "src/routes/spawn-chat-dialog.tsx",
       "src/routes/chat.tsx",
-      "src/routes/loom-view.tsx",
       "src/routes/settings.tsx",
       "src/routes/multi-tab-same-cwd.tsx",
       "src/routes/multi-path-project.tsx",
