@@ -22,15 +22,6 @@ const sections: Array<{
     ],
   },
   {
-    title: "Loom artifact view",
-    pages: [
-      { path: "/loom/idea", label: "Loom — idea phase pending", subtitle: "Read-only loom view with phase stepper at idea.", tag: "06" },
-      { path: "/loom/plan", label: "Loom — plan complete", subtitle: "plan.md rendered as markdown.", tag: "07" },
-      { path: "/loom/mockup", label: "Loom — mockup rendering", subtitle: "Sandboxed iframe preview.", tag: "08" },
-      { path: "/loom/build", label: "Loom — build phase kanban", subtitle: "board.md kanban + events.jsonl tail.", tag: "09" },
-    ],
-  },
-  {
     title: "Sidebar variants",
     pages: [
       { path: "/multi-tab", label: "Multi-tab same cwd", subtitle: "Two chats sharing a cwd.", tag: "12" },
@@ -63,7 +54,7 @@ export function Index() {
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "rgba(16,185,129,0.18)", color: "var(--success-foreground)" }}>
-              16 pages
+              12 pages
             </span>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>
               v0.1
@@ -106,7 +97,7 @@ export function Index() {
 
         <footer className="mt-8 pt-6 border-t text-[11px] flex items-center justify-between" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
           <span>apps/web · Phase 4 build</span>
-          <span className="font-mono">React + Vite · 16 pages</span>
+          <span className="font-mono">React + Vite · 12 pages</span>
         </footer>
       </div>
     </div>

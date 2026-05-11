@@ -5,7 +5,6 @@ import { EmptyHome } from "./routes/empty-home";
 import { LiveHome } from "./routes/live-home";
 import { ChatRoute } from "./routes/chat";
 import { LiveChatRoute } from "./routes/live-chat";
-import { LoomView } from "./routes/loom-view";
 import { LoomViewLive } from "./routes/loom-view-live";
 import { Settings } from "./routes/settings";
 import { SpawnChatDialogPage } from "./routes/spawn-chat-dialog";
@@ -40,13 +39,6 @@ export function App() {
               projectId={decodeURIComponent(params.projectId)}
               loomName={decodeURIComponent(params.loomName)}
             />
-          )}
-        </Route>
-        <Route path="/loom/:phase?">
-          {(params: { phase?: string }) => (
-            <AppSidebarLayout>
-              <LoomView phase={params.phase ?? "idea"} />
-            </AppSidebarLayout>
           )}
         </Route>
         <Route path="/settings/:variant?">
