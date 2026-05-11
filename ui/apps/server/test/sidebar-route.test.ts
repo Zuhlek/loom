@@ -19,7 +19,7 @@ afterAll(() => {
 });
 
 function makeProjectWithLooms(loomNames: string[]): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "nora-loom-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-test-"));
   tmpRoots.push(root);
   fs.mkdirSync(path.join(root, ".loom"), { recursive: true });
   for (const n of loomNames) {
@@ -57,7 +57,7 @@ describe("sidebar route loom discovery", () => {
 
   test("loom discovery skips dot-prefixed entries and non-directories", async () => {
     invalidateLoomCache();
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "nora-loom-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-test-"));
     tmpRoots.push(root);
     fs.mkdirSync(path.join(root, ".loom", "real"), { recursive: true });
     fs.mkdirSync(path.join(root, ".loom", ".hidden"), { recursive: true });
@@ -77,7 +77,7 @@ describe("sidebar route loom discovery", () => {
 
   test("project with no .loom/ directory yields zero looms", async () => {
     invalidateLoomCache();
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "nora-loom-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-test-"));
     tmpRoots.push(root);
 
     const store = await initMetadataStore({ inMemoryOnly: true });

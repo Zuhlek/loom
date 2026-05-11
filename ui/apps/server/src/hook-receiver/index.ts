@@ -13,6 +13,7 @@ export type EnvelopeBroadcaster = (envelope: any) => void;
 
 let broadcaster: EnvelopeBroadcaster | null = null;
 const lastWarnings: string[] = [];
+let lastDelivered: { channel: string; at: string } | null = null;
 
 export function setEnvelopeBroadcaster(b: EnvelopeBroadcaster | null) {
   broadcaster = b;
@@ -20,6 +21,14 @@ export function setEnvelopeBroadcaster(b: EnvelopeBroadcaster | null) {
 
 export function getRecentHookWarnings(): string[] {
   return lastWarnings.slice(-50);
+}
+
+export function getLastDelivered(): { channel: string; at: string } | null {
+  return lastDelivered;
+}
+
+export function resetLastDelivered(): void {
+  lastDelivered = null;
 }
 
 export function mountHookReceiver(
@@ -37,6 +46,7 @@ export function mountHookReceiver(
     if (!body || typeof body.channel !== "string") {
       return new Response("missing channel", { status: 400 });
     }
+    lastDelivered = { channel: body.channel, at: new Date().toISOString() };
     const result = normalizeHookEvent(body);
     if (result.pendingGate) {
       store.pendingGates.upsert(result.pendingGate);
@@ -46,7 +56,7 @@ export function mountHookReceiver(
     }
     if (result.warning) {
       lastWarnings.push(result.warning);
-      console.warn(`[nora hook] ${result.warning}`);
+      console.warn(`[loom hook] ${result.warning}`);
     }
     if (broadcaster) {
       for (const env of result.envelopes) broadcaster(env);

@@ -23,7 +23,7 @@ afterAll(() => {
 });
 
 function makeLoom(loomName: string, files: Record<string, string>): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "nora-loom-route-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-route-test-"));
   tmpRoots.push(root);
   const loomDir = path.join(root, ".loom", loomName);
   fs.mkdirSync(loomDir, { recursive: true });
@@ -107,7 +107,7 @@ describe("loom route", () => {
 
   test("404 on missing loom directory", async () => {
     invalidateLoomViewCache();
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "nora-loom-route-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-route-test-"));
     tmpRoots.push(root);
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({ name: "p", paths: [root] });
@@ -125,7 +125,7 @@ describe("loom route", () => {
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({
       name: "p",
-      paths: [fs.mkdtempSync(path.join(os.tmpdir(), "nora-loom-route-"))],
+      paths: [fs.mkdtempSync(path.join(os.tmpdir(), "loom-route-test-"))],
     });
     tmpRoots.push(proj.paths[0]);
     const routes: Record<string, any> = {};

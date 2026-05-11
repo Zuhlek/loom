@@ -1,5 +1,5 @@
 /*
- * Nora visual identity tokens — verbatim from .loom/nora/mockup/shared/styles.html.
+ * Loom visual identity tokens — verbatim from .loom/loom/mockup/shared/styles.html.
  * Tailwind v3 is loaded via CDN in index.html; these CSS variables back the
  * arbitrary-property utilities (e.g. text-[var(--foreground)]).
  */
@@ -74,13 +74,13 @@ body::after {
 .diff-del-strong { background: rgba(239, 68, 68, 0.18); }
 .diff-meta { color: var(--muted-foreground); }
 
-@keyframes nora-pulse {
+@keyframes loom-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
-.awaiting-pulse { animation: nora-pulse 2s ease-in-out infinite; }
+.awaiting-pulse { animation: loom-pulse 2s ease-in-out infinite; }
 
-@keyframes nora-spin {
+@keyframes loom-spin {
   to { transform: rotate(360deg); }
 }
-.tasks-spinner { animation: nora-spin 1s linear infinite; transform-origin: center; }
+.tasks-spinner { animation: loom-spin 1s linear infinite; transform-origin: center; }

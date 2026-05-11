@@ -135,7 +135,7 @@ export function NewProjectDialog({ onClose, onCreated, onUseExisting }: Props) {
               autoFocus
               className="w-full mt-1.5 px-2.5 py-1.5 rounded-md border bg-white text-sm outline-none"
               style={{ borderColor: "var(--border)" }}
-              placeholder="e.g. nora, web-app, scratch"
+              placeholder="e.g. loom, web-app, scratch"
             />
             <p className="text-[10px] mt-1" style={{ color: "var(--muted-foreground)" }}>
               Letters, digits, dashes, underscores, spaces. 1–64 chars.

@@ -16,7 +16,7 @@ const DEFAULT_CANDIDATES: Candidate[] = [
     looms: 3,
     lastAccessed: "2h ago",
     recommended: true,
-    projectTags: ["nora", "cinnamon", "visana", "+9 more"],
+    projectTags: ["loom", "cinnamon", "visana", "+9 more"],
   },
   { path: "~/code", repos: 5, looms: 0, lastAccessed: "14d ago" },
   { path: "~/Documents/work", repos: 2, looms: 0, lastAccessed: "41d ago" },
@@ -38,9 +38,9 @@ export function DiscoverWizard() {
             N
           </div>
           <div className="flex-1">
-            <h1 className="text-base font-semibold tracking-tight">Welcome to nora</h1>
+            <h1 className="text-base font-semibold tracking-tight">Welcome to loom</h1>
             <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-              Pick a workspace root so nora can discover your repos and looms.
+              Pick a workspace root so loom can discover your repos and looms.
             </p>
           </div>
           <span
@@ -133,14 +133,14 @@ export function DiscoverWizard() {
               </button>
             </div>
             <p className="text-[10px] mt-1.5 font-mono" style={{ color: "var(--muted-foreground)" }}>
-              resolved → ~/.nora/config.json on Continue
+              resolved → ~/.loom/config.json on Continue
             </p>
           </div>
         </div>
 
         <div className="px-6 py-4 border-t flex items-center justify-between" style={{ borderColor: "var(--border)", background: "rgba(0,0,0,0.015)" }}>
           <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
-            Resolution: CLI <code className="font-mono">--root</code> &gt; <code className="font-mono">~/.nora/config.json</code> &gt; this wizard
+            Resolution: CLI <code className="font-mono">--root</code> &gt; <code className="font-mono">~/.loom/config.json</code> &gt; this wizard
           </span>
           <div className="flex items-center gap-2">
             <button className="px-3 py-2 rounded-lg text-xs font-medium hover:bg-[var(--accent)]" style={{ color: "var(--muted-foreground)" }}>

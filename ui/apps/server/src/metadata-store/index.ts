@@ -2,7 +2,7 @@
  * Metadata store.
  *
  * For v1 we use a simple JSON-backed in-memory store with auto-save. The
- * default path is ~/.nora/metadata.db (a JSON file, not a real database).
+ * default path is ~/.loom/metadata.db (a JSON file, not a real database).
  * Tests override the path or pass `inMemoryOnly: true` to keep behavior
  * deterministic.
  *
@@ -29,7 +29,7 @@ export interface MetadataStore {
 }
 
 export interface InitOptions {
-  // If supplied, persist JSON to this path. Defaults to ~/.nora/metadata.db.
+  // If supplied, persist JSON to this path. Defaults to ~/.loom/metadata.db.
   pglitePath?: string;
   // Override migration directory (tests).
   migrationsDir?: string;
@@ -82,7 +82,7 @@ function hydrate(storage: InMemoryStorage, data: SerializedStorage): void {
 }
 
 function defaultDbPath(): string {
-  return path.join(os.homedir(), ".nora", "metadata.db");
+  return path.join(os.homedir(), ".loom", "metadata.db");
 }
 
 export async function initMetadataStore(opts: InitOptions = {}): Promise<MetadataStore> {
@@ -108,7 +108,7 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
       const parsed = JSON.parse(raw) as SerializedStorage;
       hydrate(storage, parsed);
     } catch (err) {
-      console.warn(`[nora] metadata.db is malformed; starting fresh: ${(err as Error).message}`);
+      console.warn(`[loom] metadata.db is malformed; starting fresh: ${(err as Error).message}`);
     }
   }
 
@@ -125,7 +125,7 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
         fs.writeFileSync(dbPath, JSON.stringify(serialize(storage), null, 2), "utf8");
       } catch (err) {
         lastError = err as Error;
-        console.warn(`[nora] failed to persist metadata.db: ${(err as Error).message}`);
+        console.warn(`[loom] failed to persist metadata.db: ${(err as Error).message}`);
       }
     });
   };

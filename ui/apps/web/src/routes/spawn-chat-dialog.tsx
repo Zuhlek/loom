@@ -12,7 +12,7 @@ const MODES: Array<{ id: PermissionMode; label: string; subtitle: string; dot: s
   { id: "trusted-vm", label: "Trusted-VM", subtitle: "Skip all prompts", dot: "var(--destructive)" },
 ];
 
-const PROJECTS = ["nora", "cinnamon", "visana", "— Create new..."];
+const PROJECTS = ["loom", "cinnamon", "visana", "— Create new..."];
 
 /** /spawn — opens the live spawn modal on top of the live home. */
 export function SpawnChatDialogPage() {
@@ -32,10 +32,10 @@ export function SpawnChatDialogPage() {
 }
 
 export function SpawnChatModal({ onClose }: { onClose?: () => void } = {}) {
-  const [cwd, setCwd] = useState("/Users/tristan/dev/repo/nora");
+  const [cwd, setCwd] = useState("/Users/tristan/dev/repo/loom");
   const [mode, setMode] = useState<PermissionMode>("default");
   const [worktree, setWorktree] = useState(false);
-  const [project, setProject] = useState("nora");
+  const [project, setProject] = useState("loom");
 
   return (
     <div className="w-full max-w-xl rounded-2xl bg-white shadow-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
@@ -91,7 +91,7 @@ export function SpawnChatModal({ onClose }: { onClose?: () => void } = {}) {
             Recent
           </div>
           <div className="mt-1 flex flex-wrap gap-1">
-            {["~/dev/repo/nora", "~/dev/repo/cinnamon", "~/dev/repo/visana"].map((p) => (
+            {["~/dev/repo/loom", "~/dev/repo/cinnamon", "~/dev/repo/visana"].map((p) => (
               <button
                 key={p}
                 onClick={() => setCwd(p)}

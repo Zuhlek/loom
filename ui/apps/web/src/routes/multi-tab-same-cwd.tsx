@@ -6,8 +6,8 @@ import type { ProjectGroup } from "../components/Sidebar";
 
 const PROJECTS: ProjectGroup[] = [
   {
-    id: "nora",
-    label: "nora",
+    id: "loom",
+    label: "loom",
     initial: "N",
     accent: "emerald",
     count: 3,
@@ -23,7 +23,7 @@ const PROJECTS: ProjectGroup[] = [
 export function MultiTabSameCwd() {
   return (
     <AppSidebarLayout sidebar={{ chatGroups: PROJECTS, emptyLooms: true }}>
-      <ChatHeader title="Refine sidebar layout" permissionMode="default" cwd="~/dev/repo/nora · PID 47821" mode="local" />
+      <ChatHeader title="Refine sidebar layout" permissionMode="default" cwd="~/dev/repo/loom · PID 47821" mode="local" />
       <div className="mx-5 mt-3 rounded-lg border p-3 flex items-start gap-2.5" style={{ borderColor: "rgba(59,130,246,0.3)", background: "rgba(59,130,246,0.04)" }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4 mt-0.5 shrink-0" style={{ color: "var(--info)" }}>
           <circle cx="12" cy="12" r="10" />
@@ -34,7 +34,7 @@ export function MultiTabSameCwd() {
             Another chat is running in this cwd.
           </p>
           <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-            "Test infrastructure scan" (PID 47914) shares <code className="font-mono px-1 rounded" style={{ background: "rgba(0,0,0,0.04)" }}>~/dev/repo/nora</code>. Each chat owns its own PID/PTY. Conflict responsibility stays with you. <span className="font-mono text-[10px]" style={{ color: "var(--muted-foreground)" }}>SR-36</span>
+            "Test infrastructure scan" (PID 47914) shares <code className="font-mono px-1 rounded" style={{ background: "rgba(0,0,0,0.04)" }}>~/dev/repo/loom</code>. Each chat owns its own PID/PTY. Conflict responsibility stays with you. <span className="font-mono text-[10px]" style={{ color: "var(--muted-foreground)" }}>SR-36</span>
           </p>
         </div>
         <button className="text-[10px] px-1.5 py-0.5 rounded hover:bg-[var(--accent)]" style={{ color: "var(--muted-foreground)" }}>

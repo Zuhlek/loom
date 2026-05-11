@@ -3,7 +3,7 @@
  *
  * Lifted from t3code's apps/server/src/git/GitManager.ts (MIT License). The
  * Effect runtime is replaced with plain async/await; only the operations we
- * need for nora's "Commit / Commit & push / Create PR" branch toolbar are
+ * need for loom's "Commit / Commit & push / Create PR" branch toolbar are
  * implemented.
  */
 

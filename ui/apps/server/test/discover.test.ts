@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { scanCommonParents } from "../src/discover-wizard-service/index.ts";
 
 function tmpDir(): string {
-  const p = path.join(os.tmpdir(), `nora-discover-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const p = path.join(os.tmpdir(), `loom-discover-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   fs.mkdirSync(p, { recursive: true });
   return p;
 }

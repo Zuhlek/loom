@@ -1,6 +1,6 @@
 /**
  * GET /discover/scan — scans common parents and returns matches.
- * POST /discover/save — writes ~/.nora/config.json with chosen root.
+ * POST /discover/save — writes ~/.loom/config.json with chosen root.
  */
 import { scanCommonParents, isAbsolutePath } from "../discover-wizard-service/index.ts";
 import { writeConfig } from "../config-loader/index.ts";
@@ -36,7 +36,7 @@ export function mountDiscoverRoute(
     }
     const configPath = body?.configPath ?? undefined;
     try {
-      const finalPath = configPath ?? `${process.env.HOME}/.nora/config.json`;
+      const finalPath = configPath ?? `${process.env.HOME}/.loom/config.json`;
       writeConfig(finalPath, { root });
       return new Response(JSON.stringify({ ok: true, configPath: finalPath, root }), {
         status: 200,

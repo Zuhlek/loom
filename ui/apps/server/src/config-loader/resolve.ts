@@ -1,5 +1,5 @@
 /**
- * Resolution chain: CLI --root > ~/.nora/config.json > none (wizard).
+ * Resolution chain: CLI --root > ~/.loom/config.json > none (wizard).
  *
  * Pure function so it's easy to unit-test.
  */
@@ -22,7 +22,7 @@ export interface ResolveOptions {
 }
 
 export function resolveConfig(opts: ResolveOptions = {}): ResolvedConfig {
-  const configPath = opts.configPath ?? path.join(os.homedir(), ".nora", "config.json");
+  const configPath = opts.configPath ?? path.join(os.homedir(), ".loom", "config.json");
 
   if (opts.cliRoot) {
     return { root: opts.cliRoot, source: "cli", configPath };
@@ -41,7 +41,7 @@ export function resolveConfig(opts: ResolveOptions = {}): ResolvedConfig {
         };
       }
     } catch (err) {
-      console.warn(`[nora] config.json is malformed; ignoring: ${(err as Error).message}`);
+      console.warn(`[loom] config.json is malformed; ignoring: ${(err as Error).message}`);
     }
   }
   return { root: null, source: "none", configPath };

@@ -2,7 +2,7 @@
  * SidebarStateProvider — fetches /api/sidebar/state on mount and exposes
  * a refresh() method so children can re-read after mutations (spawn chat,
  * etc.). Also polls every 5 s in case the backend was modified out of band
- * (e.g. another nora client created a chat).
+ * (e.g. another loom client created a chat).
  */
 import {
   createContext,

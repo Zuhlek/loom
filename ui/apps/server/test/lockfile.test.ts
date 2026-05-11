@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { acquireLock } from "../src/lockfile.ts";
 
 function tmpLock(): string {
-  return path.join(os.tmpdir(), `nora-lock-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  return path.join(os.tmpdir(), `loom-lock-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 }
 
 describe("acquireLock", () => {

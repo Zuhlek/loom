@@ -6,10 +6,10 @@ import { spawnSync } from "node:child_process";
 import { executeGit, listWorktrees, getStatus, sanitizeBranchSegment, GitCommandError } from "../src/git/worktree";
 
 function makeRepo(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "nora-wt-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "loom-wt-"));
   spawnSync("git", ["init", "-b", "main"], { cwd: dir });
-  spawnSync("git", ["config", "user.email", "test@nora"], { cwd: dir });
-  spawnSync("git", ["config", "user.name", "Nora Test"], { cwd: dir });
+  spawnSync("git", ["config", "user.email", "test@loom"], { cwd: dir });
+  spawnSync("git", ["config", "user.name", "Loom Test"], { cwd: dir });
   spawnSync("git", ["commit", "--allow-empty", "-m", "init"], { cwd: dir });
   return dir;
 }
@@ -46,7 +46,7 @@ describe("worktree manager", () => {
   });
 
   test("getStatus on a non-repo returns isRepo=false", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "nora-non-"));
+    const dir = mkdtempSync(path.join(tmpdir(), "loom-non-"));
     const status = await getStatus(dir);
     expect(status.isRepo).toBe(false);
     rmSync(dir, { recursive: true });

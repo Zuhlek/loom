@@ -55,14 +55,14 @@ const KANBAN: KanbanColumn[] = [
     id: "done",
     label: "Done",
     cards: [
-      { id: "t-001", title: "Bootstrap nora-server", tags: ["backend"], duration: "14m", done: true },
+      { id: "t-001", title: "Bootstrap loom-server", tags: ["backend"], duration: "14m", done: true },
       { id: "t-004", title: "PTY bridge (node-pty)", tags: ["backend"], duration: "9m", done: true },
     ],
   },
 ];
 
 const SAMPLE_EVENTS = [
-  { ts: "14:31:21", level: "info" as const, message: "build_started project=nora total=8" },
+  { ts: "14:31:21", level: "info" as const, message: "build_started project=loom total=8" },
   { ts: "14:31:22", level: "ok" as const, message: "task_done id=t-001 duration=14m commit=abc123f" },
   { ts: "14:31:38", level: "ok" as const, message: "task_done id=t-004 duration=9m commit=def456a" },
   { ts: "14:31:55", level: "info" as const, message: "task_started id=t-002 lane=in-progress" },
@@ -91,16 +91,16 @@ export function LoomView({ phase }: LoomViewProps) {
 
   return (
     <div className="flex flex-1 min-w-0">
-      <FileTreeView rootLabel=".loom/nora/" files={fileList} />
+      <FileTreeView rootLabel=".loom/" files={fileList} />
       <main className="flex-1 flex flex-col min-w-0">
         <header className="border-b" style={{ borderColor: "var(--border)" }}>
           <div className="px-5 py-2.5 flex items-center gap-3">
-            <span className="text-sm font-medium font-mono">.loom/nora/</span>
+            <span className="text-sm font-medium font-mono">.loom/</span>
             <span className="text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>
               read-only
             </span>
             <span className="ml-auto text-[10px] font-mono" style={{ color: "var(--muted-foreground)" }}>
-              ~/dev/repo/nora
+              ~/dev/repo/loom
             </span>
           </div>
           <PhaseStepper current={phaseId} states={states} />
@@ -117,7 +117,7 @@ export function LoomView({ phase }: LoomViewProps) {
           <div className="flex-1 overflow-y-auto px-5 py-4">
             <div className="max-w-3xl">
               <div className="text-[10px] uppercase tracking-wide font-mono mb-1" style={{ color: "var(--muted-foreground)" }}>
-                .loom/nora/{isPlan ? "plan.md" : "idea.md"}
+                .loom/{isPlan ? "plan.md" : "idea.md"}
               </div>
               {isPlan ? <PlanContent /> : <IdeaContent />}
             </div>
@@ -145,7 +145,7 @@ function PendingBanner() {
           Phase 1 has a pending question.
         </p>
         <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-          Resolve it from the owning chat <span className="font-mono px-1 rounded" style={{ background: "rgba(0,0,0,0.04)" }}>/weave nora</span> in the left nav. The loom view is read-only.
+          Resolve it from the owning chat <span className="font-mono px-1 rounded" style={{ background: "rgba(0,0,0,0.04)" }}>/weave loom</span> in the left nav. The loom view is read-only.
         </p>
       </div>
       <button className="text-[10px] px-1.5 py-0.5 rounded hover:bg-[var(--accent)]" style={{ color: "var(--muted-foreground)" }} title="Dismiss banner">
@@ -158,7 +158,7 @@ function PendingBanner() {
 function IdeaContent() {
   return (
     <article className="text-sm leading-relaxed space-y-3">
-      <h1 className="text-2xl font-semibold tracking-tight">Nora — chat-first Claude Code session manager + loom artifact viewer</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Loom — chat-first Claude Code session manager + loom artifact viewer</h1>
       <h2 className="text-lg font-semibold mt-4">What it is</h2>
       <p>Localhost browser app managing Claude Code sessions with loom artifacts side-by-side in one nav. Chats produce changes, looms show state, <code className="font-mono px-1 rounded text-[12px]" style={{ background: "var(--muted)" }}>AskUserQuestion</code> is the only bridge.</p>
       <h2 className="text-lg font-semibold mt-4">Why</h2>
@@ -180,7 +180,7 @@ function IdeaContent() {
 function PlanContent() {
   return (
     <article className="text-sm leading-relaxed space-y-3">
-      <h1 className="text-2xl font-semibold tracking-tight">Plan — Nora</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Plan — Loom</h1>
       <p style={{ color: "var(--muted-foreground)" }}>Derived from idea.md. 32 tasks; 5 AFK-runnable; rest gated by HITL.</p>
       <h2 className="text-lg font-semibold mt-4">Phases (DAG)</h2>
       <ol className="list-decimal ml-5 space-y-1">

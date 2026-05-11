@@ -44,7 +44,7 @@ describe("cwd routes", () => {
     const routes: Record<string, any> = {};
     mountCwdRoute(routes, store);
     // Create a tiny git-shaped tree under HOME's tmp area.
-    const tmpRoot = fs.mkdtempSync(path.join(os.homedir(), ".nora-cwd-test-"));
+    const tmpRoot = fs.mkdtempSync(path.join(os.homedir(), ".loom-cwd-test-"));
     try {
       const repo = path.join(tmpRoot, "repo-a");
       fs.mkdirSync(repo);
@@ -69,7 +69,7 @@ describe("cwd routes", () => {
     const routes: Record<string, any> = {};
     mountCwdRoute(routes, store);
     // A path inside HOME that almost certainly doesn't exist.
-    const ghost = path.join(os.homedir(), ".nora-does-not-exist-" + Date.now());
+    const ghost = path.join(os.homedir(), ".loom-does-not-exist-" + Date.now());
     const req = new Request(`http://localhost/cwd?parent=${encodeURIComponent(ghost)}`);
     const res = await routes["/cwd"](req, new URL(req.url));
     expect(res.status).toBe(404);
@@ -83,7 +83,7 @@ describe("cwd routes", () => {
     const store = await initMetadataStore({ inMemoryOnly: true });
     const routes: Record<string, any> = {};
     mountCwdRoute(routes, store);
-    const filePath = path.join(os.homedir(), ".nora-cwd-test-file-" + Date.now());
+    const filePath = path.join(os.homedir(), ".loom-cwd-test-file-" + Date.now());
     fs.writeFileSync(filePath, "x");
     try {
       const req = new Request(`http://localhost/cwd?parent=${encodeURIComponent(filePath)}`);

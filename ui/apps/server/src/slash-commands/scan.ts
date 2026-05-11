@@ -4,7 +4,7 @@
  * Walks user-scope (`~/.claude/commands/`), project-scope
  * (`<cwd>/.claude/commands/`), and plugin-scope (best-effort) and
  * returns a deduped list with scope labels. Per plan.md Out-of-scope
- * "reimplementing slash-command semantics", nora ONLY collects names
+ * "reimplementing slash-command semantics", loom ONLY collects names
  * — Claude Code itself executes them.
  */
 import * as fs from "node:fs";

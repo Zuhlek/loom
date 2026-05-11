@@ -42,7 +42,7 @@ export function LiveSidebar() {
     try {
       await deleteChat(chatId);
     } catch (err) {
-      console.warn("[nora] deleteChat failed", err);
+      console.warn("[loom] deleteChat failed", err);
     }
     if (location === `/chat/${chatId}`) {
       navigate("/");
@@ -54,7 +54,7 @@ export function LiveSidebar() {
     try {
       await deleteProject(project.id);
     } catch (err) {
-      console.warn("[nora] deleteProject failed", err);
+      console.warn("[loom] deleteProject failed", err);
     }
     if (deletedChatIds.some((id) => location === `/chat/${id}`)) {
       navigate("/");

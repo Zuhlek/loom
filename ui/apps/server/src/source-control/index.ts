@@ -1,7 +1,7 @@
 /*
  * Source-control provider registry.
  *
- * Modeled on t3code's SourceControlProviderRegistry.ts (MIT). For nora v1
+ * Modeled on t3code's SourceControlProviderRegistry.ts (MIT). For loom v1
  * we ship a real GitHub provider (CLI-based) and stub the others — they
  * register a "not implemented yet" placeholder that throws if invoked.
  *

@@ -6,7 +6,7 @@ export interface ChatHeaderProps {
   cwd: string;
   /** "local" | "worktree" */
   mode: "local" | "worktree";
-  /** worktree-mode branch e.g. "nora/plan-deploy/abc123" */
+  /** worktree-mode branch e.g. "loom/plan-deploy/abc123" */
   branch?: string;
   onTerminalToggle?: () => void;
   onMenuOpen?: (e: React.MouseEvent) => void;

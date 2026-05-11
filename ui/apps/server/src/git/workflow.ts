@@ -2,7 +2,7 @@
  * GitWorkflowService — the "Commit / Commit & push / Create PR" composite ops.
  *
  * Lifted from t3code's apps/server/src/git/GitWorkflowService.ts (MIT License),
- * simplified for nora. Each method is one button on the worktree-mode chat's
+ * simplified for loom. Each method is one button on the worktree-mode chat's
  * branch toolbar (mockup 05).
  */
 

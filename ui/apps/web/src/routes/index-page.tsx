@@ -56,7 +56,7 @@ export function Index() {
             N
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Nora — Mockup pages</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Loom — Mockup pages</h1>
             <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
               Phase 4 build · React + Vite + Tailwind v3 (CDN)
             </p>

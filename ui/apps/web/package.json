@@ -1,5 +1,5 @@
 {
-  "name": "@nora/web",
+  "name": "@loom/web",
   "private": true,
   "type": "module",
   "scripts": {

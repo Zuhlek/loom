@@ -230,9 +230,9 @@ export function LiveChatRoute({ chatId }: Props) {
             term.write(data);
           }
         } else if (env.kind === "pty-exit" && env["chat-id"] === chatId) {
-          term.write(`\r\n[nora] PTY exited (code=${env.body?.exitCode}).\r\n`);
+          term.write(`\r\n[loom] PTY exited (code=${env.body?.exitCode}).\r\n`);
         } else if (env.kind === "error") {
-          term.write(`\r\n[nora] error: ${env.body?.message ?? "unknown"}\r\n`);
+          term.write(`\r\n[loom] error: ${env.body?.message ?? "unknown"}\r\n`);
         }
       };
 

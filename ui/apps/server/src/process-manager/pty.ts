@@ -247,7 +247,7 @@ export function spawnPty(input: PtySpawnInput & { useHelper?: boolean }): PtyPro
     } catch (err) {
       // Fall through to direct spawn.
       console.warn(
-        `[nora pty] helper failed (${(err as Error).message}); falling back to child_process`,
+        `[loom pty] helper failed (${(err as Error).message}); falling back to child_process`,
       );
     }
   }

@@ -1,7 +1,7 @@
 /**
- * Single-instance lockfile for nora-server.
+ * Single-instance lockfile for loom-server.
  *
- * Writes ~/.nora/.lock containing the current PID. If a lock already
+ * Writes ~/.loom/.lock containing the current PID. If a lock already
  * exists and the PID is alive, refuses cleanly. Releases on
  * process exit / SIGTERM.
  */
@@ -17,7 +17,7 @@ export interface LockResult {
   release?: () => void;
 }
 
-const DEFAULT_LOCK_PATH = path.join(os.homedir(), ".nora", ".lock");
+const DEFAULT_LOCK_PATH = path.join(os.homedir(), ".loom", ".lock");
 
 function isPidAlive(pid: number): boolean {
   try {
@@ -26,7 +26,7 @@ function isPidAlive(pid: number): boolean {
     return true;
   } catch (err: any) {
     // ESRCH: no such process. EPERM: process exists but owned by
-    // another user — almost certainly NOT our recycled nora-server, so
+    // another user — almost certainly NOT our recycled loom-server, so
     // treat as stale and let the caller take the lock. Anything else
     // (e.g. invalid PID) → treat as dead.
     return false;
@@ -55,7 +55,7 @@ export function acquireLock(lockPath: string = DEFAULT_LOCK_PATH): LockResult {
         ok: false,
         reason: "already-running",
         pid: existing,
-        message: `nora-server already running at PID ${existing}`,
+        message: `loom-server already running at PID ${existing}`,
       };
     }
     // Stale lock (dead PID, unparseable contents, or our own PID from a
@@ -84,7 +84,7 @@ export function acquireLock(lockPath: string = DEFAULT_LOCK_PATH): LockResult {
         const raw = fs.readFileSync(lockPath, "utf8").trim();
         const parsed = parseInt(raw, 10);
         // If parsing fails, the file is junk — clear it. If a different
-        // PID owns it, another nora-server claimed it after us; leave
+        // PID owns it, another loom-server claimed it after us; leave
         // it alone.
         if (!isNaN(parsed) && parsed > 0 && parsed !== process.pid) {
           stillOurs = false;

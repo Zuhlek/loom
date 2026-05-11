@@ -118,7 +118,7 @@ describe("extractTodosFromJsonlEntry", () => {
 
 describe("TranscriptWatcher", () => {
   function tmp(): string {
-    return mkdtempSync(path.join(tmpdir(), "nora-transcript-"));
+    return mkdtempSync(path.join(tmpdir(), "loom-transcript-"));
   }
 
   test("emits the latest TodoWrite when one shows up", async () => {

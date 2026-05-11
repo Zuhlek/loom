@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { JsonlTailer, encodeProjectDir, transcriptsDir } from "../src/jsonl-tailer";
 
 function tmp(): string {
-  return mkdtempSync(path.join(tmpdir(), "nora-tailer-"));
+  return mkdtempSync(path.join(tmpdir(), "loom-tailer-"));
 }
 
 describe("jsonl-tailer", () => {
@@ -39,7 +39,7 @@ describe("jsonl-tailer", () => {
 
   test("encodeProjectDir mirrors Claude Code's encoding convention", () => {
     // Real Claude Code keeps the leading hyphen — every '/' maps to '-'.
-    expect(encodeProjectDir("/Users/tristan/dev/repo/nora")).toBe("-Users-tristan-dev-repo-nora");
+    expect(encodeProjectDir("/Users/tristan/dev/repo/loom")).toBe("-Users-tristan-dev-repo-loom");
   });
 
   test("transcriptsDir composes the path under ~/.claude/projects/", () => {

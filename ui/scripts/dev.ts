@@ -1,7 +1,7 @@
 /**
  * Concurrent dev script.
  *
- * Spawns nora-server (tsx watch) and the Vite dev server side-by-side,
+ * Spawns loom-server (tsx watch) and the Vite dev server side-by-side,
  * pipes their stdout/stderr with a label prefix, and forwards SIGINT /
  * SIGTERM to both children so Ctrl+C cleanly stops everything.
  */
@@ -78,7 +78,7 @@ const server = startChild({
   cmd: "tsx",
   args: ["watch", "apps/server/src/index.ts"],
   cwd: repoRoot,
-  env: { NORA_PORT: process.env.NORA_PORT ?? "3737" },
+  env: { LOOM_PORT: process.env.LOOM_PORT ?? "3737" },
 });
 children.push(server);
 

@@ -1,5 +1,5 @@
 /**
- * Reset nora's metadata store. Removes ~/.nora/metadata.db after asking
+ * Reset loom's metadata store. Removes ~/.loom/metadata.db after asking
  * the user to confirm. Useful for clearing test/smoke chats from the
  * sidebar without touching config.json or running PTYs.
  *
@@ -11,7 +11,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as readline from "node:readline";
 
-const dbPath = path.join(os.homedir(), ".nora", "metadata.db");
+const dbPath = path.join(os.homedir(), ".loom", "metadata.db");
 
 if (!fs.existsSync(dbPath)) {
   console.log(`[reset-state] nothing to do — ${dbPath} does not exist.`);

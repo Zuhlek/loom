@@ -1,5 +1,5 @@
 /*
- * Worktree manager for nora.
+ * Worktree manager for loom.
  *
  * Lifted-and-adapted from t3code's apps/server/src/vcs/GitVcsDriverCore.ts
  * (MIT License, copyright t3tools authors). The Effect-runtime layer has been
@@ -131,7 +131,7 @@ export async function listWorktrees(parentCwd: string): Promise<WorktreeInfo[]> 
 export interface CreateWorktreeOpts {
   /** Path of the parent (main) repo. */
   parentCwd: string;
-  /** Where the worktree should live, e.g. `~/.nora/worktrees/<repo>/<branch>`. */
+  /** Where the worktree should live, e.g. `~/.loom/worktrees/<repo>/<branch>`. */
   worktreePath: string;
   /** New branch name to create off of base. */
   newBranch: string;
@@ -148,7 +148,7 @@ export async function createWorktree(opts: CreateWorktreeOpts): Promise<string> 
   return opts.worktreePath;
 }
 
-/** Remove a worktree (force, since nora-managed worktrees are disposable). */
+/** Remove a worktree (force, since loom-managed worktrees are disposable). */
 export async function removeWorktree(parentCwd: string, worktreePath: string): Promise<void> {
   await executeGit(parentCwd, ["worktree", "remove", "--force", worktreePath]);
 }

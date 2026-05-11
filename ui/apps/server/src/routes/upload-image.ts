@@ -15,7 +15,7 @@ const ALLOWED_MIME = new Set([
   "image/gif",
 ]);
 
-const UPLOAD_DIR = path.join(os.tmpdir(), "nora-uploads");
+const UPLOAD_DIR = path.join(os.tmpdir(), "loom-uploads");
 
 function ensureDir() {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });

@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { install, uninstall, detectConflict, resolveSettingsPath } from "../src/hook-installer";
 
 function tmp(): string {
-  return mkdtempSync(path.join(tmpdir(), "nora-hook-"));
+  return mkdtempSync(path.join(tmpdir(), "loom-hook-"));
 }
 
 describe("hook-installer", () => {
@@ -15,8 +15,8 @@ describe("hook-installer", () => {
     const result = install({ settingsPath, receiverPort: 7891 });
     expect(result.wroteFreshFile).toBe(true);
     const content = readFileSync(settingsPath, "utf8");
-    expect(content).toContain("// nora:hooks:start");
-    expect(content).toContain("// nora:hooks:end");
+    expect(content).toContain("// loom:hooks:start");
+    expect(content).toContain("// loom:hooks:end");
     expect(content).toContain("127.0.0.1:7891/hooks");
     rmSync(dir, { recursive: true });
   });
@@ -44,12 +44,12 @@ describe("hook-installer", () => {
     expect(result.appendedBelowExisting).toBe(true);
     const content = readFileSync(settingsPath, "utf8");
     expect(content).toContain("user-existing");
-    expect(content).toContain("// nora:hooks:start");
-    expect(content).toContain("// nora:hooks:end");
+    expect(content).toContain("// loom:hooks:start");
+    expect(content).toContain("// loom:hooks:end");
     rmSync(dir, { recursive: true });
   });
 
-  test("uninstall removes only nora's marker block, preserving user hooks", () => {
+  test("uninstall removes only loom's marker block, preserving user hooks", () => {
     const dir = tmp();
     const settingsPath = path.join(dir, "settings.json");
     writeFileSync(
@@ -73,7 +73,7 @@ describe("hook-installer", () => {
     expect(removed.removed).toBe(true);
     const content = readFileSync(settingsPath, "utf8");
     expect(content).toContain("user-existing");
-    expect(content).not.toContain("// nora:hooks:start");
+    expect(content).not.toContain("// loom:hooks:start");
     rmSync(dir, { recursive: true });
   });
 
@@ -105,7 +105,7 @@ describe("hook-installer", () => {
     install({ settingsPath, receiverPort: 7891 });
     install({ settingsPath, receiverPort: 7891 });
     const content = readFileSync(settingsPath, "utf8");
-    const startCount = (content.match(/\/\/ nora:hooks:start/g) ?? []).length;
+    const startCount = (content.match(/\/\/ loom:hooks:start/g) ?? []).length;
     // One per wired event
     expect(startCount).toBe(5);
     rmSync(dir, { recursive: true });

@@ -5,8 +5,8 @@ import type { ProjectGroup } from "../components/Sidebar";
 
 const PROJECTS: ProjectGroup[] = [
   {
-    id: "nora",
-    label: "nora",
+    id: "loom",
+    label: "loom",
     initial: "N",
     accent: "emerald",
     count: 2,
@@ -40,7 +40,7 @@ export function HandoffForkMenu() {
           },
         }}
       >
-        <ChatHeader title="Refine sidebar layout" permissionMode="default" cwd="~/dev/repo/nora" mode="local" />
+        <ChatHeader title="Refine sidebar layout" permissionMode="default" cwd="~/dev/repo/loom" mode="local" />
         <div className="flex-1 grid place-items-center px-5">
           <p className="text-sm text-center max-w-md" style={{ color: "var(--muted-foreground)" }}>
             Right-click any chat row in the sidebar to open the per-chat context menu. The menu is also reachable from the header dot-dot-dot button.
@@ -57,7 +57,7 @@ export function HandoffForkMenu() {
           <div className="px-3 py-2 border-b" style={{ borderColor: "var(--border)" }}>
             <p className="font-medium">Refine sidebar layout</p>
             <p className="text-[10px] font-mono" style={{ color: "var(--muted-foreground)" }}>
-              PID 47821 · ~/dev/repo/nora
+              PID 47821 · ~/dev/repo/loom
             </p>
           </div>
           <button className="w-full text-left px-3 py-2 hover:bg-[var(--accent)] flex items-start gap-2.5">

@@ -1,5 +1,5 @@
 /**
- * nora-server entrypoint.
+ * loom-server entrypoint.
  *
  * Resolves config (CLI > config.json > wizard), acquires the
  * single-instance lockfile, and starts the HTTP+WS server with all
@@ -28,6 +28,7 @@ import { mountLoomMockupRoute } from "./routes/loom-mockup.ts";
 import { mountLoomBoardRoute } from "./routes/loom-board.ts";
 import { mountLoomRoute } from "./routes/loom.ts";
 import { mountSettingsRoute } from "./routes/settings.ts";
+import { mountHooksAdminRoute } from "./routes/hooks-admin.ts";
 
 function parseRootFlag(argv: string[]): string | undefined {
   const i = argv.indexOf("--root");
@@ -117,17 +118,19 @@ if (isEntrypoint) {
   mountLoomBoardRoute(routes);
   mountLoomRoute(routes, store);
   mountSettingsRoute(routes, config);
+  const loomPort = parseInt(process.env.LOOM_PORT ?? "3737", 10);
+  mountHooksAdminRoute(routes, { receiverPort: loomPort });
   const server = await startServer({
-    port: parseInt(process.env.NORA_PORT ?? "3737", 10),
+    port: loomPort,
     routes,
     bridge,
   });
   console.log(
-    `nora-server listening at ${server.url} (root: ${config.root ?? "<none>"} / source: ${config.source})`,
+    `loom-server listening at ${server.url} (root: ${config.root ?? "<none>"} / source: ${config.source})`,
   );
 
   const shutdown = async (sig: string) => {
-    console.log(`[nora-server] received ${sig}, shutting down...`);
+    console.log(`[loom-server] received ${sig}, shutting down...`);
     try {
       await server.stop();
     } catch {}

@@ -210,7 +210,7 @@ export class ChatPtyBridge {
       const fakeSession: ChatSession = {
         chatId: chat.id,
         pty: failingPty(err?.message ?? "spawn failed"),
-        buffer: `[nora] failed to spawn ${this.claudeBin}: ${err?.message ?? err}\r\n`,
+        buffer: `[loom] failed to spawn ${this.claudeBin}: ${err?.message ?? err}\r\n`,
         clients: new Set(),
         drainTimer: null,
         exited: true,
@@ -249,13 +249,13 @@ export class ChatPtyBridge {
       });
       // Errors are non-fatal — log to stderr but keep the chat alive.
       watcher.on("error", (err: Error) => {
-        console.warn(`[nora] transcript watcher error for ${chat.id}: ${err.message}`);
+        console.warn(`[loom] transcript watcher error for ${chat.id}: ${err.message}`);
       });
       session.watcher = watcher;
       // Fire-and-forget; the tailer falls back to a parent watcher when
       // the JSONL file doesn't exist yet (claude creates it on first write).
       watcher.start().catch((err) => {
-        console.warn(`[nora] transcript watcher start failed for ${chat.id}: ${(err as Error).message}`);
+        console.warn(`[loom] transcript watcher start failed for ${chat.id}: ${(err as Error).message}`);
       });
     }
 
@@ -318,7 +318,7 @@ function failingPty(message: string): PtyProcess {
     onData(cb) {
       // Deliver the failure message asynchronously so callers can wire up
       // listeners before the message arrives.
-      setImmediate(() => cb(`[nora] ${message}\r\n`));
+      setImmediate(() => cb(`[loom] ${message}\r\n`));
       return () => {};
     },
     onExit(cb) {

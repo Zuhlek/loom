@@ -133,7 +133,7 @@ function ProjectGroupView({ group }: { group: ProjectGroup }) {
 
 /**
  * Two-section sidebar: Chats and Looms.
- * Modeled on t3code's Sidebar.tsx but rewritten for nora's grouping (SR-37).
+ * Modeled on t3code's Sidebar.tsx but rewritten for loom's grouping (SR-37).
  */
 export function Sidebar(props: SidebarProps) {
   const { chatGroups, loomGroups, flatChats, flatLooms, emptyChats, emptyLooms, onContextMenu } = props;

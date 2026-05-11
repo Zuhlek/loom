@@ -1,7 +1,7 @@
-# Nora
+# Loom
 
 Chat-first Claude Code session manager + loom artifact viewer.
-See `.loom/nora/idea.md` for the full vision.
+See `.loom/idea.md` for the full vision.
 
 ## Prerequisites
 
@@ -22,7 +22,7 @@ Then open <http://localhost:5173>.
 
 What `pnpm dev` does:
 
-- Launches `nora-server` (Fastify HTTP + `@fastify/websocket`) on port **3737**.
+- Launches `loom-server` (Fastify HTTP + `@fastify/websocket`) on port **3737**.
 - Launches the Vite dev server on port **5173** with HMR.
 - Vite proxies `/api/*` to the server, plus `/ws` for the chat WebSocket.
 
@@ -39,20 +39,20 @@ pnpm build:web    # Production build of the React app.
 pnpm test         # Run all tests (server + web smoke) via Vitest.
 pnpm install-hooks
                   # Optional: install Claude Code's user-scope hooks
-                  # so nora can receive PostToolUse / SessionStart /
+                  # so loom can receive PostToolUse / SessionStart /
                   # Stop / SubagentStop / PermissionRequest events.
                   # Skipped on dev startup; opt-in only.
 ```
 
 ## State
 
-- `~/.nora/metadata.db` — JSON-backed metadata store (chats, projects,
+- `~/.loom/metadata.db` — JSON-backed metadata store (chats, projects,
   pending-gates, hook registrations). Auto-created on first run.
-- `~/.nora/.lock` — single-instance lockfile holding the running PID.
-- `~/.nora/config.json` — workspace config (root, worktrees-root); written
+- `~/.loom/.lock` — single-instance lockfile holding the running PID.
+- `~/.loom/config.json` — workspace config (root, worktrees-root); written
   by the discover wizard.
 
-To reset all state: `rm -rf ~/.nora/`.
+To reset all state: `rm -rf ~/.loom/`.
 
 To clear just the chats/projects metadata while keeping config: `pnpm
 reset-state` (interactive confirm; does not kill running PTYs — stop
@@ -65,7 +65,7 @@ Recent builds promote Project to a first-class entity: chats are created
 your `metadata.db` predates this change you have two options:
 
 1. **Wipe and start clean.** `pnpm reset-state` (or
-   `rm -rf ~/.nora/metadata.db`) — recommended when your existing chats
+   `rm -rf ~/.loom/metadata.db`) — recommended when your existing chats
    are throwaway test rows.
 2. **Keep them and migrate forward.** Existing chats with no
    `project_id` still appear in the sidebar's "Unassigned" bucket. Existing
@@ -90,7 +90,7 @@ your `metadata.db` predates this change you have two options:
 ## Known limitations
 
 These are intentionally deferred to follow-up tasks (see
-`.loom/nora/review.md` for the full list):
+`.loom/review.md` for the full list):
 
 - **Worktree mode**: the spawn dialog has the checkbox and the field is
   recorded, but every chat currently runs in the bare cwd. The diff
@@ -140,5 +140,5 @@ apps/
 scripts/
   dev.ts          # Concurrent dev runner.
   install-hooks.ts# Optional user-scope hook installer.
-.loom/nora/       # Loom artifacts: idea, plan, mockups, BOARD, etc.
+.loom/       # Loom artifacts: idea, plan, mockups, BOARD, etc.
 ```

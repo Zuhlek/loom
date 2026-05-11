@@ -8,7 +8,7 @@ interface AppSidebarLayoutProps {
 
 /**
  * App shell: 256px sidebar + main pane.
- * Mirrors t3code's AppSidebarLayout.tsx but rewritten for Nora's two-section
+ * Mirrors t3code's AppSidebarLayout.tsx but rewritten for Loom's two-section
  * sidebar (Chats + Looms).
  */
 export function AppSidebarLayout({ children, sidebar }: AppSidebarLayoutProps) {

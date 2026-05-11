@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { resolveConfig, writeConfig } from "../src/config-loader/index.ts";
 
 function tmpFile(): string {
-  return path.join(os.tmpdir(), `nora-config-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+  return path.join(os.tmpdir(), `loom-config-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
 }
 
 describe("resolveConfig", () => {

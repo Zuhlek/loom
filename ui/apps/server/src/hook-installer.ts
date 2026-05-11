@@ -1,27 +1,27 @@
 /*
- * Hook installer — manages nora's append-with-marker block in
+ * Hook installer — manages loom's append-with-marker block in
  * ~/.claude/settings.json. SR-39: pre-existing user-scope hooks are
- * never modified; nora's hooks live inside a marker block that uninstall
+ * never modified; loom's hooks live inside a marker block that uninstall
  * removes verbatim.
  *
  * The marker block is JSON-comment-style:
- *   // nora:hooks:start
- *   ...nora's hooks...
- *   // nora:hooks:end
+ *   // loom:hooks:start
+ *   ...loom's hooks...
+ *   // loom:hooks:end
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const MARKER_START = "// nora:hooks:start";
-const MARKER_END = "// nora:hooks:end";
+const MARKER_START = "// loom:hooks:start";
+const MARKER_END = "// loom:hooks:end";
 
 export interface HookInstallerOptions {
   /** Path to settings.json. Defaults to ~/.claude/settings.json. */
   settingsPath?: string;
-  /** Receiver port — usually nora-server's listen port (default 7891). */
+  /** Receiver port — usually loom-server's listen port (default 7891). */
   receiverPort?: number;
-  /** Events to wire. Defaults to the canonical nora set. */
+  /** Events to wire. Defaults to the canonical loom set. */
   events?: readonly string[];
 }
 
@@ -39,7 +39,7 @@ export function settingsExists(opts: HookInstallerOptions = {}): boolean {
   return fs.existsSync(resolveSettingsPath(opts));
 }
 
-/** Detect if pre-existing user-scope hooks are present (without nora's marker). */
+/** Detect if pre-existing user-scope hooks are present (without loom's marker). */
 export function detectConflict(opts: HookInstallerOptions = {}): { hasMarker: boolean; hasUserHooks: boolean } {
   const filePath = resolveSettingsPath(opts);
   if (!fs.existsSync(filePath)) return { hasMarker: false, hasUserHooks: false };
@@ -50,7 +50,7 @@ export function detectConflict(opts: HookInstallerOptions = {}): { hasMarker: bo
 }
 
 /**
- * Install nora's hook receiver into ~/.claude/settings.json. Idempotent —
+ * Install loom's hook receiver into ~/.claude/settings.json. Idempotent —
  * if the marker block is already present, replaces only what's between
  * MARKER_START and MARKER_END.
  *
@@ -79,7 +79,7 @@ export function install(opts: HookInstallerOptions = {}): { wroteFreshFile: bool
   };
 }
 
-/** Uninstall nora's marker block. Pre-existing lines are preserved. */
+/** Uninstall loom's marker block. Pre-existing lines are preserved. */
 export function uninstall(opts: HookInstallerOptions = {}): { removed: boolean } {
   const filePath = resolveSettingsPath(opts);
   if (!fs.existsSync(filePath)) return { removed: false };
@@ -97,7 +97,7 @@ function freshSettings(port: number, events: readonly string[]): string {
       [
         {
           matcher: "*",
-          hooks: [{ type: "command", command: `curl -s http://127.0.0.1:${port}/hooks` }],
+          hooks: [{ type: "command", command: `curl -s -X POST -H 'content-type: application/json' --data-binary @- http://127.0.0.1:${port}/hooks/event` }],
         },
       ],
     ]),
@@ -117,7 +117,7 @@ function freshSettings(port: number, events: readonly string[]): string {
 }
 
 function upsertMarkerBlock(before: string, port: number, events: readonly string[]): string {
-  // Strategy: drop existing nora blocks, then append a fresh "hooks" override
+  // Strategy: drop existing loom blocks, then append a fresh "hooks" override
   // block at the file's end via JSONC-style merge. For real-world correctness
   // a JSONC parser is preferred; we keep the simple text-edit approach for v1
   // and document the limitation: if the user has an unusual settings shape
@@ -128,7 +128,7 @@ function upsertMarkerBlock(before: string, port: number, events: readonly string
     let out = stripped;
     for (const evt of events) {
       const re = new RegExp(`("${evt}"\\s*:\\s*\\[)([\\s\\S]*?)(\\])`, "m");
-      const insert = `\n      ${MARKER_START}\n      { "matcher": "*", "hooks": [{ "type": "command", "command": "curl -s http://127.0.0.1:${port}/hooks" }] }\n      ${MARKER_END}\n    `;
+      const insert = `\n      ${MARKER_START}\n      { "matcher": "*", "hooks": [{ "type": "command", "command": "curl -s -X POST -H 'content-type: application/json' --data-binary @- http://127.0.0.1:${port}/hooks/event" }] }\n      ${MARKER_END}\n    `;
       out = out.replace(re, (_m, open, body: string, close) => {
         const trimmed = body.trim();
         const sep = trimmed.length > 0 && !trimmed.endsWith(",") ? "," : "";

@@ -1,9 +1,9 @@
 import { AppSidebarLayout } from "../components/layout/AppSidebarLayout";
 import type { ProjectGroup } from "../components/Sidebar";
 
-const NORA_PROJECT: ProjectGroup = {
-  id: "nora",
-  label: "nora",
+const LOOM_PROJECT: ProjectGroup = {
+  id: "loom",
+  label: "loom",
   initial: "N",
   accent: "emerald",
   count: 5,
@@ -11,18 +11,18 @@ const NORA_PROJECT: ProjectGroup = {
 
 const PATH_GROUPS: Array<{ path: string; chats: ProjectGroup["chats"] }> = [
   {
-    path: "~/dev/repo/nora",
+    path: "~/dev/repo/loom",
     chats: [
       { id: "c1", label: "Refine sidebar layout", active: true, permissionDot: "default" },
       { id: "c2", label: "Test infrastructure scan", permissionDot: "accept-edits" },
     ],
   },
   {
-    path: "~/dev/repo/nora-server",
+    path: "~/dev/repo/loom-server",
     chats: [{ id: "c3", label: "PGlite migration", permissionDot: "bypass", worktree: true }],
   },
   {
-    path: "~/dev/repo/nora-web",
+    path: "~/dev/repo/loom-web",
     chats: [
       { id: "c4", label: "Diff panel lift", permissionDot: "default" },
       { id: "c5", label: "Composer @-file", permissionDot: "default", awaitingInput: true },
@@ -30,34 +30,34 @@ const PATH_GROUPS: Array<{ path: string; chats: ProjectGroup["chats"] }> = [
   },
 ];
 
-const NORA_LOOMS: ProjectGroup["looms"] = [
-  { id: "f1", label: ".loom/nora/", phase: "P3", subtitle: "~/dev/repo/nora", done: true },
-  { id: "f2", label: ".loom/nora-server/", phase: "P2", subtitle: "~/dev/repo/nora-server" },
+const PROJECT_LOOMS: ProjectGroup["looms"] = [
+  { id: "f1", label: ".loom/", phase: "P3", subtitle: "~/dev/repo/loom", done: true },
+  { id: "f2", label: ".loom/loom-server/", phase: "P2", subtitle: "~/dev/repo/loom-server" },
 ];
 
-/** Mockup 13: one Project (nora) assigned to 3 paths. */
+/** Mockup 13: one Project (loom) assigned to 3 paths. */
 export function MultiPathProject() {
   return (
     <AppSidebarLayout
       sidebar={{
         chatGroups: [
           {
-            ...NORA_PROJECT,
+            ...LOOM_PROJECT,
             chats: PATH_GROUPS.flatMap((g) => g.chats ?? []),
           },
         ],
-        loomGroups: [{ ...NORA_PROJECT, looms: NORA_LOOMS }],
+        loomGroups: [{ ...LOOM_PROJECT, looms: PROJECT_LOOMS }],
       }}
     >
       <header className="border-b px-5 py-3" style={{ borderColor: "var(--border)" }}>
         <span className="text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
-          Project: nora — assigned to 3 paths
+          Project: loom — assigned to 3 paths
         </span>
       </header>
       <div className="flex-1 overflow-y-auto px-5 py-5">
         <div className="max-w-3xl mx-auto space-y-3">
           <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-            One Project may span multiple paths. Chats and looms are grouped per-path so the developer can disambiguate at a glance. The sidebar's per-path subtitle (e.g. <code className="font-mono">~/dev/repo/nora-server</code>) appears below the Project header.
+            One Project may span multiple paths. Chats and looms are grouped per-path so the developer can disambiguate at a glance. The sidebar's per-path subtitle (e.g. <code className="font-mono">~/dev/repo/loom-server</code>) appears below the Project header.
           </p>
           <ul className="space-y-2 mt-4">
             {PATH_GROUPS.map((g) => (

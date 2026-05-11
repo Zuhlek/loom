@@ -78,7 +78,7 @@ export function ChatRoute({ variant }: ChatRouteProps) {
     messages.push(
       <ChatMessage key="u1" role="user" subtitle="Yesterday">
         <div className="text-sm">
-          /weave refine the worktree-mode story for nora — should it default to ON for git repos?
+          /weave refine the worktree-mode story for loom — should it default to ON for git repos?
         </div>
       </ChatMessage>,
       <ChatMessage key="a1" role="assistant" subtitle="claude-opus-4-7">
@@ -88,7 +88,7 @@ export function ChatRoute({ variant }: ChatRouteProps) {
       </ChatMessage>,
       <AskUserQuestionPicker
         key="ask"
-        question="Which worktree default should nora ship?"
+        question="Which worktree default should loom ship?"
         options={[
           { id: "a", label: "A. Genuine t3code mimic — opt-in worktree, default OFF", badge: "S, Low", detail: "Spawn dialog has a checkbox unchecked at open; matches t3code's mode parameter exactly." },
           { id: "b", label: "B. Worktree-leaning — opt-in worktree, default ON", badge: "S, Low", detail: "User can uncheck for local mode; ships MORE opinionated than t3code on the default." },
@@ -109,7 +109,7 @@ export function ChatRoute({ variant }: ChatRouteProps) {
         prompt="Run bun test apps/web/src/components/Sidebar.logic.test.ts?"
         args={{
           command: "bun test apps/web/src/components/Sidebar.logic.test.ts",
-          cwd: "/Users/tristan/dev/repo/nora",
+          cwd: "/Users/tristan/dev/repo/loom",
           timeout: "60000ms",
           env: "CI=1 NODE_ENV=test",
         }}
@@ -166,9 +166,9 @@ export function ChatRoute({ variant }: ChatRouteProps) {
           <ChatHeader
             title="Plan deployment"
             permissionMode="default"
-            cwd="~/dev/repo/nora"
+            cwd="~/dev/repo/loom"
             mode="worktree"
-            branch="nora/plan-deploy/abc123"
+            branch="loom/plan-deploy/abc123"
           />
           <div className="flex-1 overflow-y-auto px-4 py-5">
             <div className="max-w-2xl mx-auto space-y-5">
@@ -188,7 +188,7 @@ export function ChatRoute({ variant }: ChatRouteProps) {
         </div>
         <DiffPanelShell
           branchToolbar={{
-            branch: "nora/plan-deploy/abc123",
+            branch: "loom/plan-deploy/abc123",
             base: "main",
             uncommitted: true,
             remote: "github",
@@ -209,7 +209,7 @@ export function ChatRoute({ variant }: ChatRouteProps) {
 
   return (
     <>
-      <ChatHeader title={title} permissionMode="default" cwd="~/dev/repo/nora" mode="local" />
+      <ChatHeader title={title} permissionMode="default" cwd="~/dev/repo/loom" mode="local" />
       <div className="flex-1 overflow-y-auto px-5 py-5">
         <div className="max-w-3xl mx-auto space-y-5">{messages}</div>
       </div>

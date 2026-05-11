@@ -3,7 +3,7 @@
  *
  * Shells out to `git -C <worktreePath> diff <base>...HEAD --unified=3`.
  * For per-turn mode, returns each turn's commits' diffs as separate
- * sections. nora doesn't auto-commit-per-turn (SR-33), so per-turn
+ * sections. loom doesn't auto-commit-per-turn (SR-33), so per-turn
  * is best-effort; it falls back to whole-conversation if no commits
  * exist.
  */
