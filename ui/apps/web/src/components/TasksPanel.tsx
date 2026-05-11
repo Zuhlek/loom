@@ -8,9 +8,9 @@
  * This component just renders the latest snapshot — the parent route
  * owns subscription + open/close state.
  *
- * Layout: collapsible right-side rail, ~340 px wide. When collapsed
- * only a thin toggle strip remains so the chat surface gets its width
- * back.
+ * Layout: right-side rail, ~340 px wide when open. When closed the
+ * panel renders nothing; the "Tasks" button in the chat header is the
+ * sole toggle.
  */
 
 export type TaskStatus = "pending" | "inProgress" | "completed";
@@ -32,35 +32,7 @@ interface Props {
 const PANEL_WIDTH = 340;
 
 export function TasksPanel({ tasks, open, onToggle, lastUpdatedAt }: Props) {
-  if (!open) {
-    return (
-      <aside
-        data-testid="tasks-panel-collapsed"
-        className="flex flex-col items-center border-l py-2"
-        style={{ width: 28, borderColor: "var(--border)", background: "var(--card, #f5f5f5)" }}
-      >
-        <button
-          type="button"
-          aria-label="Show tasks"
-          onClick={onToggle}
-          className="text-xs px-1 py-1 hover:bg-black/5 rounded"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          {"‹"}
-        </button>
-        <div
-          className="mt-2 select-none text-[10px] tracking-wider"
-          style={{
-            color: "var(--muted-foreground)",
-            writingMode: "vertical-rl",
-            transform: "rotate(180deg)",
-          }}
-        >
-          TASKS
-        </div>
-      </aside>
-    );
-  }
+  if (!open) return null;
 
   return (
     <aside

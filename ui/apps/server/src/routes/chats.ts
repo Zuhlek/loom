@@ -18,7 +18,7 @@
  * so we don't burn a process before the user actually opens the chat.
  */
 import type { MetadataStore } from "../metadata-store/index.ts";
-import type { ChatPtyBridge } from "../process-manager/chat-pty-bridge.ts";
+import type { ClaudeSessionBridge } from "../process-manager/claude-session-bridge.ts";
 import { invalidateLoomCache } from "./sidebar.ts";
 
 function newId(): string {
@@ -33,7 +33,7 @@ function newId(): string {
 export function mountChatsRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   store: MetadataStore,
-  bridge?: ChatPtyBridge,
+  bridge?: ClaudeSessionBridge,
 ): void {
   routes["/chats"] = async (req) => {
     if (req.method === "GET") {

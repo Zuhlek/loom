@@ -79,7 +79,7 @@ export function Settings({ variant }: SettingsProps) {
         <header className="border-b px-6 py-4" style={{ borderColor: "var(--border)" }}>
           <h1 className="text-base font-semibold tracking-tight">Hooks</h1>
           <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-            Auto-installed at user scope (<code className="font-mono">~/.claude/settings.json</code>) with marker for clean uninstall.
+            Auto-installed at user scope (<code className="font-mono">~/.claude/settings.json</code>). Loom-owned entries are identified by their receiver URL for clean uninstall.
           </p>
         </header>
 
@@ -230,7 +230,7 @@ function InstalledBanner({
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium">Hooks installed and healthy.</p>
           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "rgba(16,185,129,0.18)", color: "var(--success-foreground)" }}>
-            marker: loom:hooks
+            id: 127.0.0.1/hooks/event
           </span>
         </div>
         <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
@@ -280,8 +280,8 @@ function NotInstalledBanner({
         <p className="text-sm font-medium">Hooks not installed.</p>
         <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
           {status.settingsExists
-            ? "Your ~/.claude/settings.json has no loom marker. Installing adds one and leaves everything else untouched."
-            : "No ~/.claude/settings.json yet. Installing will create one with loom's hook block."}
+            ? "Your ~/.claude/settings.json has no loom-owned entries. Installing adds them and leaves everything else untouched."
+            : "No ~/.claude/settings.json yet. Installing will create one with loom's hook entries."}
         </p>
       </div>
       <button
@@ -321,15 +321,11 @@ function ConflictBanner({
             You already have hooks at user scope.
           </p>
           <p className="text-xs mt-1">
-            Loom detected hooks in <code className="font-mono px-1 rounded" style={{ background: "rgba(0,0,0,0.04)" }}>{status.settingsPath}</code> without loom's marker. Continue and loom will <strong>append below</strong> your existing hooks, wrapped in a marker block. Your pre-existing lines are never modified.
+            Loom detected hooks in <code className="font-mono px-1 rounded" style={{ background: "rgba(0,0,0,0.04)" }}>{status.settingsPath}</code>. Continue and loom will <strong>append its receiver entry</strong> alongside your existing hooks. Uninstall removes only loom's own entries (identified by their receiver URL); your hooks are never modified.
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-mono">
             <span className="px-1.5 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.6)", border: "1px solid rgba(245,158,11,0.3)", color: "var(--warning-foreground)" }}>
-              # loom:hooks:start
-            </span>
-            <span style={{ color: "var(--muted-foreground)" }}>...loom's hooks...</span>
-            <span className="px-1.5 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.6)", border: "1px solid rgba(245,158,11,0.3)", color: "var(--warning-foreground)" }}>
-              # loom:hooks:end
+              identifier: 127.0.0.1:{status.receiverPort}/hooks/event
             </span>
           </div>
         </div>
@@ -349,7 +345,7 @@ function ConflictBanner({
           className="px-4 py-1.5 rounded-md text-xs font-medium text-white shadow-sm disabled:opacity-50"
           style={{ background: "var(--primary)" }}
         >
-          {busy === "install" ? "Appending…" : "Continue — append marker block"}
+          {busy === "install" ? "Appending…" : "Continue — append loom entries"}
         </button>
       </div>
     </div>
@@ -382,10 +378,10 @@ function MarkerBlock({ status }: { status: HooksStatus }) {
   return (
     <div>
       <h2 className="text-xs font-medium mb-2 flex items-center gap-2">
-        Installed marker block <span className="text-[10px] font-mono px-1 rounded" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>SR-39</span>
+        Installed entries <span className="text-[10px] font-mono px-1 rounded" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>SR-39</span>
       </h2>
       <p className="text-[11px] mb-2" style={{ color: "var(--muted-foreground)" }}>
-        loom appends its hooks below your existing hooks wrapped in this marker. Uninstall removes only this block.
+        loom appends its receiver entries to each wired event. Uninstall removes only entries whose command points to <code className="font-mono">127.0.0.1:{status.receiverPort}/hooks/event</code>.
       </p>
       <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--border)" }}>
         <div className="px-3 py-1.5 border-b flex items-center justify-between text-[10px] font-mono" style={{ borderColor: "var(--border)", background: "rgba(0,0,0,0.012)" }}>
@@ -397,16 +393,15 @@ function MarkerBlock({ status }: { status: HooksStatus }) {
             <span style={{ color: "var(--muted-foreground)" }}>{`{
   "hooks": {
     "PostToolUse": [
-      // your existing hooks (untouched)
       { "matcher": "Bash", "hooks": [{ "type": "command", "command": "..." }] },
 `}</span>
-            <span style={{ color: "var(--info-foreground)", fontWeight: 600 }}>      // loom:hooks:start</span>
-            <span style={{ color: "var(--success-foreground)" }}>      ← block start{"\n"}</span>
             <span style={{ background: "rgba(16,185,129,0.06)", display: "block", padding: "0 0.4rem", borderLeft: "2px solid var(--success)" }}>
-              {`      { "type": "command", "command": "curl -s http://127.0.0.1:${status.receiverPort}/hooks/event" },`}
+              {`      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "curl -s ... http://127.0.0.1:${status.receiverPort}/hooks/event" }]
+      }`}
             </span>
-            <span style={{ color: "var(--info-foreground)", fontWeight: 600 }}>      // loom:hooks:end</span>
-            <span style={{ color: "var(--success-foreground)" }}>      ← block end</span>
+            <span style={{ color: "var(--success-foreground)" }}>      ← loom-owned (matched by URL)</span>
             <span style={{ color: "var(--muted-foreground)" }}>{`
     ],
     ...
@@ -438,12 +433,12 @@ function Diagnostics({ status }: { status: HooksStatus }) {
           </span>
         </div>
         <div className="flex items-center justify-between px-3 py-2 text-xs">
-          <span>User-scope marker integrity</span>
+          <span>User-scope settings.json</span>
           <span className="text-[11px] inline-flex items-center gap-1" style={{ color: "var(--success-foreground)" }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-3">
               <path d="M5 12l5 5L20 7" />
             </svg>
-            start/end matched
+            valid JSON · loom entries detected
           </span>
         </div>
       </div>
@@ -471,7 +466,7 @@ function StaticConflictDemo() {
               You already have hooks at user scope.
             </p>
             <p className="text-xs mt-1">
-              Loom detected hooks in <code className="font-mono px-1 rounded" style={{ background: "rgba(0,0,0,0.04)" }}>~/.claude/settings.json</code> without loom's marker. Loom will <strong>append below</strong> your existing hooks, wrapped in a marker block. Your pre-existing lines are never modified.
+              Loom detected hooks in <code className="font-mono px-1 rounded" style={{ background: "rgba(0,0,0,0.04)" }}>~/.claude/settings.json</code>. Loom will <strong>append its receiver entry</strong> alongside your existing hooks. Uninstall removes only loom's own entries (identified by their receiver URL); your hooks are never modified.
             </p>
           </div>
         </div>

@@ -25,7 +25,7 @@ import websocketPlugin from "@fastify/websocket";
 import type { WebSocket } from "ws";
 import { acquireLock } from "./lockfile.ts";
 import { makeError, type ChatEnvelope } from "./chat-protocol/envelope.ts";
-import type { ChatPtyBridge } from "./process-manager/chat-pty-bridge.ts";
+import type { ClaudeSessionBridge } from "./process-manager/claude-session-bridge.ts";
 
 export interface ServerOptions {
   port?: number;
@@ -33,7 +33,7 @@ export interface ServerOptions {
   origins?: string[];
   routes?: Record<string, (req: Request, url: URL) => Response | Promise<Response>>;
   onWsMessage?: (data: ChatEnvelope, send: (msg: ChatEnvelope) => void) => void;
-  bridge?: ChatPtyBridge;
+  bridge?: ClaudeSessionBridge;
   acquireLock?: boolean;
   lockPath?: string;
   version?: string;
@@ -226,25 +226,38 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
           }
           return;
         }
-        if (envelope.kind === "pty-in") {
+        if (envelope.kind === "user-turn") {
           const chatId = envelope["chat-id"];
-          const data = (envelope.body as any)?.data;
-          if (!chatId || typeof data !== "string") {
-            send(makeError(chatId, "pty-in: missing chat-id or body.data"));
+          const text = (envelope.body as any)?.text;
+          if (!chatId || typeof text !== "string") {
+            send(makeError(chatId, "user-turn: missing chat-id or body.text"));
             return;
           }
-          opts.bridge.write(chatId, data);
+          opts.bridge.submitUserTurn(chatId, text);
           return;
         }
-        if (envelope.kind === "resize") {
+        if (envelope.kind === "interrupt") {
           const chatId = envelope["chat-id"];
-          const cols = Number((envelope.body as any)?.cols);
-          const rows = Number((envelope.body as any)?.rows);
-          if (!chatId || !Number.isFinite(cols) || !Number.isFinite(rows) || cols <= 0 || rows <= 0) {
-            send(makeError(chatId, "resize: missing chat-id or invalid cols/rows"));
+          if (!chatId) {
+            send(makeError(undefined, "interrupt: missing chat-id"));
             return;
           }
-          opts.bridge.resize(chatId, Math.floor(cols), Math.floor(rows));
+          opts.bridge.interrupt(chatId);
+          return;
+        }
+        if (envelope.kind === "permission-response") {
+          const chatId = envelope["chat-id"];
+          const body = envelope.body as
+            | { id?: string; behavior?: "allow" | "deny"; remember?: boolean; message?: string }
+            | undefined;
+          if (!chatId || !body?.id || (body.behavior !== "allow" && body.behavior !== "deny")) {
+            send(makeError(chatId, "permission-response: missing chat-id/id/behavior"));
+            return;
+          }
+          opts.bridge.respondToPermission(chatId, body.id, body.behavior, {
+            remember: body.remember,
+            message: body.message,
+          });
           return;
         }
         if (envelope.kind === "detach") {
