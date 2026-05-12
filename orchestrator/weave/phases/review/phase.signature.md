@@ -19,9 +19,8 @@ I/O signature between `/weave` and the Review Audit Agent.
 | `test-report.md` | `.loom/<project>/test-report.md` | yes | Aggregated verification |
 | `smoke-report.md` | `.loom/<project>/smoke-report.md` | conditional | When Build ran smoke-test |
 | Repository diff | working tree | yes | Code under review |
-| `principles.md` | `loom/principles.md` | yes | Engineering principles |
-| `<type>.md` | `loom/types/<type>.md` | when typed | Domain guidance |
-| `constitution.md` | `.loom/<project>/constitution.md` | optional | Project-wide invariants |
+| `principles.md` | `orchestrator/principles.md` | yes | Engineering principles |
+| `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
 
 ### State preconditions
 
@@ -89,9 +88,9 @@ Review writes learning observations to two surfaces. Both are required.
 | Stream | Path | Purpose |
 | --- | --- | --- |
 | Project-local | `.loom/<project>/develop-log.md` | Raw observations for this project |
-| Global shard | `loom/orchestrator/log/{audit,build,feedback,ideate}.md` | Curation source for `/tune review` |
+| Global shard | `orchestrator/log/{audit,build,feedback,ideate}.md` | Curation source for `/tune review` |
 
-For every learning observation written to `develop-log.md`, a matching `## YYYY-MM-DD - <project> - <topic>` entry must exist in the appropriate `loom/orchestrator/log/<shard>.md`:
+For every learning observation written to `develop-log.md`, a matching `## YYYY-MM-DD - <project> - <topic>` entry must exist in the appropriate `orchestrator/log/<shard>.md`:
 
 | Topic | Shard |
 | --- | --- |

@@ -15,7 +15,6 @@ I/O signature for the top-level Loom orchestrator. The orchestrator coordinates 
 | `$ARGUMENTS` | Slash command argument | optional | Project name, ticket ID, or free text used to resolve or create a workspace |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | required when resuming | Canonical state file; absence implies new workspace |
 | `seed.md` | `.loom/<project>/seed.md` | required for new projects | Raw user input that seeds the Spec phase |
-| `constitution.md` | `.loom/<project>/constitution.md` | optional | Project-wide invariants surfaced to phase agents |
 | Phase agent body | `phases/<current-phase>/phase.md` | required at dispatch | Body half of the phase agent's system prompt |
 | Phase agent signature | `phases/<current-phase>/phase.signature.md` | required at dispatch | Signature half of the phase agent's system prompt, carrying trigger, params, returns (including the embedded RETURN-block YAML schema), and throws |
 | Orchestrator methods | `methods/find-project.md`, `methods/create-project.md`, `methods/recovery.md` | conditional | Orchestrator-internal skills loaded per Load Order in `SKILL.md` |

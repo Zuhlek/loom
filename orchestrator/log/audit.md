@@ -264,3 +264,25 @@ alongside the new ones — both as regression check and as proof the
 extension didn't break inherited coverage.
 
 Source: `.loom/chat-streaming-fixes/` review.
+
+## 2026-05-12 - framework-audit - Review verdict (pass; 3 notes for follow-up)
+
+**Outcome:** Review verdict `pass` for the framework-audit loom. Zero blockers, zero major issues, three `note`-severity findings recorded for follow-up routing (no rework requested of Build).
+
+**Substantive cross-check performed by Review:**
+
+- Re-ran the strict-gate grep `grep -rnE '(^|[^.])\bloom/(lib|hooks|orchestrator|weave|types|principles|templates|setup-loom)' orchestrator/` and confirmed exactly 3 hits, all in `setup-loom.sh:9,79,93` (intentional migration regex per design). Build's Gate 1 PASS verified.
+- Re-counted repo-context Flavour 1 enumeration: 32 line entries across 12 files + the 35th `hooks/README.md:13` = 33 hits to discharge. Cross-referenced against `findings.md` F1-* IDs: 33 IDs allocated, every repo-context-enumerated file has a matching finding. Coverage complete.
+- Spot-checked the 4 gate-feedback dispositions: Q04 (principles.md row absent from spec/phase.signature.md), Q05 (categories.md:3 rewritten to remove hook overreach + describe Spec agent's self-validation), Q09 (build/phase.md:41-47 + build/methods/task.md:13 carry the "agent-discipline" downgrade), Q10 (no tune-shard Flavour 5 finding present; N-T-005-001 records the disposition).
+- Verified US-008 AC3: `ui/apps/server/src/routes/loom.ts` mtime (15:06) predates Build's first task (16:12). Build did not modify loom.ts. The loom.ts diff present in the working tree is pre-existing constitution-cleanup state from "last session" (per seed §55), not an audit-Build edit. F2-T-008-001..002 record the UI phantoms as Document-triage notes.
+- Re-ran `setup-loom.sh` re-run idempotency check: `findings.md` § Integration assertions records exit-0, 5 distinct canonical hook entries (0 duplicates), 4 symlinks resolved. Gate 6 PASS verified.
+
+**Three notes routed to a follow-up framework-hygiene loom:**
+
+- **F-001:** Build phase did not write `tasks/T-NNN.done.md` / `tasks/T-NNN.test-log.txt` despite the Build signature (`weave/phases/build/phase.signature.md:82-101`) requiring both. Substantive verification evidence lives in `test-report.md` per-task table instead. Strict Gate 5 in `tests.md` cannot be evaluated at the artifact location it names; the substantive cross-reference exists at a different location. Recommends a Spec-level Choice: (1) downgrade the signature to make these files conditional on task type (audit/doc-edit vs code+test); (2) tighten the Coordinator enforcement to fail Build status when a Done task lacks both files. Option (1) is the symmetric fix to Q09 (downgrade doc claim); option (2) is the symmetric fix to "extend the hook" (rejected by Q09 on scope grounds). This is itself a flavour-5-class observation (stale contract: the signature promises artifacts the framework's Build coordinator does not always produce) — exactly the kind of finding that motivates a follow-up framework-hygiene loom.
+- **F-002:** Working tree co-ships pre-existing constitution-cleanup edits (6 files at mtime 15:04–15:06, predating Build's 16:12 start) with the audit's diff. Includes the deletion of `orchestrator/templates/constitution.md`, principles.md preamble rewrite, README.md template row update, signature.md / create-project.md constitution stripping, review/phase.md `## Reads first` insertion, and the `ui/apps/server/src/routes/loom.ts` `"constitution.md"` removal from ARTIFACT_FILES. The seed (§55) treats these as "this session" work — the user explicitly expected the prior session's edits and this audit's edits to ship together. Transparency note for the user; no audit-side rework needed.
+- **F-003:** `N-T-000-001` (harness Task-dispatcher absence) recorded by Build is the exact bug class the audit was built to surface. Framework body files repeatedly claim "fresh `Task` subagent" dispatch without acknowledging that whether `Task` is available is a harness-level capability dependency. Recommends a Spec-level Choice: (a) document the dual-mode reality in body text (Coordinator MAY run in-process when `Task` is unavailable AND each task's surface is bounded enough that in-process preserves correctness); (b) tighten the contract to fail when `Task` is absent. Surfaced to a follow-up loom rather than counted against this audit's correctness.
+
+**Positive pattern worth carrying forward:** read-and-cite verification (ADR-05) is sufficient for a documentation-edit loom. No test harness was introduced, no new dependencies were added, and deterministic shell assertions (grep, readlink, python3 settings.json parse) provide the same audit-trail property a test runner would, at a fraction of the token cost. Recommend reusing this verification-environment pattern for future doc-edit / hygiene looms.
+
+**Cross-references:** `.loom/framework-audit/review.md`, `.loom/framework-audit/findings.md`, `.loom/framework-audit/develop-log.md`.

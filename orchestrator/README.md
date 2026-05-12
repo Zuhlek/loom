@@ -36,7 +36,7 @@ After every phase the orchestrator surfaces a rerun-or-continue decision to the 
 | `lib/` | Workspace helpers (pipeline parser, events, artifacts, locks, atomic write) |
 | `hooks/` | Claude Code hooks |
 | `types/` | Domain guidance loaded by Type hint |
-| `templates/` | Project templates (seed, constitution) |
+| `templates/` | Project templates (seed) |
 | `log/` | Learning shards appended by Review |
 | `principles.md` | Engineering principles P1–P7 |
 

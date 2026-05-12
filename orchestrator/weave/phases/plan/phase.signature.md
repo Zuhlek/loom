@@ -19,8 +19,7 @@ I/O signature between `/weave` and the Work Graph Agent.
 | Evidence artifacts | `.loom/<project>/mockup/` etc. | optional | Design-phase evidence |
 | `plan.md` + `board.md` + `task.md` + `tests.md` + `tasks/T-*.md` | `.loom/<project>/` | on rerun | Prior run's outputs (starting point, not blank slate) |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | when present | Quality Check findings to address |
-| `<type>.md` | `loom/types/<type>.md` | when typed | Domain guidance |
-| `constitution.md` | `.loom/<project>/constitution.md` | optional | Project-wide invariants |
+| `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
 
 ### State preconditions
 

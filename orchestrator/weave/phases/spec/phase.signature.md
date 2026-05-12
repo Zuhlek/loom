@@ -18,12 +18,10 @@ I/O signature between `/weave` and the Spec Grilling Agent.
 | `decisions.md` | `.loom/<project>/decisions.md` | on rerun | Prior decision slots |
 | `repo-context.md` | `.loom/<project>/repo-context.md` | on subsequent dispatch | Findings from the first-dispatch Explore subagent |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | when present | Quality Check findings to address |
-| `principles.md` | `loom/principles.md` | yes | Engineering principles P1–P7 |
-| `methods/grilling.md` | `loom/weave/phases/spec/methods/grilling.md` | yes | Six-rule question discipline, dispatch flow, slot conventions, revisit mechanic |
-| `methods/categories.md` | `loom/weave/phases/spec/methods/categories.md` | yes | Per-category briefing templates and validation |
-| `methods/stories.md` | `loom/weave/phases/spec/methods/stories.md` | yes | User story format, EARS acceptance-criteria patterns, marker shape, IDs, status |
-| `<type>.md` | `loom/types/<type>.md` | when typed | Domain guidance |
-| `constitution.md` | `.loom/<project>/constitution.md` | optional | Project-wide invariants |
+| `methods/grilling.md` | `orchestrator/weave/phases/spec/methods/grilling.md` | yes | Six-rule question discipline, dispatch flow, slot conventions, revisit mechanic |
+| `methods/categories.md` | `orchestrator/weave/phases/spec/methods/categories.md` | yes | Per-category briefing templates and validation |
+| `methods/stories.md` | `orchestrator/weave/phases/spec/methods/stories.md` | yes | User story format, EARS acceptance-criteria patterns, marker shape, IDs, status |
+| `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
 
 ### State preconditions
 

@@ -39,7 +39,6 @@ const ARTIFACT_FILES = [
   "quality-review.md",
   "summary.md",
   "seed.md",
-  "constitution.md",
 ] as const;
 
 const ARTIFACT_MAX_BYTES = 200 * 1024;

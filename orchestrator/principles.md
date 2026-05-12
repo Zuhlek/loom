@@ -1,8 +1,10 @@
 # Engineering Principles
 
-> **What this is:** the default engineering principles that every code-touching Loom subagent (Build's Task Builder, Review's Audit Agent) loads as preamble. These are *enforceable rules*, not vibes.
+> **What this is:** the default engineering principles every code-touching Loom subagent (Build's Task Builder, Review's Audit Agent) operates under. These are *enforceable rules*, not vibes.
 >
-> **Where it lives:** `loom/principles.md` — team-shared. Per-project overrides go in `.loom/<project>/constitution.md`. Constitution wins on conflict.
+> **Where it lives:** `orchestrator/principles.md` — team-shared. Per-project invariants and overrides live in the project's `spec.md ## Constraints` section, which the Build Task Builder and Review Audit Agent both read as part of their input context. A Constraint wins over a principle on conflict.
+>
+> **How agents pick this up:** subagent-pull, not orchestrator-push. The Task Builder's [`weave/phases/build/methods/task.md`](weave/phases/build/methods/task.md) and the Review Audit Agent's [`weave/phases/review/phase.md`](weave/phases/review/phase.md) each open with a "Reads first" instruction pointing here. They read this file before any work-loop step. The orchestrator never injects this file into dispatch prompts.
 >
 > **Why it exists:** without explicit, enforceable principles, the agent will introduce duplication, leave dead code, add backwards-compat shims, and drift from the codebase's existing conventions. These failures aren't taste — they're predictable consequences of an agent generating code without anchored constraints.
 
@@ -20,7 +22,7 @@ Concrete rules:
 
 **Self-check during implementation:** *"If I removed this line, would a documented requirement (acceptance criterion, test) start failing? If no, the line probably shouldn't have been added."*
 
-**Review check:** every line in the diff must trace to an acceptance criterion in the task spec or to a constraint in `constitution.md`. Lines that trace to neither are flagged MAJOR.
+**Review check:** every line in the diff must trace to an acceptance criterion in the task spec or to an entry in `spec.md ## Constraints`. Lines that trace to neither are flagged MAJOR.
 
 ---
 
@@ -125,59 +127,26 @@ Concrete rules:
 
 ---
 
-## How these load into subagents
+## How code-touching agents pick this up
 
-### Build (Task Builder) preamble
+Subagent-pull. The orchestrator never injects this file into dispatch prompts.
 
-Every Task Builder dispatch prepends:
+| Agent | Operating spec | Pickup mechanism |
+| --- | --- | --- |
+| Build Task Builder | [`weave/phases/build/methods/task.md`](weave/phases/build/methods/task.md) | Opens with a `## Reads first` section instructing the agent to read this file before any Contract step. |
+| Review Audit Agent | [`weave/phases/review/phase.md`](weave/phases/review/phase.md) | Same — opens with `## Reads first` + a dedicated `Principle compliance` Review Target that applies the per-principle Review checks below. |
 
-```markdown
-ENGINEERING PRINCIPLES (must follow, validated in Review)
-
-1. Lean changes. Smallest diff for the task's acceptance criteria. No drive-by refactors.
-2. Existing patterns first. Run an Explore subagent for prior art before writing new code.
-   Match naming, libraries, test style, logging patterns of the existing repo.
-3. Zero duplication. 3+ occurrences = must extract. Search for existing helpers first.
-4. One clean implementation. No `legacy*` / `*V2` / commented-out code / backwards-compat
-   shims unless the task spec explicitly requires them.
-5. No speculative scaffolding. Every new file/abstraction/config field must be exercised
-   in this PR.
-6. Tests verify behaviour, not structure. Public interfaces only. No internal mocking.
-7. Use the framework. Don't hand-roll what's built-in.
-
-See loom/principles.md for full rules. The constitution.md at .loom/<project>/constitution.md
-may override or extend these. Selected loom/types/<type>.md applies when Type hint is set.
-```
+Spec / Design / Plan don't touch code and don't read this file.
 
 ### Review checklist
 
-The Review Audit Agent uses these as a structured checklist. Each principle has its "flag if" rule from the section above. Findings categorise:
+The Review Audit Agent uses these as a structured checklist. Each principle has its "flag if" rule from the sections above. Findings categorise:
 
 - **Blocker:** P1 if a clear scope violation; P3 if duplication is 3+ instances; P4 if `legacy*` naming or commented-out code lands.
 - **Major:** P2 mismatch with existing conventions; P5 unused abstraction with no consumer; P6 internal mocking.
 - **Minor:** stylistic deviations within a principle's spirit.
 
----
-
-## Per-project overrides via `constitution.md`
-
-`.loom/<project>/constitution.md` may extend or override any principle. Examples:
-
-```markdown
-# Constitution — CSD-789-payments-rewrite
-
-## Overrides
-- **P4 backwards-compat is required** for the public REST API (`/api/v1/payments/*`).
-  Any breaking change must keep the old endpoint live for 90 days, deprecation header
-  set, removal task filed.
-
-## Project-specific invariants
-- All DB writes go through `PaymentRepository` — no direct ORM calls in services.
-- All money is stored as `Decimal` in cents; never floats.
-- All payment-state transitions emit a `PaymentStateChanged` event before returning.
-```
-
-The Task Builder and Review Audit Agent both read `principles.md` AND `constitution.md`. On conflict, constitution wins for that project.
+Project-level `spec.md ## Constraints` entries take precedence over the matching principle when both apply for a given project. The Spec / Design phases are responsible for surfacing those Constraints; the Task Builder and Review Audit Agent both read `spec.md` as part of their input context.
 
 ---
 
@@ -193,4 +162,4 @@ Seven enforceable principles, all with concrete rules and review checks:
 6. **Tests verify behaviour** — public interfaces, no internal mocking.
 7. **Don't fight the framework** — use built-ins, no wrappers.
 
-Loaded into every code-touching subagent. Used as a structured checklist by the Review Audit Agent. Per-project overrides via `constitution.md`.
+Read by the Task Builder and Review Audit Agent on dispatch (their operating specs instruct them to). Used as a structured checklist by Review. Per-project overrides live in `spec.md ## Constraints` — a Constraint wins over a principle on conflict.

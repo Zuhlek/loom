@@ -191,7 +191,7 @@ Either path keeps the prototype analysis as the canonical source of *what* to bu
 After completing the exploration, append the same entry to BOTH surfaces (dual-write, per Loom's learning-log discipline):
 
 - `.loom/<project>/develop-log.md` — project-local raw observations
-- `loom/orchestrator/log/ideate.md` — global learning shard (spec-phase observations live here per Review's dual-write contract)
+- `orchestrator/log/ideate.md` — global learning shard (spec-phase observations live here per Review's dual-write contract)
 
 Entry format:
 

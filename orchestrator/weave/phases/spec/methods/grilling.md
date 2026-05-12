@@ -113,7 +113,7 @@ The user's response options map onto picker entries and a free-text fallback:
 
 | Action | Surface |
 |---|---|
-| `(A)` / `(B)` / `YES` / `NO` / `Accept this direction` — direct answer | Picker entry. The recommended option's label carries a `(Recommended)` suffix. The agent strips the suffix and writes the option name to the slot via `loom/lib/atomic-write.sh`. Status flips to `answered`. |
+| `(A)` / `(B)` / `YES` / `NO` / `Accept this direction` — direct answer | Picker entry. The recommended option's label carries a `(Recommended)` suffix. The agent strips the suffix and writes the option name to the slot via `orchestrator/lib/atomic-write.sh`. Status flips to `answered`. |
 | `Explain more` | Picker entry. The agent composes a 2–4 sentence elaboration grounded in the existing briefing and re-calls `AskUserQuestion` with the same options + the elaboration appended to the `question` field. Hard cap: **4 elaborations per Q** (raised from 2 — the user can iterate on understanding before being forced to commit). On the 5th attempt, write `[push back: needs more context]` to the slot. |
 | `Explain more: <focus>` | Free-text fallback. Same as `Explain more` but the agent focuses the elaboration on `<focus>` (the user's specific area of confusion — e.g., `Explain more: how does this affect deployment?`). Counted against the same 4-elab cap. |
 | `Stop` | Picker entry. The agent writes `[stop]` to the slot and exits the loop with `STATUS: stop-requested`. The next `/weave` kick force-ends Spec via the close branch, writes `spec.md` with whatever's resolved, and emits `phase-complete`. |

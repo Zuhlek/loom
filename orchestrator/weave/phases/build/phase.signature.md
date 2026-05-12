@@ -19,9 +19,8 @@ I/O signature between `/weave` and the Build Coordinator Agent.
 | `board.md` | `.loom/<project>/board.md` | yes | Kanban (task readiness) |
 | `tests.md` | `.loom/<project>/tests.md` | yes | Test strategy + mutation-test opt-in |
 | `tasks/T-*.md` | `.loom/<project>/tasks/T-NNN.md` | yes | Per-task definitions |
-| `principles.md` | `loom/principles.md` | yes | Engineering principles |
-| `<type>.md` | `loom/types/<type>.md` | when typed | Domain guidance |
-| `constitution.md` | `.loom/<project>/constitution.md` | optional | Project-wide invariants |
+| `principles.md` | `orchestrator/principles.md` | yes | Engineering principles |
+| `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
 
 ### State preconditions
 
@@ -114,11 +113,11 @@ Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a
 #### `develop-log.md`
 
 - Path: `.loom/<project>/develop-log.md`.
-- Build observations, dual-written with `loom/orchestrator/log/build.md`.
+- Build observations, dual-written with `orchestrator/log/build.md`.
 
-#### `loom/orchestrator/log/build.md`
+#### `orchestrator/log/build.md`
 
-- Path: `loom/orchestrator/log/build.md`.
+- Path: `orchestrator/log/build.md`.
 - Build-task log shard (dual-write with `develop-log.md`).
 
 ### State postconditions

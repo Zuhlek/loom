@@ -10,4 +10,4 @@ Claude Code hooks keep Loom workspaces resumable and observable.
 | `emit-events.sh` | PostToolUse | Appends lifecycle events and refreshes artifacts |
 | `capture-task-start.sh` | PreToolUse Task | Records task dispatch start time |
 
-Install through `loom/setup-loom.sh`.
+Install through `orchestrator/setup-loom.sh`.

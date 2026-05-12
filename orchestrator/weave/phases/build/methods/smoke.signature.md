@@ -57,11 +57,11 @@ properties:
 #### `develop-log.md`
 
 - Path: `.loom/<project>/develop-log.md`.
-- Smoke observations, dual-written with `loom/orchestrator/log/build.md`.
+- Smoke observations, dual-written with `orchestrator/log/build.md`.
 
-#### `loom/orchestrator/log/build.md`
+#### `orchestrator/log/build.md`
 
-- Path: `loom/orchestrator/log/build.md`.
+- Path: `orchestrator/log/build.md`.
 - Matching smoke entry for the global log shard.
 
 ## Throws

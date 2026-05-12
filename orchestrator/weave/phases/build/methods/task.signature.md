@@ -17,9 +17,8 @@ I/O signature between the Build Coordinator and a Task Builder subagent.
 | `plan.md` | `.loom/<project>/plan.md` | yes | Work graph + verification environment |
 | `design.md` | `.loom/<project>/design.md` | yes | Solution structure context |
 | `spec.md` | `.loom/<project>/spec.md` | yes | Specified intent context |
-| `principles.md` | `loom/principles.md` | yes | Engineering principles |
-| `<type>.md` | `loom/types/<type>.md` | when typed | Domain guidance |
-| `constitution.md` | `.loom/<project>/constitution.md` | optional | Project-wide invariants |
+| `principles.md` | `orchestrator/principles.md` | yes | Engineering principles |
+| `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
 
 ## Returns
 
@@ -84,11 +83,11 @@ properties:
 #### `develop-log.md`
 
 - Path: `.loom/<project>/develop-log.md`.
-- Build-task entry, dual-written with `loom/orchestrator/log/build.md`.
+- Build-task entry, dual-written with `orchestrator/log/build.md`.
 
-#### `loom/orchestrator/log/build.md`
+#### `orchestrator/log/build.md`
 
-- Path: `loom/orchestrator/log/build.md`.
+- Path: `orchestrator/log/build.md`.
 - Matching build-task entry for the global log shard.
 
 ## Throws

@@ -838,3 +838,17 @@ review.md but with different severity routing.
 Source: `git log` showing commits between 10:45 UTC AFK-complete
 and 11:00 UTC HITL-complete; commits authored as `Zuhlek
 <72124667+...>` (the user).
+
+## 2026-05-12 - framework-audit - Build phase complete (audit + path-drift fixes)
+
+**Outcome:** All 15 tasks (T-001..T-015) reached Done. 35 path-drift hits rewritten across 14 files in `orchestrator/`. Q04 (drop principles.md row in spec signature), Q05 (downgrade categories.md:3 hook overreach), Q09 (downgrade build phase.md/task.md atomic-write/locks framing) all applied. 41 findings entries written to `findings.md` (F1=22, F2=12, F3=3, F4=5, F5=4) plus 4 Notes. All 7 acceptance gates pass; `setup-loom.sh` re-run exit 0, 4 symlinks resolve, 5 canonical hook entries with no duplicates, 6 `.loom/` workspaces preserved.
+
+**Verification environment:** `cli-shell` — bash + grep + python3.
+
+**Notable framework observation (recorded as `N-T-000-001`):** the Build phase contract requires the Coordinator to dispatch fresh `Task` subagents per ready task. This harness instance did not expose a Task dispatcher tool to the Build Coordinator. The Coordinator executed the 14 audit task bodies in-process via `Edit` + `Bash`. Audit correctness is unchanged (mechanical text rewrites; task-prefixed finding IDs preserved per ADR-03), but the framework body's claim about dispatch mechanism is harness-instance-dependent — flagged as a Note rather than a Flavour 3 because the framework contract describes production Claude Code behaviour.
+
+**Process discipline observations:**
+- Atomic-write was used via `orchestrator/lib/atomic-write.sh` for all artifact writes that touched `board.md`, `findings.md`, `smoke-report.md`, `test-report.md` (the discipline contract the audit just downgraded in F3-T-012-001 and F3-T-013-001 was followed by the Coordinator itself).
+- The audit fixed bugs it was simultaneously exhibiting: the dispatch context preamble noted that the meta-routing through the orchestrator already substituted `orchestrator/...` for `loom/...` in this Coordinator's own instructions. The audit closes that loop for the source files.
+
+**Artifacts:** findings.md, board.md (all in Done), smoke-report.md, test-report.md, develop-log.md, plus per-file edits to 14 framework files under `orchestrator/`.

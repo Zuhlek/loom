@@ -38,11 +38,13 @@ When the orchestrator re-dispatches this agent after a user-initiated rerun:
 | Task Builder returns `status: hitl-block` | `In Progress` | `Backlog` | `[HITL-blocked: <one-line reason>]` immediately after the ID |
 | Blocker for a backlog task moves to `Done` and unblocks it | `Backlog` | `Backlog` | Remove `(blocked by ...)` segment |
 
-### Atomic-write discipline
+### Atomic-write discipline (agent-enforced)
 
-- Every `board.md` mutation goes through `loom/lib/atomic-write.sh`. Never partial-write the file.
-- Acquire the project lock via `loom/lib/locks.sh acquire <project> build` before any board mutation; release after.
-- Per-task locks (`loom/lib/locks.sh acquire-task <project> T-NNN`) gate the implementation work, not the board mutation.
+These are agent-discipline rules, not framework-enforced mechanisms: `orchestrator/lib/atomic-write.sh` and `orchestrator/lib/locks.sh` are available as libraries, but no hook enforces their invocation. The Coordinator MUST call them from `Bash` tool calls per the contract below.
+
+- Every `board.md` mutation goes through `orchestrator/lib/atomic-write.sh`. Never partial-write the file.
+- Acquire the project lock via `orchestrator/lib/locks.sh acquire <project> build` before any board mutation; release after.
+- Per-task locks (`orchestrator/lib/locks.sh acquire-task <project> T-NNN`) gate the implementation work, not the board mutation.
 
 ### Rerun-or-continue surface
 
