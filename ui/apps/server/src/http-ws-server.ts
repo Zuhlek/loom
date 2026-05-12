@@ -25,6 +25,7 @@ import websocketPlugin from "@fastify/websocket";
 import type { WebSocket } from "ws";
 import { acquireLock } from "./lockfile.ts";
 import { makeError, type ChatEnvelope } from "./chat-protocol/envelope.ts";
+import { serializeServerFrame, type TasksUpdateFrame } from "./chat-protocol/frames.ts";
 import type { ClaudeSessionBridge } from "./process-manager/claude-session-bridge.ts";
 
 export interface ServerOptions {
@@ -135,11 +136,12 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
     unsubTasks = opts.bridge.onTasksUpdate((chatId, tasks) => {
       const set = attachedByChat.get(chatId);
       if (!set) return;
-      const payload = JSON.stringify({
+      const frame: TasksUpdateFrame = {
         kind: "tasks-update",
         "chat-id": chatId,
         body: { tasks },
-      });
+      };
+      const payload = serializeServerFrame(frame);
       for (const ws of set) {
         try {
           ws.send(payload);
@@ -228,12 +230,20 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
         }
         if (envelope.kind === "user-turn") {
           const chatId = envelope["chat-id"];
-          const text = (envelope.body as any)?.text;
+          const body = envelope.body as
+            | { text?: string; priority?: "now" | "next" | "later" }
+            | undefined;
+          const text = body?.text;
           if (!chatId || typeof text !== "string") {
             send(makeError(chatId, "user-turn: missing chat-id or body.text"));
             return;
           }
-          opts.bridge.submitUserTurn(chatId, text);
+          const rawPriority = body?.priority;
+          const priority: "now" | "next" | "later" =
+            rawPriority === "now" || rawPriority === "next" || rawPriority === "later"
+              ? rawPriority
+              : "now";
+          opts.bridge.submitUserTurnWithPriority(chatId, text, priority);
           return;
         }
         if (envelope.kind === "interrupt") {
@@ -243,6 +253,72 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             return;
           }
           opts.bridge.interrupt(chatId);
+          return;
+        }
+        if (envelope.kind === "plan-accept") {
+          const chatId = envelope["chat-id"];
+          const body = envelope.body as { planId?: string } | undefined;
+          const planId = body?.planId;
+          if (!chatId || typeof planId !== "string" || planId === "") {
+            send(makeError(chatId, "plan-accept: missing chat-id or body.planId"));
+            return;
+          }
+          // Fire-and-forget per ADR-004; any SDK error is surfaced as a
+          // session-scoped system-notice by the bridge.
+          void opts.bridge.acceptPlanProposal(chatId, planId);
+          return;
+        }
+        if (envelope.kind === "plan-reject") {
+          const chatId = envelope["chat-id"];
+          const body = envelope.body as { planId?: string } | undefined;
+          const planId = body?.planId;
+          if (!chatId || typeof planId !== "string" || planId === "") {
+            send(makeError(chatId, "plan-reject: missing chat-id or body.planId"));
+            return;
+          }
+          void opts.bridge.rejectPlanProposal(chatId, planId);
+          return;
+        }
+        if (envelope.kind === "permission-mode-set") {
+          const chatId = envelope["chat-id"];
+          const body = envelope.body as { mode?: string } | undefined;
+          const mode = body?.mode;
+          if (
+            !chatId ||
+            (mode !== "default" &&
+              mode !== "plan" &&
+              mode !== "acceptEdits" &&
+              mode !== "bypassPermissions")
+          ) {
+            send(makeError(chatId, "permission-mode-set: missing chat-id or invalid body.mode"));
+            return;
+          }
+          // Fire-and-forget; per ADR-004 the call is forwarded straight
+          // to the SDK Query handle without coalescing/debouncing. Any
+          // SDK rejection is surfaced as a session-scoped notice by the
+          // bridge, so we do not propagate the promise here.
+          void opts.bridge.setPermissionMode(chatId, mode);
+          return;
+        }
+        if (envelope.kind === "question-response") {
+          const chatId = envelope["chat-id"];
+          const body = envelope.body as
+            | { id?: string; answers?: unknown; otherText?: unknown }
+            | undefined;
+          const answers = Array.isArray(body?.answers)
+            ? (body!.answers as unknown[]).filter((a): a is string => typeof a === "string")
+            : null;
+          if (!chatId || !body?.id || !answers) {
+            send(
+              makeError(
+                chatId,
+                "question-response: missing chat-id/id or invalid body.answers",
+              ),
+            );
+            return;
+          }
+          const otherText = typeof body.otherText === "string" ? body.otherText : undefined;
+          opts.bridge.respondToQuestion(chatId, body.id, { answers, otherText });
           return;
         }
         if (envelope.kind === "permission-response") {

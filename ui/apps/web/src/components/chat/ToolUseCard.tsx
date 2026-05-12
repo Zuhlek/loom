@@ -12,6 +12,7 @@ import { useState } from "react";
 import clsx from "clsx";
 
 import type { AssistantToolUseBlock } from "../../lib/chat-types";
+import { ToolResultMedia } from "./ToolResultMedia";
 
 interface Props {
   block: AssistantToolUseBlock;
@@ -27,7 +28,12 @@ export function ToolUseCard({ block }: Props) {
       : { dot: "var(--info)", label: "…" };
 
   const result = block.result;
-  const hasResult = !!result && result.text.length > 0;
+  const hasImages = !!(result?.images && result.images.length > 0);
+  const hasText = !!(result && result.text.length > 0);
+  // The collapse toggle should engage whenever there's *any* result
+  // payload to surface — text OR images. Per Design ADR-007 image-only
+  // results are common (screenshot tools, MCP image returns).
+  const hasResult = hasText || hasImages;
 
   return (
     <div
@@ -56,12 +62,19 @@ export function ToolUseCard({ block }: Props) {
         </span>
       </button>
       {open && hasResult && result && (
-        <pre
-          className="m-0 px-3 pb-2 pt-0 whitespace-pre-wrap text-[11px] leading-relaxed font-mono overflow-x-auto"
-          style={{ color: result.isError ? "var(--destructive-foreground)" : "var(--muted-foreground)" }}
-        >
-          {result.text}
-        </pre>
+        <div className="px-3 pb-2 pt-0">
+          {hasText && (
+            <pre
+              className="m-0 whitespace-pre-wrap text-[11px] leading-relaxed font-mono overflow-x-auto"
+              style={{ color: result.isError ? "var(--destructive-foreground)" : "var(--muted-foreground)" }}
+            >
+              {result.text}
+            </pre>
+          )}
+          {hasImages && result.images && (
+            <ToolResultMedia images={result.images} />
+          )}
+        </div>
       )}
     </div>
   );

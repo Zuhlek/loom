@@ -18,15 +18,19 @@ import { TasksPanel, type Task } from "../components/TasksPanel";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { PermissionRequestInline } from "../components/chat/PermissionRequestInline";
+import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker";
+import { ChatErrorBanner } from "../components/chat/ChatErrorBanner";
 import { getChat, wsUrl, type ApiChat } from "../lib/api";
 import type {
   ChatItem,
   ClientFrame,
   PendingPermission,
   PendingQuestion,
+  PermissionMode,
   ServerFrame,
   TurnState,
 } from "../lib/chat-types";
+import type { ComposerQueuePriority } from "../components/chat/ChatComposer";
 
 interface Props {
   chatId: string;
@@ -34,22 +38,91 @@ interface Props {
 
 type ConnState = "idle" | "connecting" | "open" | "closed";
 
+/**
+ * T-007 / US-007 — Composer policy split per Design `## composerDisabled
+ * policy split`. The legacy `composerDisabled = !!pendingPermission ||
+ * !!pendingQuestion` boolean is replaced by a three-state selector so
+ * the composer can distinguish "queued while running" from "hard-blocked
+ * by a pending tool gate":
+ *
+ *   - `"ready"`   : composer enabled; submit goes through as
+ *                   priority `"now"`. Includes `idle`, `interrupted`,
+ *                   `error` — the `"interrupted"` case relies on the
+ *                   SDK's implicit re-prime (US-005).
+ *   - `"queue"`   : composer enabled but a turn is in flight. Send
+ *                   button surfaces as "Queue"; submits push with
+ *                   `priority: "next"` by default (the user can flip
+ *                   the visible queue-priority toggle to "now" via the
+ *                   T-004 composer control).
+ *   - `"blocked"` : a pending permission or AskUserQuestion is open;
+ *                   the composer hard-disables until the user
+ *                   resolves the inline picker / permission card.
+ *
+ * Exported so the static-source contract tests can import it directly
+ * and verify the selector behaviour; pure (depends only on the three
+ * state fields).
+ */
+export type ComposerMode = "ready" | "queue" | "blocked";
+
+export function composerMode(state: {
+  pendingPermission: PendingPermission | null;
+  pendingQuestion: PendingQuestion | null;
+  turnState: TurnState;
+}): ComposerMode {
+  if (state.pendingPermission || state.pendingQuestion) return "blocked";
+  if (state.turnState === "running") return "queue";
+  return "ready";
+}
+
 interface ChatState {
   items: ChatItem[];
   itemsById: Record<string, number>;
   turnState: TurnState;
-  lastError: string | undefined;
+  /**
+   * US-008. Sticky error banner state. Survives `snapshot` resets;
+   * only overwritten when a NEW error arrives (different message),
+   * and only hidden when the user explicitly dismisses. The banner
+   * renders iff `error && !error.dismissed`.
+   */
+  error: { message: string; dismissed: boolean } | null;
   pendingPermission: PendingPermission | null;
   pendingQuestion: PendingQuestion | null;
+  /** US-004. Current SDK permission mode driving the composer dropdown. */
+  permissionMode: PermissionMode;
+  /** US-004 / US-007. Current composer queue-priority selection. */
+  queuePriority: ComposerQueuePriority;
+  /**
+   * T-003 / US-003 (chat-streaming-fixes). Millisecond epoch when the
+   * active turn entered the `running` state. `null` whenever
+   * `turnState` is not `"running"`. Consumed by `<WorkingChip>` (via
+   * `<MessagesTimeline>`) to drive the "Working for Xs" elapsed
+   * counter. Set on the idle→running transition; preserved across
+   * multiple SDK messages within one turn (running→running); cleared
+   * on any transition out of `"running"`. See ADR-005.
+   */
+  activeTurnStartedAt: number | null;
 }
 
 const EMPTY_STATE: ChatState = {
   items: [],
   itemsById: {},
   turnState: "idle",
-  lastError: undefined,
+  error: null,
   pendingPermission: null,
   pendingQuestion: null,
+  permissionMode: "default",
+  // T-007 AC2 / US-007. The toggle defaults to "next" so that the
+  // first submit while a turn is running enqueues ahead by default
+  // per the SDK scheduler (ADR-004). In `ready` mode the toggle is
+  // not visible and the effective priority pinned to `"now"` at the
+  // composer mount site, so this initial value does not leak onto
+  // the wire for ready-mode submits.
+  queuePriority: "next",
+  // T-003 / US-003. Set by the reducer's `turn-state` branch on the
+  // idle→running transition; never set elsewhere. Initial value
+  // `null` because EMPTY_STATE represents the pre-attach state where
+  // no turn is running.
+  activeTurnStartedAt: null,
 };
 
 type ChatAction =
@@ -59,7 +132,11 @@ type ChatAction =
   | { type: "item-update"; item: ChatItem }
   | { type: "turn-state"; state: TurnState; lastError?: string }
   | { type: "pending-permission"; pending: PendingPermission | null }
-  | { type: "pending-question"; pending: PendingQuestion | null };
+  | { type: "pending-question"; pending: PendingQuestion | null }
+  | { type: "permission-mode"; mode: PermissionMode }
+  | { type: "queue-priority"; priority: ComposerQueuePriority }
+  | { type: "error-frame"; message: string }
+  | { type: "dismiss-error" };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -71,13 +148,37 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       items.forEach((it, i) => {
         itemsById[it.id] = i;
       });
+      // US-008 AC2: the sticky error banner survives `snapshot` resets.
+      // Only overwrite when the snapshot carries a NEW message (one
+      // we haven't already surfaced); otherwise preserve `state.error`
+      // verbatim (including the user's `dismissed` flag).
+      const incoming = action.payload.body.lastError;
+      const error =
+        incoming && incoming !== state.error?.message
+          ? { message: incoming, dismissed: false }
+          : state.error;
+      // T-003 / US-003 (ADR-005). On snapshot (initial attach or
+      // reconnect-after-drain) the wire does not carry the original
+      // turn-start timestamp (no-wire-shape constraint). If the
+      // snapshot says we're already running, seed `activeTurnStartedAt`
+      // to `Date.now()` — the chip restarts from 0s, which is the
+      // best we can do. Otherwise clear it.
+      const activeTurnStartedAt =
+        action.payload.body.turnState === "running" ? Date.now() : null;
       return {
         items,
         itemsById,
         turnState: action.payload.body.turnState,
-        lastError: action.payload.body.lastError,
+        error,
         pendingPermission: action.payload.body.pendingPermission ?? null,
         pendingQuestion: action.payload.body.pendingQuestion ?? null,
+        // Preserve the locally-selected composer state across snapshots.
+        // The server snapshot does not yet carry `permissionMode` — it
+        // arrives on the chat row at attach time (a future T-NNN may
+        // hydrate from the snapshot body).
+        permissionMode: state.permissionMode,
+        queuePriority: state.queuePriority,
+        activeTurnStartedAt,
       };
     }
     case "item-append": {
@@ -104,12 +205,61 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       items[idx] = action.item;
       return { ...state, items };
     }
-    case "turn-state":
-      return { ...state, turnState: action.state, lastError: action.lastError };
+    case "turn-state": {
+      // US-008 AC1 / AC4. If the frame carries an error message,
+      // raise the sticky banner. When the message changes (or no
+      // banner is currently visible), reset `dismissed: false` so the
+      // banner re-shows even if the user had previously dismissed an
+      // older error. If the same message repeats, preserve the
+      // existing `dismissed` flag (no re-surfacing).
+      let nextError = state.error;
+      if (action.lastError) {
+        if (!state.error || state.error.message !== action.lastError) {
+          nextError = { message: action.lastError, dismissed: false };
+        }
+      }
+      // T-003 / US-003 (ADR-005). Manage `activeTurnStartedAt` across
+      // turn-state transitions:
+      //   • idle/error/interrupted → running : seed Date.now()
+      //   • running → running              : preserve (multi-SDK-message
+      //                                       within one turn — AC-4)
+      //   • running → anything-else        : clear to null
+      //   • anything-else → anything-else  : leave null
+      const nextStartedAt =
+        action.state === "running"
+          ? state.turnState !== "running"
+            ? Date.now()
+            : state.activeTurnStartedAt
+          : null;
+      return {
+        ...state,
+        turnState: action.state,
+        error: nextError,
+        activeTurnStartedAt: nextStartedAt,
+      };
+    }
     case "pending-permission":
       return { ...state, pendingPermission: action.pending };
     case "pending-question":
       return { ...state, pendingQuestion: action.pending };
+    case "permission-mode":
+      return { ...state, permissionMode: action.mode };
+    case "queue-priority":
+      return { ...state, queuePriority: action.priority };
+    case "error-frame": {
+      // US-008 AC1 / AC4. Server-emitted `error` frame raises the
+      // sticky banner the same way `turn-state` does — re-show with
+      // `dismissed: false` when the message is new.
+      if (state.error && state.error.message === action.message) return state;
+      return { ...state, error: { message: action.message, dismissed: false } };
+    }
+    case "dismiss-error": {
+      // US-008 AC3. Hide the banner; keep the message around so
+      // future-snapshot novelty checks can compare against it. The
+      // banner re-shows only when a different message arrives.
+      if (!state.error || state.error.dismissed) return state;
+      return { ...state, error: { ...state.error, dismissed: true } };
+    }
   }
 }
 
@@ -204,7 +354,13 @@ export function LiveChatRoute({ chatId }: Props) {
             break;
           }
           case "error":
+            // US-008 AC1. Route the server's `error` frame through
+            // the reducer so it raises the sticky banner instead of
+            // disappearing into the console.
             console.warn("[loom] ws error frame:", frame.body?.message);
+            if (frame.body?.message) {
+              dispatch({ type: "error-frame", message: frame.body.message });
+            }
             break;
         }
       };
@@ -238,13 +394,40 @@ export function LiveChatRoute({ chatId }: Props) {
   }, [chatId]);
 
   const submitTurn = useCallback(
-    (text: string) => {
+    (text: string, priority: ComposerQueuePriority) => {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== ws.OPEN) return;
-      sendFrame(ws, { kind: "user-turn", "chat-id": chatId, body: { text } });
+      // Omit the `priority` field on the wire when it's the default
+      // ("now") so we stay byte-compatible with legacy emitters; the
+      // server treats an absent priority as "now" per ADR-004.
+      const body = priority === "now" ? { text } : { text, priority };
+      sendFrame(ws, { kind: "user-turn", "chat-id": chatId, body });
     },
     [chatId],
   );
+
+  const changePermissionMode = useCallback(
+    (mode: PermissionMode) => {
+      dispatch({ type: "permission-mode", mode });
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== ws.OPEN) return;
+      sendFrame(ws, {
+        kind: "permission-mode-set",
+        "chat-id": chatId,
+        body: { mode },
+      });
+    },
+    [chatId],
+  );
+
+  const changeQueuePriority = useCallback((priority: ComposerQueuePriority) => {
+    dispatch({ type: "queue-priority", priority });
+  }, []);
+
+  // US-008 AC3. Wire ChatErrorBanner's dismiss button to the reducer.
+  const dismissError = useCallback(() => {
+    dispatch({ type: "dismiss-error" });
+  }, []);
 
   const interruptTurn = useCallback(() => {
     const ws = wsRef.current;
@@ -265,13 +448,97 @@ export function LiveChatRoute({ chatId }: Props) {
     [chatId],
   );
 
+  /**
+   * T-003 / US-003 AC3. Accept the latest `plan-proposed` item — the
+   * server bridge performs the `setPermissionMode("default")` + queued
+   * user-turn pair atomically. Per ADR-004 we do NOT auto-submit the
+   * composer's current draft and we do NOT debounce the mode change.
+   */
+  const acceptPlanProposal = useCallback(
+    (planId: string) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== ws.OPEN) return;
+      sendFrame(ws, {
+        kind: "plan-accept",
+        "chat-id": chatId,
+        body: { planId },
+      });
+    },
+    [chatId],
+  );
+
+  /**
+   * T-003 / US-003 AC4. Reject the latest `plan-proposed` item — the
+   * server bridge queues a reconsider user-turn and leaves permission
+   * mode at `"plan"`.
+   */
+  const rejectPlanProposal = useCallback(
+    (planId: string) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== ws.OPEN) return;
+      sendFrame(ws, {
+        kind: "plan-reject",
+        "chat-id": chatId,
+        body: { planId },
+      });
+    },
+    [chatId],
+  );
+
+  /**
+   * US-001 AC5. Forward the picker's submit payload as a typed
+   * `question-response` ClientFrame. The bridge's
+   * `respondToQuestion` resolves the SDK's pending tool call.
+   */
+  const respondToQuestion = useCallback(
+    (id: string, answers: string[], otherText?: string) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== ws.OPEN) return;
+      const body: { id: string; answers: string[]; otherText?: string } = {
+        id,
+        answers,
+      };
+      if (otherText !== undefined && otherText !== "") body.otherText = otherText;
+      sendFrame(ws, {
+        kind: "question-response",
+        "chat-id": chatId,
+        body,
+      });
+    },
+    [chatId],
+  );
+
   const pp = state.pendingPermission;
-  const composerDisabled = !!pp || !!state.pendingQuestion;
+  // T-007. Three-state composer policy. `composerDisabled` is the
+  // hard-disable derivative used by ChatComposer's textarea + send
+  // button; `"blocked"` is the only mode that hard-disables. The
+  // queue-mode keeps the composer enabled so the user can type and
+  // submit a follow-up while a turn is still streaming.
+  const mode: ComposerMode = composerMode({
+    pendingPermission: state.pendingPermission,
+    pendingQuestion: state.pendingQuestion,
+    turnState: state.turnState,
+  });
+  const composerDisabled = mode === "blocked";
   const composerReason = pp
     ? "Resolve the permission request to continue"
     : state.pendingQuestion
       ? "Answer the question to continue"
       : undefined;
+  // T-007 AC2. Mode-driven default queue-priority. While a turn is
+  // running (`mode === "queue"`) the submit pushes `priority: "next"`
+  // by default so the follow-up slots ahead of the streaming turn's
+  // continuation per the SDK's scheduler (ADR-004). Otherwise the
+  // submit pushes `priority: "now"`. The user's explicit toggle (T-004's
+  // visible queue-priority `<select>`, only rendered in queue mode)
+  // sits on top of this default — `state.queuePriority` is the
+  // override, applied only when the toggle is visible. In non-queue
+  // modes we hard-pin to `"now"` to keep the wire byte-compatible
+  // with legacy emitters.
+  const queueModeDefault: ComposerQueuePriority =
+    mode === "queue" ? "next" : "now";
+  const effectiveQueuePriority: ComposerQueuePriority =
+    mode === "queue" ? state.queuePriority : queueModeDefault;
 
   return (
     <div className="h-screen flex">
@@ -311,12 +578,16 @@ export function LiveChatRoute({ chatId }: Props) {
           </span>
         </header>
 
-        <MessagesTimeline items={state.items} turnState={state.turnState} />
+        <MessagesTimeline
+          items={state.items}
+          turnState={state.turnState}
+          activeTurnStartedAt={state.activeTurnStartedAt}
+          onPlanAccept={acceptPlanProposal}
+          onPlanReject={rejectPlanProposal}
+        />
 
-        {state.lastError && state.turnState === "error" && (
-          <div className="mx-5 mb-2 px-3 py-2 rounded-md text-[12px]" style={{ background: "rgba(239,68,68,0.08)", color: "var(--destructive-foreground)" }}>
-            {state.lastError}
-          </div>
+        {state.error && !state.error.dismissed && (
+          <ChatErrorBanner message={state.error.message} onDismiss={dismissError} />
         )}
 
         {pp && (
@@ -334,12 +605,29 @@ export function LiveChatRoute({ chatId }: Props) {
           </div>
         )}
 
+        {state.pendingQuestion && (
+          <div className="px-5 pb-3">
+            <AskUserQuestionPicker
+              pending={state.pendingQuestion}
+              onSubmit={({ answers, otherText }) =>
+                respondToQuestion(state.pendingQuestion!.id, answers, otherText)
+              }
+            />
+          </div>
+        )}
+
         <ChatComposer
+          composerMode={mode}
           disabled={composerDisabled}
           disabledReason={composerReason}
           onSubmit={submitTurn}
           isRunning={state.turnState === "running"}
           onInterrupt={interruptTurn}
+          permissionMode={state.permissionMode}
+          onPermissionModeChange={changePermissionMode}
+          queuePriority={effectiveQueuePriority}
+          onQueuePriorityChange={changeQueuePriority}
+          isInterrupted={state.turnState === "interrupted"}
         />
       </main>
       <TasksPanel

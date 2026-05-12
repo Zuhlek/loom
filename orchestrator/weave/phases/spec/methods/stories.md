@@ -108,7 +108,7 @@ The `status` attribute on the `<!-- loom:story -->` marker tracks lifecycle:
 | `active` | Current; downstream phases consume this story. (Default.) |
 | `superseded` | A later story / grilling answer made this obsolete. Body kept on disk for audit. Mark with `superseded-by US-NNN` in the same comment if a replacement exists. |
 | `deferred` | Scope-cut to a later iteration. Downstream phases ignore. |
-| `answered` | Used during grilling when a story has been confirmed by the user against a recommendation. Equivalent to `active` post-confirmation; the status exists so the validator can distinguish agent-drafted vs user-confirmed stories. |
+| `answered` | Used during grilling when a story has been confirmed by the user against a recommendation. Equivalent to `active` post-confirmation; the status exists so the quality-check agent can distinguish agent-drafted vs user-confirmed stories. |
 
 Downstream phases (Design / Plan / Build) read **only** `Status: active` and `Status: answered` stories. Superseded / deferred stories are visible only in audit.
 
@@ -166,9 +166,9 @@ the tab.
 
 ---
 
-## 9. Required validator checks (for `validator.md`)
+## 9. Required Quality Check assertions (for `quality-check.md`)
 
-The Spec validator checks:
+The Spec Quality Check agent checks:
 
 - Every story has a `loom:story` opening marker, a `loom:story-end` matching marker with the same `id`, and a `status` attribute on the opener.
 - Every story has exactly one role/action/value `**Story:**` line.
@@ -189,4 +189,4 @@ The Spec validator checks:
 3. Extracts the `**Story:**` line and the `**Acceptance criteria:**` numbered list.
 4. Reads `status` to determine which stories to include in the active set.
 
-Design / Plan / Build / Review consume the parsed set; `superseded` / `deferred` stories are visible only to validators and auditors.
+Design / Plan / Build / Review consume the parsed set; `superseded` / `deferred` stories are visible only to quality-check agents and auditors.

@@ -1,3 +1,7 @@
+
+
+--- weaved on 12.5
+
 /Users/tristankindle/dev/loom/orchestrator/weave/SKILL.md
 - schema for returns of a phase agent is currnetly written in the agent.md file. but maybe it is better to write separate schema files for the agent phase returns. 
 - also, when we talk about checking the schema, we should not write about validating the schema, rather write about "ensure return schema compliance" or something. so that the orchestrator does that check not confuse with the quality check which calls the validator file. the schema check itself is silent, if a missmatch is found, the subagent is called again and asked to resolve the missmatch

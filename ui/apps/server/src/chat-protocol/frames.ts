@@ -10,6 +10,7 @@ import type {
   ChatSnapshot,
   PendingPermission,
   PendingQuestion,
+  Task,
   TurnState,
 } from "./messages.ts";
 
@@ -28,7 +29,17 @@ export interface DetachFrame {
 export interface UserTurnFrame {
   kind: "user-turn";
   "chat-id": string;
-  body: { text: string };
+  body: {
+    text: string;
+    /**
+     * SDK priority hint for the queued user message. Mirrors the SDK's
+     * `SDKUserMessage.priority` enum exactly per Design `## Wire
+     * protocol additions` — no translation table. Server defaults the
+     * value to `"now"` when omitted so legacy `{ text }`-only submits
+     * keep working.
+     */
+    priority?: "now" | "next" | "later";
+  };
 }
 
 export interface InterruptFrame {
@@ -53,11 +64,69 @@ export interface QuestionResponseFrame {
   kind: "question-response";
   "chat-id": string;
   body: {
+    /** Question id matching the open `PendingQuestion.id`. */
     id: string;
-    /** Chosen option id, or "__freeform__" to use freeform text. */
-    choice: string;
-    freeform?: string;
+    /**
+     * Array of chosen option ids. Single-select submits a length-1
+     * array; multi-select submits length ≥ 1. The sentinel
+     * `"__freeform__"` is included in `answers` when the user picks
+     * the "Other" escape hatch, in which case `otherText` carries the
+     * typed body.
+     */
+    answers: string[];
+    /** Typed free-text content when `"__freeform__"` is in `answers`. */
+    otherText?: string;
   };
+}
+
+/**
+ * SDK PermissionMode subset surfaced on the wire. Matches the SDK's
+ * `PermissionMode` enum exactly for the four modes US-004 AC1 exposes
+ * in the composer dropdown — the SDK-internal `dontAsk` / `auto`
+ * variants are intentionally omitted.
+ */
+export type WirePermissionMode =
+  | "default"
+  | "plan"
+  | "acceptEdits"
+  | "bypassPermissions";
+
+export interface PermissionModeSetFrame {
+  kind: "permission-mode-set";
+  "chat-id": string;
+  body: { mode: WirePermissionMode };
+}
+
+/**
+ * T-003 / US-003. Accept the latest `plan-proposed` item.
+ *
+ * Bridge handler: `bridge.acceptPlanProposal(chatId, planId)` calls
+ * `Query.setPermissionMode("default")` and queues a user-turn ("Please
+ * execute the plan as proposed"). The plan-proposed item's status
+ * flips to `"accepted"` via an item-update broadcast.
+ *
+ * Per ADR-004: NOT debounced; NOT coalesced with composer-footer
+ * permission-mode changes. Accept does NOT auto-submit any composer
+ * draft — only the dedicated execute user-turn is queued.
+ */
+export interface PlanAcceptFrame {
+  kind: "plan-accept";
+  "chat-id": string;
+  body: { planId: string };
+}
+
+/**
+ * T-003 / US-003. Reject the latest `plan-proposed` item.
+ *
+ * Bridge handler: `bridge.rejectPlanProposal(chatId, planId)` queues a
+ * user-turn ("Please reconsider the plan; do not execute it as-is")
+ * WITHOUT touching permission mode (the SDK stays in `"plan"`). The
+ * item's status flips to `"rejected"`.
+ */
+export interface PlanRejectFrame {
+  kind: "plan-reject";
+  "chat-id": string;
+  body: { planId: string };
 }
 
 export type ClientFrame =
@@ -66,7 +135,10 @@ export type ClientFrame =
   | UserTurnFrame
   | InterruptFrame
   | PermissionResponseFrame
-  | QuestionResponseFrame;
+  | QuestionResponseFrame
+  | PermissionModeSetFrame
+  | PlanAcceptFrame
+  | PlanRejectFrame;
 
 // ─── Server → Client ─────────────────────────────────────────────────
 
@@ -112,6 +184,12 @@ export interface PendingQuestionFrame {
   body: PendingQuestion | null;
 }
 
+export interface TasksUpdateFrame {
+  kind: "tasks-update";
+  "chat-id": string;
+  body: { tasks: Task[]; replay?: boolean };
+}
+
 export interface ErrorFrame {
   kind: "error";
   "chat-id"?: string;
@@ -126,4 +204,19 @@ export type ServerFrame =
   | TurnStateFrame
   | PendingPermissionFrame
   | PendingQuestionFrame
+  | TasksUpdateFrame
   | ErrorFrame;
+
+/**
+ * Serialise a typed ServerFrame to the on-wire JSON string. The single
+ * place untyped envelope writes are funnelled through, restoring the
+ * type-safety boundary mandated by Spec `## Constraints` and US-009.
+ *
+ * Wire shape is preserved verbatim — `JSON.stringify` is a no-op on the
+ * envelope structure. The helper exists so the type-check fires before
+ * the bytes hit the socket, replacing the prior `JSON.stringify({...})`
+ * call sites that bypassed the union.
+ */
+export function serializeServerFrame(frame: ServerFrame): string {
+  return JSON.stringify(frame);
+}

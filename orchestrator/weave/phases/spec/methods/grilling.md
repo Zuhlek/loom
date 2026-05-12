@@ -49,7 +49,7 @@ Grilling is **staged** — a direct application of the Double Diamond framework.
 
 Gather context. **No decisions yet.**
 
-Read `repo-context.md` (produced by the Spec agent's repository pre-flight — see `agent.md` Work Loop step 2) before generating Foundation questions. Never ask the user for a fact the repo states directly — pull it from `repo-context.md` and treat it as established. Foundation questions fill the gaps the repo cannot answer (team context, value bar, constraints not in code).
+Read `repo-context.md` (produced by the Spec agent's repository pre-flight — see `phase.md` Work Loop step 2) before generating Foundation questions. Never ask the user for a fact the repo states directly — pull it from `repo-context.md` and treat it as established. Foundation questions fill the gaps the repo cannot answer (team context, value bar, constraints not in code).
 
 - Existing situation — current architecture, team, prior choices, integration points.
 - Value bar — what does "done" mean? what is the success criterion?
@@ -281,7 +281,7 @@ When the Spec phase agent returns, it MUST have written:
 1. `spec.md` — what the user is building, why, scope, out of scope, **user stories with EARS acceptance criteria** (per [`stories.md`](stories.md)), constraints, open ambiguity.
 2. `decisions.md` — every Q with its slot, status, recommendation, resolution. Side requirements section. Deferred clarifications section. Parseable by the rules in §6.
 
-Stories are distilled from grilling answers + seed at the end of the loop (Work Loop step 9 in [`agent.md`](../agent.md)). They are NOT user-answered questions; they are agent-produced outputs. Universal acceptance conditions go under `spec.md` `## Constraints`, not Stories.
+Stories are distilled from grilling answers + seed at the end of the loop (Work Loop step 10 in [`phase.md`](../phase.md)). They are NOT user-answered questions; they are agent-produced outputs. Universal acceptance conditions go under `spec.md` `## Constraints`, not Stories.
 
 These two writes are non-negotiable. They are the contract Design inherits.
 
