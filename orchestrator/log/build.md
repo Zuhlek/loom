@@ -771,3 +771,70 @@ Files changed:
 
 Smoke / mutation gate untouched (Build Coordinator's responsibility).
 - **T-004 chat-streaming-fixes (green, 2026-05-12T13:00:00Z, HITL)** — 10/10 live smoke; bugs 1 & 2 fixed.
+
+## 2026-05-12 - chat-streaming-fixes - 3/3 AFK tasks green on first attempt with zero rework
+
+T-001, T-002, T-003 all came back green on their first build
+attempt. No re-dispatch. No 3-attempt cap exercised. The build
+window was ~35 minutes wall-clock from Build-start to AFK-complete
+(per pipeline.md history: 12:10 → 12:45 UTC).
+
+Contributing factors observed:
+1. Plan pre-resolved 7 "would Build need to ask?" ambiguities
+   inline (`plan.md ## Build-simulation result`) — fallback warning
+   string format, `currentMessageStartId` init sites, placeholder
+   shape, snapshot-reattach behaviour, chip placement, etc. Build
+   never stalled to ask.
+2. Design's diff-surface annotation
+   (`design.md ## System shape` enumerates "Diff surface 1, 1b, 2,
+   3" with file:line citations) meant Build knew exactly where
+   each task touches the tree — no exploration phase.
+3. ADR-007's emergence in Design pre-emptively flagged the paired
+   `onAssistant` migration. Without it Build would likely have
+   discovered the bug during T-001 unit-test red phase and had to
+   re-dispatch or expand scope mid-task.
+4. The four task `T-NNN.md` briefs reference Spec ACs and Design
+   ADRs by id, not by paraphrase — Build agents could anchor every
+   assertion to a specific AC/ADR without re-deriving intent.
+
+Process lesson: zero-rework Build runs aren't luck; they correlate
+with explicit pre-resolution of would-stall-Build questions in
+Plan AND with Design pre-emptively flagging cross-cut migrations
+that the seed didn't name. Reusable cue: `plan.md ## Build-simulation
+result` is a high-value section even when it looks repetitive —
+each "Plan choice: …" line is a future Build stall averted.
+
+Source: `.loom/chat-streaming-fixes/plan.md` Build-simulation
+section + per-task done.md "Attempts: 1" line.
+
+## 2026-05-12 - chat-streaming-fixes - user committed mid-Build (between AFK-complete and HITL-complete)
+
+Two user-initiated commits (`aca4c9b` "remove docs, fix ui
+streaming layedr" and `9fc18e5` ".") landed between the AFK-build
+complete event (12:45) and the T-004 HITL-complete event (13:00) per
+`events.jsonl`. The commits include the load-bearing loom diff
+(`WorkingChip.tsx`, `claude-session-bridge.ts`, `MessagesTimeline.tsx`,
+`live-chat.tsx`, the four new test files) bundled with unrelated
+working-tree state from the parent loom that hadn't been committed
+during chat-ui-parity's lifecycle.
+
+This is flagged as `F-MINOR-1` in this loom's `review.md`. The
+commits were user-driven (lowercase, untemplated messages), not
+agent-driven. The Review-prompt safety check ("No commits / pushes
+during Build … same head as before Build") is calibrated against
+agent behaviour but matches user behaviour too — which produced a
+finding even though nothing harmful happened.
+
+Process lesson: the harness should distinguish agent-initiated from
+user-initiated commits when checking the "no commits during Build"
+invariant. Users sometimes commit mid-Build to clean up working-tree
+drift before opening Review; this is not the failure mode the
+safety check was designed to prevent (which is agent auto-commit
+short-circuiting the gate). Reusable cue: when Review surfaces
+"head moved during Build," distinguish "agent did this" (blocker)
+from "user did this" (minor process note). Both deserve a row in
+review.md but with different severity routing.
+
+Source: `git log` showing commits between 10:45 UTC AFK-complete
+and 11:00 UTC HITL-complete; commits authored as `Zuhlek
+<72124667+...>` (the user).

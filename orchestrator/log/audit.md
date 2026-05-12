@@ -227,3 +227,40 @@ streaming / permission / AskQ / resume / interrupt / plan flows.
 
 Source: chat-ui-parity follow-up loom `chat-streaming-fixes` opened
 same day after first-dogfooding regressions.
+
+## 2026-05-12 - chat-streaming-fixes - smoke-coverage extension caught the bugs it was designed to validate
+
+Counter-example to "smoke checklists are theatre". The parent
+`chat-ui-parity` loom shipped with a 7-flow live smoke that walked
+canonical happy / streaming / permission / AskUserQuestion / resume /
+interrupt / plan-mode paths and missed two crash-grade bugs because
+none of those flows exercised multi-batch partial-stream events or
+any tool whose `content_block_start` index lands at >0.
+
+chat-streaming-fixes added three flows specifically targeted at the
+failure modes: flow 8 (sustained thinking — multi-batch partials),
+flow 9 (TodoWrite — high-index tool_use), flow 10 (multi-tool —
+non-sequential block indices across multiple SDK messages in one
+turn). On the T-004 HITL walk:
+
+- Flow 8 caught the row-spam regression (would have shown six
+  "Thinking…" rows had the fix not landed). PASS confirmed bug 1
+  fixed.
+- Flow 9 caught the TodoWrite React crash directly with the exact
+  prompt that surfaced bug 2 originally ("can you make some dummy
+  tasks for testing"). PASS confirmed bug 2 fixed.
+- Flow 10 validated that the per-SDK-message row UX (Q04 option B)
+  matches t3code's behaviour on multi-tool turns.
+
+Process lesson: codified smoke flows targeting known failure modes
+DO pay off. When a regression is found in production / dogfooding,
+the right move is to encode the missing flow in the next iteration's
+smoke list — not to rely on review caution. Reusable cue: when a
+follow-up loom opens after a parent loom's smoke missed a real-world
+bug, the iteration's spec.md `## Constraints` should explicitly add
+the targeted flow that would have caught it, and the iteration's
+T-NNN-HITL walk should re-confirm the previously-green parent flows
+alongside the new ones — both as regression check and as proof the
+extension didn't break inherited coverage.
+
+Source: `.loom/chat-streaming-fixes/` review.

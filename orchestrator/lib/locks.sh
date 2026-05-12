@@ -13,6 +13,16 @@ _pid_alive() {
     [ -n "${1:-}" ] && ps -p "$1" >/dev/null 2>&1
 }
 
+# The holder PID we record is `$PPID` — the process that invoked
+# `bash locks.sh ...`, not the ephemeral subshell that runs locks.sh
+# itself. `$$` would die the moment this script returns, making any
+# subsequent `release` call see a fresh `$$` that never matches the
+# acquired one. `$PPID` is the calling agent / shell, which is stable
+# across a session's repeated acquire/release calls.
+_holder_pid() {
+    printf '%s' "${LOOM_HOLDER_PID:-$PPID}"
+}
+
 _acquire() {
     local lock="$1"
     local label="$2"
@@ -28,10 +38,11 @@ _acquire() {
     fi
 
     mkdir "$lock" 2>/dev/null || return 1
-    local ts
+    local ts holder
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    holder="$(_holder_pid)"
     jq -cn \
-        --argjson pid "$$" \
+        --argjson pid "$holder" \
         --arg host "$(hostname)" \
         --arg started "$ts" \
         --arg label "$label" \
@@ -42,11 +53,23 @@ _acquire() {
 _release() {
     local lock="$1"
     [ -d "$lock" ] || return 0
-    local pid host
+    local pid host holder
     pid="$(jq -r '.pid // empty' "$lock/info.json" 2>/dev/null || true)"
     host="$(jq -r '.host // empty' "$lock/info.json" 2>/dev/null || true)"
-    [ "$pid" = "$$" ] && [ "$host" = "$(hostname)" ] || return 1
-    rm -rf "$lock"
+    holder="$(_holder_pid)"
+    # Allow release when the recorded holder matches us, OR the holder
+    # is gone (stale lock cleanup) on the same host. Refuse only when a
+    # live different holder owns the lock on the same host.
+    if [ "$host" = "$(hostname)" ]; then
+        if [ "$pid" = "$holder" ] || ! _pid_alive "$pid"; then
+            rm -rf "$lock"
+            return 0
+        fi
+        return 1
+    fi
+    # Cross-host: refuse — releasing a lock held on a different host
+    # would be a coordination bug.
+    return 1
 }
 
 acquire_lock() {

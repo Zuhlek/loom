@@ -91,3 +91,75 @@ opt-in QC on AFK-gated transitions has high signal even when it finds
 nothing — the binary "passed" output is itself the deliverable. Worth
 recommending QC by default at any AFK-gate transition (Plan → Build),
 not only on high-uncertainty plans.
+
+## 2026-05-12 - chat-streaming-fixes - follow-up-loom velocity vs greenfield-loom velocity
+
+chat-streaming-fixes ran Spec → Design → Plan → Build → Review in
+~2 hours wall-clock. The parent chat-ui-parity loom ran the same
+lifecycle in ~8 hours. The ~4× collapse is attributable to inherited
+anchors that the follow-up loom did NOT re-litigate:
+
+- Spec inherited parent Q01 (single-turn-feel parity bar) and Q02
+  (internal-team daily-driver UX bar) as foundational anchors. Same
+  with Constraints (SDK pin, wire-mirror discipline, bundle budget,
+  `dangerouslySetInnerHTML` trust boundary, typed-broadcast
+  boundary). The decisions.md "Inheritance note" section explicitly
+  enumerates which parent anchors apply.
+- Design inherited the entire system shape from `repo-context.md` —
+  the diff surfaces were already known from the parent's work. ADR
+  scope shrank to chip / fallback / placeholder / paired-migration
+  decisions, not "where does this code live".
+- Plan inherited AFK/HITL slicing patterns (vertical
+  observable-behaviour cuts; HITL gates for live-Claude smoke). The
+  4-task graph maps cleanly to the inherited topology.
+
+Process lesson: follow-up looms naturally absorb less ideation
+overhead because parent anchors carry forward. Reusable cue: when
+the Spec agent sees `type-hint: bugfix` paired with a `parent:`
+field in the project metadata (or the seed references a closed
+parent loom), it should:
+1. Explicitly enumerate inherited anchors in a top-of-decisions.md
+   "Inheritance note" section (the pattern this loom established).
+2. Short-circuit the foundational grilling questions about audience,
+   UX bar, parity bar — those are already pinned by the parent.
+3. Focus grilling on the iteration's specific decisions (here:
+   Q01-Q05) rather than the foundational ones (parent Q01-Q03).
+
+Source: `.loom/chat-streaming-fixes/decisions.md` Inheritance note
+section + spec.md Constraints "Inherited from chat-ui-parity (in
+force)" subsection.
+
+## 2026-05-12 - chat-streaming-fixes - bug-fix loom pattern (seed pre-frames diagnoses)
+
+The `seed.md` for chat-streaming-fixes carried explicit diagnoses
+with file paths + line numbers for both bugs (bridge `:478`,
+MessagesTimeline `:136`, bridge `:501` as bug-2 root cause). This
+pre-framing made Spec → Design → Plan move fast because the agents
+were resolving "which of several known fix strategies do we take?"
+(Q01-Q05), not "where does the bug live?"
+
+Spec produced 5 questions, all answered in one batch with no
+follow-up grilling. Design produced 7 ADRs in one pass with zero
+open ambiguity at the gate. Plan produced a 4-task graph with zero
+deferred-to-Build ambiguities.
+
+Process lesson: bug-fix looms where the seed pre-frames diagnoses
+with file:line citations collapse Spec faster than greenfield
+feature looms. Reusable cue: when the Spec agent reads a seed that
+includes file paths + line numbers in its bug descriptions, it
+should:
+1. Skip the "what is the problem" grilling questions — those are
+   answered in the seed.
+2. Open directly with "pick the fix shape" questions (Q01-style
+   adopt/skip on polish, Q02-style choose-the-defense-layer,
+   Q03-style codify-smoke-coverage).
+3. Treat the seed's diagnoses as authoritative for that loom's
+   spec.md `## What we're building` and `## Out of scope` sections
+   without re-litigating the diagnosis.
+
+The Spec agent for this loom got Q01-Q05 right on the first pass —
+worth surfacing the pattern so future bug-fix looms benefit
+without trial-and-error.
+
+Source: `docs/chat-streaming-fixes-seed.md` (the seed used here) +
+`.loom/chat-streaming-fixes/decisions.md` Q01-Q05 question framing.
