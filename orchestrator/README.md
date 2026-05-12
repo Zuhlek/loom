@@ -37,7 +37,6 @@ After every phase the orchestrator surfaces a rerun-or-continue decision to the 
 | `hooks/` | Claude Code hooks |
 | `types/` | Domain guidance loaded by Type hint |
 | `templates/` | Project templates (seed, constitution) |
-| `schemas/` | JSON schemas (pipeline, events, artifacts, lock) |
 | `log/` | Learning shards appended by Review |
 | `principles.md` | Engineering principles P1–P7 |
 

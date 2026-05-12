@@ -1,2 +1,4 @@
 .loom
 docs
+__pycache__/
+*.pyc
