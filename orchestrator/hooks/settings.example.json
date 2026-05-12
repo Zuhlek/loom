@@ -22,19 +22,11 @@
         ]
       }
     ],
-    "PreToolUse": [
-      {
-        "matcher": "Task",
-        "hooks": [
-          { "type": "command", "command": "\"$HOME/.claude/loom-hooks/capture-task-start.sh\"" }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
-        "matcher": "Task|Write|Edit|MultiEdit|AskUserQuestion",
+        "matcher": "Write|Edit|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "\"$HOME/.claude/loom-hooks/emit-events.sh\"" }
+          { "type": "command", "command": "\"$HOME/.claude/loom-hooks/refresh-artifacts.sh\"" }
         ]
       }
     ]

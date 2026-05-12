@@ -26,6 +26,7 @@ import type { WebSocket } from "ws";
 import { acquireLock } from "./lockfile.ts";
 import { makeError, type ChatEnvelope } from "./chat-protocol/envelope.ts";
 import { serializeServerFrame, type TasksUpdateFrame } from "./chat-protocol/frames.ts";
+import { sanitizeUserTurnImages } from "./chat-protocol/sanitize-user-turn-images.ts";
 import type { ClaudeSessionBridge } from "./process-manager/claude-session-bridge.ts";
 
 export interface ServerOptions {
@@ -209,7 +210,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             return;
           }
           try {
-            opts.bridge.attach(chatId, makeWsClient(socket));
+            await opts.bridge.attach(chatId, makeWsClient(socket));
             const st = wsState.get(socket);
             if (st) st.attachedChatId = chatId;
             let set = attachedByChat.get(chatId);
@@ -231,7 +232,11 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
         if (envelope.kind === "user-turn") {
           const chatId = envelope["chat-id"];
           const body = envelope.body as
-            | { text?: string; priority?: "now" | "next" | "later" }
+            | {
+                text?: string;
+                priority?: "now" | "next" | "later";
+                images?: unknown;
+              }
             | undefined;
           const text = body?.text;
           if (!chatId || typeof text !== "string") {
@@ -243,7 +248,10 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             rawPriority === "now" || rawPriority === "next" || rawPriority === "later"
               ? rawPriority
               : "now";
-          opts.bridge.submitUserTurnWithPriority(chatId, text, priority);
+          // T-003 / US-006 AC1. Defence-in-depth: filter malformed
+          // `body.images` before forwarding to the bridge.
+          const images = sanitizeUserTurnImages(body?.images);
+          opts.bridge.submitUserTurnWithPriority(chatId, text, priority, images);
           return;
         }
         if (envelope.kind === "interrupt") {
@@ -334,6 +342,15 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             remember: body.remember,
             message: body.message,
           });
+          return;
+        }
+        if (envelope.kind === "retry-session") {
+          const chatId = envelope["chat-id"];
+          if (!chatId) {
+            send(makeError(undefined, "retry-session: missing chat-id"));
+            return;
+          }
+          opts.bridge.retrySession(chatId);
           return;
         }
         if (envelope.kind === "detach") {

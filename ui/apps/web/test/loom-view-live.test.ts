@@ -29,19 +29,10 @@ describe("LoomViewLive route wiring", () => {
     expect(src).toContain("marked.parse");
   });
 
-  test("App.tsx mounts the dynamic loom route BEFORE the static demo", () => {
+  test("App.tsx mounts the dynamic loom route", () => {
     const app = readFileSync(root + "src/App.tsx", "utf8");
     expect(app).toContain('path="/loom/:projectId/:loomName"');
     expect(app).toContain("LoomViewLive");
-    // Static demo must still exist for the mockup browser.
-    expect(app).toContain('path="/loom/:phase?"');
-    // Wouter matches in declaration order; the more specific route
-    // must come first or the static demo wins.
-    const dyn = app.indexOf('path="/loom/:projectId/:loomName"');
-    const stat = app.indexOf('path="/loom/:phase?"');
-    expect(dyn).toBeGreaterThan(0);
-    expect(stat).toBeGreaterThan(0);
-    expect(dyn).toBeLessThan(stat);
   });
 
   test("marked is in package.json", () => {

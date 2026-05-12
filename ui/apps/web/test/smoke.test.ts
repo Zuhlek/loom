@@ -13,31 +13,23 @@ describe("apps/web frontend skeleton", () => {
   test("App.tsx has all expected routes wired", () => {
     const app = readFileSync(root + "src/App.tsx", "utf8");
     expect(app).toContain('path="/discover"');
-    expect(app).toContain('path="/empty"');
-    expect(app).toContain('path="/spawn"');
-    // Live chat route by id; the legacy mock-variant route is mounted at
-    // /chat-mock/:variant (still string-matches "chat/:variant").
     expect(app).toContain("/chat/:id");
-    expect(app).toContain("/chat-mock/:variant");
     expect(app).toContain("/loom/:projectId/:loomName");
-    expect(app).toContain("/settings/:variant");
+    // T-001: settings route is /settings/:variant? — the active panel
+    // is driven by the route segment rather than a hard-coded
+    // constant. The bare `/settings` segment falls through to the
+    // Workspace panel via the optional :variant param.
+    expect(app).toContain('path="/settings/:variant');
   });
 
-  test("Sidebar and AppSidebarLayout exist", () => {
-    expect(existsSync(root + "src/components/Sidebar.tsx")).toBe(true);
-    expect(existsSync(root + "src/components/layout/AppSidebarLayout.tsx")).toBe(true);
-  });
-
-  test("All 16 mockup pages have a React route", () => {
+  test("Production route files exist", () => {
     const expected = [
       "src/routes/discover-wizard.tsx",
-      "src/routes/empty-home.tsx",
-      "src/routes/spawn-chat-dialog.tsx",
-      "src/routes/chat.tsx",
+      "src/routes/live-home.tsx",
+      "src/routes/live-chat.tsx",
+      "src/routes/loom-view-live.tsx",
+      "src/routes/spawn-chat-dialog-live.tsx",
       "src/routes/settings.tsx",
-      "src/routes/multi-tab-same-cwd.tsx",
-      "src/routes/multi-path-project.tsx",
-      "src/routes/handoff-fork-menu.tsx",
     ];
     for (const f of expected) {
       expect(existsSync(root + f)).toBe(true);
@@ -48,7 +40,6 @@ describe("apps/web frontend skeleton", () => {
     expect(existsSync(root + "src/components/diff/DiffPanel.tsx")).toBe(true);
     expect(existsSync(root + "src/components/loom/PhaseStepper.tsx")).toBe(true);
     expect(existsSync(root + "src/components/loom/KanbanView.tsx")).toBe(true);
-    expect(existsSync(root + "src/components/loom/EventsTail.tsx")).toBe(true);
   });
 
   test("TasksPanel exists and exposes header + status icons for all three states", () => {
@@ -57,7 +48,6 @@ describe("apps/web frontend skeleton", () => {
     const src = readFileSync(file, "utf8");
     // The header reads "TASKS" (mirrors t3code's PlanSidebar rendering).
     expect(src).toContain("TASKS");
-    expect(src).toContain("STEPS");
     // All three task statuses are handled.
     expect(src).toContain('"completed"');
     expect(src).toContain('"inProgress"');

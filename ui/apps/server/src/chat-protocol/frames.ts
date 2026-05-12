@@ -10,6 +10,7 @@ import type {
   ChatSnapshot,
   PendingPermission,
   PendingQuestion,
+  SessionLifecycle,
   Task,
   TurnState,
 } from "./messages.ts";
@@ -39,7 +40,30 @@ export interface UserTurnFrame {
      * keep working.
      */
     priority?: "now" | "next" | "later";
+    /**
+     * Optional image attachments captured by the composer (paste from
+     * clipboard, paperclip file picker, or drag-drop). Each entry is a
+     * base64 payload + MIME type. The bridge fans these out into
+     * `ImageBlockParam` content blocks on the `SDKUserMessage`. Absent
+     * on legacy text-only submits — back-compat with pre-attachment
+     * clients is preserved by the optional marker.
+     */
+    images?: UserTurnImage[];
   };
+}
+
+/**
+ * One image attachment on an outbound user turn. Mirrors the
+ * `ToolResultImage` shape on the inbound side (base64 + media-type, no
+ * `data:` prefix) so the web client can reuse the same encoder.
+ */
+export interface UserTurnImage {
+  /** MIME type, e.g. `"image/png"`, `"image/jpeg"`. */
+  mediaType: string;
+  /** Base64-encoded image bytes (no `data:` prefix). */
+  dataB64: string;
+  /** Optional source filename — surfaced in the bubble for context. */
+  filename?: string;
 }
 
 export interface InterruptFrame {
@@ -129,6 +153,21 @@ export interface PlanRejectFrame {
   body: { planId: string };
 }
 
+/**
+ * Manually trigger a recovery attempt after the bridge gave up
+ * auto-respawning (lifecycle = "failed"). Idempotent; if the session is
+ * already recovering or active, the bridge no-ops.
+ *
+ * Bridge handler: `bridge.retrySession(chatId)`. On success the bridge
+ * emits a `session-state` frame flipping lifecycle through
+ * `recovering → active`; on failure it flips back to `failed` with the
+ * fresh error message attached.
+ */
+export interface RetrySessionFrame {
+  kind: "retry-session";
+  "chat-id": string;
+}
+
 export type ClientFrame =
   | AttachFrame
   | DetachFrame
@@ -138,7 +177,8 @@ export type ClientFrame =
   | QuestionResponseFrame
   | PermissionModeSetFrame
   | PlanAcceptFrame
-  | PlanRejectFrame;
+  | PlanRejectFrame
+  | RetrySessionFrame;
 
 // ─── Server → Client ─────────────────────────────────────────────────
 
@@ -196,6 +236,24 @@ export interface ErrorFrame {
   body: { message: string };
 }
 
+/**
+ * Session-lifetime state transition. Emitted whenever the bridge moves
+ * a session through `active ↔ recovering ↔ failed` (see
+ * `SessionLifecycle`). The web client uses this to drive the recovery
+ * banner — distinct from `turn-state`, which tracks the current turn
+ * only. `recoveryAttempt` is the auto-retry counter for the current
+ * failure streak; `lastError` is the most recent SDK error string.
+ */
+export interface SessionStateFrame {
+  kind: "session-state";
+  "chat-id": string;
+  body: {
+    lifecycle: SessionLifecycle;
+    recoveryAttempt?: number;
+    lastError?: string;
+  };
+}
+
 export type ServerFrame =
   | AttachedFrame
   | SnapshotFrame
@@ -205,6 +263,7 @@ export type ServerFrame =
   | PendingPermissionFrame
   | PendingQuestionFrame
   | TasksUpdateFrame
+  | SessionStateFrame
   | ErrorFrame;
 
 /**

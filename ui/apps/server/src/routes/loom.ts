@@ -1,20 +1,25 @@
 /**
- * GET /loom/:projectId/:loomName
+ * GET /loom/:projectId/:loomName — READ-ONLY.
+ *
+ * The phase pipeline this surface exposes is owned by `/weave`,
+ * which is the only writer to `pipeline.md`. This route exposes
+ * **no** POST / PATCH / PUT / DELETE mutators for the loom view;
+ * non-GET requests return 405. See US-009 (AC4, AC5).
  *
  * Returns the live state of a loom directory:
- *   - pipeline:    parsed top-level scalars from `.pipeline` (YAML-ish).
- *                  Exposes only `current.phase`, `current.status`,
- *                  `approvals`, and `pending` (no deep recursion).
+ *   - pipeline:    parsed `pipeline.md` (markdown with `## Section`
+ *                  headers and fenced ```text scalar bodies). Only
+ *                  `current.phase` and `current.status` are surfaced.
  *   - tree:        flat directory listing at depth ≤ 2, sorted
  *                  (directories first, then files, alphabetically).
- *   - artifacts:   contents of well-known markdown artifacts (see
- *                  ARTIFACT_FILES below). Each capped at 200 KB;
- *                  truncated entries carry a marker tail.
- *   - events:      last 200 lines of `events.jsonl`, parsed.
+ *   - artifacts:   contents of every `.md` file in the tree, keyed by
+ *                  the same relative path used in `tree`. Each capped
+ *                  at 200 KB; truncated entries carry a marker tail.
  *   - mockupPages: filenames in the `mockup/` subdir (rendered via the
  *                  existing /loom/mockup/file iframe route).
  *
  * Behaviour:
+ *  - 405 if the request method is not GET (the read-only contract).
  *  - 404 if the project id is unknown.
  *  - 404 if no project path contains a `.loom/<loomName>/` directory.
  *  - 1-second TTL cache keyed by (projectId, loomName) so rapid sidebar
@@ -24,25 +29,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { MetadataStore } from "../metadata-store/index.ts";
 
-const ARTIFACT_FILES = [
-  "idea.md",
-  "decisions.md",
-  "design.md",
-  "plan.md",
-  "board.md",
-  "task.md",
-  "tests.md",
-  "test-report.md",
-  "develop-log.md",
-  "review.md",
-  "feedback.md",
-  "quality-review.md",
-  "summary.md",
-  "seed.md",
-] as const;
-
 const ARTIFACT_MAX_BYTES = 200 * 1024;
-const EVENTS_TAIL_LINES = 200;
 const TREE_MAX_DEPTH = 2;
 const CACHE_TTL_MS = 1_000;
 
@@ -51,8 +38,6 @@ interface PipelineSummary {
     phase: string | null;
     status: string | null;
   };
-  approvals: Record<string, string | number | boolean | null>;
-  pending: Record<string, unknown>;
 }
 
 interface LoomTreeEntry {
@@ -71,7 +56,6 @@ interface LoomViewResponse {
   pipeline: PipelineSummary | null;
   tree: LoomTreeEntry[];
   artifacts: Record<string, string>;
-  events: unknown[];
   mockupPages: string[];
 }
 
@@ -87,77 +71,45 @@ export function invalidateLoomViewCache(): void {
 }
 
 /**
- * Minimal YAML scalar parser tailored for `.pipeline` files. We only
- * care about a flat set of top-level keys plus `current.phase` /
- * `current.status` / `approvals.*`. Anything deeper than that we
- * ignore — `pending` is exposed as a shallow Record and the caller
- * doesn't recurse into nested blobs.
+ * Parser for `pipeline.md` written by `orchestrator/lib/pipeline-parser.py`.
+ * Sections are introduced by `## <Name>` headers; scalar fields live in
+ * fenced ```text blocks. We only surface `Current phase` and
+ * `Phase status` — they drive the UI stepper. Anything else is left
+ * for the artifact viewer to render as plain markdown.
  */
 function parsePipeline(text: string): PipelineSummary {
-  const lines = text.split(/\r?\n/);
-  const summary: PipelineSummary = {
-    current: { phase: null, status: null },
-    approvals: {},
-    pending: {},
+  const sections = splitSections(text);
+  const phase = readFenced(sections["Current phase"]);
+  const status = readFenced(sections["Phase status"]);
+  return {
+    current: {
+      phase: phase ?? null,
+      status: status ?? null,
+    },
   };
-  let section: "current" | "approvals" | "pending" | null = null;
-  for (const raw of lines) {
-    const line = raw.replace(/\s+#.*$/, "");
-    if (!line.trim()) continue;
-    // Top-level key (no leading whitespace).
-    const topMatch = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
-    if (topMatch && !line.startsWith(" ") && !line.startsWith("\t")) {
-      const key = topMatch[1];
-      const value = topMatch[2];
-      if (key === "current" && (value === "" || value === undefined)) {
-        section = "current";
-        continue;
-      }
-      if (key === "approvals" && (value === "" || value === undefined)) {
-        section = "approvals";
-        continue;
-      }
-      if (key === "pending") {
-        section = "pending";
-        if (value && value !== "" && value !== "{}") {
-          // Inline: ignore non-empty inline content for v1.
-        }
-        continue;
-      }
-      // Other top-level keys we don't surface for v1.
-      section = null;
-      continue;
-    }
-    // Indented (2 spaces) child of current section.
-    const childMatch = /^\s+([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
-    if (childMatch && section) {
-      const k = childMatch[1];
-      const v = parseScalar(childMatch[2]);
-      if (section === "current" && (k === "phase" || k === "status")) {
-        summary.current[k] = typeof v === "string" ? v : v == null ? null : String(v);
-      } else if (section === "approvals") {
-        summary.approvals[k] = v as any;
-      } else if (section === "pending") {
-        summary.pending[k] = v;
-      }
-    }
-  }
-  return summary;
 }
 
-function parseScalar(raw: string): string | number | boolean | null {
-  const v = raw.trim();
-  if (v === "" || v === "null" || v === "~") return null;
-  if (v === "true") return true;
-  if (v === "false") return false;
-  if (v === "{}" || v === "[]") return null;
-  if (/^-?\d+$/.test(v)) return parseInt(v, 10);
-  if (/^-?\d*\.\d+$/.test(v)) return parseFloat(v);
-  // Strip surrounding quotes if present.
-  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-    return v.slice(1, -1);
+function splitSections(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const re = /^## ([^\n]+)\n/gm;
+  const matches: Array<{ name: string; start: number; bodyStart: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    matches.push({ name: m[1].trim(), start: m.index, bodyStart: m.index + m[0].length });
   }
-  return v;
+  for (let i = 0; i < matches.length; i++) {
+    const end = i + 1 < matches.length ? matches[i + 1].start : text.length;
+    out[matches[i].name] = text.slice(matches[i].bodyStart, end);
+  }
+  return out;
+}
+
+function readFenced(body: string | undefined): string | null {
+  if (!body) return null;
+  const match = /```(?:text)?\n([\s\S]*?)\n```/.exec(body);
+  const raw = match ? match[1] : body;
+  const trimmed = raw.trim();
+  return trimmed.length === 0 ? null : trimmed;
 }
 
 function readArtifact(filePath: string): string | null {
@@ -196,9 +148,7 @@ function listTree(dir: string, maxDepth: number): LoomTreeEntry[] {
     const dirs: LoomTreeEntry[] = [];
     const files: LoomTreeEntry[] = [];
     for (const e of dirents) {
-      // Skip dotfiles other than .pipeline (which is informational data
-      // already surfaced via the pipeline field).
-      if (e.name.startsWith(".") && e.name !== ".pipeline") continue;
+      if (e.name.startsWith(".")) continue;
       const full = path.join(current, e.name);
       let stat: fs.Stats;
       try {
@@ -227,23 +177,6 @@ function listTree(dir: string, maxDepth: number): LoomTreeEntry[] {
   };
   walk(dir, 1);
   return out;
-}
-
-function tailEvents(filePath: string, n: number): unknown[] {
-  let text: string;
-  try {
-    text = fs.readFileSync(filePath, "utf8");
-  } catch {
-    return [];
-  }
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0).slice(-n);
-  return lines.map((l) => {
-    try {
-      return JSON.parse(l);
-    } catch {
-      return { raw: l };
-    }
-  });
 }
 
 function listMockupPages(dir: string): string[] {
@@ -282,7 +215,7 @@ function buildView(
   loomDir: string,
 ): LoomViewResponse {
   let pipeline: PipelineSummary | null = null;
-  const pipelinePath = path.join(loomDir, ".pipeline");
+  const pipelinePath = path.join(loomDir, "pipeline.md");
   if (fs.existsSync(pipelinePath)) {
     try {
       pipeline = parsePipeline(fs.readFileSync(pipelinePath, "utf8"));
@@ -291,14 +224,14 @@ function buildView(
     }
   }
 
+  const tree = listTree(loomDir, TREE_MAX_DEPTH);
   const artifacts: Record<string, string> = {};
-  for (const name of ARTIFACT_FILES) {
-    const content = readArtifact(path.join(loomDir, name));
-    if (content != null) artifacts[name] = content;
+  for (const entry of tree) {
+    if (entry.isDirectory || !entry.name.endsWith(".md")) continue;
+    const content = readArtifact(path.join(loomDir, entry.path));
+    if (content != null) artifacts[entry.path] = content;
   }
 
-  const tree = listTree(loomDir, TREE_MAX_DEPTH);
-  const events = tailEvents(path.join(loomDir, "events.jsonl"), EVENTS_TAIL_LINES);
   const mockupPages = listMockupPages(loomDir);
 
   return {
@@ -309,7 +242,6 @@ function buildView(
     pipeline,
     tree,
     artifacts,
-    events,
     mockupPages,
   };
 }
@@ -318,7 +250,13 @@ export function mountLoomRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   store: MetadataStore,
 ): void {
-  routes["/loom/:projectId/:loomName"] = async (_req, url) => {
+  routes["/loom/:projectId/:loomName"] = async (req, url) => {
+    // Read-only contract (US-009 AC4): any non-GET request returns
+    // 405 — the phase pipeline is owned by /weave and the UI must
+    // not mutate it via this surface.
+    if (req.method !== "GET") {
+      return jsonResponse({ error: "method not allowed" }, 405);
+    }
     // Pathname is /loom/<projectId>/<loomName>; segments[2] = id, [3] = name.
     const segs = url.pathname.split("/").filter((s) => s.length > 0);
     if (segs.length !== 3 || segs[0] !== "loom") {
@@ -364,4 +302,4 @@ function jsonResponse(body: unknown, status: number): Response {
   });
 }
 
-export const __test__ = { parsePipeline, parseScalar, listTree, tailEvents };
+export const __test__ = { parsePipeline, listTree };

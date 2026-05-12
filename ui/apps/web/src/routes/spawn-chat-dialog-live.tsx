@@ -20,7 +20,7 @@ const MODES: Array<{ id: PermissionMode; label: string; subtitle: string; dot: s
   { id: "default", label: "Default", subtitle: "Ask before risky tools", dot: "var(--success)" },
   { id: "plan", label: "Plan", subtitle: "Read-only mode", dot: "var(--info)" },
   { id: "accept-edits", label: "Accept-edits", subtitle: "Auto-approve edits", dot: "var(--warning)" },
-  { id: "trusted-vm", label: "Trusted-VM", subtitle: "Skip all prompts", dot: "var(--destructive)" },
+  { id: "trusted-vm", label: "Trusted-VM", subtitle: "The agent runs with --dangerously-skip-permissions — assumes your local environment (typically a developer VM) as the trust boundary.", dot: "var(--destructive)" },
 ];
 
 interface Props {
@@ -301,9 +301,6 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
                     opt-in
                   </span>
                 </div>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-                  v1: this checkbox is recorded but the chat still runs in the bare cwd.
-                </p>
               </div>
             </label>
           </div>

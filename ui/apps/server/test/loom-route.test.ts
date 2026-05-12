@@ -1,9 +1,11 @@
 /**
  * Tests for /loom/:projectId/:loomName.
  *
- * Seeds a temp project containing `.loom/foo/` with a `.pipeline`
- * file and an `idea.md`; calls the registered handler directly and
- * verifies the parsed pipeline + artifact content come back.
+ * Seeds a temp project containing `.loom/foo/` with a `pipeline.md`
+ * file (the markdown format written by
+ * `orchestrator/lib/pipeline-parser.py`) and a `spec.md`; calls the
+ * registered handler directly and verifies the parsed pipeline +
+ * artifact content come back.
  */
 import { describe, test, expect, afterAll } from "vitest";
 import * as fs from "node:fs";
@@ -36,23 +38,34 @@ function makeLoom(loomName: string, files: Record<string, string>): string {
 }
 
 describe("loom route", () => {
-  test("GET /loom/:projectId/:loomName returns pipeline + idea.md content", async () => {
+  test("GET /loom/:projectId/:loomName returns pipeline + spec.md content", async () => {
     invalidateLoomViewCache();
     const root = makeLoom("foo", {
-      ".pipeline": [
-        "schema-version: 1",
-        "project: foo",
-        "current:",
-        "  phase: build",
-        "  status: in-progress",
-        "approvals:",
-        "  idea-approved: approved",
-        "  plan-approved: approved",
-        "pending: {}",
+      "pipeline.md": [
+        "# Pipeline - foo",
+        "",
+        "## Project name",
+        "```text",
+        "foo",
+        "```",
+        "",
+        "## Current phase",
+        "```text",
+        "build",
+        "```",
+        "",
+        "## Phase status",
+        "```text",
+        "Pending",
+        "```",
+        "",
+        "## Lifecycle state",
+        "```text",
+        "active",
+        "```",
         "",
       ].join("\n"),
-      "idea.md": "# Idea\n\nthis is the idea body",
-      "events.jsonl": '{"ts":1,"msg":"hello"}\n{"ts":2,"msg":"world"}\n',
+      "spec.md": "# Spec\n\nthis is the spec body",
       "mockup/01-foo.html": "<html><body>foo</body></html>",
     });
 
@@ -74,19 +87,18 @@ describe("loom route", () => {
     expect(body.projectId).toBe(proj.id);
     expect(body.loomName).toBe("foo");
     expect(body.pipeline.current.phase).toBe("build");
-    expect(body.pipeline.current.status).toBe("in-progress");
-    expect(body.pipeline.approvals["idea-approved"]).toBe("approved");
-    expect(body.pipeline.approvals["plan-approved"]).toBe("approved");
+    expect(body.pipeline.current.status).toBe("Pending");
 
-    expect(body.artifacts["idea.md"]).toContain("this is the idea body");
+    expect(body.artifacts["spec.md"]).toContain("this is the spec body");
+    expect(body.artifacts["pipeline.md"]).toContain("Current phase");
 
     expect(Array.isArray(body.tree)).toBe(true);
     const treeNames = body.tree.map((t: any) => t.name);
-    expect(treeNames).toContain("idea.md");
+    expect(treeNames).toContain("spec.md");
+    expect(treeNames).toContain("pipeline.md");
     expect(treeNames).toContain("mockup");
 
-    expect(body.events.length).toBe(2);
-    expect(body.events[0]).toEqual({ ts: 1, msg: "hello" });
+    expect(body.events).toBeUndefined();
 
     expect(body.mockupPages).toEqual(["01-foo.html"]);
 
@@ -142,7 +154,7 @@ describe("loom route", () => {
 
   test("caches result within 1s window", async () => {
     invalidateLoomViewCache();
-    const root = makeLoom("c1", { "idea.md": "first" });
+    const root = makeLoom("c1", { "spec.md": "first" });
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({ name: "p", paths: [root] });
     const routes: Record<string, any> = {};
@@ -153,13 +165,13 @@ describe("loom route", () => {
     const r1 = await handler(new Request(url), url);
     expect(r1.status).toBe(200);
     const b1 = await r1.json();
-    expect(b1.artifacts["idea.md"]).toBe("first");
+    expect(b1.artifacts["spec.md"]).toBe("first");
 
     // Mutate on disk; within 1s the cache should still serve the old.
-    fs.writeFileSync(path.join(root, ".loom", "c1", "idea.md"), "second", "utf8");
+    fs.writeFileSync(path.join(root, ".loom", "c1", "spec.md"), "second", "utf8");
     const r2 = await handler(new Request(url), url);
     const b2 = await r2.json();
-    expect(b2.artifacts["idea.md"]).toBe("first");
+    expect(b2.artifacts["spec.md"]).toBe("first");
 
     await store.close();
   });

@@ -163,3 +163,41 @@ without trial-and-error.
 
 Source: `docs/chat-streaming-fixes-seed.md` (the seed used here) +
 `.loom/chat-streaming-fixes/decisions.md` Q01-Q05 question framing.
+
+## 2026-05-12 - loom-ui - Prototype Exploration
+**Skill:** explore-prototype
+**URL:** http://localhost:5173
+**Source scan:** yes (routes + types + backend HTTP/WS API)
+**Pages discovered:** 12 mockup pages + LiveHome (connected & offline) + 1 real chat + LoomViewLive (offline) + New-project dialog = 20 captures
+**User-guided additions:** user-directed Phase 2 — recapture loom-view-live with backend up (blocked: backend was offline mid-crawl), capture more live-chat states (blocked: same), capture sidebar variants (deferred for same reason); user framed analysis as **parity audit of production code**, not re-spec; user requested full Phase 3 source scan including backend HTTP/WS surface.
+**What worked:** Reading App.tsx as the route ground-truth resolved tab-state confusion early (Settings sidebar items render but have no onClick — only Hooks is wired); single-message Phase 3 dispatch to Explore agent produced the full HTTP+WS+types surface in one pass, kept main-agent context lean; tagging buttons with synthetic data-test attributes via puppeteer_evaluate solved click failures on un-keyed React elements.
+**Problems:** Backend went offline partway through crawl (port 7891 not listening; /api/* returns 500); could not capture LoomViewLive with real data, real-chat slash menu, or sidebar dynamic states. Per the skill's no-mutation discipline plus the production-code framing, I declined to start the backend myself.
+**Proposed change:** Add a "Backend liveness preflight" line to Phase 1 setup in `orchestrator/explore-prototype/SKILL.md`: before crawling, hit `/health` (or the equivalent) and abort to Phase 2 to ask the user if the backend is down. Currently the skill verifies the URL is reachable but doesn't distinguish between "vite dev server up, backend down" and "fully up."
+
+## 2026-05-12 - loom-ui-parity-gaps - Spec/Design/Plan process notes
+
+The Spec subagent for this loom could not call `AskUserQuestion`
+directly from the Task-dispatch subagent context (the harness only
+exposes `AskUserQuestion` to the orchestrator's main loop). The
+orchestrator surfaced the foundation + branching question batches on
+the Spec agent's behalf and mirrored answers into `decisions.md`
+answer-slots.
+
+Net effect on this loom: zero — content fidelity preserved across all
+12 questions, every answer landed in its slot with the verbatim quote
+preserved. But the framework body text (`weave/phases/spec/phase.md`
+and the AskUserQuestion docstring) repeatedly implies the Spec
+subagent can call AskUserQuestion directly. That is a capability
+contract the harness may or may not satisfy depending on the dispatch
+context.
+
+Reusable lesson: framework body text should state the dual-mode
+reality. The Spec agent's responsibility is to *produce* the question
+batch (with options + recommendation per the categories.md format);
+who *issues* the AskUserQuestion call (orchestrator or subagent) is a
+harness-level capability dependency. Documenting it removes a class
+of "why didn't the Spec agent just ask?" confusion for future runs.
+
+Source: `.loom/loom-ui-parity-gaps/decisions.md` Q1-Q12 (12 questions
+resolved with full answer-slot fidelity); `quality-review.md` does
+not record any Spec-side gap.

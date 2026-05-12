@@ -119,21 +119,25 @@ describe("T-008 dismiss action + banner conditional render (US-008 AC3)", () => 
     expect(hasGuard).toBe(true);
   });
 
-  test("banner exposes a dismiss control (× / aria-label / close button)", () => {
+  test("error surface exposes a dismiss control (× / aria-label / Snackbar / banner)", () => {
     const src = readFileSync(liveChatPath, "utf8");
     // The dismiss action must be dispatched on click somewhere in the
-    // banner render path. We accept either an inline button onClick
-    // that dispatches the action, or a ChatErrorBanner component with
-    // an `onDismiss` prop.
+    // error surface render path. Accepts either an inline button
+    // onClick → dispatch, an `onDismiss` prop (banner-style), or the
+    // global Snackbar's `onDismiss` callback option (current shape).
     const dispatchesDismiss =
       /dispatch\(\s*\{\s*type:\s*["'](?:dismiss-error|error-dismiss)["']/.test(src) ||
-      /onDismiss\s*=/.test(src);
+      /onDismiss\s*[=:]/.test(src);
     expect(dispatchesDismiss).toBe(true);
-    // Visible affordance: × character, aria-label "Dismiss", or text "Dismiss".
+    // Visible affordance: × literal, aria-label "Dismiss", a
+    // <ChatErrorBanner>, OR routing through the global Snackbar (which
+    // owns the × button in `ui/Snackbar.tsx`).
     const hasAffordance =
       /["']×["']/.test(src) ||
       /aria-label=["']Dismiss/i.test(src) ||
-      /<ChatErrorBanner\b/.test(src);
+      /<ChatErrorBanner\b/.test(src) ||
+      /useSnackbar\b/.test(src) ||
+      /snackbar\.show\b/.test(src);
     expect(hasAffordance).toBe(true);
   });
 });

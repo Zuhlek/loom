@@ -25,13 +25,13 @@ interface Props {
   tasks: Task[] | null;
   open: boolean;
   onToggle: () => void;
-  /** When was the last `tasks-update` received? Used for the header timestamp. */
+  /** When was the last `tasks-update` received? Surfaced inline above the list. */
   lastUpdatedAt: number | null;
 }
 
 const PANEL_WIDTH = 340;
 
-export function TasksPanel({ tasks, open, onToggle, lastUpdatedAt }: Props) {
+export function TasksPanel({ tasks, open, lastUpdatedAt }: Props) {
   if (!open) return null;
 
   return (
@@ -40,43 +40,19 @@ export function TasksPanel({ tasks, open, onToggle, lastUpdatedAt }: Props) {
       className="flex flex-col border-l"
       style={{ width: PANEL_WIDTH, borderColor: "var(--border)", background: "var(--card, #f5f5f5)" }}
     >
-      <header
-        className="flex items-center justify-between px-3 py-2 border-b"
-        style={{ borderColor: "var(--border)" }}
-      >
-        <div className="flex flex-col">
-          <span className="text-xs font-semibold tracking-wider" style={{ color: "var(--foreground)" }}>
-            TASKS
-          </span>
-          <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-            {lastUpdatedAt ? `updated ${formatTimeShort(lastUpdatedAt)}` : "no updates yet"}
-          </span>
-        </div>
-        <button
-          type="button"
-          aria-label="Hide tasks"
-          onClick={onToggle}
-          className="text-xs px-1 py-1 hover:bg-black/5 rounded"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          {"›"}
-        </button>
-      </header>
-
-      <div className="px-3 pt-2 pb-1">
+      <div className="px-3 pt-3 pb-1 flex items-baseline justify-between">
         <span className="text-[10px] font-semibold tracking-wider" style={{ color: "var(--muted-foreground)" }}>
-          STEPS
+          TASKS
+        </span>
+        <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+          {lastUpdatedAt ? `updated ${formatTimeShort(lastUpdatedAt)}` : "no updates yet"}
         </span>
       </div>
 
       <ol className="flex-1 overflow-y-auto px-2 pb-2 list-none">
-        {tasks && tasks.length > 0 ? (
-          tasks.map((t, idx) => <TaskRow key={`${idx}-${t.step}`} task={t} />)
-        ) : (
-          <li className="px-2 py-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
-            No tasks yet. They appear when claude tracks tasks in the chat.
-          </li>
-        )}
+        {tasks && tasks.length > 0
+          ? tasks.map((t, idx) => <TaskRow key={`${idx}-${t.step}`} task={t} />)
+          : null}
       </ol>
     </aside>
   );

@@ -180,9 +180,13 @@ describe("T-003 MessagesTimeline renders WorkingChip below the timeline (US-003 
     expect(hasGate).toBe(true);
   });
 
-  test("<WorkingChip> is rendered AFTER the items.map() loop (sibling row at bottom — ADR-001)", () => {
+  test("<WorkingChip> is rendered AFTER the timeline-rows .map() loop (sibling row at bottom — ADR-001)", () => {
     const src = readFileSync(timelinePath, "utf8");
-    const mapIdx = src.search(/items\.map\(/);
+    // The rendering loop is over `items` directly OR `rows` (the
+    // derived TimelineRow[] used when consecutive tool-only assistant
+    // messages get grouped into a work-group card). The chip must come
+    // AFTER whichever loop the timeline uses so it stays at the bottom.
+    const mapIdx = src.search(/(items|rows)\.map\(/);
     const chipIdx = src.indexOf("<WorkingChip");
     expect(mapIdx).toBeGreaterThan(0);
     expect(chipIdx).toBeGreaterThan(0);

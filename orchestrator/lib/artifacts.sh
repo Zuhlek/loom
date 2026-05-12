@@ -48,7 +48,7 @@ refresh_artifacts() {
         local rel meta kind renderer primary
         rel="${file#"$dir"/}"
         case "$rel" in
-            artifacts.json|events.jsonl|.lock/*|.locks/*|.in-flight/*|*.tmp.*) continue ;;
+            artifacts.json|.lock/*|.locks/*|.in-flight/*|*.tmp.*) continue ;;
         esac
         read -r kind renderer primary <<< "$(_kind_for_path "$rel")"
         jq -cn --arg path "$rel" --arg kind "$kind" --arg renderer "$renderer" --argjson primary "$primary" \

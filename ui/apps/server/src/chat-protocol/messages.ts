@@ -81,12 +81,36 @@ export interface ToolResultSummary {
 
 export type AssistantBlock = AssistantTextBlock | AssistantThinkingBlock | AssistantToolUseBlock;
 
+/**
+ * One image attachment surfaced on a `UserMessageItem` (the post-submit,
+ * timeline-rendered record of what the user sent). Mirrors the inbound
+ * `UserTurnImage` shape on `UserTurnFrame.body.images` byte-for-byte
+ * (per `frames.ts`); the bridge stamps the same array on the appended
+ * `UserMessageItem` so the timeline can render thumbnails without
+ * round-tripping through the SDK content blocks. Optional alt text
+ * mirrors `ToolResultImage` for forward compat.
+ */
+export interface UserMessageImage {
+  /** MIME type, e.g. `"image/png"`. */
+  mediaType: string;
+  /** Base64-encoded image bytes (no `data:` prefix). */
+  dataB64: string;
+  /** Optional source filename — surfaced as `alt` / `title`. */
+  filename?: string;
+}
+
 export interface UserMessageItem {
   kind: "user-message";
   id: ChatItemId;
   turnId: TurnId;
   text: string;
   createdAt: string;
+  /**
+   * Image attachments the user sent with this turn. Absent on legacy
+   * text-only messages and on replayed-from-snapshot items predating
+   * the attachments feature (back-compat per US-007 AC3).
+   */
+  images?: UserMessageImage[];
 }
 
 export interface AssistantMessageItem {
@@ -147,6 +171,26 @@ export type ChatItem =
 
 export type TurnState = "idle" | "running" | "interrupted" | "error";
 
+/**
+ * Session-lifetime resilience state. Orthogonal to `TurnState` (which
+ * tracks the active turn). Drives the recovery banner and the composer's
+ * "buffered" hint while the bridge auto-respawns after an SDK failure.
+ *
+ *   • `active`     — normal operation; SDK query loop is live.
+ *   • `recovering` — SDK loop threw; the bridge is auto-respawning with
+ *                    `resume: sessionId`. User input is buffered into
+ *                    `pendingInput` and replayed when the new query
+ *                    starts iterating. Backoff schedule: 1s, 2s, 4s.
+ *   • `failed`     — auto-respawn exhausted (3 consecutive attempts).
+ *                    The session stays in memory; the client surfaces a
+ *                    "Retry" button that emits `retry-session`.
+ *
+ * The lifecycle replaces the previous "mark chat inert + leave a stale
+ * ChatSession in the map" failure mode, which silently dropped any
+ * subsequent user input. See `claude-session-bridge.ts` `handleSessionFailure`.
+ */
+export type SessionLifecycle = "active" | "recovering" | "failed";
+
 export interface PendingPermission {
   /** Stable id for the permission request — used by the response frame. */
   id: string;
@@ -174,6 +218,18 @@ export interface ChatSnapshot {
   lastError?: string;
   pendingPermission?: PendingPermission | null;
   pendingQuestion?: PendingQuestion | null;
+  /**
+   * Session-lifetime resilience state. Defaults to `"active"` for any
+   * snapshot emitted before the bridge has observed an SDK failure.
+   * Older clients that ignore the field continue to render as before.
+   */
+  lifecycle?: SessionLifecycle;
+  /**
+   * Number of consecutive auto-respawn attempts already made on the
+   * current failure streak. Resets to 0 when the SDK loop runs cleanly.
+   * Surfaced so the recovery banner can show "attempt N of M".
+   */
+  recoveryAttempt?: number;
 }
 
 /**

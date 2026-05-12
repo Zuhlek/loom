@@ -57,9 +57,9 @@ The RETURN schema is no longer a sibling YAML file: it is the fenced `yaml` bloc
    b. Dispatch the matching phase agent in a fresh Task session. The system prompt is the deterministic concatenation of the body and signature files (see "Dispatch concatenation" below).
    c. Ensure return schema compliance: parse the RETURN block from the Task's reply and check it against the fenced `yaml` schema embedded in `phases/<phase>/phase.signature.md` under `## Returns` › `### Return block` (see "Schema-compliance extraction" below). This check is silent — on mismatch, re-dispatch the same agent with the schema mismatch as the rerun instruction (do not surface to the user). See `methods/recovery.md` for redispatch policy.
    d. Surface the rerun-or-continue decision (see below) via AskUserQuestion.
-   e. On continue: update pipeline.md, append events.jsonl, advance phase, loop to (a).
+   e. On continue: update pipeline.md, advance phase, loop to (a).
    f. On rerun: re-dispatch the same phase agent with prior artifacts (+ optional Quality Check findings), loop to (c).
-4. On Review continue: set Lifecycle state = complete, append events.jsonl, report and exit.
+4. On Review continue: set Lifecycle state = complete, report and exit.
 ```
 
 ### Dispatch concatenation
@@ -172,8 +172,7 @@ Re-open the prior phase. The orchestrator handles the transition by:
 
 1. Setting `pipeline.md.Current phase` to the prior phase.
 2. Moving the current phase's artifacts AND any downstream phase artifacts into `.loom/<project>/superseded/<timestamp>/`. The prior phase's artifacts remain in place — the agent treats them as the starting point.
-3. Appending a `phase-revert` event to `events.jsonl` with `from`, `to`, and `superseded-paths`.
-4. Re-dispatching the prior phase agent. The agent reads its own prior artifacts (now the starting point) and may run a Quality Check pass if the user opts in at the new gate.
+3. Re-dispatching the prior phase agent. The agent reads its own prior artifacts (now the starting point) and may run a Quality Check pass if the user opts in at the new gate.
 
 Going back is destructive to downstream artifacts but non-destructive to history — `superseded/<timestamp>/` is preserved indefinitely so the user can recover earlier work if needed.
 

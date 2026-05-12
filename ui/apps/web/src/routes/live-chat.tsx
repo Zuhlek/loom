@@ -10,17 +10,18 @@
  * snapshot so we don't accumulate stale state.
  */
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { Link } from "wouter";
 import clsx from "clsx";
 
+import { AppLayout } from "../components/layout/AppLayout";
 import { LiveSidebar } from "../components/LiveSidebar";
 import { TasksPanel, type Task } from "../components/TasksPanel";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { PermissionRequestInline } from "../components/chat/PermissionRequestInline";
 import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker";
-import { ChatErrorBanner } from "../components/chat/ChatErrorBanner";
-import { getChat, wsUrl, type ApiChat } from "../lib/api";
+import { useSnackbar } from "../components/ui/Snackbar";
+import { SessionRecoveryBanner } from "../components/chat/SessionRecoveryBanner";
+import { getChat, getSlashCommands, wsUrl, type ApiChat, type SlashCommandEntry } from "../lib/api";
 import type {
   ChatItem,
   ClientFrame,
@@ -28,7 +29,9 @@ import type {
   PendingQuestion,
   PermissionMode,
   ServerFrame,
+  SessionLifecycle,
   TurnState,
+  UserTurnImage,
 } from "../lib/chat-types";
 import type { ComposerQueuePriority } from "../components/chat/ChatComposer";
 
@@ -101,6 +104,17 @@ interface ChatState {
    * on any transition out of `"running"`. See ADR-005.
    */
   activeTurnStartedAt: number | null;
+  /**
+   * Session-lifetime resilience state mirrored from the server bridge.
+   * Drives `SessionRecoveryBanner` and gates the legacy
+   * `ChatErrorBanner` (suppressed during recovery to avoid stacking).
+   * Defaults to `"active"`; the server emits `session-state` frames
+   * (or snapshot fields) when the SDK loop crashes and the bridge
+   * starts auto-respawning.
+   */
+  lifecycle: SessionLifecycle;
+  /** Auto-respawn counter for the current failure streak. */
+  recoveryAttempt: number;
 }
 
 const EMPTY_STATE: ChatState = {
@@ -123,6 +137,8 @@ const EMPTY_STATE: ChatState = {
   // `null` because EMPTY_STATE represents the pre-attach state where
   // no turn is running.
   activeTurnStartedAt: null,
+  lifecycle: "active",
+  recoveryAttempt: 0,
 };
 
 type ChatAction =
@@ -136,7 +152,13 @@ type ChatAction =
   | { type: "permission-mode"; mode: PermissionMode }
   | { type: "queue-priority"; priority: ComposerQueuePriority }
   | { type: "error-frame"; message: string }
-  | { type: "dismiss-error" };
+  | { type: "dismiss-error" }
+  | {
+      type: "session-state";
+      lifecycle: SessionLifecycle;
+      recoveryAttempt?: number;
+      lastError?: string;
+    };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -179,6 +201,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         permissionMode: state.permissionMode,
         queuePriority: state.queuePriority,
         activeTurnStartedAt,
+        lifecycle: action.payload.body.lifecycle ?? "active",
+        recoveryAttempt: action.payload.body.recoveryAttempt ?? 0,
       };
     }
     case "item-append": {
@@ -260,6 +284,21 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       if (!state.error || state.error.dismissed) return state;
       return { ...state, error: { ...state.error, dismissed: true } };
     }
+    case "session-state": {
+      // Server announced an `active ↔ recovering ↔ failed` transition.
+      // Drives the `SessionRecoveryBanner`. When we transition BACK to
+      // active (auto-respawn succeeded), clear the stale legacy
+      // error-banner state so we don't stack notices — the recovery
+      // banner itself goes away naturally as `lifecycle === "active"`.
+      const nextError =
+        action.lifecycle === "active" ? null : state.error;
+      return {
+        ...state,
+        lifecycle: action.lifecycle,
+        recoveryAttempt: action.recoveryAttempt ?? state.recoveryAttempt,
+        error: nextError,
+      };
+    }
   }
 }
 
@@ -272,6 +311,8 @@ export function LiveChatRoute({ chatId }: Props) {
   const [tasksUpdatedAt, setTasksUpdatedAt] = useState<number | null>(null);
   const [tasksOpen, setTasksOpen] = useState(false);
   const tasksAutoOpenedRef = useRef(false);
+  const [slashCommands, setSlashCommands] = useState<SlashCommandEntry[]>([]);
+  const snackbar = useSnackbar();
 
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(0);
@@ -285,6 +326,19 @@ export function LiveChatRoute({ chatId }: Props) {
       .catch((err) => { if (alive) setChatErr(err?.message ?? "load failed"); });
     return () => { alive = false; };
   }, [chatId]);
+
+  // Fetch the slash-command catalog (user + project + plugin scope)
+  // once the chat row resolves, so the composer's `/`-trigger menu can
+  // surface project-scoped commands keyed off the chat's cwd. The
+  // catalog is read-only and small; we don't re-fetch on tab focus.
+  useEffect(() => {
+    if (!chat?.cwd) return;
+    let alive = true;
+    getSlashCommands(chat.cwd)
+      .then((r) => { if (alive) setSlashCommands(r.commands ?? []); })
+      .catch(() => { /* non-fatal — the composer just hides its menu */ });
+    return () => { alive = false; };
+  }, [chat?.cwd]);
 
   // (Re)connect the WebSocket on chatId change.
   useEffect(() => {
@@ -341,6 +395,14 @@ export function LiveChatRoute({ chatId }: Props) {
           case "pending-question":
             dispatch({ type: "pending-question", pending: frame.body });
             break;
+          case "session-state":
+            dispatch({
+              type: "session-state",
+              lifecycle: frame.body.lifecycle,
+              recoveryAttempt: frame.body.recoveryAttempt,
+              lastError: frame.body.lastError,
+            });
+            break;
           case "tasks-update": {
             const incoming = frame.body?.tasks ?? null;
             if (incoming) {
@@ -394,13 +456,16 @@ export function LiveChatRoute({ chatId }: Props) {
   }, [chatId]);
 
   const submitTurn = useCallback(
-    (text: string, priority: ComposerQueuePriority) => {
+    (text: string, priority: ComposerQueuePriority, images: UserTurnImage[]) => {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== ws.OPEN) return;
-      // Omit the `priority` field on the wire when it's the default
-      // ("now") so we stay byte-compatible with legacy emitters; the
-      // server treats an absent priority as "now" per ADR-004.
-      const body = priority === "now" ? { text } : { text, priority };
+      // Construct the wire body incrementally so optional fields are
+      // absent (not undefined) when not in use — the server treats
+      // missing fields as their defaults (priority → "now", images →
+      // empty array) per ADR-004.
+      const body: ClientFrame extends { kind: "user-turn"; body: infer B } ? B : never = { text };
+      if (priority !== "now") body.priority = priority;
+      if (images.length > 0) body.images = images;
       sendFrame(ws, { kind: "user-turn", "chat-id": chatId, body });
     },
     [chatId],
@@ -424,10 +489,52 @@ export function LiveChatRoute({ chatId }: Props) {
     dispatch({ type: "queue-priority", priority });
   }, []);
 
-  // US-008 AC3. Wire ChatErrorBanner's dismiss button to the reducer.
+  // US-008 AC3. Snackbar dismiss → flip the reducer's dismissed flag so
+  // the same message doesn't re-raise on subsequent renders.
   const dismissError = useCallback(() => {
     dispatch({ type: "dismiss-error" });
   }, []);
+
+  // Surface session errors as a global snackbar instead of a stacked
+  // banner. Conditions mirror the legacy ChatErrorBanner gate:
+  //   - lifecycle === "active" (SessionRecoveryBanner owns the
+  //     recovering/failed states)
+  //   - turnState === "error" (banner is suppressed once the bridge
+  //     has moved past the error — recovery succeeded)
+  //   - error is set and not user-dismissed
+  // Keyed by chatId so navigating to another chat doesn't carry the
+  // error forward; updating the same chat's snackbar replaces it in
+  // place instead of stacking.
+  const errorMessage = state.error && !state.error.dismissed ? state.error.message : null;
+  const showError =
+    state.lifecycle === "active" && state.turnState === "error" && errorMessage !== null;
+  const errorSnackbarKey = `chat-error:${chatId}`;
+  useEffect(() => {
+    if (showError) {
+      snackbar.show({
+        key: errorSnackbarKey,
+        type: "error",
+        message: errorMessage!,
+        onDismiss: dismissError,
+      });
+    } else {
+      snackbar.dismissByKey(errorSnackbarKey);
+    }
+    return () => {
+      snackbar.dismissByKey(errorSnackbarKey);
+    };
+  }, [showError, errorMessage, errorSnackbarKey, dismissError, snackbar]);
+
+  // SessionRecoveryBanner's Retry button. Fires after the bridge has
+  // exhausted its auto-respawn schedule (lifecycle === "failed").
+  // No-op when the socket isn't open — the user can try again once
+  // the WS reconnects (we also handle reconnect via the outer retry
+  // loop).
+  const retrySession = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== ws.OPEN) return;
+    sendFrame(ws, { kind: "retry-session", "chat-id": chatId });
+  }, [chatId]);
 
   const interruptTurn = useCallback(() => {
     const ws = wsRef.current;
@@ -540,44 +647,45 @@ export function LiveChatRoute({ chatId }: Props) {
   const effectiveQueuePriority: ComposerQueuePriority =
     mode === "queue" ? state.queuePriority : queueModeDefault;
 
-  return (
-    <div className="h-screen flex">
-      <LiveSidebar />
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="border-b px-4 py-2.5 flex items-center gap-3" style={{ borderColor: "var(--border)" }}>
-          <Link href="/">
-            <button className="text-xs hover:underline" style={{ color: "var(--muted-foreground)" }}>
-              ← Home
-            </button>
-          </Link>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{chat ? chat.cwd : chatId}</p>
-            {chatErr ? (
-              <p className="text-[10px]" style={{ color: "var(--destructive)" }}>{chatErr}</p>
-            ) : (
-              <p className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-                {chat ? `${chat.permission_mode} · ${chat.worktree_mode}` : "loading..."}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            data-testid="tasks-toggle"
-            onClick={() => setTasksOpen((v) => !v)}
-            className="text-[10px] font-mono px-1.5 py-0.5 rounded hover:bg-black/5 border"
-            style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-            title={tasksOpen ? "Hide tasks" : "Show tasks"}
-          >
-            Tasks{tasks && tasks.length > 0 ? ` (${tasks.length})` : ""}
-          </button>
-          <span
-            className={clsx("text-[10px] font-mono px-1.5 py-0.5 rounded", connBg(conn))}
-            title={`websocket ${conn}`}
-          >
-            {conn}
-          </span>
-        </header>
+  const topBar = (
+    <>
+      <div className="flex-1 min-w-0">
+        {chatErr ? (
+          <p className="text-[10px] truncate" style={{ color: "var(--destructive)" }}>{chatErr}</p>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        data-testid="tasks-toggle"
+        onClick={() => setTasksOpen((v) => !v)}
+        className="text-[10px] font-mono px-1.5 py-0.5 rounded hover:bg-black/5 border"
+        style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+        title={tasksOpen ? "Hide tasks" : "Show tasks"}
+      >
+        Tasks{tasks && tasks.length > 0 ? ` (${tasks.length})` : ""}
+      </button>
+      <span
+        className={clsx("text-[10px] font-mono px-1.5 py-0.5 rounded", connBg(conn))}
+        title={`websocket ${conn}`}
+      >
+        {conn}
+      </span>
+    </>
+  );
 
+  return (
+    <AppLayout
+      topBar={topBar}
+      leftDrawer={<LiveSidebar />}
+      rightDrawer={
+        <TasksPanel
+          tasks={tasks}
+          open={tasksOpen}
+          onToggle={() => setTasksOpen((v) => !v)}
+          lastUpdatedAt={tasksUpdatedAt}
+        />
+      }
+    >
         <MessagesTimeline
           items={state.items}
           turnState={state.turnState}
@@ -586,14 +694,24 @@ export function LiveChatRoute({ chatId }: Props) {
           onPlanReject={rejectPlanProposal}
         />
 
-        {state.error && !state.error.dismissed && (
-          <ChatErrorBanner message={state.error.message} onDismiss={dismissError} />
+        {state.lifecycle !== "active" && (
+          <SessionRecoveryBanner
+            lifecycle={state.lifecycle}
+            recoveryAttempt={state.recoveryAttempt}
+            maxAttempts={3}
+            lastError={state.error?.message ?? null}
+            onRetry={retrySession}
+          />
         )}
+
+        {/* Transient chat errors now surface via the global Snackbar
+            (see the `snackbar.show` effect above). SessionRecoveryBanner
+            still owns the recovering/failed lifecycle banner since it
+            has a structured Retry button that doesn't fit a toast. */}
 
         {pp && (
           <div className="px-5 pb-3">
             <PermissionRequestInline
-              tool={pp.toolName}
               prompt={pp.title ?? `Allow ${pp.toolName}?`}
               args={stringifyArgs(pp.input)}
               reason={pp.description}
@@ -628,15 +746,9 @@ export function LiveChatRoute({ chatId }: Props) {
           queuePriority={effectiveQueuePriority}
           onQueuePriorityChange={changeQueuePriority}
           isInterrupted={state.turnState === "interrupted"}
+          availableSlashCommands={slashCommands}
         />
-      </main>
-      <TasksPanel
-        tasks={tasks}
-        open={tasksOpen}
-        onToggle={() => setTasksOpen((v) => !v)}
-        lastUpdatedAt={tasksUpdatedAt}
-      />
-    </div>
+    </AppLayout>
   );
 }
 

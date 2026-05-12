@@ -12,14 +12,23 @@ import { useState } from "react";
 import { useSidebarState } from "../lib/sidebar-state";
 import { SpawnChatModalLive } from "../routes/spawn-chat-dialog-live";
 import { NewProjectDialog } from "./NewProjectDialog";
+import { ChatContextMenu } from "./sidebar/ChatContextMenu";
 import {
   deleteChat,
   deleteProject,
+  forkChat,
+  handoffChat,
   type ApiChat,
   type ApiProject,
   type SidebarLoomEntry,
 } from "../lib/api";
 import clsx from "clsx";
+
+interface ContextMenuState {
+  chat: ApiChat;
+  x: number;
+  y: number;
+}
 
 const DOT_FOR_MODE: Record<ApiChat["permission_mode"], string> = {
   default: "bg-emerald-500",
@@ -33,10 +42,41 @@ export function LiveSidebar() {
   const [location, navigate] = useLocation();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [spawnFor, setSpawnFor] = useState<ApiProject | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [detachedIds, setDetachedIds] = useState<Set<string>>(() => new Set());
 
   const groups = state?.groups ?? [];
   const unassigned = state?.unassigned ?? [];
   const empty = !state || (groups.length === 0 && unassigned.length === 0);
+
+  const onContextMenu = (chat: ApiChat, evt: React.MouseEvent) => {
+    evt.preventDefault();
+    setContextMenu({ chat, x: evt.clientX, y: evt.clientY });
+  };
+
+  const onHandoff = async (chat: ApiChat) => {
+    setContextMenu(null);
+    try {
+      await handoffChat(chat.id);
+      setDetachedIds((prev) => {
+        const next = new Set(prev);
+        next.add(chat.id);
+        return next;
+      });
+    } catch (err) {
+      console.warn("[loom] handoffChat failed", err);
+    }
+  };
+
+  const onFork = async (chat: ApiChat) => {
+    setContextMenu(null);
+    try {
+      await forkChat(chat.id);
+      await refresh();
+    } catch (err) {
+      console.warn("[loom] forkChat failed", err);
+    }
+  };
 
   const onDelete = async (chatId: string) => {
     try {
@@ -71,28 +111,7 @@ export function LiveSidebar() {
       className="w-64 shrink-0 flex flex-col border-r"
       style={{ borderColor: "var(--border)", background: "var(--card)" }}
     >
-      {/* Branding header */}
-      <div className="flex items-center justify-between px-3 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-        <Link href="/" className="flex items-center gap-2 cursor-pointer">
-          <svg viewBox="0 0 24 24" fill="currentColor" className="size-6" style={{ color: "var(--primary)" }} aria-hidden>
-            <path d="M3 6 C 6 4, 9 8, 12 6 S 18 4, 21 6 L 21 18 C 18 16, 15 20, 12 18 S 6 16, 3 18 Z" />
-          </svg>
-          <span className="text-sm font-medium">loom</span>
-        </Link>
-        <button
-          onClick={() => setNewProjectOpen(true)}
-          className="size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]"
-          style={{ color: "var(--muted-foreground)" }}
-          aria-label="New project"
-          title="New project"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-1.5 py-2">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-2">
         {/* Projects + chats section */}
         <div className="px-1.5 pt-1 pb-1.5 flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-[0.12em] font-medium" style={{ color: "var(--muted-foreground)" }}>
@@ -109,16 +128,7 @@ export function LiveSidebar() {
           </button>
         </div>
 
-        {empty ? (
-          <div className="px-2 py-3 mx-1.5 rounded-md border border-dashed text-center" style={{ borderColor: "var(--border)" }}>
-            <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
-              No projects yet.
-            </p>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-              Create one to begin.
-            </p>
-          </div>
-        ) : (
+        {empty ? null : (
           <>
             {groups.map((g) => (
               <ProjectGroup
@@ -129,6 +139,8 @@ export function LiveSidebar() {
                 onDelete={onDelete}
                 onSpawnChat={onSpawnChat}
                 onDeleteProject={onDeleteProject}
+                onContextMenu={onContextMenu}
+                detachedIds={detachedIds}
               />
             ))}
             {unassigned.length > 0 ? (
@@ -145,6 +157,8 @@ export function LiveSidebar() {
                     chat={c}
                     active={location === `/chat/${c.id}`}
                     onDelete={onDelete}
+                    onContextMenu={onContextMenu}
+                    detached={detachedIds.has(c.id)}
                   />
                 ))}
               </div>
@@ -179,16 +193,7 @@ export function LiveSidebar() {
                 <LoomProjectGroup key={g.project.id} project={g.project} looms={g.looms} />
               ))}
           </div>
-        ) : (
-          <div className="px-2 py-3 mx-1.5 rounded-md border border-dashed text-center" style={{ borderColor: "var(--border)" }}>
-            <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
-              No looms yet.
-            </p>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-              Run <code className="font-mono">/weave</code> in any chat.
-            </p>
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* Footer */}
@@ -206,21 +211,6 @@ export function LiveSidebar() {
             </svg>
           </button>
         </Link>
-        {error ? (
-          <>
-            <span className="size-1.5 rounded-full bg-red-500" />
-            <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-              backend offline
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="size-1.5 rounded-full bg-emerald-500" />
-            <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-              connected
-            </span>
-          </>
-        )}
       </div>
       {newProjectOpen ? (
         <NewProjectDialog
@@ -229,6 +219,15 @@ export function LiveSidebar() {
         />
       ) : null}
       {spawnFor ? <SpawnChatModalLive onClose={() => setSpawnFor(null)} project={spawnFor} /> : null}
+      {contextMenu ? (
+        <ChatContextMenu
+          chat={contextMenu.chat}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={() => setContextMenu(null)}
+          onHandoff={onHandoff}
+          onFork={onFork}
+        />
+      ) : null}
     </aside>
   );
 }
@@ -240,6 +239,8 @@ function ProjectGroup({
   onDelete,
   onSpawnChat,
   onDeleteProject,
+  onContextMenu,
+  detachedIds,
 }: {
   project: ApiProject;
   chats: ApiChat[];
@@ -247,6 +248,8 @@ function ProjectGroup({
   onDelete: (id: string) => void | Promise<void>;
   onSpawnChat: (project: ApiProject) => void;
   onDeleteProject: (project: ApiProject, deletedChatIds: string[]) => void | Promise<void>;
+  onContextMenu: (chat: ApiChat, evt: React.MouseEvent) => void;
+  detachedIds: Set<string>;
 }) {
   const [confirming, setConfirming] = useState(false);
   return (
@@ -335,6 +338,8 @@ function ProjectGroup({
           chat={c}
           active={location === `/chat/${c.id}`}
           onDelete={onDelete}
+          onContextMenu={onContextMenu}
+          detached={detachedIds.has(c.id)}
         />
       ))}
     </div>
@@ -384,10 +389,14 @@ function ChatLink({
   chat,
   active,
   onDelete,
+  onContextMenu,
+  detached,
 }: {
   chat: ApiChat;
   active: boolean;
   onDelete: (id: string) => void | Promise<void>;
+  onContextMenu: (chat: ApiChat, evt: React.MouseEvent) => void;
+  detached: boolean;
 }) {
   const label = chat.cwd.split("/").filter(Boolean).slice(-1)[0] ?? chat.cwd;
   const dot = DOT_FOR_MODE[chat.permission_mode] ?? "bg-emerald-500";
@@ -399,10 +408,15 @@ function ChatLink({
         active ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]",
       )}
       title={`${chat.cwd} · ${chat.permission_mode}${chat.inert ? " · inert" : ""}`}
+      onContextMenu={(evt) => onContextMenu(chat, evt)}
     >
       <Link href={`/chat/${chat.id}`} className="flex-1 min-w-0 overflow-hidden">
         <div className="flex items-center gap-1.5 cursor-pointer min-w-0">
-          <span className={clsx("size-1.5 rounded-full shrink-0", dot)} />
+          {detached ? (
+            <span className="text-[10px] text-[var(--muted-foreground)] font-mono shrink-0" title="detached">↗</span>
+          ) : (
+            <span className={clsx("size-1.5 rounded-full shrink-0", dot)} />
+          )}
           <span className="flex-1 min-w-0 truncate">{label}</span>
           {chat.inert ? <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">·z</span> : null}
           {chat.worktree_mode === "worktree" ? <span className="text-[10px] text-[var(--muted-foreground)] font-mono shrink-0">⎇</span> : null}

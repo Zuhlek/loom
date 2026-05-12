@@ -135,6 +135,12 @@ function makeStubStore(): MetadataStore {
       markActive: fail,
       markInert: fail,
     },
+    chatItems: {
+      list: () => [],
+      append: () => {},
+      update: () => {},
+      clear: () => {},
+    },
   } as unknown as MetadataStore;
 }
 
@@ -164,14 +170,20 @@ describe("ClaudeSessionBridge.handleCanUseTool — AskUserQuestion branch (US-00
     const session = bridge.__test__sessions().get("chat-q1")!;
     session.clients.add({ send: (text: string) => sent.push(text) });
 
+    // SDK shape: { questions: [{ question, header, options: [{label, description}], multiSelect }] }
+    // Options have NO `id` field — the bridge synthesizes one from label+index.
     const input = {
-      question: "Pick a color",
-      options: [
-        { id: "red", label: "Red" },
-        { id: "blue", label: "Blue" },
+      questions: [
+        {
+          question: "Pick a color",
+          header: "Color",
+          options: [
+            { label: "Red", description: "rojo" },
+            { label: "Blue", description: "azul" },
+          ],
+          multiSelect: false,
+        },
       ],
-      multiSelect: false,
-      header: "Color selection",
     };
 
     // Invoke the bridge's canUseTool wiring synchronously; the SDK gets
@@ -201,18 +213,24 @@ describe("ClaudeSessionBridge.handleCanUseTool — AskUserQuestion branch (US-00
     expect(kinds).toContain("pending-question");
     expect(kinds).not.toContain("pending-permission");
 
-    // Body carries the parsed question + options.
+    // Body carries the parsed question + options. The bridge synthesizes
+    // ids since the SDK only sends labels; we assert by label.
     const pendingQuestionFrame = sent
       .map((s) => JSON.parse(s) as { kind: string; body: PendingQuestion | null })
       .find((f) => f.kind === "pending-question")!;
     expect(pendingQuestionFrame.body).not.toBeNull();
     expect(pendingQuestionFrame.body!.question).toBe("Pick a color");
-    expect(pendingQuestionFrame.body!.options).toEqual(input.options);
+    expect(pendingQuestionFrame.body!.options.map((o) => o.label)).toEqual([
+      "Red",
+      "Blue",
+    ]);
+    expect(pendingQuestionFrame.body!.options.every((o) => typeof o.id === "string" && o.id.length > 0)).toBe(true);
     expect(pendingQuestionFrame.body!.multiSelect).toBe(false);
 
     // Drain the dangling promise to keep vitest happy.
+    const firstOptId = pendingQuestionFrame.body!.options[0]!.id;
     bridge.respondToQuestion("chat-q1", pendingQuestionFrame.body!.id, {
-      answers: ["red"],
+      answers: [firstOptId],
     });
     return promise;
   });
@@ -228,12 +246,17 @@ describe("ClaudeSessionBridge.handleCanUseTool — AskUserQuestion branch (US-00
       "chat-q2",
       "AskUserQuestion",
       {
-        question: "Pick all",
-        options: [
-          { id: "a", label: "A" },
-          { id: "b", label: "B" },
+        questions: [
+          {
+            question: "Pick all",
+            header: "All",
+            options: [
+              { label: "A", description: "a" },
+              { label: "B", description: "b" },
+            ],
+            multiSelect: true,
+          },
         ],
-        multiSelect: true,
       },
       makeCtx("tool-use-2"),
     );
@@ -243,7 +266,8 @@ describe("ClaudeSessionBridge.handleCanUseTool — AskUserQuestion branch (US-00
       .find((f) => f.kind === "pending-question")!;
     expect(frame.body!.multiSelect).toBe(true);
 
-    bridge.respondToQuestion("chat-q2", frame.body!.id, { answers: ["a", "b"] });
+    const ids = frame.body!.options.map((o) => o.id);
+    bridge.respondToQuestion("chat-q2", frame.body!.id, { answers: ids });
     return promise;
   });
 });
@@ -259,10 +283,15 @@ describe("ClaudeSessionBridge.respondToQuestion (US-001 AC5)", () => {
       "chat-q3",
       "AskUserQuestion",
       {
-        question: "Choose",
-        options: [
-          { id: "yes", label: "Yes" },
-          { id: "no", label: "No" },
+        questions: [
+          {
+            question: "Choose",
+            header: "Choice",
+            options: [
+              { label: "Yes", description: "y" },
+              { label: "No", description: "n" },
+            ],
+          },
         ],
       },
       makeCtx("tool-use-3"),
@@ -272,7 +301,7 @@ describe("ClaudeSessionBridge.respondToQuestion (US-001 AC5)", () => {
     expect(pending).not.toBeNull();
 
     bridge.respondToQuestion("chat-q3", pending.pending.id, {
-      answers: ["yes"],
+      answers: [pending.pending.options[0]!.id],
     });
 
     const result = (await promise) as PermissionResult;
@@ -290,20 +319,25 @@ describe("ClaudeSessionBridge.respondToQuestion (US-001 AC5)", () => {
       "chat-q4",
       "AskUserQuestion",
       {
-        question: "Pick all",
-        options: [
-          { id: "a", label: "A" },
-          { id: "b", label: "B" },
-          { id: "c", label: "C" },
+        questions: [
+          {
+            question: "Pick all",
+            header: "All",
+            options: [
+              { label: "A", description: "a" },
+              { label: "B", description: "b" },
+              { label: "C", description: "c" },
+            ],
+            multiSelect: true,
+          },
         ],
-        multiSelect: true,
       },
       makeCtx("tool-use-4"),
     );
 
     const pending = session.pendingQuestion!;
     bridge.respondToQuestion("chat-q4", pending.pending.id, {
-      answers: ["a", "c"],
+      answers: [pending.pending.options[0]!.id, pending.pending.options[2]!.id],
       otherText: undefined,
     });
 
@@ -326,10 +360,15 @@ describe("ClaudeSessionBridge.respondToQuestion (US-001 AC5)", () => {
       "chat-q5",
       "AskUserQuestion",
       {
-        question: "Pick or write",
-        options: [
-          { id: "yes", label: "Yes" },
-          { id: "no", label: "No" },
+        questions: [
+          {
+            question: "Pick or write",
+            header: "Pick",
+            options: [
+              { label: "Yes", description: "y" },
+              { label: "No", description: "n" },
+            ],
+          },
         ],
       },
       makeCtx("tool-use-5"),
@@ -361,14 +400,22 @@ describe("ClaudeSessionBridge.respondToQuestion (US-001 AC5)", () => {
       "chat-q6",
       "AskUserQuestion",
       {
-        question: "Pick",
-        options: [{ id: "y", label: "Y" }],
+        questions: [
+          {
+            question: "Pick",
+            header: "Pick",
+            options: [
+              { label: "Y", description: "y" },
+              { label: "N", description: "n" },
+            ],
+          },
+        ],
       },
       makeCtx("tool-use-6"),
     );
 
     // Mismatched id — should NOT resolve the pending promise.
-    bridge.respondToQuestion("chat-q6", "wrong-id", { answers: ["y"] });
+    bridge.respondToQuestion("chat-q6", "wrong-id", { answers: ["whatever"] });
 
     // Verify the original promise is still pending by racing it against
     // a microtask resolve.
@@ -380,7 +427,9 @@ describe("ClaudeSessionBridge.respondToQuestion (US-001 AC5)", () => {
 
     // Cleanup so we don't leak the unresolved promise.
     const id = session.pendingQuestion!.pending.id;
-    bridge.respondToQuestion("chat-q6", id, { answers: ["y"] });
+    bridge.respondToQuestion("chat-q6", id, {
+      answers: [session.pendingQuestion!.pending.options[0]!.id],
+    });
     await promise;
   });
 });

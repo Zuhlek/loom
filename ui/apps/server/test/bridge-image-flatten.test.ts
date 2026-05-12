@@ -59,6 +59,12 @@ function makeStubStore(): MetadataStore {
       markActive: fail,
       markInert: fail,
     },
+    chatItems: {
+      list: () => [],
+      append: () => {},
+      update: () => {},
+      clear: () => {},
+    },
   } as unknown as MetadataStore;
 }
 

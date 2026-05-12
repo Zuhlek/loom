@@ -98,11 +98,11 @@ export function AskUserQuestionPicker(props: AskUserQuestionPickerProps) {
       style={{ borderColor: "var(--info)", background: "rgba(59,130,246,0.04)" }}
     >
       <div
-        className="px-4 py-3 flex items-start gap-2.5 border-b"
+        className="px-4 py-3 flex items-center gap-2.5 border-b"
         style={{ borderColor: "rgba(59,130,246,0.25)" }}
       >
         <div
-          className="size-6 rounded-md grid place-items-center mt-0.5"
+          className="size-6 rounded-md grid place-items-center shrink-0"
           style={{ background: "rgba(59,130,246,0.18)" }}
         >
           <svg
@@ -117,24 +117,22 @@ export function AskUserQuestionPicker(props: AskUserQuestionPickerProps) {
             <path d="M9.1 9a3 3 0 015.8 1c0 2-3 3-3 3M12 17h.01" />
           </svg>
         </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 flex items-center gap-2 flex-wrap min-w-0">
+          <span
+            className="text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded shrink-0"
+            style={{ background: "rgba(59,130,246,0.18)", color: "var(--info-foreground)" }}
+          >
+            AskUserQuestion
+          </span>
+          {multiSelect && (
             <span
-              className="text-[10px] uppercase tracking-wide font-medium px-1.5 py-0.5 rounded"
-              style={{ background: "rgba(59,130,246,0.18)", color: "var(--info-foreground)" }}
+              className="text-[9px] font-mono px-1 rounded shrink-0"
+              style={{ background: "rgba(59,130,246,0.12)", color: "var(--muted-foreground)" }}
             >
-              AskUserQuestion
+              multi-select
             </span>
-            {multiSelect && (
-              <span
-                className="text-[9px] font-mono px-1 rounded"
-                style={{ background: "rgba(59,130,246,0.12)", color: "var(--muted-foreground)" }}
-              >
-                multi-select
-              </span>
-            )}
-          </div>
-          <p className="text-sm font-medium mt-0.5">{question}</p>
+          )}
+          <p className="text-sm font-medium">{question}</p>
         </div>
       </div>
 
@@ -262,19 +260,13 @@ export function AskUserQuestionPicker(props: AskUserQuestionPickerProps) {
       </div>
 
       {showFreeformInput && (
-        <div className="px-4 pb-3 pt-1 border-t" style={{ borderColor: "var(--border)" }}>
-          <label
-            className="text-[10px] uppercase tracking-wide font-medium"
-            style={{ color: "var(--muted-foreground)" }}
-          >
-            Or write your own answer
-          </label>
+        <div className="px-4 pb-3 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
           <textarea
             rows={2}
             placeholder="Type your answer..."
             value={otherText}
             onChange={(e) => setOtherText(e.target.value)}
-            className="mt-1 w-full px-2.5 py-1.5 rounded-md border bg-white text-sm outline-none resize-none"
+            className="w-full px-2.5 py-1.5 rounded-md border bg-white text-sm outline-none resize-none"
             style={{ borderColor: "var(--border)" }}
             data-testid="ask-user-question-other-input"
           />

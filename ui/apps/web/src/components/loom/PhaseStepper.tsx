@@ -1,6 +1,6 @@
 import clsx from "clsx";
 
-export type PhaseId = "idea" | "design" | "plan" | "build" | "review";
+export type PhaseId = "spec" | "design" | "plan" | "build" | "review";
 
 export interface Phase {
   id: PhaseId;
@@ -10,7 +10,7 @@ export interface Phase {
 }
 
 const PHASES: Phase[] = [
-  { id: "idea",   num: "1", label: "Idea",   state: "todo" },
+  { id: "spec",   num: "1", label: "Spec",   state: "todo" },
   { id: "design", num: "2", label: "Design", state: "todo" },
   { id: "plan",   num: "3", label: "Plan",   state: "todo" },
   { id: "build",  num: "4", label: "Build",  state: "todo" },

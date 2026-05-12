@@ -2,22 +2,25 @@
  * MessagesTimeline — renders the structured chat items emitted by
  * `ClaudeSessionBridge`. One row per item:
  *
- *   - `user-message`     → ChatMessage with the user bubble
- *   - `assistant-message` → ChatMessage; each block renders as text /
- *                          thinking / ToolUseCard
+ *   - `user-message`     → right-aligned bubble (user-bg token)
+ *   - `assistant-message` → left-aligned: text blocks grouped into
+ *                          WhatsApp-style bubble(s); tool_use cards
+ *                          and `<details>` thinking blocks render
+ *                          outside the bubble.
  *   - `system-notice`    → muted divider line
  *
  * Auto-scrolls to the bottom on new items unless the user has scrolled
  * away (matches t3code's MessagesTimeline behavior).
  */
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 
-import { ChatMessage } from "./ChatMessages";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ToolUseCard } from "./ToolUseCard";
 import { ProposedPlanCard } from "./ProposedPlanCard";
 import { WorkingChip } from "./WorkingChip";
+import { WorkGroupCard } from "./WorkGroupCard";
+import { deriveTimelineRows, type TimelineRow } from "../../lib/timeline-rows";
 import type {
   AssistantBlock,
   AssistantMessageItem,
@@ -58,7 +61,37 @@ export function MessagesTimeline({
   onPlanReject,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const innerRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
+  // Mirror of `stickToBottomRef` exposed as state so the floating
+  // "jump to bottom" chevron can react to scroll position. We keep
+  // the ref too because the auto-scroll effect needs to read the
+  // latest value without re-running on every scroll tick.
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (behavior === "smooth") {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, []);
+
+  // On open, the timeline must land at the bottom — not the top — so
+  // the user sees the most recent messages without scrolling. We do
+  // this synchronously before paint (useLayoutEffect) AND on the next
+  // frame, because markdown / code blocks can grow the scrollHeight
+  // after the initial layout pass.
+  useLayoutEffect(() => {
+    scrollToBottom("auto");
+    const raf = requestAnimationFrame(() => scrollToBottom("auto"));
+    return () => cancelAnimationFrame(raf);
+    // Mount-only — subsequent updates are handled by the items effect
+    // and the ResizeObserver below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Track whether the user has scrolled away from the bottom; only
   // auto-scroll when they're already near the floor.
@@ -67,7 +100,9 @@ export function MessagesTimeline({
     if (!el) return;
     const onScroll = () => {
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      stickToBottomRef.current = distance < 64;
+      const atBottom = distance < 64;
+      stickToBottomRef.current = atBottom;
+      setIsAtBottom(atBottom);
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
@@ -75,55 +110,129 @@ export function MessagesTimeline({
 
   useEffect(() => {
     if (!stickToBottomRef.current) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [items, turnState]);
+    scrollToBottom("auto");
+  }, [items, turnState, scrollToBottom]);
+
+  // Re-pin to bottom when the inner content grows (late-rendered
+  // markdown, images, tool cards). Without this, an initial scroll-
+  // to-bottom lands above the floor as soon as more layout settles,
+  // and the user sees the "opened at top" symptom on slow renders.
+  useEffect(() => {
+    const inner = innerRef.current;
+    if (!inner || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (stickToBottomRef.current) scrollToBottom("auto");
+    });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [scrollToBottom]);
+
+  // Group consecutive tool-only assistant messages into one work-group
+  // row — keeps the timeline readable when Claude bursts through a
+  // sequence of Bash / Glob / Grep calls between meaningful prose.
+  const rows = useMemo(() => deriveTimelineRows(items), [items]);
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-5">
-        {items.length === 0 && (
-          <p className="text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
-            Send a message to start the conversation.
-          </p>
-        )}
-        {items.map((item) => (
-          <TimelineRow
-            key={item.id}
-            item={item}
-            onPlanAccept={onPlanAccept}
-            onPlanReject={onPlanReject}
-          />
-        ))}
-        {turnState === "running" && activeTurnStartedAt != null && (
-          <WorkingChip startedAtMs={activeTurnStartedAt} />
-        )}
+    <div className="relative flex-1 min-h-0 flex flex-col">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <div ref={innerRef} className="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-4">
+          {items.length === 0 && (
+            <p className="text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
+              Send a message to start the conversation.
+            </p>
+          )}
+          {rows.map((row) => (
+            <TimelineRowView
+              key={row.id}
+              row={row}
+              onPlanAccept={onPlanAccept}
+              onPlanReject={onPlanReject}
+            />
+          ))}
+          {turnState === "running" && activeTurnStartedAt != null && (
+            <WorkingChip startedAtMs={activeTurnStartedAt} />
+          )}
+        </div>
       </div>
+      <JumpToBottomButton
+        visible={!isAtBottom}
+        onClick={() => scrollToBottom("smooth")}
+      />
     </div>
   );
 }
 
-function TimelineRow({
-  item,
+/**
+ * Floating chevron button shown when the user has scrolled up from
+ * the bottom of the timeline. One-tap "jump to latest" — mirrors the
+ * affordance every modern messenger ships.
+ */
+function JumpToBottomButton({
+  visible,
+  onClick,
+}: {
+  visible: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Scroll to latest message"
+      title="Scroll to latest"
+      data-testid="jump-to-bottom"
+      className={clsx(
+        "absolute right-5 bottom-5 z-10 flex h-9 w-9 items-center justify-center",
+        "rounded-full border shadow-md transition-all duration-150",
+        "hover:translate-y-[-1px] active:translate-y-0",
+        visible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+      )}
+      style={{
+        background: "var(--background)",
+        borderColor: "var(--border)",
+        color: "var(--foreground)",
+      }}
+      tabIndex={visible ? 0 : -1}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    </button>
+  );
+}
+
+function TimelineRowView({
+  row,
   onPlanAccept,
   onPlanReject,
 }: {
-  item: ChatItem;
+  row: TimelineRow;
   onPlanAccept?: (planId: string) => void;
   onPlanReject?: (planId: string) => void;
 }) {
-  switch (item.kind) {
-    case "user-message":
-      return <UserRow item={item} />;
-    case "assistant-message":
-      return <AssistantRow item={item} />;
-    case "system-notice":
-      return <SystemRow item={item} />;
+  switch (row.kind) {
+    case "user":
+      return <UserRow item={row.item} />;
+    case "assistant":
+      return <AssistantRow item={row.item} />;
+    case "work-group":
+      return <WorkGroupCard tools={row.tools} />;
+    case "system":
+      return <SystemRow item={row.item} />;
     case "plan-proposed":
       return (
         <PlanProposedRow
-          item={item}
+          item={row.item}
           onAccept={onPlanAccept}
           onReject={onPlanReject}
         />
@@ -132,10 +241,55 @@ function TimelineRow({
 }
 
 function UserRow({ item }: { item: UserMessageItem }) {
+  // Right-aligned chat bubble. No avatar — the alignment alone signals
+  // role (mirrors t3code's UserTimelineRow). The asymmetric corner
+  // radius (`rounded-br-sm`) is the visual tail pointing at the user.
+  // The bubble's background is the loom-blue-tinted user token so it
+  // visually distinguishes the user's turn from the agent's bubble.
+  //
+  // T-004 / US-007: when `item.images?.length` is non-zero render a
+  // thumbnail row above the text. Each thumbnail is an inline `data:`
+  // URL — mirrors `ToolResultMedia.tsx`'s ADR-006 transport (no blob
+  // URLs, no server route).
+  const images = item.images ?? [];
+  const hasImages = images.length > 0;
   return (
-    <ChatMessage role="user" subtitle={formatTime(item.createdAt)}>
-      <div className="whitespace-pre-wrap text-sm leading-relaxed">{item.text}</div>
-    </ChatMessage>
+    <div className="flex justify-end">
+      <div
+        className="group relative max-w-[85%] rounded-2xl rounded-br-sm border px-4 py-2.5"
+        style={{
+          borderColor: "var(--bubble-user-border)",
+          background: "var(--bubble-user-bg)",
+          color: "var(--bubble-user-fg)",
+        }}
+        data-testid="user-message-bubble"
+      >
+        {hasImages && (
+          <div
+            className="mb-2 flex flex-wrap gap-1.5"
+            data-testid="user-message-images"
+          >
+            {item.images?.map((img, idx) => (
+              <img
+                key={idx}
+                src={`data:${img.mediaType};base64,${img.dataB64}`}
+                alt={img.filename ?? ""}
+                title={img.filename ?? ""}
+                className="h-24 w-24 rounded-md object-cover"
+              />
+            ))}
+          </div>
+        )}
+        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+          {item.text}
+        </div>
+        <p
+          className="mt-1 text-right text-[10px] opacity-70"
+        >
+          {formatTime(item.createdAt)}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -155,39 +309,117 @@ function AssistantRow({ item }: { item: AssistantMessageItem }) {
   // index check below uses the FILTERED `arr.length` so it lands on
   // the last RENDERED block — without this it could light up an
   // invisible placeholder.
+  //
+  // WhatsApp-style bubble: consecutive `text` blocks render together
+  // inside a single AssistantTextBubble; `tool_use` and `thinking`
+  // blocks render unwrapped so cards/details keep their card-style
+  // chrome. We walk the filtered blocks once and group adjacent text
+  // runs so multi-block streams still produce one bubble rather than
+  // a stack of tiny ones. The avatar and "Claude" label that the old
+  // ChatMessage wrapper drew are gone — alignment alone signals role
+  // (matching the user-bubble side), and the createdAt timestamp lives
+  // inside the last text bubble bottom-right (WhatsApp-style).
+  const visibleBlocks = item.blocks.filter(
+    (block): block is AssistantBlock =>
+      block != null &&
+      !(
+        block?.type === "text" &&
+        (block as { _placeholder?: boolean })._placeholder === true
+      ),
+  );
+  const lastVisibleIdx = visibleBlocks.length - 1;
+  let lastTextIdx = -1;
+  for (let i = visibleBlocks.length - 1; i >= 0; i -= 1) {
+    if (visibleBlocks[i]?.type === "text") {
+      lastTextIdx = i;
+      break;
+    }
+  }
+
+  const rendered: ReactNode[] = [];
+  let textRun: { idx: number; text: string }[] = [];
+
+  const flushTextRun = (key: string) => {
+    if (textRun.length === 0) return;
+    const runEntries = textRun;
+    const runEndsAtLastText = runEntries[runEntries.length - 1]!.idx === lastTextIdx;
+    const isLastRunInStream = runEntries[runEntries.length - 1]!.idx === lastVisibleIdx;
+    rendered.push(
+      <AssistantTextBubble
+        key={key}
+        timestamp={runEndsAtLastText ? formatTime(item.createdAt) : null}
+      >
+        {runEntries.map((entry, i) => (
+          <ChatMarkdown
+            key={i}
+            text={entry.text}
+            isStreaming={item.streaming && isLastRunInStream && i === runEntries.length - 1}
+          />
+        ))}
+      </AssistantTextBubble>,
+    );
+    textRun = [];
+  };
+
+  visibleBlocks.forEach((block, idx) => {
+    if (block?.type === "text") {
+      textRun.push({ idx, text: block.text });
+      return;
+    }
+    flushTextRun(`text-${idx}`);
+    if (block?.type === "thinking") {
+      rendered.push(<ThinkingBlock key={`think-${idx}`} text={block.text} />);
+      return;
+    }
+    if (block?.type === "tool_use") {
+      rendered.push(<ToolUseCard key={block.id} block={block} />);
+      return;
+    }
+    // Unknown block kind — render nothing rather than throwing
+    // (US-002 AC-5).
+  });
+  flushTextRun(`text-tail`);
+
+  // If the assistant emitted only tool_use / thinking blocks (no text
+  // yet — common while streaming starts), don't render an empty time
+  // stamp; the tool cards and WorkingChip carry the "still working"
+  // signal on their own.
   return (
-    <ChatMessage role="assistant" subtitle={formatTime(item.createdAt)} streaming={item.streaming}>
-      <div className="flex flex-col gap-2">
-        {item.blocks
-          .filter((block): block is AssistantBlock =>
-            block != null &&
-            !(
-              block?.type === "text" &&
-              (block as { _placeholder?: boolean })._placeholder === true
-            ),
-          )
-          .map((block, idx, arr) => {
-            if (block?.type === "text") {
-              return (
-                <ChatMarkdown
-                  key={idx}
-                  text={block.text}
-                  isStreaming={item.streaming && idx === arr.length - 1}
-                />
-              );
-            }
-            if (block?.type === "thinking") {
-              return <ThinkingBlock key={idx} text={block.text} />;
-            }
-            if (block?.type === "tool_use") {
-              return <ToolUseCard key={block.id} block={block} />;
-            }
-            // Unknown block kind — render nothing rather than throwing
-            // (US-002 AC-5).
-            return null;
-          })}
-      </div>
-    </ChatMessage>
+    <div className="flex flex-col items-start gap-2">{rendered}</div>
+  );
+}
+
+/**
+ * WhatsApp-style bubble wrapping the assistant's plain-text answers.
+ * Left-aligned via the parent's `items-start`; the visual tail
+ * (`rounded-bl-sm`) mirrors the user bubble's `rounded-br-sm`. Only
+ * applied to text content — tool_use cards and the `Thinking` <details>
+ * keep their existing chrome and render outside the bubble. The
+ * `timestamp` (when provided — last text bubble of the message) sits
+ * bottom-right, matching the user-bubble's time treatment.
+ */
+function AssistantTextBubble({
+  children,
+  timestamp,
+}: {
+  children: ReactNode;
+  timestamp: string | null;
+}) {
+  return (
+    <div
+      className="max-w-[85%] rounded-2xl rounded-bl-sm border px-4 py-2.5 shadow-sm"
+      style={{
+        background: "var(--bubble-agent-bg)",
+        borderColor: "var(--bubble-agent-border)",
+        color: "var(--bubble-agent-fg)",
+      }}
+      data-testid="assistant-message-bubble"
+    >
+      {children}
+      {timestamp && (
+        <p className="mt-1 text-right text-[10px] opacity-60">{timestamp}</p>
+      )}
+    </div>
   );
 }
 

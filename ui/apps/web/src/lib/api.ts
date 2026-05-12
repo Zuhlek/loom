@@ -123,6 +123,22 @@ export async function createProject(body: CreateProjectBody): Promise<{ project:
   });
 }
 
+/** US-003. Launch a system terminal that re-attaches to the chat's PTY. */
+export async function handoffChat(id: string): Promise<{ ok: true; command: string }> {
+  return apiFetch<{ ok: true; command: string }>(
+    `/chats/handoff?id=${encodeURIComponent(id)}`,
+    { method: "POST" },
+  );
+}
+
+/** US-003. Clone a chat row (same cwd / permission_mode / worktree_mode). */
+export async function forkChat(id: string): Promise<{ chat: ApiChat }> {
+  return apiFetch<{ chat: ApiChat }>(
+    `/chats/fork?id=${encodeURIComponent(id)}`,
+    { method: "POST" },
+  );
+}
+
 export async function deleteChat(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/chats/delete?id=${encodeURIComponent(id)}`, {
     method: "DELETE",
@@ -166,6 +182,49 @@ export async function listProjects(): Promise<{ projects: ApiProject[] }> {
 
 export async function listRecentCwds(limit = 10): Promise<{ cwds: string[] }> {
   return apiFetch<{ cwds: string[] }>(`/cwd/recent?limit=${limit}`);
+}
+
+export type SlashCommandScope = "user" | "project" | "plugin";
+
+export interface SlashCommandEntry {
+  name: string;
+  scope: SlashCommandScope;
+  filePath: string;
+}
+
+export async function getSlashCommands(cwd?: string): Promise<{ commands: SlashCommandEntry[] }> {
+  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
+  return apiFetch<{ commands: SlashCommandEntry[] }>(`/slash-commands${qs}`);
+}
+
+/**
+ * GET /settings — Workspace + Worktrees + Auth panel data (US-001).
+ *
+ * Mirrors `ui/apps/server/src/routes/settings.ts` response shape.
+ */
+export interface ApiSettings {
+  workspace: { root: string; source: string };
+  worktrees: { root: string | null };
+  auth: {
+    loggedIn: boolean;
+    apiKeyDetected: boolean;
+    apiKeyRejected: boolean;
+    message?: string;
+  };
+}
+
+export async function getSettings(): Promise<ApiSettings> {
+  return apiFetch<ApiSettings>("/settings");
+}
+
+/** GET /api/health — used by the About panel and the offline poll. */
+export interface ApiHealth {
+  ok: boolean;
+  version: string;
+}
+
+export async function getHealth(): Promise<ApiHealth> {
+  return apiFetch<ApiHealth>("/health");
 }
 
 /** Resolve the WebSocket URL relative to the Vite dev server. */

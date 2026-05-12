@@ -52,6 +52,17 @@ function makeStubStore(): MetadataStore {
       markActive: fail,
       markInert: fail,
     },
+    // The bridge mirrors every appendItem/updateItem into the durable
+    // chat-items log. These tests bypass spawn() via
+    // __test__installStubSession, but appendItem/updateItem still fire
+    // — so we hand back a no-op repo. Persistence has its own coverage
+    // in chat-items-rehydration.test.ts.
+    chatItems: {
+      list: () => [],
+      append: () => {},
+      update: () => {},
+      clear: () => {},
+    },
   } as unknown as MetadataStore;
 }
 

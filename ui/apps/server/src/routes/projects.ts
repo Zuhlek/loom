@@ -158,6 +158,7 @@ export function mountProjectsRoute(
           bridge.dispose(c.id);
         } catch {}
       }
+      store.chatItems.clear(c.id);
       store.chats.delete(c.id);
     }
     store.projects.delete(id);

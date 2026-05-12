@@ -16,12 +16,20 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import { chatRepo, type ChatRepo } from "./repos/chat.ts";
+import { chatItemsRepo, type ChatItemsRepo, type ChatItemRow } from "./repos/chat-items.ts";
 import { projectRepo, type ProjectRepo } from "./repos/project.ts";
 import { pendingGateRepo, type PendingGateRepo } from "./repos/pending-gate.ts";
 import { hookRegistrationRepo, type HookRegistrationRepo } from "./repos/hook-registration.ts";
 
 export interface MetadataStore {
   chats: ChatRepo;
+  /**
+   * Durable, ordered ChatItem log per chat. The bridge mirrors every
+   * append/update here and replays from it on `spawn()` so the timeline
+   * survives drain/respawn/server-restart. See
+   * `./repos/chat-items.ts` for the t3code-inspired rationale.
+   */
+  chatItems: ChatItemsRepo;
   projects: ProjectRepo;
   pendingGates: PendingGateRepo;
   hookRegistrations: HookRegistrationRepo;
@@ -37,7 +45,9 @@ export interface InitOptions {
   inMemoryOnly?: boolean;
 }
 
-// In-memory storage shared across the four repos when fallback is used.
+// In-memory storage shared across the repos when fallback is used.
+// `chatItems` is attached lazily by `chatItemsRepo` on first use so
+// existing direct callers of `newStorage()` keep working.
 export interface InMemoryStorage {
   chats: Map<string, any>;
   projects: Map<string, any>;
@@ -59,14 +69,31 @@ interface SerializedStorage {
   projects: any[];
   pendingGates: any[];
   hookRegistrations: any[];
+  /**
+   * Flat list of ChatItem rows. Replayed in order on hydrate; the
+   * per-chat ordering is reconstructed from each row's `seq`. Older
+   * snapshots that pre-date this field load fine — `?? []` keeps them
+   * a no-op.
+   */
+  chatItems?: ChatItemRow[];
 }
 
 function serialize(storage: InMemoryStorage): SerializedStorage {
+  const itemsState = (storage as InMemoryStorage & {
+    chatItems?: { byChat: Map<string, ChatItemRow[]> };
+  }).chatItems;
+  const chatItems: ChatItemRow[] = [];
+  if (itemsState?.byChat) {
+    for (const rows of itemsState.byChat.values()) {
+      for (const row of rows) chatItems.push(row);
+    }
+  }
   return {
     chats: Array.from(storage.chats.values()),
     projects: Array.from(storage.projects.values()),
     pendingGates: Array.from(storage.pendingGates.entries()).map(([key, value]) => ({ __key: key, value })),
     hookRegistrations: Array.from(storage.hookRegistrations.values()),
+    chatItems,
   };
 }
 
@@ -78,6 +105,34 @@ function hydrate(storage: InMemoryStorage, data: SerializedStorage): void {
   }
   for (const h of data.hookRegistrations ?? []) {
     if (h && h.id) storage.hookRegistrations.set(h.id, h);
+  }
+  // Restore the chat-items log. Group rows by chat and sort by seq so
+  // the in-memory order matches what was persisted, regardless of how
+  // the JSON serialiser laid them out.
+  const itemRows = data.chatItems ?? [];
+  if (itemRows.length === 0) return;
+  const itemsState = (storage as InMemoryStorage & {
+    chatItems?: { byChat: Map<string, ChatItemRow[]>; nextSeq: Map<string, number> };
+  });
+  itemsState.chatItems = {
+    byChat: new Map(),
+    nextSeq: new Map(),
+  };
+  const grouped = new Map<string, ChatItemRow[]>();
+  for (const row of itemRows) {
+    if (!row || typeof row.chat_id !== "string" || typeof row.id !== "string") continue;
+    let list = grouped.get(row.chat_id);
+    if (!list) {
+      list = [];
+      grouped.set(row.chat_id, list);
+    }
+    list.push(row);
+  }
+  for (const [chatId, rows] of grouped) {
+    rows.sort((a, b) => a.seq - b.seq);
+    itemsState.chatItems!.byChat.set(chatId, rows);
+    const lastSeq = rows[rows.length - 1]?.seq ?? 0;
+    itemsState.chatItems!.nextSeq.set(chatId, lastSeq);
   }
 }
 
@@ -132,6 +187,7 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
 
   // Wrap each repo so any mutation triggers a persist().
   const chats = chatRepo(storage);
+  const chatItems = chatItemsRepo(storage);
   const projects = projectRepo(storage);
   const pendingGates = pendingGateRepo(storage);
   const hookRegistrations = hookRegistrationRepo(storage);
@@ -163,12 +219,14 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
     "markInert",
     "markActive",
   ]) as ChatRepo;
+  const wrappedChatItems = wrap(chatItems, ["append", "update", "clear"]) as ChatItemsRepo;
   const wrappedProjects = wrap(projects, ["create", "addPath", "removePath", "update", "delete"]) as ProjectRepo;
   const wrappedPendingGates = wrap(pendingGates, ["upsert", "delete", "deleteByChat"]) as PendingGateRepo;
   const wrappedHookRegistrations = wrap(hookRegistrations, ["upsert", "delete"]) as HookRegistrationRepo;
 
   return {
     chats: wrappedChats,
+    chatItems: wrappedChatItems,
     projects: wrappedProjects,
     pendingGates: wrappedPendingGates,
     hookRegistrations: wrappedHookRegistrations,
@@ -188,4 +246,4 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
   };
 }
 
-export type { ChatRepo, ProjectRepo, PendingGateRepo, HookRegistrationRepo };
+export type { ChatRepo, ChatItemsRepo, ProjectRepo, PendingGateRepo, HookRegistrationRepo };

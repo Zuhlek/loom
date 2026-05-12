@@ -852,3 +852,183 @@ and 11:00 UTC HITL-complete; commits authored as `Zuhlek
 - The audit fixed bugs it was simultaneously exhibiting: the dispatch context preamble noted that the meta-routing through the orchestrator already substituted `orchestrator/...` for `loom/...` in this Coordinator's own instructions. The audit closes that loop for the source files.
 
 **Artifacts:** findings.md, board.md (all in Done), smoke-report.md, test-report.md, develop-log.md, plus per-file edits to 14 framework files under `orchestrator/`.
+
+## loom-ui-parity-gaps T-003 — green
+
+resolve-spawn-cwd helper landed; 7 tests green.
+
+## loom-ui-parity-gaps T-006 — green
+
+ChatContextMenu lands as a pure-UI primitive; 11 tests green.
+
+## 2026-05-12 — composer-attachments-and-at-file T-001 — green (Coordinator inline)
+
+Mirror wire-protocol image types across server + web. Server already
+carried `UserTurnImage` from a prior partial session (per
+repo-context.md §1). This task added:
+
+- Server `messages.ts`: new `UserMessageImage` interface +
+  optional `images?: UserMessageImage[]` on `UserMessageItem`.
+- Web `chat-types.ts`: `UserTurnImage` interface, `UserMessageImage`
+  interface, optional `images?` on `UserMessageItem`, optional
+  `images?: UserTurnImage[]` on the `user-turn` ClientFrame body.
+
+Red: `tsc --noEmit -p apps/server` reported drift on
+`Equals<ServerClientFrame, WebClientFrame>` —
+`wire-mirror-drift.test.ts(102,42)` and `(133,11)`.
+Green: zero wire-mirror-drift errors; runtime sentinel still 1/1.
+
+Reusable signal: when the predecessor session leaves one side of a
+wire mirror landed and the other side empty, the wire-mirror-drift
+guard's type-identity assertion is the only thing flagging the
+asymmetry — the runtime sentinel passes either way. Read the tsc
+output, not the vitest output, for this class of drift.
+
+**Note on dispatch model:** this Build run is executing the Lock →
+Red → Implement → Green → Done loop *inline* from the Coordinator
+because the harness instance did not expose a Task subagent
+primitive (same constraint flagged previously in `chat-ui-parity`
+and `framework-audit`). The agent-discipline rules (test-log
+red+green, per-task done.md, dual log writes, board atomicity, lock
+release) are preserved; only the fresh-subagent-context isolation
+is collapsed. Recorded for Review.
+
+
+## loom-ui-parity-gaps T-007 — green
+
+handoff launcher + /chats/handoff route landed; 9 task-scope tests +
+10 regression tests green.
+
+## loom-ui-parity-gaps T-008 — green
+
+/chats/fork lands as an amendment to routes/chats.ts; 3 task-scope
+tests + 14 regression tests green.
+
+## 2026-05-12 — composer-attachments-and-at-file T-011 — green (Coordinator inline)
+
+`detectAtFileTrigger` pure helper added to
+`ui/apps/web/src/lib/composer-trigger.ts`. Mirrors
+`detectSlashCommandTrigger`'s shape. 8 new test cases in
+`composer-trigger.test.ts`. Red: 5 runtime assertion failures
+against a `return null` stub. Green: 23/23 pass.
+
+## loom-ui-parity-gaps T-011 — green
+
+useHealthPoll hook + BackendOfflineBanner component landed; 13 tests
+green.
+
+## 2026-05-12 — composer-attachments-and-at-file T-004 — green (Coordinator inline)
+
+UserRow thumbnail render landed in
+`ui/apps/web/src/components/chat/MessagesTimeline.tsx`. data: URL
+transport mirrors ToolResultMedia ADR-006 (no blob URLs). Legacy
+text-only render preserved when images is absent/empty. 6 new
+static-source contract tests in `user-row-images.test.ts`. Red:
+4 runtime assertion failures. Green: 6/6 attempt-1.
+
+Test-style deviation worth flagging for Review: tests.md G7 calls
+for RTL/JSDOM render assertions but the repo's vitest config is
+node-only (`environment: "node"`, `include: apps/**/test/**/*.test.ts`).
+The new test file follows principles.md P2 and mirrors the
+static-source precedent set by tool-result-media.test.ts, working-
+chip.test.ts, assistant-row-null-defense.test.ts. Behavioural
+contract (one `<img>` per image, data: URL shape, ordering above
+`{item.text}`, legacy guard) is fully covered.
+
+## loom-ui-parity-gaps T-004 — green
+
+bridge.spawn awaits resolveSpawnCwd; worktree_path persisted via
+setWorktreePath; fallback emits a system-notice chat item. All 197
+server tests green.
+
+## 2026-05-12 — composer-attachments-and-at-file T-002 — green (Coordinator inline)
+
+`submitUserTurnWithPriority` widened with optional `images?:
+ReadonlyArray<UserTurnImage>` 4th arg. Builds SDK content-block
+array `[{type:"text", text}?, ...image blocks]` when images present;
+plain string otherwise. Blank-input guard relaxed (empty text +
+non-empty images is allowed). `UserMessageItem.images` mirrors the
+input. Recovering-mode `pendingInput` buffer preserves the content-
+block array. 5 new tests in `bridge-user-turn-images.test.ts` (sibling
+to `bridge-image-flatten.test.ts`). Red 3/5; green 5/5 attempt 1.
+33/33 across all bridge test files.
+
+## loom-ui-parity-gaps T-009 — green
+
+LiveSidebar wires the ChatContextMenu + detached visual. 7
+task-scope tests + 278 web regression tests green.
+
+## 2026-05-12 — composer-attachments-and-at-file T-003 — green (Coordinator inline)
+
+`sanitizeUserTurnImages` lives in a new module
+`apps/server/src/chat-protocol/sanitize-user-turn-images.ts` (rather
+than inline in `http-ws-server.ts` per the brief). `http-ws-server.ts`
+extended body destructure with `images?: unknown` and forwards the
+sanitised result to `submitUserTurnWithPriority`'s 4th arg. 12 unit
+tests cover defensive filters + over-cap truncation.
+
+Module-split decision worth flagging: `http-ws-server.ts` has a
+pre-existing parser bug — `socket.on("message", (raw) => { ... await
+opts.bridge.attach(...)` is `await` inside a non-`async` callback.
+Node tolerates it at runtime but esbuild rejects it at parse time,
+so vitest can't compile any test that imports the server file. The
+sanitiser belongs in its own module on principle (P5 single-
+responsibility) anyway, so I split it out rather than expand the task
+scope to fix the unrelated `async` issue. The bug is worth filing as
+a follow-up — it currently blocks unit-testing anything else in
+http-ws-server.ts.
+
+## loom-ui-parity-gaps T-012 — green
+
+App shell mounts useHealthPoll + BackendOfflineBanner exactly once.
+Sidebar + loom-view listen for BACKEND_ONLINE_EVENT and refetch on
+recovery. 9 task-scope tests + 501 full-suite tests green.
+
+## 2026-05-12 — composer-attachments-and-at-file T-012 — green (Coordinator inline)
+
+`ComposerAtFileMenu.tsx` presentational component mirroring
+`ComposerSlashMenu.tsx`'s structure. role="listbox" outer container
+(`data-testid="composer-atfile-menu"`), role="option" rows with
+onMouseDown preventDefault, parent-driven selection. Renders basename
+in `font-mono` + muted dirname; empty + !loading returns null; empty +
+loading renders "Searching…". 10 static-source contract tests. Red
+7/10; green 10/10 attempt 1.
+
+## 2026-05-12 - loom-ui-parity-gaps - Build process notes
+
+The Build coordinator for this loom ran the per-task contract
+(Lock → Red → Implement → Green → Done) inline in its own context
+rather than dispatching a fresh `Task` subagent per task. The
+coordinator's RETURN block documented the deviation:
+*"No Task-dispatch tool was available, so the coordinator ran the
+task contract inline rather than via fresh subagents — same
+Lock → Red → Implement → Green → Done discipline, single context."*
+
+Net effect on this loom: zero — `test-report.md` reconciles the
+aggregate Vitest run (62 files / 511 tests green / 3.39s) against
+per-task test-log.txt files; the high-value suites (T-001, T-002,
+T-005, T-013, T-014) contain raw Vitest output with named failures
+and line numbers. Build QC examined the deviation and recommended
+`continue`.
+
+Process risk for future looms: inline execution loses the per-task
+context isolation the framework intends. A failure in T-N's
+implementation could in principle bleed into T-(N+1)'s context.
+Build QC's finding #2 (six task logs are narrated summaries rather
+than raw Vitest output) is a direct symptom — when the coordinator
+runs inline, the cost of capturing raw stdout into a file is higher,
+so the temptation to summarise increases.
+
+Reusable lesson: the Build coordinator's operating spec should treat
+Task-dispatch availability as a first-class capability check, not as
+an implicit assumption. Two reasonable framework moves: (a) document
+the fallback inline-execution mode explicitly with its evidence
+requirements (raw Vitest stdout captured per task even when running
+inline); (b) fail the Build phase when no Task-dispatch is available
+AND the task count exceeds some threshold (e.g. 8). Choice belongs
+to a follow-up framework-hygiene loom.
+
+Source: Build RETURN block;
+`.loom/loom-ui-parity-gaps/quality-review.md` findings #1 and #2;
+`.loom/loom-ui-parity-gaps/test-report.md ## Final full-project
+Vitest run`.

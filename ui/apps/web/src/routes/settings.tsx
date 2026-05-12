@@ -1,11 +1,11 @@
-import { Link } from "wouter";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
-
-interface SettingsProps {
-  /** "default" (live) | "conflict" (static design mockup) */
-  variant: string;
-}
+import { Link } from "wouter";
+import { AppLayout } from "../components/layout/AppLayout";
+import { WorkspacePanel } from "./settings/WorkspacePanel";
+import { WorktreesPanel } from "./settings/WorktreesPanel";
+import { AuthPanel } from "./settings/AuthPanel";
+import { AboutPanel } from "./settings/AboutPanel";
 
 interface HooksStatus {
   settingsPath: string;
@@ -27,67 +27,91 @@ const NAV: Array<{ id: string; label: string; tag?: { label: string; tone: "ok" 
   { id: "about", label: "About" },
 ];
 
-export function Settings({ variant }: SettingsProps) {
+/**
+ * Map every recognised `/settings/:variant` segment to its panel
+ * component. Unknown variants fall through to a 404-shape empty state
+ * (see `renderPanel` below). The default segment (no variant) lands
+ * on Workspace per ADR-004.
+ */
+function renderPanel(variant: string | undefined) {
+  const v = variant ?? "workspace";
+  switch (v) {
+    case "workspace":
+      return <WorkspacePanel />;
+    case "hooks":
+      return <LiveHooks />;
+    case "worktrees":
+      return <WorktreesPanel />;
+    case "auth":
+      return <AuthPanel />;
+    case "about":
+      return <AboutPanel />;
+    default:
+      // Any other variant string (e.g. /settings/conflict — the
+      // deleted dev-route variant) renders the 404-shape empty state.
+      return (
+        <div
+          className="rounded-xl border p-6 text-sm"
+          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+        >
+          Settings panel not found — pick one of {NAV.map((n) => n.label).join(", ")}.
+        </div>
+      );
+  }
+}
+
+export function Settings({ variant }: { variant?: string } = {}) {
+  const activeId = variant ?? "workspace";
+  const sidebar = (
+    <aside className="w-60 shrink-0 flex flex-col border-r" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+      <div className="flex-1 overflow-y-auto px-2 py-3">
+        <div className="space-y-0.5">
+          {NAV.map((n) => {
+            const active = n.id === activeId;
+            return (
+              <Link
+                key={n.id}
+                href={`/settings/${n.id}`}
+                className={clsx(
+                  "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-left",
+                  active ? "font-medium" : "hover:bg-[var(--accent)]",
+                )}
+                style={active ? { background: "var(--accent)" } : { color: "var(--muted-foreground)" }}
+              >
+                <span className="size-3.5" />
+                {n.label}
+                {n.tag && (
+                  <span
+                    className="ml-auto text-[9px] font-mono px-1 rounded"
+                    style={{ background: "rgba(16,185,129,0.18)", color: "var(--success-foreground)" }}
+                  >
+                    {n.tag.label}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+      <div className="border-t px-3 py-2 text-[10px] font-mono" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+        loom v0.1
+      </div>
+    </aside>
+  );
+
   return (
-    <div className="h-screen flex">
-      <aside className="w-60 shrink-0 flex flex-col border-r" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-        <div className="px-3 py-3 border-b flex items-center gap-2" style={{ borderColor: "var(--border)" }}>
-          <Link href="/empty">
-            <button className="size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]" style={{ color: "var(--muted-foreground)" }} aria-label="Back">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </button>
-          </Link>
-          <span className="text-sm font-medium">Settings</span>
+    <AppLayout leftDrawer={sidebar}>
+      <div className="flex-1 overflow-y-auto px-6 pt-4 pb-5">
+        <div className="max-w-3xl space-y-5">
+          {activeId === "hooks" ? (
+            <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+              Auto-installed at user scope (<code className="font-mono">~/.claude/settings.json</code>). Loom-owned entries are identified by their receiver URL for clean uninstall.
+            </p>
+          ) : null}
+          {renderPanel(activeId)}
         </div>
-
-        <div className="flex-1 overflow-y-auto px-2 py-3">
-          <div className="space-y-0.5">
-            {NAV.map((n) => {
-              const active = n.id === "hooks";
-              return (
-                <button
-                  key={n.id}
-                  className={clsx(
-                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-left",
-                    active ? "font-medium" : "hover:bg-[var(--accent)]",
-                  )}
-                  style={active ? { background: "var(--accent)" } : { color: "var(--muted-foreground)" }}
-                >
-                  <span className="size-3.5" />
-                  {n.label}
-                  {n.tag && (
-                    <span
-                      className="ml-auto text-[9px] font-mono px-1 rounded"
-                      style={{ background: "rgba(16,185,129,0.18)", color: "var(--success-foreground)" }}
-                    >
-                      {n.tag.label}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="border-t px-3 py-2 text-[10px] font-mono" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
-          loom v0.1
-        </div>
-      </aside>
-
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <header className="border-b px-6 py-4" style={{ borderColor: "var(--border)" }}>
-          <h1 className="text-base font-semibold tracking-tight">Hooks</h1>
-          <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-            Auto-installed at user scope (<code className="font-mono">~/.claude/settings.json</code>). Loom-owned entries are identified by their receiver URL for clean uninstall.
-          </p>
-        </header>
-
-        <div className="flex-1 px-6 py-5 max-w-3xl space-y-5">
-          {variant === "conflict" ? <StaticConflictDemo /> : <LiveHooks />}
-        </div>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }
 
@@ -443,36 +467,6 @@ function Diagnostics({ status }: { status: HooksStatus }) {
         </div>
       </div>
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*                      Static conflict mockup (demo)                 */
-/* ------------------------------------------------------------------ */
-
-function StaticConflictDemo() {
-  return (
-    <>
-      <div className="rounded-xl border-2 overflow-hidden" style={{ borderColor: "rgba(245,158,11,0.4)" }}>
-        <div className="px-4 py-3 flex items-start gap-3" style={{ background: "rgba(245,158,11,0.08)" }}>
-          <div className="size-9 rounded-full grid place-items-center mt-0.5" style={{ background: "rgba(245,158,11,0.2)" }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4" style={{ color: "var(--warning-foreground)" }}>
-              <path d="M10.3 3.86a2 2 0 013.4 0l8 14A2 2 0 0120 21H4a2 2 0 01-1.7-3.14z" />
-              <path d="M12 9v4M12 17h.01" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold" style={{ color: "var(--warning-foreground)" }}>
-              You already have hooks at user scope.
-            </p>
-            <p className="text-xs mt-1">
-              Loom detected hooks in <code className="font-mono px-1 rounded" style={{ background: "rgba(0,0,0,0.04)" }}>~/.claude/settings.json</code>. Loom will <strong>append its receiver entry</strong> alongside your existing hooks. Uninstall removes only loom's own entries (identified by their receiver URL); your hooks are never modified.
-            </p>
-          </div>
-        </div>
-      </div>
-      <WiredEvents events={["PostToolUse", "SessionStart", "Stop", "SubagentStop", "PermissionRequest"]} dim />
-    </>
   );
 }
 

@@ -47,7 +47,6 @@ type: null
 | Artifact | Target path | Description |
 | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | Updated sections: `Current phase`, `Phase status`, `Lifecycle state`, `Produced artifacts`, `Pending user input`, `Quality findings`, `Next valid action`, `Resume point`, `History` |
-| `events.jsonl` | `.loom/<project>/events.jsonl` | Appended one line per orchestrator-observed event |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | Written by the phase quality-check agent when QC is invoked; orchestrator does not author it |
 
 After a successful continue:
@@ -55,7 +54,6 @@ After a successful continue:
 - `pipeline.md.Current phase` advanced to the next phase OR set to `complete` after Review.
 - `pipeline.md.Phase status` reset to `Pending` for the new phase.
 - `Produced artifacts` and `History` updated.
-- `events.jsonl` reflects the phase transition.
 
 After a successful rerun:
 
@@ -80,7 +78,7 @@ Each per-phase rerun-or-continue gate is a regular `AskUserQuestion` surfaced by
 | Workspace cannot be resolved or created | Dispatch `methods/find-project.md` or `methods/create-project.md` per Load Order; if both fail, report to user and exit |
 | Phase quality-check agent returns `findings` | Surface findings in chat; ask the user to choose `Continue` or `Rerun phase`; do not act unilaterally |
 | Phase agent returns `blocked` with `Pending user input` | Surface the relay question; write the answer back into the phase artifact on next dispatch |
-| User picks `Go back to <prior-phase>` at a gate | Set `Current phase` to the target; move current and downstream phase artifacts to `superseded/<timestamp>/`; append `phase-revert` to `events.jsonl`; re-dispatch the prior phase agent |
+| User picks `Go back to <prior-phase>` at a gate | Set `Current phase` to the target; move current and downstream phase artifacts to `superseded/<timestamp>/`; re-dispatch the prior phase agent |
 | `phase.md` or `phase.signature.md` missing at dispatch | Fail dispatch with `missing-file: phases/<phase>/<role>.md|<role>.signature.md` before any Task is started |
 
 ## Methods available

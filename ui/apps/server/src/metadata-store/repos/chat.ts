@@ -46,6 +46,8 @@ export interface ChatRepo {
   recentCwds(limit?: number): string[];
   setPid(id: string, pid: number | null): void;
   setSessionId(id: string, sessionId: string): void;
+  /** Runtime-only field set by the bridge at spawn time. */
+  setWorktreePath(id: string, path: string | null): void;
   dismissResumeBanner(id: string): void;
   markInert(id: string): void;
   markActive(id: string): void;
@@ -121,6 +123,12 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
       const r = storage.chats.get(id);
       if (r) {
         r.session_id = sessionId;
+      }
+    },
+    setWorktreePath(id, path) {
+      const r = storage.chats.get(id);
+      if (r) {
+        r.worktree_path = path;
       }
     },
     dismissResumeBanner(id) {

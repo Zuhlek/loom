@@ -42,6 +42,14 @@ import {
 
 import type { MetadataStore } from "../metadata-store/index.ts";
 import type { ChatRow } from "../metadata-store/repos/chat.ts";
+import type { ResolvedConfig } from "../config-loader/index.ts";
+import {
+  resolveSpawnCwd as defaultResolveSpawnCwd,
+  type ResolvedSpawnCwd,
+  type SpawnInput,
+} from "./resolve-spawn-cwd.ts";
+import { isGitRepo as defaultIsGitRepo } from "../git/is-git-repo.ts";
+import { createWorktree as defaultCreateWorktree } from "../git/worktree.ts";
 
 type PermissionMode = ChatRow["permission_mode"];
 import type {
@@ -53,13 +61,18 @@ import type {
   PendingPermission,
   PendingQuestion,
   PlanProposedItem,
+  SessionLifecycle,
   SystemNoticeItem,
   Task,
   ToolResultImage,
   TurnState,
   UserMessageItem,
 } from "../chat-protocol/messages.ts";
-import type { ServerFrame, WirePermissionMode } from "../chat-protocol/frames.ts";
+import type {
+  ServerFrame,
+  UserTurnImage,
+  WirePermissionMode,
+} from "../chat-protocol/frames.ts";
 
 // Re-export so existing `import { Task } from ".../claude-session-bridge.ts"`
 // call sites (if any are introduced in future) keep working. The single
@@ -76,11 +89,27 @@ export interface BridgeOptions {
   pathToClaudeCodeExecutable?: string;
   /** Drain delay in ms before aborting the query after the last client leaves. */
   drainMs?: number;
+  /** Resolved config snapshot. Used by resolveSpawnCwd to find worktreesRoot. */
+  config?: ResolvedConfig;
+  /** Injectable for tests: override the worktree-resolution helper. */
+  resolveSpawnCwd?: (input: SpawnInput) => Promise<ResolvedSpawnCwd>;
+  /** Test seam: skip the real SDK query and capture the session instead. */
+  startQueryOverride?: (session: ChatSession, mode: "create" | "resume") => void;
 }
 
 export type TasksUpdateListener = (chatId: string, tasks: Task[]) => void;
 
 const DEFAULT_DRAIN_MS = 30_000;
+
+/**
+ * Auto-recovery backoff schedule (in ms) when the SDK loop throws.
+ * Each attempt uses the delay at `attempt - 1`; once the array is
+ * exhausted the session transitions to `lifecycle: "failed"` and waits
+ * for an explicit `retry-session` from the client. The schedule is
+ * t3code-inspired: short enough that transient errors clear quickly,
+ * bounded enough that a hard failure stops hammering the SDK.
+ */
+const RECOVERY_BACKOFF_MS: readonly number[] = [1_000, 2_000, 4_000];
 
 /** Minimum unbounded async queue used as the SDK input iterable. */
 class UserMessageQueue {
@@ -100,6 +129,19 @@ class UserMessageQueue {
     while (this.resolvers.length > 0) {
       this.resolvers.shift()!({ value: undefined as unknown as SDKUserMessage, done: true });
     }
+  }
+
+  /**
+   * Returns all messages buffered in the queue that the SDK iterator
+   * never consumed, in FIFO order. Used by `handleSessionFailure` so
+   * unflushed user turns survive an SDK crash and are replayed into
+   * the fresh queue on respawn. Idempotent: subsequent calls return
+   * an empty array.
+   */
+  drain(): SDKUserMessage[] {
+    const drained = this.queue;
+    this.queue = [];
+    return drained;
   }
 
   [Symbol.asyncIterator](): AsyncIterator<SDKUserMessage> {
@@ -135,6 +177,12 @@ interface PendingQuestionState {
    */
   resolve: (result: PermissionResult) => void;
   toolUseID: string;
+  /** Original SDK input — echoed back in `updatedInput.questions`. */
+  originalInput: Record<string, unknown>;
+  /** Question text — used as the key in the SDK's `answers` map. */
+  questionText: string;
+  /** Map from synthesized option id → original label (for the answers map). */
+  optionLabels: Record<string, string>;
 }
 
 /**
@@ -153,9 +201,11 @@ interface PendingPlanProposal {
   status: "pending" | "accepted" | "rejected";
 }
 
-interface ChatSession {
+export interface ChatSession {
   chatId: string;
   cwd: string;
+  /** Set when the bridge materialised a git worktree for this chat. */
+  worktreePath: string | null;
   permissionMode: PermissionMode;
   /** SDK session id (matches the row's session_id). */
   sessionId: string;
@@ -178,6 +228,24 @@ interface ChatSession {
   generation: number;
   clients: Set<WsClient>;
   drainTimer: NodeJS.Timeout | null;
+  /**
+   * Session-lifetime resilience state. Driven by `handleSessionFailure`
+   * and `attemptRestart`. The web client mirrors this to drive the
+   * recovery banner. See `SessionLifecycle` in `chat-protocol/messages.ts`.
+   */
+  lifecycle: SessionLifecycle;
+  /** Auto-respawn counter for the current failure streak (0 when active). */
+  recoveryAttempt: number;
+  /** Pending setTimeout handle for the next scheduled respawn, if any. */
+  recoveryTimer: NodeJS.Timeout | null;
+  /**
+   * User messages submitted while the SDK loop is dead (lifecycle !=
+   * "active") OR drained from a dying inputQueue. Replayed in order
+   * into the fresh inputQueue when the bridge respawns the SDK. This
+   * is the central piece of the "session survives SDK crash" contract:
+   * input that lands during recovery is never dropped.
+   */
+  pendingInput: SDKUserMessage[];
   /** Latest TodoWrite tasks snapshot, derived from tool_use blocks. */
   latestTasks: Task[] | null;
   /** Current turn id used to group items. Bumped on each user turn. */
@@ -250,9 +318,22 @@ export class ClaudeSessionBridge {
   private pathToClaudeCodeExecutable: string | undefined;
   private tasksListeners = new Set<TasksUpdateListener>();
 
+  private config?: ResolvedConfig;
+  private resolveSpawnCwdFn: (input: SpawnInput) => Promise<ResolvedSpawnCwd>;
+  private startQueryOverride?: (session: ChatSession, mode: "create" | "resume") => void;
+
   constructor(private store: MetadataStore, opts: BridgeOptions = {}) {
     this.drainMs = opts.drainMs ?? DEFAULT_DRAIN_MS;
     this.pathToClaudeCodeExecutable = opts.pathToClaudeCodeExecutable;
+    this.config = opts.config;
+    this.resolveSpawnCwdFn =
+      opts.resolveSpawnCwd ??
+      ((input) =>
+        defaultResolveSpawnCwd(input, {
+          isGitRepo: defaultIsGitRepo,
+          createWorktree: defaultCreateWorktree,
+        }));
+    this.startQueryOverride = opts.startQueryOverride;
   }
 
   onTasksUpdate(cb: TasksUpdateListener): () => void {
@@ -264,13 +345,18 @@ export class ClaudeSessionBridge {
     return this.sessions.get(chatId)?.latestTasks ?? null;
   }
 
+  /** Whether a live bridge session exists for the given chat. */
+  hasSession(chatId: string): boolean {
+    return this.sessions.has(chatId);
+  }
+
   /** Attach a WS client; lazy-spawn the session if needed. Sends a snapshot. */
-  attach(chatId: string, client: WsClient): void {
+  async attach(chatId: string, client: WsClient): Promise<void> {
     let session = this.sessions.get(chatId);
     if (!session) {
       const chat = this.store.chats.get(chatId);
       if (!chat) throw new Error(`chat not found: ${chatId}`);
-      session = this.spawn(chat);
+      session = await this.spawn(chat);
       this.sessions.set(chatId, session);
     }
 
@@ -359,25 +445,74 @@ export class ClaudeSessionBridge {
 
   // ─── Internal ────────────────────────────────────────────────────
 
-  private spawn(chat: ChatRow): ChatSession {
-    const inputQueue = new UserMessageQueue();
-    const abortController = new AbortController();
+  private async spawn(chat: ChatRow): Promise<ChatSession> {
     const sessionId = chat.session_id ?? randomUUID();
     if (!chat.session_id) {
       this.store.chats.setSessionId(chat.id, sessionId);
     }
 
+    // T-004 (US-002 / ADR-002). Resolve the cwd via the worktree-mode
+    // helper before we kick off the SDK query. The helper never throws;
+    // a non-null fallbackReason becomes a one-shot system-notice in the
+    // timeline (ADR-006).
+    const resolved = await this.resolveSpawnCwdFn({
+      chat: { id: chat.id, cwd: chat.cwd, worktree_mode: chat.worktree_mode },
+      config: { worktreesRoot: this.config?.worktreesRoot ?? null },
+    });
+    this.store.chats.setWorktreePath(chat.id, resolved.worktreePath);
+    if (resolved.fallbackReason) {
+      const noticeText = resolved.fallbackDetail ?? `Worktree-mode fallback: ${resolved.fallbackReason}`;
+      const notice: SystemNoticeItem = {
+        kind: "system-notice",
+        id: randomUUID(),
+        text: noticeText,
+        level: "info",
+        createdAt: new Date().toISOString(),
+      };
+      this.store.chatItems.append(chat.id, notice);
+    }
+
+    // Rehydrate the timeline from the durable chat-items log. The
+    // Claude SDK has its own server-side memory (the `--resume` path
+    // below replays history into the agent), but the UI's view of the
+    // conversation lives entirely in `session.items`. Without this
+    // replay, every cold attach (drain timeout, server restart, SDK
+    // respawn after crash) shows an empty timeline even though the
+    // agent remembers everything — that asymmetry is the bug this
+    // hydration fixes. See `metadata-store/repos/chat-items.ts`.
+    const persistedItems = this.store.chatItems.list(chat.id) as ChatItem[];
+    const itemsById = new Map<string, ChatItem>();
+    const toolUseToAssistantId = new Map<string, string>();
+    for (const item of persistedItems) {
+      itemsById.set(item.id, item);
+      // Rebuild the tool_use → assistant-id index so that any in-flight
+      // tool_result echoes from the SDK on resume can wire back to the
+      // correct assistant message. This is the same shape the live
+      // path builds in `onAssistantMessage` / `onPartial`.
+      if (item.kind === "assistant-message") {
+        for (const block of item.blocks) {
+          if (block.type === "tool_use") {
+            toolUseToAssistantId.set(block.id, item.id);
+          }
+        }
+      }
+    }
+
     const session: ChatSession = {
       chatId: chat.id,
-      cwd: chat.cwd,
+      cwd: resolved.cwd,
+      worktreePath: resolved.worktreePath,
       permissionMode: chat.permission_mode,
       sessionId,
-      inputQueue,
-      abortController,
+      // `inputQueue` and `abortController` are owned by the current SDK
+      // run. `startQuery` allocates a fresh pair on each respawn so a
+      // dead iterator from a failed run never leaks into the next.
+      inputQueue: new UserMessageQueue(),
+      abortController: new AbortController(),
       queryHandle: null,
-      items: [],
-      itemsById: new Map(),
-      toolUseToAssistantId: new Map(),
+      items: persistedItems,
+      itemsById,
+      toolUseToAssistantId,
       turnState: "idle",
       lastError: undefined,
       pendingPermission: null,
@@ -386,58 +521,270 @@ export class ClaudeSessionBridge {
       generation: 0,
       clients: new Set(),
       drainTimer: null,
+      lifecycle: "active",
+      recoveryAttempt: 0,
+      recoveryTimer: null,
+      pendingInput: [],
       latestTasks: null,
       currentTurnId: randomUUID(),
       currentMessageStartId: null,
     };
 
+    // `chat.inert` here means "previously drained / previously crashed
+    // and was persisted as inert". Either way the Claude side has the
+    // session on disk and the bridge must `resume`. Only a never-spawned
+    // chat (inert=false, session_id newly minted) gets the `sessionId:`
+    // path so the SDK creates the session row.
+    if (this.startQueryOverride) {
+      this.startQueryOverride(session, chat.inert ? "resume" : "create");
+    } else {
+      this.startQuery(session, chat.inert ? "resume" : "create");
+    }
+
+    return session;
+  }
+
+  /**
+   * Allocate SDK `Options`, kick off `query()`, and arm the runLoop
+   * error handler. Called once on initial `spawn()` and again on every
+   * auto-respawn via `attemptRestart()`. `mode === "resume"` reuses
+   * the existing `chat.session_id` (the path used for every respawn
+   * after the first ever spawn). `mode === "create"` is only ever
+   * passed by the initial spawn of a brand-new chat.
+   */
+  private startQuery(session: ChatSession, mode: "create" | "resume"): void {
     const sdkOptions: Options = {
-      cwd: chat.cwd,
-      abortController,
+      cwd: session.cwd,
+      abortController: session.abortController,
       includePartialMessages: true,
       canUseTool: (toolName, input, ctx) =>
         this.handleCanUseTool(session, toolName, input, ctx),
       pathToClaudeCodeExecutable: this.pathToClaudeCodeExecutable,
     };
 
-    const sdkPermissionMode = toSdkPermissionMode(chat.permission_mode);
+    const sdkPermissionMode = toSdkPermissionMode(session.permissionMode);
     if (sdkPermissionMode) sdkOptions.permissionMode = sdkPermissionMode;
-    if (chat.permission_mode === "trusted-vm") {
+    if (session.permissionMode === "trusted-vm") {
       sdkOptions.allowDangerouslySkipPermissions = true;
     }
 
-    if (chat.inert) {
-      sdkOptions.resume = sessionId;
+    if (mode === "resume") {
+      sdkOptions.resume = session.sessionId;
     } else {
-      sdkOptions.sessionId = sessionId;
+      sdkOptions.sessionId = session.sessionId;
     }
 
-    const queryHandle = query({ prompt: inputQueue, options: sdkOptions });
+    const queryHandle = query({ prompt: session.inputQueue, options: sdkOptions });
     session.queryHandle = queryHandle;
 
-    // PID isn't surfaced by the SDK; the older bridge stored it for the
-    // sidebar's running-state badge. We mark active here and clear it
-    // when the session terminates.
-    this.store.chats.markActive(chat.id);
+    // PID isn't surfaced by the SDK; the older bridge stored it for
+    // the sidebar's running-state badge. We mark active here and clear
+    // it on disposal. On respawn this also flips the persisted `inert`
+    // flag back so the chat row reflects "session is live again".
+    this.store.chats.markActive(session.chatId);
 
-    // Drive the SDK loop in the background. Any throws end the session.
+    // Drive the SDK loop in the background. Any throws are routed to
+    // `handleSessionFailure`, which preserves the ChatSession + queued
+    // input and schedules an auto-respawn (see `RECOVERY_BACKOFF_MS`).
+    //
+    // The handle-identity guard (`session.queryHandle !== queryHandle`)
+    // discards stale catches: if a respawn already replaced the handle
+    // before this catch landed, the failure belongs to a prior run and
+    // has already been processed.
     this.runLoop(session, queryHandle).catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      session.lastError = message;
-      this.setTurnState(session, "error");
-      this.appendItem(session, makeNotice(`Session error: ${message}`, "error"));
-      this.store.chats.markInert(chat.id);
+      if (session.queryHandle !== queryHandle) return;
+      this.handleSessionFailure(session, err);
     });
-
-    return session;
   }
 
   private async runLoop(session: ChatSession, q: Query): Promise<void> {
     for await (const msg of q) {
       this.handleSdkMessage(session, msg);
     }
-    // Iterator ended — session is finished.
+    // Iterator ended cleanly — clean shutdown (drain timer closed the
+    // queue, or `disposeSession` aborted). Mark the chat row inert so
+    // the next attach uses `resume:`. We do NOT touch `lifecycle` here:
+    // recovery-state transitions are owned by `attemptRestart` /
+    // `handleSessionFailure` so a normal shutdown can't accidentally
+    // mask an in-flight failure mode.
     this.store.chats.markInert(session.chatId);
+  }
+
+  /**
+   * The single entry point for SDK loop failures. Replaces the previous
+   * "mark inert + leave a stale ChatSession in the map" path that
+   * silently dropped subsequent user input. t3code's resilience
+   * pattern adapted to loom: keep the session in memory, preserve any
+   * unflushed user input, and schedule a respawn with `resume:`.
+   *
+   * Steps:
+   *   1. Stamp `lastError`, flip `turnState` to `"error"`, append a
+   *      single error system-notice to the timeline (audit trail).
+   *   2. Mark any in-flight assistant message non-streaming so the web
+   *      timeline doesn't leave a perpetual blinking caret.
+   *   3. Drain the dying inputQueue into `pendingInput` and close it
+   *      so the dead iterator can't accept new pushes. New writes
+   *      land in `pendingInput` via `submitUserTurnWithPriority`'s
+   *      lifecycle-gated branch.
+   *   4. Mark the chat row inert so a server restart picks up via
+   *      `resume:` (DB-persisted recovery contract).
+   *   5. Hand off to `scheduleRecovery` which arms the next respawn.
+   */
+  private handleSessionFailure(session: ChatSession, err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    session.lastError = message;
+    this.setTurnState(session, "error");
+    this.appendItem(session, makeNotice(`Session error: ${message}`, "error"));
+
+    // Roll any still-streaming assistant message to a non-streaming
+    // state so the UI's caret stops blinking. The SDK never sent the
+    // matching `message_stop`, so we synthesize the closure here.
+    for (const item of session.items) {
+      if (item.kind === "assistant-message" && item.streaming) {
+        item.streaming = false;
+        item.updatedAt = new Date().toISOString();
+        this.updateItem(session, item);
+      }
+    }
+
+    // Capture unflushed user input. `inputQueue` is the dead SDK
+    // iterator's source: any messages we pushed but the SDK never
+    // consumed are still in there. Replay them into the new queue on
+    // respawn so the user's turn isn't lost.
+    const carried = session.inputQueue.drain();
+    if (carried.length > 0) {
+      session.pendingInput.push(...carried);
+    }
+    try { session.inputQueue.close(); } catch {}
+    session.queryHandle = null;
+
+    // Persist the inert flag so a server restart mid-recovery still
+    // picks up via `resume:`. The in-memory session continues to
+    // exist (we don't `disposeSession`) — that's the central invariant.
+    this.store.chats.markInert(session.chatId);
+
+    this.scheduleRecovery(session);
+  }
+
+  /**
+   * Arm the next auto-respawn attempt with exponential backoff per
+   * `RECOVERY_BACKOFF_MS`. When the schedule is exhausted, transition
+   * to `lifecycle: "failed"` and wait for the client's explicit
+   * `retry-session` frame.
+   *
+   * The recovery counter (`session.recoveryAttempt`) increments here
+   * (not in `handleSessionFailure`) so that a manual retry via
+   * `retrySession()` can reset the counter and replay from attempt 1.
+   */
+  private scheduleRecovery(session: ChatSession): void {
+    if (session.recoveryTimer) {
+      clearTimeout(session.recoveryTimer);
+      session.recoveryTimer = null;
+    }
+
+    const nextAttempt = session.recoveryAttempt + 1;
+    if (nextAttempt > RECOVERY_BACKOFF_MS.length) {
+      // Auto-recovery exhausted — give up and let the user decide.
+      this.setLifecycle(session, "failed");
+      this.appendItem(
+        session,
+        makeNotice(
+          `Auto-recovery exhausted after ${RECOVERY_BACKOFF_MS.length} attempts. Press Retry to try again.`,
+          "error",
+        ),
+      );
+      return;
+    }
+
+    session.recoveryAttempt = nextAttempt;
+    this.setLifecycle(session, "recovering");
+
+    const delay = RECOVERY_BACKOFF_MS[nextAttempt - 1] ?? RECOVERY_BACKOFF_MS[RECOVERY_BACKOFF_MS.length - 1]!;
+    session.recoveryTimer = setTimeout(() => {
+      session.recoveryTimer = null;
+      this.attemptRestart(session);
+    }, delay);
+  }
+
+  /**
+   * Build a fresh SDK input queue + AbortController on the session,
+   * replay any buffered user input, and call `startQuery` in `resume`
+   * mode. Called by the recovery timer (`scheduleRecovery`) and by
+   * the user-initiated `retrySession` path.
+   *
+   * On synchronous setup success the session optimistically flips to
+   * `lifecycle: "active"` — the SDK loop is now driving messages.
+   * If the new run fails (synchronously or asynchronously), the
+   * runLoop catch routes back to `handleSessionFailure`, which will
+   * call `scheduleRecovery` again. Repeated failures hit the same
+   * backoff schedule until the attempt counter exhausts.
+   */
+  private attemptRestart(session: ChatSession): void {
+    session.inputQueue = new UserMessageQueue();
+    session.abortController = new AbortController();
+    session.currentMessageStartId = null;
+    // Replay buffered input into the fresh queue. Preserves FIFO order.
+    const replay = session.pendingInput;
+    session.pendingInput = [];
+    for (const msg of replay) {
+      session.inputQueue.push(msg);
+    }
+
+    try {
+      this.startQuery(session, "resume");
+    } catch (err) {
+      // `query()` itself threw synchronously (very rare). Treat as a
+      // fresh failure — handleSessionFailure will schedule the next
+      // attempt with bumped `recoveryAttempt`.
+      this.handleSessionFailure(session, err);
+      return;
+    }
+
+    // Optimistic flip. If the SDK throws on first iteration, the
+    // runLoop catch will move us back to "recovering" or "failed".
+    this.setLifecycle(session, "active");
+  }
+
+  /**
+   * Public manual-recovery entry point bound to the `retry-session`
+   * client frame. No-op when the session is already running or in
+   * the middle of an auto-recovery attempt — both states will reach
+   * the terminal active/failed transition on their own. Resets the
+   * auto-retry counter so the manual press gets a full backoff
+   * schedule before giving up again.
+   */
+  retrySession(chatId: string): void {
+    const session = this.sessions.get(chatId);
+    if (!session) return;
+    if (session.lifecycle !== "failed") return;
+    if (session.recoveryTimer) {
+      clearTimeout(session.recoveryTimer);
+      session.recoveryTimer = null;
+    }
+    session.recoveryAttempt = 0;
+    session.lastError = undefined;
+    this.attemptRestart(session);
+  }
+
+  /**
+   * Broadcast a `session-state` frame iff the lifecycle is actually
+   * changing (or `recoveryAttempt` moved). Updates the in-memory
+   * session bookkeeping first so subsequent reads (e.g. snapshot on
+   * a new attach) reflect the new state.
+   */
+  private setLifecycle(session: ChatSession, lifecycle: SessionLifecycle): void {
+    const prev = session.lifecycle;
+    session.lifecycle = lifecycle;
+    if (prev === lifecycle) return;
+    this.broadcast(session, {
+      kind: "session-state",
+      "chat-id": session.chatId,
+      body: {
+        lifecycle,
+        recoveryAttempt: session.recoveryAttempt,
+        lastError: session.lastError,
+      },
+    });
   }
 
   private handleSdkMessage(session: ChatSession, msg: SDKMessage): void {
@@ -770,16 +1117,19 @@ export class ClaudeSessionBridge {
    * the SDK's `resolve` closure so `respondToQuestion` can drive it
    * when the user submits the picker.
    *
-   * The SDK's AskUserQuestion input shape (per t3code's contract):
+   * The SDK's AskUserQuestion input shape (Claude Agent SDK ≥ 0.2):
    *   {
-   *     question: string,
-   *     options: Array<{ id: string; label: string; description?: string }>,
-   *     multiSelect?: boolean,
-   *     header?: string,
+   *     questions: [{
+   *       question: string,
+   *       header: string,
+   *       options: [{ label: string, description: string, preview?: string }],
+   *       multiSelect?: boolean,
+   *     }],
    *   }
-   * The bridge parses defensively — non-conforming inputs are coerced
-   * to empty-options + raw-string question so the picker can still
-   * render a "no options provided" state without throwing.
+   * Options have no `id` — we synthesize one from the label so the
+   * picker has a stable React key and so the answers map can be
+   * rebuilt on submit. The bridge parses defensively — non-conforming
+   * inputs render a "no options provided" state without throwing.
    */
   private handleAskUserQuestion(
     session: ChatSession,
@@ -791,20 +1141,25 @@ export class ClaudeSessionBridge {
   ): Promise<PermissionResult> {
     return new Promise<PermissionResult>((resolve) => {
       const id = randomUUID();
-      const question = typeof input.question === "string" ? input.question : "";
-      const options = Array.isArray(input.options)
-        ? (input.options as unknown[]).flatMap((o) => {
-            const r = o as { id?: unknown; label?: unknown; description?: unknown };
-            if (typeof r.id !== "string" || typeof r.label !== "string") return [];
+      const questionsArr = Array.isArray(input.questions) ? input.questions : [];
+      const first = (questionsArr[0] ?? {}) as Record<string, unknown>;
+      const question = typeof first.question === "string" ? first.question : "";
+      const optionLabels: Record<string, string> = {};
+      const options = Array.isArray(first.options)
+        ? (first.options as unknown[]).flatMap((o, idx) => {
+            const r = o as { label?: unknown; description?: unknown };
+            if (typeof r.label !== "string") return [];
+            const optId = `opt-${idx}-${r.label}`;
+            optionLabels[optId] = r.label;
             const opt: { id: string; label: string; description?: string } = {
-              id: r.id,
+              id: optId,
               label: r.label,
             };
             if (typeof r.description === "string") opt.description = r.description;
             return [opt];
           })
         : [];
-      const multiSelect = input.multiSelect === true;
+      const multiSelect = first.multiSelect === true;
       const pending: PendingQuestion = {
         id,
         question,
@@ -815,6 +1170,9 @@ export class ClaudeSessionBridge {
         pending,
         resolve,
         toolUseID: ctx.toolUseID,
+        originalInput: input,
+        questionText: question,
+        optionLabels,
       };
       this.broadcast(session, {
         kind: "pending-question",
@@ -875,6 +1233,11 @@ export class ClaudeSessionBridge {
   private appendItem(session: ChatSession, item: ChatItem): void {
     session.items.push(item);
     session.itemsById.set(item.id, item);
+    // Mirror into the durable log so a cold attach (drain timeout,
+    // server restart, SDK respawn) rebuilds the same timeline. We
+    // persist before broadcasting so a crash between the two flushes
+    // through the log on next start rather than only on the wire.
+    this.persistAppend(session.chatId, item);
     this.broadcast(session, {
       kind: "item-append",
       "chat-id": session.chatId,
@@ -886,6 +1249,7 @@ export class ClaudeSessionBridge {
     // Items are mutated in place; rebroadcast as item-update so attached
     // clients can overwrite by id.
     session.itemsById.set(item.id, item);
+    this.persistUpdate(session.chatId, item);
     this.broadcast(session, {
       kind: "item-update",
       "chat-id": session.chatId,
@@ -893,8 +1257,42 @@ export class ClaudeSessionBridge {
     });
   }
 
+  private persistAppend(chatId: string, item: ChatItem): void {
+    // Defensive try/catch: persistence is best-effort. The in-memory
+    // session is still authoritative for live broadcasts; if the log
+    // write throws (disk full, permission flap), we don't want to
+    // wedge the chat — the snapshot path will recover whatever made
+    // it to disk on next attach.
+    try {
+      this.store.chatItems.append(chatId, item);
+    } catch (err) {
+      console.warn(
+        `[claude-session-bridge] failed to persist append for chat=${chatId} item=${item.id}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private persistUpdate(chatId: string, item: ChatItem): void {
+    try {
+      this.store.chatItems.update(chatId, item);
+    } catch (err) {
+      console.warn(
+        `[claude-session-bridge] failed to persist update for chat=${chatId} item=${item.id}: ${(err as Error).message}`,
+      );
+    }
+  }
+
   private setTurnState(session: ChatSession, state: TurnState): void {
     if (session.turnState === state) return;
+    // Transitioning out of "error" into a healthy state (recovery
+    // succeeded — running or idle) means the prior `lastError` is
+    // stale. Clearing it here prevents the bridge from re-echoing the
+    // dead error on every subsequent turn-state broadcast / snapshot,
+    // which the web reducer would otherwise treat as fresh and
+    // potentially re-raise after a WS reconnect / chat-switch reset.
+    if (session.turnState === "error" && (state === "running" || state === "idle")) {
+      session.lastError = undefined;
+    }
     session.turnState = state;
     this.broadcast(session, {
       kind: "turn-state",
@@ -918,6 +1316,10 @@ export class ClaudeSessionBridge {
     if (session.drainTimer) {
       clearTimeout(session.drainTimer);
       session.drainTimer = null;
+    }
+    if (session.recoveryTimer) {
+      clearTimeout(session.recoveryTimer);
+      session.recoveryTimer = null;
     }
     try { session.abortController.abort(); } catch {}
     try { session.inputQueue.close(); } catch {}
@@ -961,11 +1363,16 @@ export class ClaudeSessionBridge {
     chatId: string,
     text: string,
     priority: "now" | "next" | "later",
+    images?: ReadonlyArray<UserTurnImage>,
   ): void {
     const session = this.sessions.get(chatId);
     if (!session) return;
     const trimmed = text.trim();
-    if (!trimmed) return;
+    const hasImages = images != null && images.length > 0;
+    // T-002 / US-006 AC4: relax the blank-input guard so an
+    // images-only-no-text turn is still legitimate. Empty text +
+    // empty/undefined images stays rejected.
+    if (!trimmed && !hasImages) return;
 
     session.currentTurnId = randomUUID();
     // T-001 / US-001. Reset the per-message scratch id at every turn
@@ -979,17 +1386,60 @@ export class ClaudeSessionBridge {
       turnId: session.currentTurnId,
       text: trimmed,
       createdAt: new Date().toISOString(),
+      // T-002 / US-006: stamp images onto the appended UserMessageItem
+      // so MessagesTimeline's UserRow can render thumbnails (T-004).
+      ...(hasImages ? { images: images.map((img) => ({ ...img })) } : {}),
     };
     this.appendItem(session, item);
-    this.setTurnState(session, "running");
 
-    session.inputQueue.push({
-      type: "user",
-      message: { role: "user", content: trimmed },
+    // T-002 / US-006 AC2-4. Build SDK message content:
+    //   - no images: plain string (legacy byte-compatible path).
+    //   - with images: [{type:"text", text}?, ...image blocks].
+    //     Text block is omitted when text is empty (images-only turn).
+    const sdkContent: unknown = hasImages
+      ? [
+          ...(trimmed ? [{ type: "text" as const, text: trimmed }] : []),
+          ...images.map((img) => ({
+            type: "image" as const,
+            source: {
+              type: "base64" as const,
+              media_type: img.mediaType,
+              data: img.dataB64,
+            },
+          })),
+        ]
+      : trimmed;
+    const sdkMessage = {
+      type: "user" as const,
+      message: { role: "user" as const, content: sdkContent },
       parent_tool_use_id: null,
       session_id: session.sessionId,
       priority,
-    });
+    };
+
+    // Lifecycle-gated dispatch. While the SDK loop is dead (recovering
+    // or failed), pushing to `inputQueue` would either no-op (closed
+    // queue) or hand the message to an iterator nobody is consuming.
+    // Buffer into `pendingInput` instead — `attemptRestart` replays
+    // these into the fresh queue on respawn. This is the contract
+    // that turns "session error" from "chat is dead, recreate it"
+    // into "your message is buffered and will land when we recover".
+    if (session.lifecycle !== "active" || session.queryHandle === null) {
+      session.pendingInput.push(sdkMessage);
+      // If we'd previously given up, this user gesture is implicit
+      // consent to try again — kick the manual-retry path so the
+      // buffered turn doesn't sit forever.
+      if (session.lifecycle === "failed") {
+        this.retrySession(chatId);
+      }
+      // We intentionally do NOT setTurnState("running") here: the SDK
+      // isn't actually running. The web composer reads `lifecycle` to
+      // render a "Queued — reconnecting" hint instead.
+      return;
+    }
+
+    this.setTurnState(session, "running");
+    session.inputQueue.push(sdkMessage);
   }
 
   /**
@@ -1132,15 +1582,21 @@ export class ClaudeSessionBridge {
     if (!pending || pending.pending.id !== id) return;
 
     // Pack the user's answer into the SDK-bound PermissionResult. The
-    // SDK's `updatedInput` field is the channel Claude reads the
-    // AskUserQuestion result from — we preserve the original input
-    // keys and overlay the chosen answers + optional otherText.
+    // SDK reads `updatedInput` as the AskUserQuestion tool result and
+    // expects shape `{ questions, answers: { [questionText]: string } }`
+    // — multi-select answers join with commas. The freeform sentinel
+    // `__freeform__` is replaced with the typed text; if it's the only
+    // answer, the typed text stands alone.
+    const FREEFORM = "__freeform__";
+    const mapped = answer.answers.map((aid) => {
+      if (aid === FREEFORM) return answer.otherText ?? "";
+      return pending.optionLabels[aid] ?? aid;
+    }).filter((s) => s.length > 0);
+    const answerString = mapped.join(", ");
     const updatedInput: Record<string, unknown> = {
-      answers: answer.answers,
+      questions: (pending.originalInput.questions as unknown) ?? [],
+      answers: { [pending.questionText]: answerString },
     };
-    if (answer.otherText !== undefined && answer.otherText !== "") {
-      updatedInput.otherText = answer.otherText;
-    }
 
     pending.resolve({
       behavior: "allow",
@@ -1205,6 +1661,21 @@ export class ClaudeSessionBridge {
   }
 
   /**
+   * Synthetic entry point for the recovery test suite. Drives the
+   * `handleSessionFailure` path without needing a real SDK crash —
+   * lets unit tests exercise pendingInput buffering, the
+   * lifecycle:"failed" terminal state, and `retrySession`'s lazy
+   * restart. Production code reaches this only via the runLoop catch.
+   */
+  __test__triggerFailure(chatId: string, message: string): void {
+    const session = this.sessions.get(chatId);
+    if (!session) {
+      throw new Error(`__test__triggerFailure: no session for ${chatId}`);
+    }
+    this.handleSessionFailure(session, new Error(message));
+  }
+
+  /**
    * Install a synthetic session for unit tests, bypassing the real SDK
    * spawn. Either a `setPermissionMode` stub (for setPermissionMode
    * tests) or a `capture` callback (for queue tests) may be supplied;
@@ -1248,6 +1719,10 @@ export class ClaudeSessionBridge {
       generation: 0,
       clients: new Set(),
       drainTimer: null,
+      lifecycle: "active",
+      recoveryAttempt: 0,
+      recoveryTimer: null,
+      pendingInput: [],
       latestTasks: null,
       currentTurnId: randomUUID(),
       currentMessageStartId: null,
@@ -1263,6 +1738,8 @@ function snapshotFrame(session: ChatSession): ServerFrame {
     lastError: session.lastError,
     pendingPermission: session.pendingPermission?.pending ?? null,
     pendingQuestion: session.pendingQuestion?.pending ?? null,
+    lifecycle: session.lifecycle,
+    recoveryAttempt: session.recoveryAttempt,
   };
   return {
     kind: "snapshot",

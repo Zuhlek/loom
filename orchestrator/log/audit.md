@@ -286,3 +286,53 @@ Source: `.loom/chat-streaming-fixes/` review.
 **Positive pattern worth carrying forward:** read-and-cite verification (ADR-05) is sufficient for a documentation-edit loom. No test harness was introduced, no new dependencies were added, and deterministic shell assertions (grep, readlink, python3 settings.json parse) provide the same audit-trail property a test runner would, at a fraction of the token cost. Recommend reusing this verification-environment pattern for future doc-edit / hygiene looms.
 
 **Cross-references:** `.loom/framework-audit/review.md`, `.loom/framework-audit/findings.md`, `.loom/framework-audit/develop-log.md`.
+
+## 2026-05-12 - loom-ui-parity-gaps - Cross-phase audit observations
+
+Two of the user's Spec-grilling free-text answers were strictly
+stronger than the Y/N option sets they answered:
+
+- **Q3 — dev-only routes.** Options were YES (gate behind `__dev`) /
+  NO (leave at top-level with a banner). User free-text:
+  *"remove those mockup url, references and code. only production
+  ready code remains."* That's a third option: outright deletion.
+  Spec correctly captured this into ADR-003 (deletion, not gating) and
+  US-004 ACs (no route registrations, no backing components).
+- **Q7 — Trusted-VM.** Options were (A) relabel UI / (B) rename
+  end-to-end / (C) actually sandbox. User free-text:
+  *"we just mean that the agent is opened with
+  --dangerous-skip-permission mode. the app will run locally only,
+  mostly in vm's of a developer."* That's a fourth option: keep the
+  label, fix only the subtitle copy to be honest about the trust
+  boundary, no sandboxing. Spec captured this into US-006 AC2 +
+  out-of-scope explicit-no-sandbox clause.
+
+In both cases the user's answer was a deliberate upshift / reframe,
+not a non-answer. The Spec agent caught it and routed it correctly.
+
+Reusable lesson: free-text answers to Y/N or Choice questions should
+be treated as potentially-stronger superseding inputs, not as "no
+answer received, fall back to recommendation". The framework's
+question-format spec (`orchestrator/weave/phases/spec/categories.md`)
+should explicitly acknowledge that a free-text response can introduce
+a third option, reframe the choice, or upshift the bar — and the
+Spec agent should write a `Status: answered (free-text supersedes
+Y/N)` annotation in `decisions.md` when this happens (this loom's
+Spec agent did exactly that on Q3 and Q7 — pattern worth preserving).
+
+A second cross-phase observation: the test report flagged that
+`metadata-store/repos/chat.ts` *already* persists `worktree_path` as
+a column, even though `spec.md ## Constraints` framed it as
+"runtime-only / no new persisted column" (Review finding R-002 in
+`.loom/loom-ui-parity-gaps/review.md`). The intent of the constraint
+was "no new schema churn introduced by this spec"; the wording read
+more strictly. Build correctly preserved the observed behaviour
+rather than rip out pre-existing persistence to honor a literal
+reading of the constraint. Future Spec agents should distinguish "no
+new column added by this spec" from "field is runtime-only end-to-end"
+when writing constraints.
+
+**Cross-references:** `.loom/loom-ui-parity-gaps/decisions.md` Q3 +
+Q7; `.loom/loom-ui-parity-gaps/spec.md ## Constraints`;
+`.loom/loom-ui-parity-gaps/test-report.md ## Notes for the reviewer`;
+`.loom/loom-ui-parity-gaps/review.md` finding R-002.

@@ -19,7 +19,17 @@
  */
 import type { MetadataStore } from "../metadata-store/index.ts";
 import type { ClaudeSessionBridge } from "../process-manager/claude-session-bridge.ts";
+import {
+  launchHandoffTerminal as defaultLaunchHandoffTerminal,
+  type HandoffResult,
+  type HandoffSession,
+} from "../process-manager/handoff.ts";
 import { invalidateLoomCache } from "./sidebar.ts";
+
+export interface ChatsRouteDeps {
+  /** Injectable for tests. Defaults to the real launcher. */
+  launchHandoffTerminal?: (session: HandoffSession) => Promise<HandoffResult>;
+}
 
 function newId(): string {
   return (
@@ -34,7 +44,9 @@ export function mountChatsRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   store: MetadataStore,
   bridge?: ClaudeSessionBridge,
+  deps: ChatsRouteDeps = {},
 ): void {
+  const launchHandoffTerminal = deps.launchHandoffTerminal ?? defaultLaunchHandoffTerminal;
   routes["/chats"] = async (req) => {
     if (req.method === "GET") {
       return new Response(JSON.stringify({ chats: store.chats.list() }), {
@@ -163,8 +175,85 @@ export function mountChatsRoute(
         bridge.dispose(id);
       } catch {}
     }
+    // Clear the durable chat-items log so the next chat reusing this
+    // id (unlikely with UUIDs, but the invariant matters) doesn't
+    // inherit stale timeline rows.
+    store.chatItems.clear(id);
     store.chats.delete(id);
     invalidateLoomCache();
     return new Response(null, { status: 204 });
+  };
+
+  routes["/chats/fork"] = async (req, url) => {
+    if (req.method !== "POST") {
+      return new Response("method not allowed", { status: 405 });
+    }
+    const id = url.searchParams.get("id");
+    if (!id) {
+      return new Response(JSON.stringify({ error: "id required" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    const source = store.chats.get(id);
+    if (!source) {
+      return new Response(JSON.stringify({ error: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    const forked = store.chats.create({
+      id: newId(),
+      project_id: source.project_id,
+      cwd: source.cwd,
+      permission_mode: source.permission_mode,
+      worktree_mode: source.worktree_mode,
+      // session_id is omitted so chatRepo.create() generates a fresh
+      // UUID. pid / inert / worktree_path reset to their defaults.
+    });
+    invalidateLoomCache();
+    return new Response(JSON.stringify({ chat: forked }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  routes["/chats/handoff"] = async (req, url) => {
+    if (req.method !== "POST") {
+      return new Response("method not allowed", { status: 405 });
+    }
+    const id = url.searchParams.get("id");
+    if (!id) {
+      return new Response(JSON.stringify({ error: "id required" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    const chat = store.chats.get(id);
+    if (!chat) {
+      return new Response(JSON.stringify({ error: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (!bridge || !bridge.hasSession(id)) {
+      return new Response(JSON.stringify({ error: "no live session" }), {
+        status: 409,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    const result = await launchHandoffTerminal({ chatId: id });
+    if (!result.ok) {
+      return new Response(
+        JSON.stringify({ error: result.error ?? "handoff failed" }),
+        { status: 500, headers: { "content-type": "application/json" } },
+      );
+    }
+    // PTY is intentionally NOT disposed — the session keeps running in
+    // the bridge and the new terminal re-attaches via `loom attach`.
+    return new Response(
+      JSON.stringify({ ok: true, command: result.launched?.command ?? "" }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
   };
 }

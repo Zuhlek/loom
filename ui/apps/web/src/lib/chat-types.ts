@@ -62,12 +62,30 @@ export interface ToolResultSummary {
 
 export type AssistantBlock = AssistantTextBlock | AssistantThinkingBlock | AssistantToolUseBlock;
 
+/**
+ * One image attachment surfaced on a `UserMessageItem`. Mirrors the
+ * server `UserMessageImage` byte-for-byte (see
+ * `apps/server/src/chat-protocol/messages.ts`). The web client builds
+ * `data:<mediaType>;base64,<dataB64>` URLs for `<img>` `src` — same
+ * inline-data pattern as `ToolResultImage` (ADR-006).
+ */
+export interface UserMessageImage {
+  mediaType: string;
+  dataB64: string;
+  filename?: string;
+}
+
 export interface UserMessageItem {
   kind: "user-message";
   id: ChatItemId;
   turnId: TurnId;
   text: string;
   createdAt: string;
+  /**
+   * Image attachments included with this turn. Absent for text-only
+   * legacy items / older snapshots (US-007 AC3).
+   */
+  images?: UserMessageImage[];
 }
 
 export interface AssistantMessageItem {
@@ -112,6 +130,14 @@ export type ChatItem =
 
 export type TurnState = "idle" | "running" | "interrupted" | "error";
 
+/**
+ * Session-lifetime resilience state — mirrors the server
+ * `SessionLifecycle` byte-for-byte. Orthogonal to `TurnState`: drives
+ * the recovery banner while the bridge auto-respawns the SDK after a
+ * mid-session crash. See `claude-session-bridge.ts` `handleSessionFailure`.
+ */
+export type SessionLifecycle = "active" | "recovering" | "failed";
+
 export interface PendingPermission {
   id: string;
   toolName: string;
@@ -135,6 +161,13 @@ export interface ChatSnapshot {
   lastError?: string;
   pendingPermission?: PendingPermission | null;
   pendingQuestion?: PendingQuestion | null;
+  /**
+   * Session-lifetime resilience state. Defaults to `"active"` on the
+   * client when the field is absent (older server snapshots).
+   */
+  lifecycle?: SessionLifecycle;
+  /** Auto-retry counter for the current failure streak. */
+  recoveryAttempt?: number;
 }
 
 /**
@@ -148,6 +181,19 @@ export type PermissionMode =
   | "acceptEdits"
   | "bypassPermissions";
 
+/**
+ * One image attachment on an outbound `user-turn` frame. Mirrors the
+ * server `UserTurnImage` byte-for-byte (see
+ * `apps/server/src/chat-protocol/frames.ts`). The composer captures
+ * this via paste / paperclip / drag-drop and the bridge fans it out
+ * into SDK `ImageBlockParam` content blocks.
+ */
+export interface UserTurnImage {
+  mediaType: string;
+  dataB64: string;
+  filename?: string;
+}
+
 // ─── Frames ───────────────────────────────────────────────────────────
 
 export type ServerFrame =
@@ -159,6 +205,20 @@ export type ServerFrame =
   | { kind: "pending-permission"; "chat-id": string; body: PendingPermission | null }
   | { kind: "pending-question"; "chat-id": string; body: PendingQuestion | null }
   | { kind: "tasks-update"; "chat-id": string; body: { tasks: Task[]; replay?: boolean } }
+  | {
+      /**
+       * Session-lifetime state transition. Drives the recovery banner.
+       * See `SessionLifecycle` for the state machine. Distinct from
+       * `turn-state` (which tracks the current turn only).
+       */
+      kind: "session-state";
+      "chat-id": string;
+      body: {
+        lifecycle: SessionLifecycle;
+        recoveryAttempt?: number;
+        lastError?: string;
+      };
+    }
   | { kind: "error"; "chat-id"?: string; body: { message: string } };
 
 export type ClientFrame =
@@ -175,6 +235,14 @@ export type ClientFrame =
          * when the queue-priority toggle is on (running turn).
          */
         priority?: "now" | "next" | "later";
+        /**
+         * Optional image attachments captured by the composer (paste,
+         * paperclip, or drag-drop). Mirrors the server-side
+         * `UserTurnFrame.body.images` field byte-for-byte; the bridge
+         * fans these out into SDK `ImageBlockParam` content blocks.
+         * Absent on legacy text-only submits.
+         */
+        images?: UserTurnImage[];
       };
     }
   | { kind: "interrupt"; "chat-id": string }
@@ -221,6 +289,15 @@ export type ClientFrame =
       kind: "plan-reject";
       "chat-id": string;
       body: { planId: string };
+    }
+  | {
+      /**
+       * Manually re-run recovery after the bridge gave up auto-respawn
+       * (lifecycle = "failed"). Bridge no-ops if the session is already
+       * active or recovering.
+       */
+      kind: "retry-session";
+      "chat-id": string;
     };
 
 export interface Task {

@@ -233,8 +233,6 @@ def init_workspace(parent_dir: Path, project: str, seed: str, ticket: str, type_
     workspace.mkdir(parents=True, exist_ok=True)
     atomic_write(workspace / "pipeline.md", initial_pipeline(project, ticket, type_hint))
     atomic_write(workspace / "seed.md", seed.rstrip() + "\n")
-    if not (workspace / "events.jsonl").exists():
-        atomic_write(workspace / "events.jsonl", "")
 
 
 def validate_record(record: dict[str, object]) -> list[str]:

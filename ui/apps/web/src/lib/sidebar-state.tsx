@@ -14,6 +14,7 @@ import {
   type ReactNode,
 } from "react";
 import { getSidebarState, type SidebarState } from "./api";
+import { BACKEND_ONLINE_EVENT } from "./useHealthPoll";
 
 interface SidebarStateContextValue {
   state: SidebarState | null;
@@ -48,9 +49,17 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
     mountedRef.current = true;
     refresh();
     const timer = setInterval(refresh, 5000);
+    // US-005 AC2: when the global health hook recovers, refetch
+    // immediately so the user doesn't wait up to 5 s for the
+    // last-good groups to refresh.
+    const onOnline = () => {
+      void refresh();
+    };
+    window.addEventListener(BACKEND_ONLINE_EVENT, onOnline);
     return () => {
       mountedRef.current = false;
       clearInterval(timer);
+      window.removeEventListener(BACKEND_ONLINE_EVENT, onOnline);
     };
   }, [refresh]);
 
