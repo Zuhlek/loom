@@ -85,3 +85,46 @@ incidental commentary.
 
 Source: `.loom/chat-streaming-fixes/decisions.md` Q05 resolution
 and `spec.md` Constraints t3code-reference-invariant line.
+
+## 2026-05-12 - composer-attachments-and-at-file - no-back-compat-in-fresh-codebase
+
+User pushed back during Build on the coordinator's habit of adding
+underscore-prefix renames (`_oldParam` / `_legacy*` / etc) to
+existing parameters and variables as a backwards-compatibility tell.
+The user's framing: this is a fresh codebase, there are no external
+callers to preserve, the current name is the only name. Every diff
+line should produce ONE clean version — no `_oldParam` renames, no
+commented legacy, no duplicated old+new paths, no unreferenced shims.
+
+The pushback aligns with `principles.md` P4 ("One clean
+implementation, no backwards-compat shims") but is sharper: in a
+fresh codebase the entire concept of "transitional shim" is wrong
+even within the loose interpretation P4 allows. The Build coordinator
+calibrated the rerun explicitly against this rule, the rerun's
+8-card edit pass produced a single-version `ChatComposer.tsx`, and
+Review confirmed clean against the working-tree diff for the loom's
+claimed file set.
+
+Calibration signal for the Build Task Builder and the Build
+coordinator going forward: adopt the no-back-compat-in-fresh-codebase
+default unless the `spec.md ## Constraints` section explicitly carves
+out a wire-protocol / persisted-data back-compat clause. This
+project's `Constraints` DID carve out wire-protocol back-compat for
+`UserTurnFrame.body.images?` optionality and the legacy `user-turn`
+emitter byte-compatibility — those are explicit per-project carve-outs
+and take precedence over P4 per `principles.md` §"Review checklist".
+The carve-out language is the right escape hatch when wire-protocol
+or persisted-data forward-compat IS load-bearing; absent the
+carve-out, the default is "one clean version".
+
+Worth feeding to `/tune feedback`: P4's text should arguably tighten
+to "no backwards-compat in fresh codebases unless a Constraint carves
+it out". The current P4 text talks about "external callers" and "PR
+transition periods" which leaves room for the coordinator to invent
+back-compat where none is genuinely needed. The user's specific
+pushback case — underscore-renames on private function parameters —
+is well inside P4's spirit but not strictly forbidden by P4's text.
+
+Source: `.loom/composer-attachments-and-at-file/feedback.md`,
+orchestrator dispatch context 2026-05-12, Build rerun audit notes
+in `develop-log.md` + `test-report.md`.

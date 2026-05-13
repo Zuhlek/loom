@@ -1392,26 +1392,48 @@ export class ClaudeSessionBridge {
     };
     this.appendItem(session, item);
 
-    // T-002 / US-006 AC2-4. Build SDK message content:
-    //   - no images: plain string (legacy byte-compatible path).
-    //   - with images: [{type:"text", text}?, ...image blocks].
-    //     Text block is omitted when text is empty (images-only turn).
-    const sdkContent: unknown = hasImages
+    // T-002 / US-006 AC2-4. Build SDK message content. The SDK's
+    // `MessageParam['content']` is `string | ContentBlockParam[]`; we
+    // build the array shape when there are images and the plain string
+    // shape otherwise. Both shapes are first-class for the SDK — no
+    // legacy/fallback branching, just two type-correct constructions.
+    //
+    // Indexed access through `SDKUserMessage` keeps the bridge typed
+    // against the live SDK contract without pulling `@anthropic-ai/sdk`
+    // in as a direct dependency.
+    type SdkContent = SDKUserMessage["message"]["content"];
+    type SdkBlock = Extract<SdkContent, readonly unknown[]>[number];
+    type SdkTextBlock = Extract<SdkBlock, { type: "text" }>;
+    type SdkImageBlock = Extract<SdkBlock, { type: "image" }>;
+    type SdkBase64Source = Extract<SdkImageBlock["source"], { type: "base64" }>;
+    type SdkImageMediaType = SdkBase64Source["media_type"];
+
+    const sdkContent: SdkContent = hasImages
       ? [
-          ...(trimmed ? [{ type: "text" as const, text: trimmed }] : []),
-          ...images.map((img) => ({
-            type: "image" as const,
-            source: {
-              type: "base64" as const,
-              media_type: img.mediaType,
-              data: img.dataB64,
-            },
-          })),
+          ...(trimmed ? [{ type: "text", text: trimmed } satisfies SdkTextBlock] : []),
+          ...images.map(
+            (img): SdkImageBlock => ({
+              type: "image",
+              source: {
+                type: "base64",
+                // The `mediaType` field on the wire-protocol `UserTurnImage`
+                // is intentionally typed `string` to keep the wire schema
+                // permissive; the runtime trust boundary is the
+                // `sanitizeUserTurnImages` filter in `http-ws-server.ts`
+                // (T-003 / US-006 AC1). The SDK only accepts a narrow
+                // union here, so we assert at this boundary — invalid
+                // MIMEs will be rejected by the SDK downstream rather
+                // than the bridge silently emitting an `unknown`.
+                media_type: img.mediaType as SdkImageMediaType,
+                data: img.dataB64,
+              },
+            }),
+          ),
         ]
       : trimmed;
-    const sdkMessage = {
-      type: "user" as const,
-      message: { role: "user" as const, content: sdkContent },
+    const sdkMessage: SDKUserMessage = {
+      type: "user",
+      message: { role: "user", content: sdkContent },
       parent_tool_use_id: null,
       session_id: session.sessionId,
       priority,

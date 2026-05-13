@@ -1,3 +1,35 @@
+import { InlineEditDiff } from "./InlineEditDiff";
+
+export type EditDetection =
+  | { kind: "edit"; filePath: string; oldString: string; newString: string }
+  | { kind: "write"; filePath: string; content: string }
+  | null;
+
+/**
+ * Shape-first detection over the args record. Edit signature wins over
+ * Write when both shapes are present. Prompt text is reserved as a
+ * tie-breaker for future ambiguous-superset payloads (MultiEdit /
+ * NotebookEdit); today it's not consulted because the Edit / Write
+ * shapes are unambiguous.
+ */
+export function detectEditToolArgs(
+  args: Record<string, unknown>,
+  _prompt: string,
+): EditDetection {
+  const filePath = args.file_path;
+  if (typeof filePath !== "string") return null;
+  const oldString = args.old_string;
+  const newString = args.new_string;
+  if (typeof oldString === "string" && typeof newString === "string") {
+    return { kind: "edit", filePath, oldString, newString };
+  }
+  const content = args.content;
+  if (typeof content === "string") {
+    return { kind: "write", filePath, content };
+  }
+  return null;
+}
+
 export interface PermissionRequestInlineProps {
   prompt: string;
   args: Record<string, string>;
@@ -13,6 +45,7 @@ export function PermissionRequestInline({ prompt, args, reason, onCancelTurn, on
   // `description` arg mirrors pp.description). Keeps args intact for tools that
   // don't have this overlap.
   const visibleArgs = reason ? Object.entries(args).filter(([, v]) => v !== reason) : Object.entries(args);
+  const detected = detectEditToolArgs(args, prompt);
 
   return (
     <div className="ml-10 rounded-xl border-2 overflow-hidden" style={{ borderColor: "var(--warning)", background: "rgba(245,158,11,0.04)" }}>
@@ -45,16 +78,33 @@ export function PermissionRequestInline({ prompt, args, reason, onCancelTurn, on
       </div>
 
       <div className="px-4 py-3">
-        {visibleArgs.length > 0 && (
-          <pre className="font-mono text-[11px] px-3 py-2 rounded-md border overflow-auto max-h-[40vh]" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-            <code>
-              {visibleArgs.map(([k, v]) => (
-                <div key={k}>
-                  <span style={{ color: "var(--info-foreground)" }}>{k}</span>: {v}
-                </div>
-              ))}
-            </code>
-          </pre>
+        {detected ? (
+          detected.kind === "edit" ? (
+            <InlineEditDiff
+              mode="edit"
+              filePath={detected.filePath}
+              oldString={detected.oldString}
+              newString={detected.newString}
+            />
+          ) : (
+            <InlineEditDiff
+              mode="write"
+              filePath={detected.filePath}
+              content={detected.content}
+            />
+          )
+        ) : (
+          visibleArgs.length > 0 && (
+            <pre className="font-mono text-[11px] px-3 py-2 rounded-md border overflow-auto max-h-[40vh]" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+              <code>
+                {visibleArgs.map(([k, v]) => (
+                  <div key={k}>
+                    <span style={{ color: "var(--info-foreground)" }}>{k}</span>: {v}
+                  </div>
+                ))}
+              </code>
+            </pre>
+          )
         )}
       </div>
 

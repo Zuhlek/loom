@@ -26,6 +26,8 @@ import { mountFileSearchRoute } from "./routes/file-search.ts";
 import { mountSlashCommandsRoute } from "./routes/slash-commands.ts";
 import { mountUploadImageRoute } from "./routes/upload-image.ts";
 import { mountDiffRoute } from "./routes/diff.ts";
+import { mountGitStatusRoute } from "./routes/git-status.ts";
+import { mountGitActionsRoute } from "./routes/git-actions.ts";
 import { mountLoomMockupRoute } from "./routes/loom-mockup.ts";
 import { mountLoomBoardRoute } from "./routes/loom-board.ts";
 import { mountLoomRoute } from "./routes/loom.ts";
@@ -136,6 +138,8 @@ if (isEntrypoint) {
   mountSlashCommandsRoute(routes);
   mountUploadImageRoute(routes);
   mountDiffRoute(routes);
+  mountGitStatusRoute(routes);
+  mountGitActionsRoute(routes);
   mountLoomMockupRoute(routes);
   mountLoomBoardRoute(routes);
   mountLoomRoute(routes, store);

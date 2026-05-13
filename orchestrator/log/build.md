@@ -1,5 +1,43 @@
 # Build Log
 
+## 2026-05-12 - diff-features - T-002-diff-file-card-extracted
+
+Task: T-002 (Extract `DiffFileCard` from `DiffPanel`; add controlled-scope props). Status: **green**. Attempts: 1.
+
+Per-file card JSX lifted from `DiffPanel.tsx:181-205` into a new
+`ui/apps/web/src/components/diff/DiffFileCard.tsx` that owns collapse
+state (`useState<boolean>(defaultCollapsed ?? false)`), the chevron
+toggle, and an optional `maxHeight` inline-style on the hunks `<pre>`.
+`DiffLineRow` and the `STATUS_BG` / `STATUS_FG` palette maps moved into
+the card. `DiffPanel.tsx` now imports + renders `<DiffFileCard>` for
+each file; MIT attribution at lines 1–7 preserved verbatim.
+`DiffPanelShellProps` is now an exported interface with optional
+controlled `scope` + `onScopeChange`; `DiffPanelShell` branches on
+`isControlled = scope !== undefined && onScopeChange !== undefined`
+and routes `effectiveScope` / `effectiveOnChange` through to
+`<DiffPanel>`.
+
+Tooling note: the `diff-features` Plan documented `.test.tsx` test
+filenames and DOM-event behaviour, but the `ui/vitest.config.ts` runs
+under `environment: "node"` with an include glob of
+`apps/**/test/**/*.test.ts` — there is no jsdom or
+`@testing-library/react` installed. The Task Builder followed the
+existing static-source + JSX-grep precedent
+(`composer-controls.test.ts`, `proposed-plan-card.test.ts`,
+`ask-user-question-picker.test.ts`, etc.) instead. Worth promoting
+to the plan-template: "when the Plan calls for DOM-event tests but
+the test config lacks jsdom, write static-source + JSX-grep
+contracts and record the deviation in `done.md`."
+
+Outcome: 30 new T-002 tests green; full `ui/` suite (71 files / 650
+tests) shows 644 green + 6 pre-existing failures (unchanged from
+`main`, verified via `git stash`). `tsc --noEmit` web delta = 0 (the
+3 errors in `routes/live-chat.tsx` exist on `main` already).
+
+Source: `.loom/diff-features/tasks/T-002.done.md`;
+`.loom/diff-features/tasks/T-002.test-log.txt`;
+`.loom/diff-features/develop-log.md`.
+
 ## 2026-05-11 - loom-ui-phase-update - bunx-tsc-artifact-registry-fallback
 
 Build noted that `bunx tsc --noEmit -p ui/apps/web` (the recipe in
@@ -1032,3 +1070,252 @@ Source: Build RETURN block;
 `.loom/loom-ui-parity-gaps/quality-review.md` findings #1 and #2;
 `.loom/loom-ui-parity-gaps/test-report.md ## Final full-project
 Vitest run`.
+
+## 2026-05-12 - diff-features - T-001 shared diff engine (parse + synthesize + aggregate) green on first attempt
+
+Task: `diff-features/T-001`. Status: **green**. Attempts: 1. Duration: ~154s.
+
+Three pure libraries delivered under `ui/apps/web/src/lib/`:
+
+- `diff-parse.ts` — `parseUnifiedDiff(input): DiffFile[]`. Walks `diff --git` boundaries, detects status from chunk-header markers (`new file mode` → `added`, `deleted file mode` → `deleted`, `rename from`/`rename to` → `renamed`, default `modified`), strips trailing `\r`, caps emitted hunks per file at 200 with a synthetic `"… (truncated)"` meta line, emits empty-hunks `DiffFile` for binary files.
+- `diff-synthesize.ts` — `synthesizeEditDiff` (line-level LCS, status `modified`) and `synthesizeWriteDiff` (all-add, status `added`). Each side capped at 1000 lines; over-cap → all-del-then-all-add with `"… (input too large for line-diff; showing replacement)"` meta. CR stripped both sides.
+- `diff-aggregate.ts` — `aggregateSectionsByFile(sections): DiffFile[]`. Dedupes by `file.path`, later-section wins. Local `DiffSection` shape used pending T-006's `ApiDiffSection` reconciliation.
+
+Test scope (`ui/apps/web/test/`):
+
+- `diff-parse.test.ts` — 8 tests across six fixtures (`modified`, `added`, `deleted`, `rename-pure`, `rename-modified`, `binary`) plus a 250-hunk truncation case and a CRLF stripping case.
+- `diff-synthesize.test.ts` — 10 tests: identical no-op / append-only / prepend-only / middle-replace / full-rewrite / multi-line / CR-strip / over-cap fallback / Write all-add / Write CR-strip.
+- `diff-aggregate.test.ts` — 4 tests: same-path-later-wins, distinct paths, intra-section later-wins, empty input.
+
+Outcome: 22 new tests green; full `ui/apps/web` suite (31 files / 370 tests) green; `tsc --noEmit` clean. Source: Build Task Builder return block; `.loom/diff-features/tasks/T-001.test-log.txt`; `.loom/diff-features/tasks/T-001.done.md`.
+
+## 2026-05-12 - T-005 - git action routes green on first attempt (diff-features)
+
+Task: T-005 (Backend `POST /git/{commit,push,pr}` action routes). Status: **green**. Attempts: 1.
+
+New route module `ui/apps/server/src/routes/git-actions.ts` exporting `mountGitActionsRoute`, mounted in `ui/apps/server/src/index.ts` adjacent to `mountDiffRoute`. Three handlers wrapping existing git primitives:
+
+- `POST /git/commit` → `commitOnly({ cwd, message })` from `git/workflow.ts`. Validates `worktreePath` + `message`; appends optional `body` after a blank line; returns `{ sha }`.
+- `POST /git/push` → `push(cwd, { remote: "origin", setUpstream, force: forceWithLease })` from `git/manager.ts`. Validates `worktreePath`; returns `{ ok: true }`.
+- `POST /git/pr` → `createPullRequest({ cwd, message, title, body })` from `git/workflow.ts`. Validates `worktreePath` + `title`; returns `{ url }` extracted from `PrResult`.
+
+400 on missing required fields; 500 on git/provider failure with the underlying message in `{ error }`. Loopback-trust model inherited from `/diff`. `spawn`/`spawnSync` argv-array calls live in the wrapped modules.
+
+Test scope (`ui/apps/server/test/git-actions-route.test.ts`, 8 tests):
+
+- `/git/commit` happy path against a temp repo with a staged change; verifies `git log -1` HEAD sha and subject match the response.
+- `/git/commit` missing `message` / missing `worktreePath` → 400.
+- `/git/push` happy path against a temp file-based bare remote (fixture seeds an initial `git push -u origin main` so the branch has tracking, mirroring real-world use of `manager.push` which does not pass a branch arg).
+- `/git/push` missing `worktreePath` → 400.
+- `/git/pr` happy path with `vi.mock` of `../src/source-control/index.ts` so the registry's `getProvider` returns an in-test stub; no real `gh`/network call.
+- `/git/pr` missing `title` / missing `worktreePath` → 400.
+
+Wire shapes anchored for T-006 (`lib/api.ts`): `{ sha }` / `{ ok: true }` / `{ url }` for 200; `{ error }` for 400/500.
+
+Outcome: 8 new tests green; full `ui/apps/server` suite (37 files / 230 tests) green. Source: Build Task Builder return block; `.loom/diff-features/tasks/T-005.test-log.txt`; `.loom/diff-features/tasks/T-005.done.md`.
+
+## 2026-05-12 - diff-features - T-006 - lib/api.ts wire types + client functions green on first attempt
+
+Task: T-006 (web `lib/api.ts` git wire types + five client functions). Status: **green**. Attempts: 1.
+
+Four exported types + five client functions added to `ui/apps/web/src/lib/api.ts`:
+
+- Types: `ApiGitStatus`, `ApiDiffSection`, `ApiDiffResponse`, `GitDiffMode`.
+- Clients: `getGitStatus(worktreePath, base="main")`, `getDiff(worktreePath, { mode, base?, signal? })`, `postGitCommit({ worktreePath, message, body?, paths? })`, `postGitPush({ worktreePath, setUpstream?, forceWithLease? })`, `postGitPr({ worktreePath, title, body? })`.
+
+All clients route through the existing `apiFetch<T>` helper. GET routes encode query segments via `encodeURIComponent`; POST routes serialize the input as the JSON body with `content-type: application/json`. Error semantics: `apiFetch` already throws `ApiError` carrying `{ status, body }` on non-2xx, so the new clients inherit "rejected promise carrying the server's `{ error }` payload" for free.
+
+Reconciliation with T-001: `lib/diff-aggregate.ts` now imports `ApiDiffSection` from `./api` and the inline `DiffSection` placeholder is deleted. The four T-001 aggregator tests adjusted to import `ApiDiffSection` from `../src/lib/api` and re-ran green.
+
+Test scope: `ui/apps/web/test/api-git-clients.test.ts` (16 tests) + `ui/apps/web/test/diff-aggregate.test.ts` (4 T-001 tests re-run) — 38 passed / 0 failed. Each new test installs `vi.spyOn(globalThis, "fetch")` and asserts both the constructed Request and the parsed response; abort-signal forwarding and 4xx / 5xx → rejected `ApiError` with `{ status, body }` are explicitly covered.
+
+`pnpm tsc --noEmit -p apps/web/tsconfig.json` shows zero new errors attributable to T-006. Six remaining errors are pre-existing (verified by stashing the diff).
+
+Source: Build Task Builder return block; `.loom/diff-features/tasks/T-006.test-log.txt`; `.loom/diff-features/tasks/T-006.done.md`.
+
+## 2026-05-12 - composer-attachments-and-at-file - rerun-with-one-coordinated-pass under no-back-compat
+
+When a Build dispatch lands many cards (8 in this case: T-005..T-010,
+T-013, T-014) that all touch one file (`ChatComposer.tsx`) AND the
+project's `spec.md ## Constraints` enforces no-back-compat (the
+current name is the only name; no `_oldParam` renames, no commented
+legacy, no parallel old/new paths), the Build coordinator's natural
+per-card sequential-edit pattern produces residue (each card's
+"add my new state slot, leave the others alone" leaves intermediate
+versions interleaved through the file). The rerun's solution: rewrite
+the file in ONE coordinated edit pass covering all 8 cards at once,
+producing a single-version output that satisfies the no-back-compat
+invariant.
+
+This violates the per-card test-log contract (`tasks/T-NNN.test-log.txt`
+files don't exist for the 8 rerun cards — the verification is at the
+file-level not the card-level), but produces the right higher-order
+output. Worth documenting as a pattern: under no-back-compat with
+high single-file concentration, prefer one coordinated edit over N
+sequential surgical edits. The per-card Done-report retains the
+"what this card contributed" granularity even when the test-log
+collapses to the file-level.
+
+Trade-off: a per-card Red-Green cycle is lost, so a regression
+introduced by one card's contribution surfaces only at the
+file-level vitest run. Mitigation: the file-level test suite
+(`composer-attachments.test.ts`, 51 cases blocked T-005×12 / T-006×4
+/ T-007×4 / T-008×7 / T-009×5 / T-010×7 / T-013×9 / T-014×2) is
+explicitly partitioned by card, so a per-card test result IS
+recoverable from the test-output even if the test-log file isn't.
+
+## 2026-05-12 - composer-attachments-and-at-file - static-source contract tests in node-only vitest harness
+
+The repo's vitest config is `environment: "node"` with include glob
+`apps/**/test/**/*.test.ts` (no `.tsx`); neither `@testing-library/react`
+nor `jsdom` is on the manifest. Following P2 "match existing test style",
+the new UI-component tests use the repo's established static-source
+contract pattern (precedent: `tool-result-media.test.ts`,
+`assistant-row-null-defense.test.ts`, `working-chip.test.ts`,
+`composer-controls.test.ts`). Tests assert on:
+- DOM structure shape via grep / regex on the file's JSX source
+- `data-testid` presence + attribute values + ordering
+- function signatures + import lists
+- behavioural contract via static-source readable evidence
+
+Switching test style to RTL/JSDOM would have required a new dependency
+(`jsdom` + `@testing-library/react` + transitive), blocked by P2 (no
+new deps without explicit justification in spec). The coverage is
+structural in form but verifies the behavioural contract.
+
+Downstream Loom projects on this repo (and similar node-only-vitest
+codebases) should follow this pattern by default rather than reach
+for JSDOM/RTL. Test-style P2 alignment beats test-style P6
+behavioural-purity when the framework gap forces the choice.
+
+## 2026-05-12 - composer-attachments-and-at-file - test assertions: literal vs named-constant
+
+Initial Red-phase tests wrote literal regex assertions like
+`/setTimeout\(.*,\s*3000\)/` and `/setTimeout\(.*,\s*150\)/` to match
+the debounce / notice timeouts. The Green-phase implementation
+extracted those into named constants
+(`OVER_CAP_NOTICE_MS = 3000`, `AT_FILE_DEBOUNCE_MS = 150`), which
+broke the literal-regex assertions on the second test run.
+
+Resolution: relax the assertion phrasing to accept both the literal
+AND the named-constant spelling, e.g.
+`/setTimeout\(.*,\s*(3000|OVER_CAP_NOTICE_MS)\)/`. Three assertions
+needed this widening.
+
+Lesson: in TDD Red-Green-Refactor flows where Refactor naturally
+extracts magic numbers into named constants, write test assertions
+against the constant-or-literal alternation from the start rather
+than the literal. OR drop the arg-count assertion entirely and
+just check `setTimeout(...)` is present (looser but less brittle).
+
+Mirrors the prior chat-streaming-fixes test-pattern lesson around
+literal-string assertions for messages that later moved to a copy
+module — same shape, same mitigation.
+
+## 2026-05-12 - diff-features T-007 - state-discriminator migration with ref-mirror for stale-closure auto-open guard
+
+Task: T-007 of project `diff-features` — `routes/live-chat.tsx` migrates `tasksOpen: boolean` to `rightPane: "tasks" | "diff" | null` and adds the worktree-gated Diff topbar button. Status: **green** in one attempt.
+
+Two patterns worth recording for downstream Loom build-task work:
+
+### 1. Static-source contract style absorbed without question
+
+The project's `ui/vitest.config.ts` runs `environment: "node"` and includes only `*.test.ts` (no jsdom, no testing-library). The task spec's literal `.test.tsx` filename and DOM-event assertions were not viable — the same constraint T-002 hit. The Builder followed the established precedent (the four prior route/component tests `composer-controls.test.ts`, `proposed-plan-card.test.ts`, `ask-user-question-picker.test.ts`, `diff-panel-controlled-scope.test.ts`) and wrote 22 static-source contracts asserting JSX shape, hook declarations, conditional-render guards, and the auto-open-ref gating pattern.
+
+Two assertion-design choices worth highlighting:
+
+- **Hard-zero `not.toMatch(/\btasksOpen\b/)`** enforces the no-dual-state user MEMORY directive at test time. Any future drift that re-introduces `tasksOpen` (e.g. a partial revert, a copy-paste error from git history) fails this test loudly rather than silently. Pairs with the corresponding `setTasksOpen` zero-occurrence assertion.
+- **Tolerant regex for state-access form** — the auto-open guard regex matches `rightPane === null` OR `rightPaneRef.current === null` OR `current === null` so the test doesn't lock in the specific stale-closure mitigation (ref vs functional-setter), only the user-facing precondition. P6: tests describe behaviour, not the specific helper variable used.
+
+### 2. Stale-closure mitigation: prefer ref-mirror over re-subscription
+
+The natural reading of the task spec puts the new guard `rightPane === null` directly inside the `ws.onmessage` handler. But that handler is captured by a `useEffect(..., [chatId])` — adding `rightPane` to the dep array would re-subscribe the WebSocket on every pane toggle (very wrong: lose the running session, lose queued state). The two viable mitigations:
+
+- **Ref mirror** (`rightPaneRef = useRef(null)` + a 3-line `useEffect` copying state → ref): the auto-open reads `rightPaneRef.current`. Same precondition, no re-subscription. Three lines of overhead.
+- **Functional setter check**: `setRightPane(current => current === null ? "tasks" : current)`. The branch lives inside React's setter, no closure-captured state needed. Zero new lines but the auto-open is now silently a no-op when the user has Diff open, which can be subtle to debug — the ref-mirror leaves the explicit `=== null` check at the call site.
+
+The Builder chose ref-mirror to keep the user-facing predicate explicit. Both forms are equivalent for the user-facing contract; the choice is style. Recording the alternation here so future build-tasks facing the same `useEffect`-captured-handler pattern can pick either without re-deriving the analysis.
+
+Source: `.loom/diff-features/tasks/T-007.done.md` and `.loom/diff-features/develop-log.md`.
+
+## 2026-05-12 - diff-features T-003 - shape-first detection + thin component wrapping a shared engine
+
+Task: T-003 of project `diff-features` — `detectEditToolArgs` helper inside `PermissionRequestInline.tsx` plus a new `InlineEditDiff.tsx` component. Status: **green** in one attempt.
+
+Two patterns worth recording.
+
+### 1. Preserve the public signature, mark the unused parameter
+
+Design.md ADR-5 specifies `detectEditToolArgs(args, prompt)` and reserves prompt as a tie-breaker for ambiguous-superset payloads (MultiEdit / NotebookEdit). For Edit / Write specifically the shape is unambiguous on `args` alone — `prompt` is never consulted. The Builder kept the public two-arg signature (so a future MultiEdit task does not have to break callers) but prefixed the parameter as `_prompt` inside the function to mark the intentional non-use. P5 trade-off: the parameter is scaffolding for a future task, but the design explicitly names that consumer and the cost is one underscore. Anchoring decision: when a design document explicitly names a future consumer of a parameter, keep the signature stable from the first task; do not "add it later" in a separate breaking change.
+
+### 2. Single-line swap-site discipline
+
+The swap in `PermissionRequestInline.tsx` is the smallest possible diff at the call site: one new `const detected = detectEditToolArgs(args, prompt);` plus a ternary around the existing `<pre>` block. The original `<pre>` body is byte-for-byte unchanged (only re-indented two columns inside the new conditional). The header pill, prompt, reason badge, and four action buttons are textually untouched — a JSX-grep test asserts each of `"PermissionRequest"`, `{prompt}`, `{reason}`, `"Cancel turn"`, `"Decline"`, `"Always allow this session"`, `"Approve once"` still appears in the source. P1 / P4: when the swap is the only thing the task asks for, the surrounding component is genuinely off-limits — a textual-survival assertion at the test layer is the cheapest enforcement and the easiest to read in review.
+
+For the engine call surface, `useMemo` is the right primitive here even though the synthesizer is fast: the design contract is "call the engine on mount and on prop change" — `useMemo` expresses that directly without an `useEffect` + `useState` pair. The memo dependency is the discriminated `props` object itself (identity equality re-runs the memo on any new prop set). P6: the test verifies the engine-output shape via direct calls to `synthesizeEditDiff` / `synthesizeWriteDiff` rather than asserting the memo was called — behaviour over implementation.
+
+Source: `.loom/diff-features/tasks/T-003.done.md` and `.loom/diff-features/develop-log.md`.
+
+---
+
+## 2026-05-13 — diff-features/T-008 (build-task, green)
+
+T-008 replaced the T-007 `DiffPanelContainer.tsx` stub with the full Feature-2 right-drawer container (fetch lifecycle, scope state, chained commit/push/PR actions, snackbar feedback), added the inline `CommitDialog.tsx` composer, and additively extended `Snackbar.tsx` with an optional clickable `action: { label, url }` link for the PR-success toast. Three new test files (56 static-source assertions) cover the container's import surface, props/state shape, fetch and scope-change effects, chained-action call structure, and the dialog's required-field invariants. One T-007 stub-marker assertion in `live-chat-right-pane.test.ts` was retired per the explicit hand-off in T-007.done.md (the stub's purpose was to anchor T-007's red phase; T-008 is the sanctioned replacement, not an accidental no-op).
+
+The container's fetch lifecycle uses two `AbortController` refs so scope-change can abort the diff fetch without disturbing status. The mount effect fires `Promise.all([getGitStatus, getDiff])`; a separate scope-keyed effect (gated by a first-run ref) re-fires `getDiff` on every subsequent scope change. Chained actions short-circuit on error inside the `if (committed) { if (pushed) { ... } }` success branches; the post-action refresh runs in `finally` so partial state always lands in the panel. The internal `snackbar: { kind, sha|remoteRef|url|message }` state is mirrored to the global `useSnackbar` hook (the SnackbarProvider mounted in `App.tsx`) — adding a parallel local snackbar viewport would duplicate behaviour per the user MEMORY no-duplication rule.
+
+Outcome: 56 new T-008 tests green; full `ui/` suite 751 passing / 6 pre-existing failures (delta = 0); `tsc --noEmit` 3 pre-existing errors in `routes/live-chat.tsx` (delta = 0). Source: `.loom/diff-features/tasks/T-008.done.md`, `.loom/diff-features/tasks/T-008.test-log.txt`.
+
+## 2026-05-13 - diff-features - Per-route unit tests can pass while the route is unmounted in production
+
+T-004 in diff-features delivered `routes/git-status.ts` with 8
+unit tests, all green. The unit tests mount the route into a
+private `routes` object via `mountGitStatusRoute(routes)` and
+exercise the handler directly. T-004.done.md claimed "Mounted at
+line 139 in `src/index.ts`, immediately after `mountDiffRoute` as
+instructed." That claim was false in the working-tree state Review
+inspected: `server/src/index.ts` imports and mounts only
+`mountGitActionsRoute` (T-005's deliverable), not
+`mountGitStatusRoute`. The route handler is unreachable in the
+running server even though all 8 of its tests pass.
+
+**Build-process recommendation:** when a task's deliverable is a
+new HTTP route, the per-task test gate is necessary but not
+sufficient. The done.md authoring agent should grep
+`server/src/index.ts` (or the equivalent route-mount file) for
+the `mount*Route(routes)` call before claiming the route is
+wired. Better still: a Build-phase smoke gate that boots
+`pnpm dev` (or equivalent) and `curl`s each new endpoint will
+catch this category of regression at the work-graph level rather
+than at Review.
+
+**Cross-references:** `.loom/diff-features/review.md` finding R-001
+(Blocker); `.loom/diff-features/tasks/T-004.done.md`;
+`ui/apps/server/src/index.ts` lines 25-34 + 135-144;
+`ui/apps/server/test/git-status-route.test.ts` lines 29-33.
+
+## 2026-05-13 - diff-features - Static-source assertions are the price of node-only vitest
+
+Eight component / route-handler test files in diff-features assert
+on source-text patterns (`expect(src).toMatch(/useState<boolean>/)`)
+rather than rendered DOM behaviour. The pattern is forced by
+`ui/vitest.config.ts` declaring `environment: "node"` and an
+include glob of `apps/**/test/**/*.test.ts` (no `.tsx`, no jsdom,
+no @testing-library/react). The agents matched the existing
+precedent (`composer-controls.test.ts`,
+`proposed-plan-card.test.ts`,
+`ask-user-question-picker.test.ts`) rather than reworking the
+harness mid-task.
+
+The static-source pattern is the textbook P6 "tests describe
+structure not behaviour" smell. The Build agents are not at
+fault — the harness forces it. The fix lives in Plan / Spec:
+the project's verification environment needs jsdom or a
+playwright smoke gate, or the constraint needs to be declared up
+front in `spec.md ## Constraints` so testing strategy is sized
+honestly.
+
+**Cross-references:** `.loom/diff-features/review.md` finding R-006
+(Major, P6); all `tasks/T-NNN.done.md` "Deviations from task spec"
+section in diff-features where a React component or route was
+delivered.

@@ -15,6 +15,7 @@ import clsx from "clsx";
 import { AppLayout } from "../components/layout/AppLayout";
 import { LiveSidebar } from "../components/LiveSidebar";
 import { TasksPanel, type Task } from "../components/TasksPanel";
+import { DiffPanelContainer } from "../components/diff/DiffPanelContainer";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { PermissionRequestInline } from "../components/chat/PermissionRequestInline";
@@ -309,8 +310,37 @@ export function LiveChatRoute({ chatId }: Props) {
   const [state, dispatch] = useReducer(chatReducer, EMPTY_STATE);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [tasksUpdatedAt, setTasksUpdatedAt] = useState<number | null>(null);
-  const [tasksOpen, setTasksOpen] = useState(false);
+  /**
+   * T-007 / US-004 + US-005. Right-pane state is a discriminated
+   * union: at most one of Tasks / Diff is mounted at a time, with
+   * `null` collapsing the drawer. The Diff arm is gated at the
+   * consumer site on `chat?.worktree_mode === "worktree"` — the
+   * union itself stays mode-agnostic so the toggle handler can
+   * stay pure (the topbar conditionally renders the Diff button
+   * so the user never reaches `rightPane === "diff"` in local
+   * mode).
+   */
+  const [rightPane, setRightPane] = useState<"tasks" | "diff" | null>(null);
   const tasksAutoOpenedRef = useRef(false);
+  // T-007. Mirror `rightPane` into a ref so the `tasks-update`
+  // auto-open guard (inside the ws-attach effect closure, which
+  // captures `rightPane` once per `chatId`) can read the current
+  // value without re-subscribing the WebSocket on every pane
+  // toggle.
+  const rightPaneRef = useRef<"tasks" | "diff" | null>(null);
+  useEffect(() => {
+    rightPaneRef.current = rightPane;
+  }, [rightPane]);
+
+  // T-007. Toggle handlers per design.md contract: flip to the
+  // discriminator when the other pane (or null) is open; flip back
+  // to `null` when the same pane is already open. Both use the
+  // functional setter so the click handler is referentially stable
+  // and the toggle is race-free vs. concurrent auto-open writes.
+  const onToggleTasks = () =>
+    setRightPane((p) => (p === "tasks" ? null : "tasks"));
+  const onToggleDiff = () =>
+    setRightPane((p) => (p === "diff" ? null : "diff"));
   const [slashCommands, setSlashCommands] = useState<SlashCommandEntry[]>([]);
   const snackbar = useSnackbar();
 
@@ -348,7 +378,7 @@ export function LiveChatRoute({ chatId }: Props) {
     dispatch({ type: "reset" });
     setTasks(null);
     setTasksUpdatedAt(null);
-    setTasksOpen(false);
+    setRightPane(null);
     tasksAutoOpenedRef.current = false;
 
     const connect = () => {
@@ -408,9 +438,24 @@ export function LiveChatRoute({ chatId }: Props) {
             if (incoming) {
               setTasks(incoming);
               setTasksUpdatedAt(Date.now());
-              if (!tasksAutoOpenedRef.current && incoming.length > 0) {
+              // T-007 / US-005 AC5. Auto-open only fires when the
+              // drawer is collapsed. If the user has manually
+              // opened the Diff pane we must not clobber their
+              // selection when the first tasks-update arrives —
+              // the ref still latches so we don't fight subsequent
+              // toggles, but the new precondition is
+              // `rightPane === null`. We read through
+              // `rightPaneRef.current` because this closure was
+              // captured at attach time (the effect deps are
+              // `[chatId]`) — the ref stays current via the mirror
+              // effect above.
+              if (
+                !tasksAutoOpenedRef.current &&
+                rightPaneRef.current === null &&
+                incoming.length > 0
+              ) {
                 tasksAutoOpenedRef.current = true;
-                setTasksOpen(true);
+                setRightPane("tasks");
               }
             }
             break;
@@ -657,13 +702,31 @@ export function LiveChatRoute({ chatId }: Props) {
       <button
         type="button"
         data-testid="tasks-toggle"
-        onClick={() => setTasksOpen((v) => !v)}
-        className="text-[10px] font-mono px-1.5 py-0.5 rounded hover:bg-black/5 border"
+        onClick={onToggleTasks}
+        className={clsx(
+          "text-[10px] font-mono px-1.5 py-0.5 rounded hover:bg-black/5 border",
+          rightPane === "tasks" && "bg-black/5",
+        )}
         style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-        title={tasksOpen ? "Hide tasks" : "Show tasks"}
+        title={rightPane === "tasks" ? "Hide tasks" : "Show tasks"}
       >
         Tasks{tasks && tasks.length > 0 ? ` (${tasks.length})` : ""}
       </button>
+      {chat?.worktree_mode === "worktree" && (
+        <button
+          type="button"
+          data-testid="diff-toggle"
+          onClick={onToggleDiff}
+          className={clsx(
+            "text-[10px] font-mono px-1.5 py-0.5 rounded hover:bg-black/5 border",
+            rightPane === "diff" && "bg-black/5",
+          )}
+          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+          title={rightPane === "diff" ? "Hide diff" : "Show diff"}
+        >
+          Diff
+        </button>
+      )}
       <span
         className={clsx("text-[10px] font-mono px-1.5 py-0.5 rounded", connBg(conn))}
         title={`websocket ${conn}`}
@@ -678,12 +741,19 @@ export function LiveChatRoute({ chatId }: Props) {
       topBar={topBar}
       leftDrawer={<LiveSidebar />}
       rightDrawer={
-        <TasksPanel
-          tasks={tasks}
-          open={tasksOpen}
-          onToggle={() => setTasksOpen((v) => !v)}
-          lastUpdatedAt={tasksUpdatedAt}
-        />
+        rightPane === "tasks" ? (
+          <TasksPanel
+            tasks={tasks}
+            open={rightPane === "tasks"}
+            onToggle={onToggleTasks}
+            lastUpdatedAt={tasksUpdatedAt}
+          />
+        ) : rightPane === "diff" && chat?.worktree_mode === "worktree" ? (
+          <DiffPanelContainer
+            worktreePath={chat.worktree_path}
+            chatId={chat.id}
+          />
+        ) : undefined
       }
     >
         <MessagesTimeline

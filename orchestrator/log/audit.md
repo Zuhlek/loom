@@ -336,3 +336,115 @@ when writing constraints.
 Q7; `.loom/loom-ui-parity-gaps/spec.md ## Constraints`;
 `.loom/loom-ui-parity-gaps/test-report.md ## Notes for the reviewer`;
 `.loom/loom-ui-parity-gaps/review.md` finding R-002.
+
+## 2026-05-13 - diff-features - Build "green" can hide a missing production wire-up
+
+R-001 (Blocker) in diff-features Review: `mountGitStatusRoute` was
+implemented as a route module and 8 unit tests assert its handler
+behaviour, but the function is never invoked in
+`ui/apps/server/src/index.ts`. The route returns 404 in the running
+server. The Build Task Builder's done.md falsely claimed the mount
+was added at line 139; the per-task suite couldn't catch the false
+claim because the tests construct a private `routes` object and call
+`mountGitStatusRoute(routes)` directly, which always passes in
+isolation.
+
+**Audit lesson:** when a task's deliverable is a route module, the
+Review check should not stop at "tests green + handler file exists".
+It must also verify the production mount path — at minimum, grep
+`server/src/index.ts` for the `mount*Route(routes)` call. A
+follow-on improvement: Build-phase smoke gate should boot the server
+and curl each new endpoint; per-route unit tests in isolation are
+insufficient.
+
+**Cross-references:** `.loom/diff-features/review.md` finding R-001;
+`.loom/diff-features/tasks/T-004.done.md` (claims mount at line 139);
+`ui/apps/server/src/index.ts` lines 25-34 + 135-144;
+`ui/apps/server/test/git-status-route.test.ts` lines 29-33.
+
+## 2026-05-13 - diff-features - ADR-deviation downstream: a refactor's preceding step can become dead code
+
+Design ADR-6 in diff-features added optional controlled `scope` /
+`onScopeChange` props to `DiffPanelShellProps` so the
+worktree-panel container could drive the scope toggle through the
+shell. T-002 implemented the controlled-scope plumbing. T-008
+later deviated — its container inlines the scope toggle and renders
+`<BranchToolbar>` + `<DiffFileCard>` directly without going through
+the shell. T-008.done.md records the deviation with rationale, but
+the consequence (ADR-6 has no consumer; the controlled-scope
+plumbing is dead code) was not flagged until Review. Surface this
+as a recurring audit check: when a Build task deviates from an
+ADR's downstream-consumer assumption, ask "does the deviation
+invalidate the preceding refactor?"
+
+**Cross-references:** `.loom/diff-features/review.md` finding R-002;
+`.loom/diff-features/design.md` ADR-6;
+`.loom/diff-features/tasks/T-002.done.md` (controlled-scope props);
+`.loom/diff-features/tasks/T-008.done.md` "Deviations from task spec"
+#2 ("container does NOT wrap DiffPanelShell for scope rendering").
+
+## 2026-05-13 - diff-features - Pre-existing-failures baseline tracking lets a noisy suite still gate regressions
+
+The diff-features Build phase started with 6 pre-existing web test
+failures (`composer-attachments.test.ts` x5,
+`queued-input-policy.test.ts` x1) and 3 pre-existing tsc errors in
+`routes/live-chat.tsx:511-513`. Every task's done.md cross-verified
+`delta = 0` against this baseline via `git stash` + rerun. The
+discipline let the Build coordinator distinguish new regressions
+from inherited baseline cleanly across 8 parallel tasks. Worth
+codifying as a recurring expectation: every Build done.md asserts
+a delta-vs-baseline number, not just "tests green". Already
+established in `orchestrator/log/build.md`; surfacing here as the
+cross-phase audit pattern.
+
+**Cross-references:** `.loom/diff-features/test-report.md ## Suite
+totals`; every `tasks/T-NNN.done.md` "Test summary" section in
+diff-features.
+
+## 2026-05-13 - diff-features - Orchestrator-direct fix in lieu of Build re-dispatch for localized Review blockers
+
+After the first Review of diff-features returned `fail` with one
+Blocker (R-001 missing `mountGitStatusRoute` invocation in
+`ui/apps/server/src/index.ts`) and one Minor (R-003 misleading
+`DiffFileCard.tsx` comment block), the orchestrator did not
+re-dispatch a full Build phase. The standard recovery path
+(Review fail → Build rerun on the failing tasks → Review
+re-audit) would have re-run 8 task contexts to add a single
+`mountGitStatusRoute(routes);` line plus a one-line import and
+rewrite a misleading comment block — disproportionate cost.
+
+Instead the orchestrator applied both edits directly (two-line
+add to `index.ts` at lines 29 + 141, comment block rewrite at
+`DiffFileCard.tsx:12-13`), then dispatched a Review re-audit.
+The re-audit verified each fix in place, re-ran the impacted
+test suites (16 server route tests + 25 DiffFileCard tests, all
+green), and confirmed no new findings were introduced. Final
+verdict moved to `pass-with-accepted-risk` (the two Majors from
+the first audit, R-002 / R-006, were explicitly accepted as
+follow-ups by the orchestrator on the re-dispatch).
+
+**Audit lesson:** the framework's "Review fail → Build rerun"
+default has an implicit escape valve for one-line oversights
+that the per-task evidence already covers behaviourally. For
+diff-features, `git-status-route.test.ts` already exercised the
+handler exhaustively in isolation; the gap was strictly the
+production wire-up, not the handler logic. Re-running T-004's
+full context to add a single mount call would have been Build
+theatre rather than Build value.
+
+Worth surfacing for `/tune`: codify the orchestrator-direct
+branch in the Build-rerun decision tree explicitly. Suggested
+predicate: "if all Review blockers are localizable to ≤2 lines
+of source change AND don't require new tests AND the existing
+test evidence covers the handler/component behaviour
+in-isolation, the orchestrator MAY apply the fix directly and
+dispatch Review re-audit only (skipping a full Build rerun)."
+Without this codification, future weaves may hit the same
+oversize-recovery pattern.
+
+**Cross-references:** `.loom/diff-features/review.md` (cycle-2
+re-audit); `.loom/diff-features/develop-log.md` (
+`2026-05-13 - diff-features - Orchestrator-direct fix path for
+one-line oversights` entry); `ui/apps/server/src/index.ts` lines
+29 + 141; `ui/apps/web/src/components/diff/DiffFileCard.tsx`
+lines 12-13.

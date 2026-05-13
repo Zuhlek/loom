@@ -232,3 +232,89 @@ export function wsUrl(): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${window.location.host}/ws`;
 }
+
+// ---------------------------------------------------------------------------
+// T-006 — Git wire types and client functions
+// ---------------------------------------------------------------------------
+
+/** Response shape of `GET /git/status` (server: `routes/git-status.ts`). */
+export interface ApiGitStatus {
+  branch: string;
+  base: string;
+  ahead: number;
+  behind: number;
+  uncommitted: boolean;
+  remote?: string;
+}
+
+/** One section of `GET /diff` output (server: `routes/diff.ts`). */
+export interface ApiDiffSection {
+  kind: "per-turn" | "whole";
+  label: string;
+  diff: string;
+}
+
+/** Response shape of `GET /diff`. */
+export interface ApiDiffResponse {
+  sections: ApiDiffSection[];
+}
+
+/** Diff scope toggle: per-commit sections vs. one whole-conversation diff. */
+export type GitDiffMode = "per-turn" | "whole";
+
+export async function getGitStatus(
+  worktreePath: string,
+  base: string = "main",
+): Promise<ApiGitStatus> {
+  const qs = `worktreePath=${encodeURIComponent(worktreePath)}&base=${encodeURIComponent(base)}`;
+  return apiFetch<ApiGitStatus>(`/git/status?${qs}`);
+}
+
+export async function getDiff(
+  worktreePath: string,
+  opts: { mode: GitDiffMode; base?: string; signal?: AbortSignal },
+): Promise<ApiDiffResponse> {
+  const base = opts.base ?? "main";
+  const qs =
+    `worktreePath=${encodeURIComponent(worktreePath)}` +
+    `&base=${encodeURIComponent(base)}` +
+    `&mode=${encodeURIComponent(opts.mode)}`;
+  return apiFetch<ApiDiffResponse>(`/diff?${qs}`, { signal: opts.signal });
+}
+
+export async function postGitCommit(input: {
+  worktreePath: string;
+  message: string;
+  body?: string;
+  paths?: string[];
+}): Promise<{ sha: string }> {
+  return apiFetch<{ sha: string }>("/git/commit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function postGitPush(input: {
+  worktreePath: string;
+  setUpstream?: boolean;
+  forceWithLease?: boolean;
+}): Promise<{ ok: true } | { error: string }> {
+  return apiFetch<{ ok: true } | { error: string }>("/git/push", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function postGitPr(input: {
+  worktreePath: string;
+  title: string;
+  body?: string;
+}): Promise<{ url: string }> {
+  return apiFetch<{ url: string }>("/git/pr", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}

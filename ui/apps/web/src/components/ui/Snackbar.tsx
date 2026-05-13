@@ -40,6 +40,11 @@ export interface SnackbarOptions {
   dismissAfterMs?: number;
   /** Fired when the user clicks the dismiss button. */
   onDismiss?: () => void;
+  /** Optional inline link rendered after the message. The href is
+   *  opened in a new tab on click. Used by the Diff panel's PR-success
+   *  toast (`kind: "pr"`) so the user can click straight through to
+   *  the provider URL. */
+  action?: { label: string; url: string };
 }
 
 interface SnackbarEntry extends SnackbarOptions {
@@ -183,7 +188,24 @@ function SnackbarItem({
       }}
     >
       <SnackbarIcon type={entry.type} color={palette.icon} />
-      <span className="flex-1 min-w-0 break-words leading-relaxed">{entry.message}</span>
+      <span className="flex-1 min-w-0 break-words leading-relaxed">
+        {entry.message}
+        {entry.action && (
+          <>
+            {" "}
+            <a
+              href={entry.action.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-medium"
+              style={{ color: palette.icon }}
+              data-testid="snackbar-action"
+            >
+              {entry.action.label}
+            </a>
+          </>
+        )}
+      </span>
       <button
         type="button"
         aria-label="Dismiss"

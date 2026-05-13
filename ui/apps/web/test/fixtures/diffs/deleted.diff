@@ -1,0 +1,8 @@
+diff --git a/src/oldfile.ts b/src/oldfile.ts
+deleted file mode 100644
+index abcd123..0000000
+--- a/src/oldfile.ts
++++ /dev/null
+@@ -1,2 +0,0 @@
+-export const REMOVED = "gone";
+-export const ALSO_GONE = true;

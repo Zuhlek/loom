@@ -201,3 +201,64 @@ of "why didn't the Spec agent just ask?" confusion for future runs.
 Source: `.loom/loom-ui-parity-gaps/decisions.md` Q1-Q12 (12 questions
 resolved with full answer-slot fidelity); `quality-review.md` does
 not record any Spec-side gap.
+
+## 2026-05-13 - diff-features - Plan template should probe DOM-test capability up front
+
+The diff-features weave produced eight component / route tests that
+assert on source-text patterns (`expect(src).toMatch(/.../)`) rather
+than rendered DOM behaviour. The pattern was forced by the existing
+`ui/vitest.config.ts` declaring `environment: "node"` and an include
+glob of `*.test.ts` only — no jsdom, no @testing-library/react, no
+`.test.tsx` support. Every Build task that delivered a React
+component (T-002, T-003, T-007, T-008) recorded the same deviation
+("test filenames are `.test.ts` not `.test.tsx`; static-source
+precedent").
+
+The deviation should have been surfaced as a Constraint in
+`spec.md ## Constraints` during the Spec phase, or sized as a
+testing-strategy decision in the Plan phase. Neither phase asked the
+question "does the verification environment support DOM testing for
+the deliverables?" before sizing the test surface. The Plan template
+should add a question along those lines so future weaves either
+(a) declare the constraint and scope the test strategy accordingly,
+or (b) decide whether to rework the harness as part of the slice.
+
+The flip side: the project's vitest config could grow jsdom and
+@testing-library/react support as a one-line follow-up. If that
+happens, the static-source workaround stops being necessary and the
+deviation disappears.
+
+**Cross-references:** `.loom/diff-features/review.md` finding R-006
++ learning L-001; all four React-component tasks' done.md
+"Deviations from task spec" sections;
+`.loom/diff-features/tests.md` ## Verification environment
+(which calls out node-test as the environment but doesn't flag the
+DOM-test gap).
+
+## 2026-05-13 - diff-features - ADR-deviation downstream: design-time refactor can become dead code
+
+Design ADR-6 in diff-features added optional controlled `scope` /
+`onScopeChange` props to `DiffPanelShellProps` so the worktree-panel
+container could drive the toggle through the shell. T-002 (an
+earlier task) implemented the controlled-scope plumbing. T-008 (a
+later task) chose to inline the scope-toggle strip directly in
+`DiffPanelContainer` and render `<BranchToolbar>` + `<DiffFileCard>`
+without using the shell. T-008.done.md recorded the deviation with
+rationale (the container has to own the layout for `<CommitDialog>`
+placement anyway, so wrapping the shell would add a layer for one
+render). Net result: ADR-6 plumbing has no production consumer.
+
+The Design phase couldn't have known T-008 would deviate. The Plan
+phase couldn't have either. But the *signal* of the eventual dead
+abstraction was visible inside T-008's task spec: the container's
+sibling components (`<CommitDialog>`, scope toggle, snackbar
+bridging) all live in the container's layout, so the shell was
+always going to be a thin wrapper. A Plan-phase check —
+"are all of ADR-N's consumers still going to consume it after this
+work-graph lands?" — would have caught the upcoming dead-code at
+DAG-construction time.
+
+**Cross-references:** `.loom/diff-features/design.md` ADR-6;
+`.loom/diff-features/tasks/T-002.done.md`;
+`.loom/diff-features/tasks/T-008.done.md` "Deviations from task spec"
+#2; `.loom/diff-features/review.md` finding R-002.
