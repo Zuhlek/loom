@@ -46,7 +46,14 @@ export interface ChatRepo {
   recentCwds(limit?: number): string[];
   setPid(id: string, pid: number | null): void;
   setSessionId(id: string, sessionId: string): void;
-  /** Runtime-only field set by the bridge at spawn time. */
+  /**
+   * Bridge-owned field set at spawn time once the worktree is materialised.
+   * Persisted so that cold loads (server restart between attaches) return
+   * the path without waiting for the next attach to re-resolve it. The
+   * value is safe to reuse on restart because `createWorktree` is
+   * idempotent — a stale persisted path is verified on the next spawn
+   * and overwritten if it no longer matches the chat's branch.
+   */
   setWorktreePath(id: string, path: string | null): void;
   dismissResumeBanner(id: string): void;
   markInert(id: string): void;

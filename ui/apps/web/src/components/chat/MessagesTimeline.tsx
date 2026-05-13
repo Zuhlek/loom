@@ -390,13 +390,15 @@ function AssistantRow({ item }: { item: AssistantMessageItem }) {
 }
 
 /**
- * WhatsApp-style bubble wrapping the assistant's plain-text answers.
- * Left-aligned via the parent's `items-start`; the visual tail
- * (`rounded-bl-sm`) mirrors the user bubble's `rounded-br-sm`. Only
- * applied to text content — tool_use cards and the `Thinking` <details>
- * keep their existing chrome and render outside the bubble. The
+ * Plain-text wrapper for the assistant's text answers. No bubble chrome —
+ * answers render as bare text spanning the full width of the
+ * MessagesTimeline column, so the left edge aligns with the composer's
+ * left border and the right edge aligns with the composer's right
+ * border. `w-full` explicitly stretches the cross-axis inside the
+ * parent's flex `items-start` container (tool_use cards and
+ * <Thinking> details still render at their natural width). The
  * `timestamp` (when provided — last text bubble of the message) sits
- * bottom-right, matching the user-bubble's time treatment.
+ * bottom-right.
  */
 function AssistantTextBubble({
   children,
@@ -406,15 +408,7 @@ function AssistantTextBubble({
   timestamp: string | null;
 }) {
   return (
-    <div
-      className="max-w-[85%] rounded-2xl rounded-bl-sm border px-4 py-2.5 shadow-sm"
-      style={{
-        background: "var(--bubble-agent-bg)",
-        borderColor: "var(--bubble-agent-border)",
-        color: "var(--bubble-agent-fg)",
-      }}
-      data-testid="assistant-message-bubble"
-    >
+    <div className="w-full" data-testid="assistant-message-bubble">
       {children}
       {timestamp && (
         <p className="mt-1 text-right text-[10px] opacity-60">{timestamp}</p>

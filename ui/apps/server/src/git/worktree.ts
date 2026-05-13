@@ -106,6 +106,14 @@ export interface WorktreeInfo {
 
 const WT_LINE = /^worktree (.+)$/;
 
+function canonicalize(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
 /** `git worktree list --porcelain`, returning structured rows. */
 export async function listWorktrees(parentCwd: string): Promise<WorktreeInfo[]> {
   const { stdout } = await executeGit(parentCwd, ["worktree", "list", "--porcelain"]);
@@ -139,11 +147,51 @@ export interface CreateWorktreeOpts {
   base?: string;
 }
 
-/** Create a new git worktree with a fresh branch. Returns the worktree path. */
+/**
+ * Ensure a git worktree exists at `worktreePath` on branch `newBranch`,
+ * returning the path. Idempotent: a server restart or agent respawn
+ * re-resolves to the same `<chatId>/<sha8>` path, so this must succeed
+ * cleanly when the worktree (and/or its branch) already exist. Failing
+ * the second resolve would silently fall the spawned agent back to the
+ * parent repo cwd via `resolveSpawnCwd`'s `create-failed` branch and the
+ * agent would unknowingly edit files outside the worktree.
+ *
+ * Three cases:
+ *   1. Worktree exists at `worktreePath` and is on `newBranch` → reuse.
+ *   2. Branch exists but no worktree → attach without `-b`.
+ *   3. Neither exists → create both with `-b`.
+ */
 export async function createWorktree(opts: CreateWorktreeOpts): Promise<string> {
   fs.mkdirSync(path.dirname(opts.worktreePath), { recursive: true });
-  const args = ["worktree", "add", "-b", opts.newBranch, opts.worktreePath];
-  if (opts.base) args.push(opts.base);
+
+  const expectedRef = `refs/heads/${opts.newBranch}`;
+  const existing = await listWorktrees(opts.parentCwd).catch(() => [] as WorktreeInfo[]);
+  // `git worktree list` returns realpath-resolved paths (on macOS `/var`
+  // → `/private/var`). Compare via realpath when both ends exist; fall
+  // back to lexical compare for the no-symlink case.
+  const target = canonicalize(opts.worktreePath);
+  const match = existing.find((w) => canonicalize(w.path) === target);
+  if (match) {
+    if (match.branch === expectedRef) return opts.worktreePath;
+    throw new GitCommandError(
+      `worktree at ${opts.worktreePath} is on ${match.branch ?? "(detached)"}, expected ${expectedRef}`,
+      null,
+      "",
+      [],
+    );
+  }
+
+  const branchProbe = await executeGit(
+    opts.parentCwd,
+    ["show-ref", "--verify", "--quiet", expectedRef],
+    { allowNonZeroExit: true },
+  );
+  const branchExists = branchProbe.exitCode === 0;
+
+  const args = branchExists
+    ? ["worktree", "add", opts.worktreePath, opts.newBranch]
+    : ["worktree", "add", "-b", opts.newBranch, opts.worktreePath];
+  if (opts.base && !branchExists) args.push(opts.base);
   await executeGit(opts.parentCwd, args);
   return opts.worktreePath;
 }

@@ -5,6 +5,7 @@
  * (see envelope.ts). This file gives a typed union of the new SDK-backed
  * frame kinds so the bridge and the web client can stay aligned.
  */
+import type { ChatRow } from "../metadata-store/repos/chat.ts";
 import type {
   ChatItem,
   ChatSnapshot,
@@ -254,6 +255,19 @@ export interface SessionStateFrame {
   };
 }
 
+/**
+ * Push the latest chat row to attached clients. Emitted by the bridge
+ * when `worktree_path` (and other bridge-owned fields) become known —
+ * the row is freshly resolved at spawn time and only the in-memory copy
+ * has it, so the web client's mount-time `getChat` snapshot is stale
+ * until this frame patches it in.
+ */
+export interface ChatUpdateFrame {
+  kind: "chat-update";
+  "chat-id": string;
+  body: { chat: ChatRow };
+}
+
 export type ServerFrame =
   | AttachedFrame
   | SnapshotFrame
@@ -264,6 +278,7 @@ export type ServerFrame =
   | PendingQuestionFrame
   | TasksUpdateFrame
   | SessionStateFrame
+  | ChatUpdateFrame
   | ErrorFrame;
 
 /**

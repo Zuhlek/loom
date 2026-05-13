@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
-import { executeGit, listWorktrees, getStatus, sanitizeBranchSegment, GitCommandError } from "../src/git/worktree";
+import { createWorktree, executeGit, listWorktrees, getStatus, sanitizeBranchSegment, GitCommandError } from "../src/git/worktree";
 
 function makeRepo(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "loom-wt-"));
@@ -50,6 +50,42 @@ describe("worktree manager", () => {
     const status = await getStatus(dir);
     expect(status.isRepo).toBe(false);
     rmSync(dir, { recursive: true });
+  });
+
+  test("createWorktree is idempotent when worktree + branch already exist", async () => {
+    const repo = makeRepo();
+    const wtPath = path.join(repo, ".wt", "feature");
+    const first = await createWorktree({ parentCwd: repo, worktreePath: wtPath, newBranch: "loom/feature" });
+    expect(first).toBe(wtPath);
+    const second = await createWorktree({ parentCwd: repo, worktreePath: wtPath, newBranch: "loom/feature" });
+    expect(second).toBe(wtPath);
+    rmSync(repo, { recursive: true });
+  });
+
+  test("createWorktree attaches to an orphaned branch (worktree removed, branch lingering)", async () => {
+    const repo = makeRepo();
+    const wtPath = path.join(repo, ".wt", "orphan");
+    await createWorktree({ parentCwd: repo, worktreePath: wtPath, newBranch: "loom/orphan" });
+    // Simulate the worktree dir being wiped without `git worktree remove`.
+    rmSync(wtPath, { recursive: true });
+    await executeGit(repo, ["worktree", "prune"]);
+    // Branch still exists; re-resolving must attach instead of `-b`.
+    const reused = await createWorktree({ parentCwd: repo, worktreePath: wtPath, newBranch: "loom/orphan" });
+    expect(reused).toBe(wtPath);
+    const wts = await listWorktrees(repo);
+    const wtReal = realpathSync(wtPath);
+    expect(wts.some((w) => realpathSync(w.path) === wtReal)).toBe(true);
+    rmSync(repo, { recursive: true });
+  });
+
+  test("createWorktree rejects when the path is checked out to a different branch", async () => {
+    const repo = makeRepo();
+    const wtPath = path.join(repo, ".wt", "conflict");
+    await createWorktree({ parentCwd: repo, worktreePath: wtPath, newBranch: "loom/expected" });
+    await expect(
+      createWorktree({ parentCwd: repo, worktreePath: wtPath, newBranch: "loom/other" }),
+    ).rejects.toBeInstanceOf(GitCommandError);
+    rmSync(repo, { recursive: true });
   });
 
   test("sanitizeBranchSegment normalizes user input", () => {

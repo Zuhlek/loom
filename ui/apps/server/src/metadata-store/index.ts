@@ -215,6 +215,7 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
     "delete",
     "setPid",
     "setSessionId",
+    "setWorktreePath",
     "dismissResumeBanner",
     "markInert",
     "markActive",

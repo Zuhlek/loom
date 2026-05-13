@@ -6,6 +6,8 @@
  * — discriminated by `kind` for items / `kind` for frames.
  */
 
+import type { ApiChat } from "./api";
+
 export type ChatItemId = string;
 export type TurnId = string;
 export type ToolUseId = string;
@@ -218,6 +220,17 @@ export type ServerFrame =
         recoveryAttempt?: number;
         lastError?: string;
       };
+    }
+  | {
+      /**
+       * Bridge-emitted chat row update. Fired on attach (and any future
+       * server-side mutation of bridge-owned fields) so the client can
+       * patch its stale mount-time `getChat` snapshot — notably for
+       * `worktree_path`, which only becomes known after spawn.
+       */
+      kind: "chat-update";
+      "chat-id": string;
+      body: { chat: ApiChat };
     }
   | { kind: "error"; "chat-id"?: string; body: { message: string } };
 

@@ -407,6 +407,13 @@ export function LiveChatRoute({ chatId }: Props) {
           case "attached":
             // No-op — snapshot follows.
             break;
+          case "chat-update":
+            // Patch in bridge-owned fields (notably `worktree_path`) that
+            // weren't set when the initial `getChat` ran. The frame is
+            // emitted right after the bridge's attach handler completes
+            // its spawn-time resolution.
+            if (frame.body?.chat) setChat(frame.body.chat);
+            break;
           case "snapshot":
             dispatch({ type: "snapshot", payload: frame });
             break;

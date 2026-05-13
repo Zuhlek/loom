@@ -448,3 +448,60 @@ re-audit); `.loom/diff-features/develop-log.md` (
 one-line oversights` entry); `ui/apps/server/src/index.ts` lines
 29 + 141; `ui/apps/web/src/components/diff/DiffFileCard.tsx`
 lines 12-13.
+
+## 2026-05-13 - composer-attachments-and-at-file - Second-pass Review: verify prior findings against current working tree
+
+Cross-phase Review pattern observation. When the user chooses "Go
+back to Build" at a Review gate and Build re-opens specific cards
+with fixes, the next Review pass should NOT simply re-run the prior
+findings list as a checklist. The working tree is the source of
+truth — each prior finding's premise must be verified against the
+CURRENT state (grep, tsc, Read) and explicitly marked RESOLVED /
+INVALID rather than re-narrated.
+
+**Concrete example from this loom (second pass).**
+
+Prior Review (2026-05-12) raised:
+- Major #1: `sdkContent: unknown` widens past SDK MessageParam type
+  contract at `claude-session-bridge.ts:1399`; TS2345 at push sites
+  ~1428 + ~1442.
+- Minor #1: `[data-dragging]` CSS rule claimed in T-008 done.md but
+  not landed in styles.css.
+
+Build re-open (2026-05-13) landed fixes. Second Review pass verified:
+- `grep -n "sdkContent\|SdkContent" claude-session-bridge.ts` → shows
+  indexed-access types `SdkContent = SDKUserMessage["message"]["content"]`
+  + `Extract<...>` aliases at lines 1423-1428; no `unknown`
+  declaration.
+- `pnpm tsc --noEmit -p apps/server 2>&1 | grep -E
+  "TS2345|claude-session-bridge\.ts:14(2[0-9]|3[0-9]|4[0-9]|5[0-9])"`
+  → zero matches.
+- `grep -n "dragging\|drag" apps/web/src/styles.css` → rule present
+  at line 175 with documented block comment.
+
+Both findings marked INVALID against current working tree. NOT
+re-raised. New review.md explicitly states each prior finding's
+verification status in a dedicated "Prior-finding verification"
+section before stating the new verdict.
+
+**Why this matters.** Re-raising a finding the working tree has
+already closed (a) adds noise the user must wade through to
+understand what changed; (b) erodes trust in the audit; (c) creates
+a perverse incentive to "look thorough" by re-stating known
+information. The Review Audit Agent's job after a Build re-open is
+to confirm closure, not to re-narrate the original problem.
+
+**Recommended convention.** When the Review phase signature receives
+a `superseded/<timestamp>/review.md` input (i.e., this is a second
+or later pass), the new `review.md` MUST include a "Prior-finding
+verification" section that walks every prior Blocker / Major / Minor
+finding, records the verification method used (grep / tsc / test
+run), and marks the finding RESOLVED / INVALID / STILL-OPEN against
+the current working tree. Findings not closed by the re-open get
+re-raised; findings the re-open closed do not.
+
+**Cross-references:**
+`.loom/composer-attachments-and-at-file/review.md` (the
+"Prior-finding verification" section); `.loom/composer-attachments-and-at-file/superseded/20260512T214740Z/review.md`
+(the prior pass); `ui/apps/server/src/process-manager/claude-session-bridge.ts`
+lines 1415-1459; `ui/apps/web/src/styles.css` lines 165-178.

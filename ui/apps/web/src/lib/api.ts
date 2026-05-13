@@ -16,6 +16,7 @@ export interface ApiChat {
   pid: number | null;
   last_opened: string;
   pinned: boolean;
+  resume_banner_dismissed: boolean;
   inert: boolean;
   created_at: string;
 }

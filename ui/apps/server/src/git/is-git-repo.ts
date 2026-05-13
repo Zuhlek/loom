@@ -15,11 +15,14 @@ export interface GitProbeResult {
 }
 
 export function isGitRepo(p: string): GitProbeResult {
+  // Bail early if the path does not exist on disk.
   if (!fs.existsSync(p)) return { isGit: false };
   let cur = path.resolve(p);
+  // Walk upward from the given path looking for a `.git` marker.
   while (cur !== "/") {
     const gitMarker = path.join(cur, ".git");
     if (fs.existsSync(gitMarker)) {
+      // Found a repo root — return its name and top-level path.
       const repoName = path.basename(cur);
       return { isGit: true, repoName, topLevel: cur };
     }

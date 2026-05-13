@@ -1319,3 +1319,74 @@ honestly.
 (Major, P6); all `tasks/T-NNN.done.md` "Deviations from task spec"
 section in diff-features where a React component or route was
 delivered.
+
+## 2026-05-13 - composer-attachments-and-at-file - Re-open from Review: T-002 SDK typing + T-008 [data-dragging] CSS
+
+Build re-opened by user choosing "Go back to Build" at the Review gate.
+Re-run lands two narrow fixes for Review's Major #1 and Minor #1.
+
+**Major #1 (T-002) — Bridge SDK content-type widening (P7
+fight-the-framework).** Original T-002 used `const sdkContent: unknown`
+to bypass the SDK's `MessageParam.content` strict typing, producing
+two TS2345 errors at the queue.push sites. Re-run replaced the
+widening with indexed-access types through `SDKUserMessage["message"]
+["content"]`, deriving `SdkContent`, `SdkBlock`, `SdkTextBlock`,
+`SdkImageBlock`, `SdkBase64Source`, `SdkImageMediaType` via
+`Extract<...>` over the SDK union. The wire-protocol
+`UserTurnImage.mediaType: string` is wider than the SDK's narrow
+`'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'` union; the
+runtime trust boundary is `sanitizeUserTurnImages` (T-003), so the
+re-run asserts `img.mediaType as SdkImageMediaType` exactly once at
+the construction site with an inline boundary comment, rather than
+widening the wire type (which would ripple into ~10 callsites in
+both server and web for zero functional gain) or tightening the
+sanitiser (orthogonal to this finding's scope).
+
+**Minor #1 (T-008) — Missing `[data-dragging]` CSS rule.** T-008's
+original done.md claimed the rule was added but grep confirmed
+otherwise. Re-run appended the rule after `.streaming-caret` in
+styles.css. Uses bare `[data-dragging]` selector (no value) for
+React-serialisation robustness. Tints to `var(--info)` border + faint
+primary-tinted background; `!important` overrides the container's
+inline `borderColor: var(--border)` (cleanest no-back-compat path —
+the alternative of refactoring the inline style into a class would
+churn the composer chrome for no functional benefit).
+
+**No back-compat audit.** Both fixes are single-version: no parallel
+branches, no aliased shims, no deprecated paths. The `unknown` cast
+is fully removed (T-002); only one `[data-dragging]` rule was added
+(T-008).
+
+**Verification.**
+- `tsc --noEmit` on the server confirms zero TS2345 noise at the
+  bridge push sites (pre-existing TS5097 / TS2741 noise was flagged
+  out-of-scope by the dispatch brief).
+- Server tests: 230/230 green; bridge-user-turn-images (5),
+  bridge-image-flatten (5), http-ws-user-turn-images (12) all pass.
+- Web: the T-008 contract test
+  ("styles.css has a [data-dragging] selector for the highlight")
+  now passes. 4 pre-existing composer-attachments failures remain
+  (T-005, T-006, T-010, T-013) — these are present on baseline
+  pre-rerun and are explicitly noted as out-of-scope by the dispatch
+  brief (untracked TDD-RED scaffolds + pre-existing harness gaps).
+
+**Process learning (carries forward to the rerun-loop pattern).**
+Review's catch of an unverified done.md claim (T-008 saying the CSS
+rule was added when it wasn't) reinforces a previously-captured
+pattern: done.md narratives are not a substitute for a grep-or-test
+verification of the actual artifact. The composer-attachments-and-at-file
+loom now has TWO precedents (this one + the original Plan-time
+HTTP-route mount-call gap from diff-features) for "done.md claims
+that aren't reverified by Build's gate slip through to Review".
+Build-phase recommendation: when a task touches CSS or static
+assets, the verification gate should `grep -F "<selector>"
+<file>` for the claimed addition rather than relying on a
+unit-test-only signal.
+
+**Cross-references:** `.loom/composer-attachments-and-at-file/develop-log.md`
+"2026-05-13" entry; `.loom/composer-attachments-and-at-file/tasks/T-002.done.md`
+attempt 2 notes; `.loom/composer-attachments-and-at-file/tasks/T-008.done.md`
+attempt 2 notes; `.loom/composer-attachments-and-at-file/superseded/20260512T214740Z/review.md`
+Major #1 + Minor #1; `ui/apps/server/src/process-manager/claude-session-bridge.ts`
+lines ~1395-1442; `ui/apps/web/src/styles.css` lines ~166-179.
+

@@ -366,6 +366,19 @@ export class ClaudeSessionBridge {
     }
 
     session.clients.add(client);
+    // Push the chat row so the web client can patch in fields the bridge
+    // resolves at spawn time (notably `worktree_path`). Without this,
+    // the UI's mount-time `getChat` snapshot stays stale until a route
+    // change — the diff panel in particular reads `worktree_path`
+    // straight off the chat row.
+    const chatRow = this.store.chats.get(session.chatId);
+    if (chatRow) {
+      this.sendTo(client, {
+        kind: "chat-update",
+        "chat-id": session.chatId,
+        body: { chat: chatRow },
+      });
+    }
     this.sendTo(client, snapshotFrame(session));
   }
 
@@ -423,8 +436,14 @@ export class ClaudeSessionBridge {
     if (!pending || pending.pending.id !== id) return;
 
     if (behavior === "allow") {
+      // Echo the original tool input back as `updatedInput`. The SDK's
+      // TS type marks it optional, but the claude-code binary's runtime
+      // Zod schema rejects an "allow" result that omits it (mirrors
+      // t3code's `ClaudeAdapter.ts` permission paths, which always set
+      // `updatedInput: toolInput`).
       pending.resolve({
         behavior: "allow",
+        updatedInput: pending.pending.input,
         updatedPermissions: opts.remember ? pending.suggestions : undefined,
         toolUseID: pending.pending.toolUseId,
       });
