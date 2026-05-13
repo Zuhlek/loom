@@ -161,3 +161,19 @@ body::after {
   color: var(--info);
   animation: loom-pulse 1s ease-in-out infinite;
 }
+
+/*
+ * ChatComposer drop-target highlight (T-008 / US-003 AC1).
+ *
+ * The composer container toggles `data-dragging` on/off while a file
+ * drag is hovering it (React serialises `true` to `data-dragging="true"`
+ * and omits the attribute on `undefined`). The rule tints the border
+ * and warms the background with the primary (info) hue so the user
+ * sees a clear "drop here" affordance — kept subtle to match the
+ * existing composer chrome (1px border, no heavy outline or animation).
+ */
+[data-dragging] {
+  border-color: var(--info) !important;
+  background-color: rgba(59, 130, 246, 0.06) !important;
+}
+

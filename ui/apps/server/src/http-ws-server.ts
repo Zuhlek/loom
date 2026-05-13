@@ -187,7 +187,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
     }
     wsState.set(socket, { origin, attachedChatId: null });
 
-    socket.on("message", (raw) => {
+    socket.on("message", async (raw) => {
       let envelope: ChatEnvelope;
       try {
         const text = typeof raw === "string" ? raw : raw.toString("utf8");
