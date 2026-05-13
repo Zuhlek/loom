@@ -77,21 +77,12 @@ describe("T-004 ChatComposer — permission-mode selector (US-004 AC1/AC2)", () 
   });
 });
 
-describe("T-004 ChatComposer — queue-priority control (US-004 AC3)", () => {
-  test("ChatComposer declares the queue-priority props", () => {
-    const src = readFileSync(composerPath, "utf8");
-    expect(src).toMatch(/queuePriority\s*[:?]/);
-    expect(src).toMatch(/onQueuePriorityChange/);
-  });
-
-  test("ChatComposer renders the queue-priority control (visible on `isRunning`)", () => {
-    const src = readFileSync(composerPath, "utf8");
-    // The toggle/selector exposes the "next" priority value as a
-    // control somewhere in the JSX.
-    expect(src).toMatch(/queuePriority/);
-    expect(src).toMatch(/value=["']next["']/);
-  });
-});
+// Queue-priority describe block intentionally removed: the composer no
+// longer exposes a priority toggle (the chip was confusing and the
+// "send now / send-next" distinction was not required — every submit
+// now lands on the SDK's default queue placement). The wire still
+// accepts an optional `priority` field (server-side ADR-004) for
+// future use, but the web no longer emits it.
 
 describe("T-004 chat-types mirror — PermissionMode + frame variants", () => {
   test("chat-types exports a `PermissionMode` union with the four SDK values", () => {
@@ -120,13 +111,6 @@ describe("T-004 live-chat — frame emission + composer wiring", () => {
   test("live-chat dispatches a `permission-mode-set` frame when the dropdown changes", () => {
     const src = readFileSync(liveChatPath, "utf8");
     expect(src).toMatch(/permission-mode-set/);
-  });
-
-  test("live-chat forwards composer priority via the `user-turn` frame", () => {
-    const src = readFileSync(liveChatPath, "utf8");
-    // The submit callback now carries a priority arg; the body field
-    // must mention `priority` so the SDK-side queue sees it.
-    expect(src).toMatch(/priority/);
   });
 
   test("live-chat tracks `permissionMode` in reducer state and supplies it to the composer", () => {

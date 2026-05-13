@@ -37,6 +37,30 @@ const DOT_FOR_MODE: Record<ApiChat["permission_mode"], string> = {
   "trusted-vm": "bg-red-500",
 };
 
+/**
+ * Phase → dot color for looms in the sidebar. The scale runs red →
+ * green across the five `/weave` phases, mirroring the user's mental
+ * model of "early/risky" to "almost shipped". A `lifecycle === "complete"`
+ * loom overrides this with gray regardless of phase. Unknown / missing
+ * phase falls back to a muted gray.
+ */
+const DOT_FOR_PHASE: Record<string, string> = {
+  spec: "bg-red-500",
+  design: "bg-orange-500",
+  plan: "bg-amber-500",
+  build: "bg-lime-500",
+  review: "bg-emerald-500",
+};
+
+function loomDotClass(
+  phase: string | null | undefined,
+  lifecycle: string | null | undefined,
+): string {
+  if (lifecycle === "complete") return "bg-gray-400";
+  if (phase && DOT_FOR_PHASE[phase]) return DOT_FOR_PHASE[phase];
+  return "bg-gray-300";
+}
+
 export function LiveSidebar() {
   const { state, error, refresh } = useSidebarState();
   const [location, navigate] = useLocation();
@@ -124,7 +148,7 @@ export function LiveSidebar() {
             aria-label="New project"
             title="New project"
           >
-            + New project
+            +
           </button>
         </div>
 
@@ -172,18 +196,6 @@ export function LiveSidebar() {
           <span className="text-[10px] uppercase tracking-[0.12em] font-medium" style={{ color: "var(--muted-foreground)" }}>
             Looms
           </span>
-          <button
-            onClick={() => {
-              void refresh();
-            }}
-            className="text-[10px] hover:text-[var(--foreground)]"
-            style={{ color: "var(--muted-foreground)" }}
-            aria-label="Refresh looms"
-            title="Refresh looms"
-            data-testid="refresh-looms"
-          >
-            Refresh
-          </button>
         </div>
         {groups.some((g) => g.looms.length > 0) ? (
           <div>
@@ -196,22 +208,9 @@ export function LiveSidebar() {
         ) : null}
       </div>
 
-      {/* Footer */}
-      <div className="border-t px-2.5 py-2 flex items-center gap-2" style={{ borderColor: "var(--border)" }}>
-        <Link href="/settings">
-          <button
-            className="size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]"
-            style={{ color: "var(--muted-foreground)" }}
-            aria-label="Settings"
-            title="Settings"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1.03 1.56V21a2 2 0 01-4 0v-.09a1.7 1.7 0 00-1.11-1.56 1.7 1.7 0 00-1.87.34l-.06.06A2 2 0 014 17.93l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.56-1.03H3a2 2 0 010-4h.09A1.7 1.7 0 004.6 9.9a1.7 1.7 0 00-.34-1.87l-.06-.06A2 2 0 016.07 4l.06.06a1.7 1.7 0 001.87.34h.09A1.7 1.7 0 009.1 2.91V3a2 2 0 014 0v.09a1.7 1.7 0 001.03 1.56 1.7 1.7 0 001.87-.34l.06-.06A2 2 0 0119.93 7l-.06.06a1.7 1.7 0 00-.34 1.87v.09c.27.66.92 1.09 1.65 1.09H21a2 2 0 010 4h-.09c-.73 0-1.38.43-1.65 1.09z" />
-            </svg>
-          </button>
-        </Link>
-      </div>
+      {/* Settings has moved to the top app bar (top-right). The
+          previous footer + divider were removed so the sidebar runs
+          edge-to-edge. */}
       {newProjectOpen ? (
         <NewProjectDialog
           onClose={() => setNewProjectOpen(false)}
@@ -363,24 +362,30 @@ function LoomProjectGroup({
         <span className="text-xs font-medium flex-1 min-w-0 truncate text-[var(--foreground)]">{project.name}</span>
         <span className="text-[10px] shrink-0" style={{ color: "var(--muted-foreground)" }}>{looms.length}</span>
       </div>
-      {looms.map((f) => (
-        <button
-          key={f.id}
-          onClick={() => navigate(`/loom/${f.projectId}/${encodeURIComponent(f.name)}`)}
-          className="w-full flex items-center gap-1.5 px-2 py-1 ml-3 min-w-0 rounded-md text-xs hover:bg-[var(--accent)]"
-          title={`${f.dotLoomPath}`}
-          data-testid="loom-row"
-        >
-          <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-            {/* Rune-ish glyph for loom entries; matches the static demo header. */}
-            ᚠ
-          </span>
-          <span className="flex-1 min-w-0 truncate text-left">{f.name}</span>
-          <span className="text-[9px] font-mono px-1 rounded shrink-0" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>
-            …
-          </span>
-        </button>
-      ))}
+      {looms.map((f) => {
+        const dotTitle = f.lifecycle === "complete"
+          ? "done"
+          : (f.phase ?? "no pipeline");
+        return (
+          <button
+            key={f.id}
+            onClick={() => navigate(`/loom/${f.projectId}/${encodeURIComponent(f.name)}`)}
+            className="w-full flex items-center gap-1.5 px-2 py-1 ml-3 min-w-0 rounded-md text-xs hover:bg-[var(--accent)]"
+            title={`${f.dotLoomPath} · ${dotTitle}`}
+            data-testid="loom-row"
+          >
+            {/* Phase circle (red→green, gray when done) — mirrors the
+                chat-row dot so loom and chat entries share a shape. */}
+            <span
+              className={clsx(
+                "size-1.5 rounded-full shrink-0",
+                loomDotClass(f.phase, f.lifecycle),
+              )}
+            />
+            <span className="flex-1 min-w-0 truncate text-left">{f.name}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

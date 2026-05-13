@@ -21,14 +21,6 @@ import { ComposerAtFileMenu } from "./ComposerAtFileMenu";
 import { ComposerSlashMenu } from "./ComposerSlashMenu";
 
 /**
- * Queue-priority value as exposed by the composer UI. Maps onto the
- * SDK's `SDKUserMessage.priority` field directly — "now" is the
- * default (no priority bump) and "next" is the queue-priority bump
- * used while a turn is running (US-007).
- */
-export type ComposerQueuePriority = "now" | "next";
-
-/**
  * T-007 / US-007. Three-state composer policy mirror — kept in sync
  * with `routes/live-chat.tsx`'s `ComposerMode` type. The composer
  * uses this to split hard-disable (blocked) from queue-while-running
@@ -54,9 +46,11 @@ export interface ChatComposerProps {
   compact?: boolean;
   /**
    * US-006 / T-010. Submit handler. Always receives `images` as an
-   * array (empty when no attachments are held).
+   * array (empty when no attachments are held). The composer no
+   * longer exposes a queue-priority selector — every submit is the
+   * default "now" priority on the wire.
    */
-  onSubmit?: (text: string, priority: ComposerQueuePriority, images: UserTurnImage[]) => void;
+  onSubmit?: (text: string, images: UserTurnImage[]) => void;
   /** When true, the running turn is interruptable — shows a stop button. */
   isRunning?: boolean;
   onInterrupt?: () => void;
@@ -69,16 +63,6 @@ export interface ChatComposerProps {
    */
   permissionMode?: PermissionMode;
   onPermissionModeChange?: (mode: PermissionMode) => void;
-
-  /**
-   * US-004 / US-007. Queue-priority selector. The control is rendered
-   * iff a turn is in flight (`isRunning === true`) — per ADR-002 the
-   * footer stays minimal when there's nothing to prioritise — but the
-   * prop is always supplied by the parent so the reducer state is
-   * authoritative even while the control is hidden.
-   */
-  queuePriority?: ComposerQueuePriority;
-  onQueuePriorityChange?: (priority: ComposerQueuePriority) => void;
 
   /**
    * US-005. When true (parent derives from `turnState === "interrupted"`)
@@ -122,11 +106,147 @@ interface ComposerAttachment {
   filename: string;
 }
 
-const PERMISSION_MODES: ReadonlyArray<{ value: PermissionMode; label: string }> = [
-  { value: "default", label: "default" },
-  { value: "plan", label: "plan" },
-  { value: "acceptEdits", label: "acceptEdits" },
-  { value: "bypassPermissions", label: "bypassPermissions" },
+/**
+ * Inline SVG icons paired with each permission mode. We use raw SVGs
+ * (no `lucide-react` dep) for parity with the rest of the composer
+ * footer (paperclip, send-arrow, stop, …). Each icon takes a single
+ * `className` so the caller can size / colour it via Tailwind utilities;
+ * `currentColor` keeps the stroke in sync with the surrounding text
+ * colour so the ghost-button hover treatment "just works".
+ */
+export type ModeIconProps = { className?: string };
+
+export function ShieldIcon({ className }: ModeIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
+export function ClipboardListIcon({ className }: ModeIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M8 12h.01M12 12h4M8 16h.01M12 16h4" />
+    </svg>
+  );
+}
+
+export function PenLineIcon({ className }: ModeIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+}
+
+export function LockOpenIcon({ className }: ModeIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className }: ModeIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+/**
+ * Permission-mode catalog. The `value` field carries the SDK literal
+ * (it ships on the wire byte-for-byte via `permission-mode-set`); the
+ * `label` and `description` are the human-readable strings shown in
+ * the composer UI. The mapping mirrors the t3code runtime-mode vocab
+ * (Supervised / Auto-accept edits / Full access) plus the Claude-Code-
+ * specific "Plan" mode, so the user never sees an SDK slug like
+ * `bypassPermissions`. The icon is rendered on the ghost trigger so
+ * the current mode is scannable at a glance.
+ */
+interface PermissionModeOption {
+  value: PermissionMode;
+  label: string;
+  description: string;
+  Icon: (props: ModeIconProps) => JSX.Element;
+}
+
+const PERMISSION_MODES: ReadonlyArray<PermissionModeOption> = [
+  {
+    value: "default",
+    label: "Supervised",
+    description: "Ask before commands and file changes.",
+    Icon: ShieldIcon,
+  },
+  {
+    value: "plan",
+    label: "Plan",
+    description: "Draft a plan without executing anything.",
+    Icon: ClipboardListIcon,
+  },
+  {
+    value: "acceptEdits",
+    label: "Auto-accept edits",
+    description: "Auto-approve edits, ask before other actions.",
+    Icon: PenLineIcon,
+  },
+  {
+    value: "bypassPermissions",
+    label: "Full access",
+    description: "Allow commands and edits without prompts.",
+    Icon: LockOpenIcon,
+  },
 ];
 
 const ATTACHMENT_CAP = 4;
@@ -144,8 +264,6 @@ export function ChatComposer({
   onInterrupt,
   permissionMode = "default",
   onPermissionModeChange,
-  queuePriority = "now",
-  onQueuePriorityChange,
   isInterrupted,
   availableSlashCommands,
   cwd,
@@ -443,7 +561,7 @@ export function ChatComposer({
     if (!text && !hasAttachments) return;
     if (!onSubmit) return;
     const images = await Promise.all(attachments.map(encodeAttachment));
-    onSubmit(text, queuePriority, images);
+    onSubmit(text, images);
     // Post-submit cleanup: revoke + clear, third URL.revokeObjectURL
     // call site per US-005 AC3.
     for (const att of attachments) {
@@ -598,14 +716,16 @@ export function ChatComposer({
     onPermissionModeChange(next);
   };
 
-  const onPrioritySelectChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    if (!onQueuePriorityChange) return;
-    const next = e.target.value as ComposerQueuePriority;
-    onQueuePriorityChange(next);
-  };
-
   const stripVisible = attachments.length > 0 || overCapNotice !== null;
   const canSend = value.trim().length > 0 || attachments.length > 0;
+
+  // Resolve the active permission-mode option for the ghost trigger.
+  // Falls back to the first entry (Supervised) when the prop carries an
+  // unknown SDK value — that should never happen in practice but keeps
+  // the trigger from rendering an empty pill if the wire ever drifts.
+  const activeModeOption =
+    PERMISSION_MODES.find((m) => m.value === permissionMode) ?? PERMISSION_MODES[0];
+  const ActiveModeIcon = activeModeOption.Icon;
 
   return (
     <div className={clsx("pt-1.5", compact ? "px-4 pb-4" : "px-5 pb-5")}>
@@ -723,65 +843,78 @@ export function ChatComposer({
             </svg>
           </button>
           {!compact && (
-            <span
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono"
-              style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}
-              title="Type / at the start of a line to see commands"
-            >
-              <span className="font-mono">/</span>
-              <span>commands</span>
-            </span>
+            <>
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-mono"
+                style={{ color: "var(--muted-foreground)" }}
+                title="Type / at the start of a line to see commands"
+              >
+                <span className="font-mono">/</span>
+                <span>commands</span>
+              </span>
+              {/*
+               * Vertical hairline separator. Mirrors t3code's footer
+               * vocabulary — controls are divided by 1px dividers
+               * rather than by their own borders, so the row reads as
+               * a single horizontal toolbar instead of a row of boxed
+               * inputs. Decorative; hidden from AT.
+               */}
+              <span
+                aria-hidden="true"
+                className="mx-0.5 h-3.5 w-px"
+                style={{ background: "var(--border)" }}
+              />
+            </>
           )}
           <span className="flex-1" />
-          {!compact && (
-            <span className="text-[10px] font-mono" style={{ color: "var(--muted-foreground)" }}>
-              claude
-            </span>
-          )}
           {/*
-           * US-004. Permission-mode selector lives immediately to the
-           * right of the "claude" label per ADR-002 — a deliberate
-           * stretch, NOT a generalised control-panel. Always visible
-           * regardless of turn state so the user can pre-set the mode
-           * for the next turn while one is still running.
+           * US-004. Permission-mode selector. Ghost-styled trigger
+           * (icon + friendly label + chevron) over an invisible native
+           * `<select>` that handles keyboard, popup and option list.
+           * Native semantics, custom paint — the same trick the rest
+           * of the composer uses for the paperclip / send affordances.
+           *
+           * Labels are the friendly t3code-style strings (Supervised /
+           * Plan / Auto-accept edits / Full access) rather than the
+           * SDK slugs the wire carries — slug → friendly mapping lives
+           * in `PERMISSION_MODES`.
+           *
+           * Always visible regardless of turn state so the user can
+           * pre-set the mode for the next turn while one is still
+           * streaming.
            */}
-          <select
-            value={permissionMode}
-            onChange={onPermissionSelectChange}
-            disabled={hardDisabled || !onPermissionModeChange}
-            className="ml-1 text-[10px] font-mono rounded border bg-transparent px-1 py-0.5"
-            style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-            title="Permission mode"
-            aria-label="Permission mode"
-            data-testid="permission-mode-select"
+          <span
+            className={clsx(
+              "relative inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium",
+              !hardDisabled && onPermissionModeChange && "cursor-pointer hover:bg-[var(--accent)]",
+            )}
+            style={{ color: "var(--muted-foreground)" }}
+            title={activeModeOption.description}
           >
-            {PERMISSION_MODES.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          {/*
-           * US-004 AC3 / US-007. Queue-priority control. Only rendered
-           * while a turn is running — when the composer is in "ready"
-           * the submit always carries `priority: "now"` and the toggle
-           * would be a no-op.
-           */}
-          {isRunning && (
+            <ActiveModeIcon className="size-3.5" />
+            <span>{activeModeOption.label}</span>
+            <ChevronDownIcon className="size-3 opacity-60" />
             <select
-              value={queuePriority}
-              onChange={onPrioritySelectChange}
-              disabled={hardDisabled || !onQueuePriorityChange}
-              className="ml-1 text-[10px] font-mono rounded border bg-transparent px-1 py-0.5"
-              style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-              title="Priority for the next message you send — applies once"
-              aria-label="Priority for the next message you send — applies once"
-              data-testid="queue-priority-select"
+              value={permissionMode}
+              onChange={onPermissionSelectChange}
+              disabled={hardDisabled || !onPermissionModeChange}
+              className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+              aria-label="Permission mode"
+              data-testid="permission-mode-select"
             >
-              <option value="now">Send next at normal priority</option>
-              <option value="next">Send next as high-priority</option>
+              {PERMISSION_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label} — {m.description}
+                </option>
+              ))}
             </select>
-          )}
+          </span>
+          {/* Hairline between mode and the trailing send / stop / pill cluster. */}
+          <span
+            aria-hidden="true"
+            className="mx-0.5 h-3.5 w-px"
+            style={{ background: "var(--border)" }}
+          />
           {isInterrupted && (
             <span
               role="status"

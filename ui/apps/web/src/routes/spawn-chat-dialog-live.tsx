@@ -13,14 +13,74 @@ import { createChat, listCwdRoots, listRecentCwds, type ApiProject } from "../li
 import { useSidebarState } from "../lib/sidebar-state";
 import { CwdPicker } from "../components/CwdPicker";
 import type { ApiChat } from "../lib/api";
+import {
+  ClipboardListIcon,
+  LockOpenIcon,
+  type ModeIconProps,
+  PenLineIcon,
+  ShieldIcon,
+} from "../components/chat/ChatComposer";
 
 type PermissionMode = ApiChat["permission_mode"];
 
-const MODES: Array<{ id: PermissionMode; label: string; subtitle: string; dot: string }> = [
-  { id: "default", label: "Default", subtitle: "Ask before risky tools", dot: "var(--success)" },
-  { id: "plan", label: "Plan", subtitle: "Read-only mode", dot: "var(--info)" },
-  { id: "accept-edits", label: "Accept-edits", subtitle: "Auto-approve edits", dot: "var(--warning)" },
-  { id: "trusted-vm", label: "Trusted-VM", subtitle: "The agent runs with --dangerously-skip-permissions — assumes your local environment (typically a developer VM) as the trust boundary.", dot: "var(--destructive)" },
+/**
+ * Permission-mode catalog for the spawn-chat dialog. The `id` values
+ * are loom's API-layer slugs (kebab-case) — they map server-side onto
+ * the SDK's PermissionMode literals (the composer's catalog mirrors
+ * the SDK side directly; this catalog mirrors the wire shape that
+ * `createChat` accepts). Friendly labels + icons are intentionally
+ * kept in sync with the composer's `PERMISSION_MODES` so the user
+ * sees the same vocabulary throughout the app:
+ *
+ *   default     → Supervised        (ShieldIcon)
+ *   plan        → Plan              (ClipboardListIcon)
+ *   accept-edits → Auto-accept edits (PenLineIcon)
+ *   trusted-vm  → Full access       (LockOpenIcon)
+ *
+ * The subtitle is a one-line description — same wording the composer's
+ * dropdown shows in its `<option>` text so the two UIs stay aligned.
+ */
+interface SpawnMode {
+  id: PermissionMode;
+  label: string;
+  subtitle: string;
+  Icon: (props: ModeIconProps) => JSX.Element;
+  /** Accent colour for the icon halo — preserves the original
+   *  green/blue/amber/red signalling so the cards stay visually
+   *  distinct at a glance. */
+  accent: string;
+}
+
+const MODES: ReadonlyArray<SpawnMode> = [
+  {
+    id: "default",
+    label: "Supervised",
+    subtitle: "Ask before commands and file changes.",
+    Icon: ShieldIcon,
+    accent: "var(--success)",
+  },
+  {
+    id: "plan",
+    label: "Plan",
+    subtitle: "Draft a plan without executing anything.",
+    Icon: ClipboardListIcon,
+    accent: "var(--info)",
+  },
+  {
+    id: "accept-edits",
+    label: "Auto-accept edits",
+    subtitle: "Auto-approve edits, ask before other actions.",
+    Icon: PenLineIcon,
+    accent: "var(--warning)",
+  },
+  {
+    id: "trusted-vm",
+    label: "Full access",
+    subtitle:
+      "Allow commands and edits without prompts. Runs with --dangerously-skip-permissions — assumes the local environment (typically a developer VM) as the trust boundary.",
+    Icon: LockOpenIcon,
+    accent: "var(--destructive)",
+  },
 ];
 
 interface Props {
@@ -257,26 +317,67 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
             <div className="grid grid-cols-2 gap-1.5 mt-1.5">
               {MODES.map((m) => {
                 const sel = mode === m.id;
+                const ModeIcon = m.Icon;
                 return (
                   <label
                     key={m.id}
                     onClick={() => setMode(m.id)}
-                    className="flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer"
+                    className="flex items-start gap-2.5 px-2.5 py-2 rounded-md cursor-pointer"
                     style={
                       sel
                         ? { borderWidth: 2, borderStyle: "solid", borderColor: "var(--primary)", background: "rgba(59,130,246,0.04)" }
                         : { borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }
                     }
                   >
-                    <div className="size-3.5 rounded-full grid place-items-center" style={{ borderWidth: 2, borderStyle: "solid", borderColor: sel ? "var(--primary)" : "var(--border)" }}>
-                      {sel && <div className="size-1.5 rounded-full" style={{ background: "var(--primary)" }} />}
-                    </div>
+                    {/*
+                     * Mode icon in an accent-tinted halo. Replaces the
+                     * coloured dot + radio dot that used to sit here;
+                     * the icon is the same SVG component the composer
+                     * footer renders so the two UIs stay aligned at a
+                     * glance ("oh, the lock-open icon means Full access
+                     * everywhere"). The halo uses `color-mix` to derive
+                     * a 12% tint of the accent for the background while
+                     * keeping the icon stroke at full accent for
+                     * contrast.
+                     */}
+                    <span
+                      aria-hidden="true"
+                      className="size-7 shrink-0 rounded-md grid place-items-center"
+                      style={{
+                        background: `color-mix(in srgb, ${m.accent} 12%, transparent)`,
+                        color: m.accent,
+                      }}
+                    >
+                      <ModeIcon className="size-4" />
+                    </span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="size-1.5 rounded-full" style={{ background: m.dot }} />
+                      <div className="flex items-center justify-between gap-1.5">
                         <span className="text-xs font-medium">{m.label}</span>
+                        {/*
+                         * Radio affordance — kept small and to the right
+                         * so the icon can lead. The selected state still
+                         * paints the primary accent so the card visibly
+                         * "checks in" even before the user notices the
+                         * border change.
+                         */}
+                        <span
+                          aria-hidden="true"
+                          className="size-3 rounded-full grid place-items-center shrink-0"
+                          style={{
+                            borderWidth: 2,
+                            borderStyle: "solid",
+                            borderColor: sel ? "var(--primary)" : "var(--border)",
+                          }}
+                        >
+                          {sel && (
+                            <span
+                              className="size-1.5 rounded-full"
+                              style={{ background: "var(--primary)" }}
+                            />
+                          )}
+                        </span>
                       </div>
-                      <p className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+                      <p className="text-[10px] leading-snug" style={{ color: "var(--muted-foreground)" }}>
                         {m.subtitle}
                       </p>
                     </div>
