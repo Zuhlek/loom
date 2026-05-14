@@ -13,6 +13,7 @@
  * create/delete to call when they may have changed loom state.
  */
 import type { MetadataStore } from "../metadata-store/index.ts";
+import { decorateChat } from "./chat-decorator.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
@@ -148,7 +149,9 @@ export function mountSidebarRoute(
     const projects = store.projects.list();
     const chats = store.chats.list();
     const groups = projects.map((p) => {
-      const groupChats = chats.filter((c: any) => c.project_id === p.id);
+      const groupChats = chats
+        .filter((c: any) => c.project_id === p.id)
+        .map((c) => decorateChat(c, store));
       const looms: CachedLooms["entries"] = [];
       for (const cwdPath of p.paths) {
         looms.push(...scanLooms(p.id, p.name, cwdPath));
@@ -156,7 +159,9 @@ export function mountSidebarRoute(
       return { project: p, chats: groupChats, looms };
     });
     // Unassigned chats → a synthetic "Unassigned" group at the end.
-    const unassigned = chats.filter((c: any) => !c.project_id);
+    const unassigned = chats
+      .filter((c: any) => !c.project_id)
+      .map((c) => decorateChat(c, store));
     return new Response(
       JSON.stringify({
         groups,

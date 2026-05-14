@@ -19,11 +19,12 @@ export interface ChatContextMenuProps {
   position: { x: number; y: number };
   onClose(): void;
   onHandoff(chat: ApiChat): Promise<void> | void;
+  onRename(chat: ApiChat): void;
   onFork(chat: ApiChat): Promise<void> | void;
 }
 
 export function ChatContextMenu(props: ChatContextMenuProps) {
-  const { chat, position, onClose, onHandoff, onFork } = props;
+  const { chat, position, onClose, onHandoff, onRename, onFork } = props;
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -89,6 +90,36 @@ export function ChatContextMenu(props: ChatContextMenuProps) {
             style={{ color: "var(--muted-foreground)" }}
           >
             Detach this PTY into a system terminal; chat row goes detached.
+          </div>
+        </div>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        data-testid="chat-context-menu-rename"
+        className="w-full text-left px-3 py-2 hover:bg-[var(--accent)] flex items-start gap-2.5 border-t"
+        style={{ borderColor: "var(--border)" }}
+        onClick={() => {
+          onRename(chat);
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          className="size-3.5 mt-0.5"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          <path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z" />
+        </svg>
+        <div className="flex-1">
+          <div className="text-xs font-medium">Rename</div>
+          <div
+            className="text-[10px]"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            Give this chat a custom label; clears on empty input.
           </div>
         </div>
       </button>

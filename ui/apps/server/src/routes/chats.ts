@@ -24,6 +24,7 @@ import {
   type HandoffResult,
   type HandoffSession,
 } from "../process-manager/handoff.ts";
+import { decorateChat } from "./chat-decorator.ts";
 import { invalidateLoomCache } from "./sidebar.ts";
 
 export interface ChatsRouteDeps {
@@ -49,7 +50,8 @@ export function mountChatsRoute(
   const launchHandoffTerminal = deps.launchHandoffTerminal ?? defaultLaunchHandoffTerminal;
   routes["/chats"] = async (req) => {
     if (req.method === "GET") {
-      return new Response(JSON.stringify({ chats: store.chats.list() }), {
+      const chats = store.chats.list().map((row) => decorateChat(row, store));
+      return new Response(JSON.stringify({ chats }), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
@@ -124,7 +126,7 @@ export function mountChatsRoute(
     // the loom cache so the next sidebar refresh re-scans.
     invalidateLoomCache();
 
-    return new Response(JSON.stringify({ chat }), {
+    return new Response(JSON.stringify({ chat: decorateChat(chat, store) }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
@@ -145,7 +147,7 @@ export function mountChatsRoute(
         headers: { "content-type": "application/json" },
       });
     }
-    return new Response(JSON.stringify({ chat }), {
+    return new Response(JSON.stringify({ chat: decorateChat(chat, store) }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
@@ -212,7 +214,65 @@ export function mountChatsRoute(
       // UUID. pid / inert / worktree_path reset to their defaults.
     });
     invalidateLoomCache();
-    return new Response(JSON.stringify({ chat: forked }), {
+    return new Response(JSON.stringify({ chat: decorateChat(forked, store) }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  routes["/chats/rename"] = async (req, url) => {
+    if (req.method !== "POST") {
+      return new Response("method not allowed", { status: 405 });
+    }
+    const id = url.searchParams.get("id");
+    if (!id) {
+      return new Response(JSON.stringify({ error: "missing id" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "invalid body" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    const customName = body?.customName;
+    if (customName !== null && typeof customName !== "string") {
+      return new Response(JSON.stringify({ error: "invalid customName" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    let effective: string | null;
+    if (customName === null) {
+      effective = null;
+    } else {
+      const trimmed = customName.trim();
+      if (trimmed.length > 80) {
+        return new Response(JSON.stringify({ error: "customName too long" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      effective = trimmed.length === 0 ? null : trimmed;
+    }
+    let row;
+    try {
+      row = store.chats.setCustomName(id, effective);
+    } catch (err) {
+      if (err instanceof Error && err.message === "chat not found") {
+        return new Response(JSON.stringify({ error: "chat not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw err;
+    }
+    return new Response(JSON.stringify({ chat: decorateChat(row, store) }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });

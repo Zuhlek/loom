@@ -19,6 +19,8 @@ export interface ApiChat {
   resume_banner_dismissed: boolean;
   inert: boolean;
   created_at: string;
+  custom_name: string | null;
+  auto_title: string | null;
 }
 
 export interface ApiProject {
@@ -152,6 +154,21 @@ export async function forkChat(id: string): Promise<{ chat: ApiChat }> {
   );
 }
 
+export async function renameChat(
+  id: string,
+  customName: string | null,
+): Promise<ApiChat> {
+  const { chat } = await apiFetch<{ chat: ApiChat }>(
+    `/chats/rename?id=${encodeURIComponent(id)}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ customName }),
+    },
+  );
+  return chat;
+}
+
 export async function deleteChat(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/chats/delete?id=${encodeURIComponent(id)}`, {
     method: "DELETE",
@@ -195,19 +212,6 @@ export async function listProjects(): Promise<{ projects: ApiProject[] }> {
 
 export async function listRecentCwds(limit = 10): Promise<{ cwds: string[] }> {
   return apiFetch<{ cwds: string[] }>(`/cwd/recent?limit=${limit}`);
-}
-
-export type SlashCommandScope = "user" | "project" | "plugin";
-
-export interface SlashCommandEntry {
-  name: string;
-  scope: SlashCommandScope;
-  filePath: string;
-}
-
-export async function getSlashCommands(cwd?: string): Promise<{ commands: SlashCommandEntry[] }> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-  return apiFetch<{ commands: SlashCommandEntry[] }>(`/slash-commands${qs}`);
 }
 
 /**

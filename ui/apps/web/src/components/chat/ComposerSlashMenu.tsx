@@ -1,34 +1,124 @@
 /**
- * Floating menu rendered above the composer textarea while the user is
- * mid-`/`-trigger. Keyboard navigation is driven from the parent
- * (ChatComposer) — this component is presentational: it renders the
- * list, highlights the selected row, and emits onSelect / onHover.
+ * Grouped slash-command menu. Mirrors {@link ComposerAtFileMenu} —
+ * parent-driven keyboard nav, per-row `onMouseDown.preventDefault` to
+ * keep the editor focused, `onSelect` emits the selected row by index
+ * into a flat list the parent computes via {@link buildSlashMenuRows}.
+ *
+ * Two sections per design.md §Component split:
+ *   - Built-in: three Loom-side rows (`/model`, `/plan`, `/default`)
+ *     sourced from a local constant; T-008/T-010 land click handlers.
+ *   - Provider: rows from the bridge-supplied catalog
+ *     ({@link WireSlashCommand}), with built-in name collisions
+ *     suppressed (built-in wins — US-001 AC5).
+ *
+ * Empty-state matrix per design.md (ADR-D02):
+ *   - `slashCommands === null`, built-ins survive filter ⇒ Built-in
+ *     group + "Loading commands…" italic muted row under PROVIDER
+ *     header with `aria-busy="true"`.
+ *   - `slashCommands === null`, built-ins filtered out ⇒ "No matching
+ *     command" row only.
+ *   - Loaded `[]` + non-empty built-ins ⇒ Built-in group only.
+ *   - Loaded `[]` + empty built-ins ⇒ "No matching command" row.
+ *   - Otherwise both groups render.
+ *
+ * Row icons per ADR-D01 — three inline SVGs, zero new deps:
+ *   - Built-in    → hexagon outline
+ *   - Provider    → square outline (`kind: 'command'`)
+ *   - Skill       → diamond outline (`kind: 'skill'`)
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import clsx from "clsx";
+import type { WireSlashCommand } from "../../lib/chat-types";
 
-import type { SlashCommandEntry } from "../../lib/api";
+/**
+ * Built-in row shape. The three Loom-side commands `/model`, `/plan`,
+ * `/default` open or toggle local UI state — they do NOT send a chat
+ * turn (Spec US-001 AC3). T-008/T-010 land the per-row click handlers;
+ * for T-007 the menu just renders them and reports selection by index.
+ */
+export interface BuiltinSlashCommand {
+  name: string;
+  description: string;
+}
+
+export const BUILTIN_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
+  { name: "model", description: "Open the model picker" },
+  { name: "plan", description: "Switch to Plan permission mode" },
+  { name: "default", description: "Switch to default permission mode" },
+];
+
+const BUILTIN_NAMES: ReadonlySet<string> = new Set(BUILTIN_COMMANDS.map((c) => c.name));
+
+/**
+ * One menu row after filtering. The parent feeds these back to the
+ * `onSelect` handler via the row index in the flat list (ordered:
+ * built-ins first, then providers). Headers are not rows — they
+ * render in between but are NOT navigable.
+ */
+export type SlashMenuRow =
+  | { kind: "builtin"; name: string; description: string }
+  | { kind: "command"; name: string; description: string; argumentHint: string }
+  | { kind: "skill"; name: string; description: string; argumentHint: string };
 
 export interface ComposerSlashMenuProps {
-  items: SlashCommandEntry[];
+  /** Filter query — typed text AFTER the leading `/`. */
+  query: string;
+  /** Bridge-supplied SDK catalog; `null` until the first frame lands. */
+  slashCommands: WireSlashCommand[] | null;
   selectedIndex: number;
   onHover: (index: number) => void;
-  onSelect: (item: SlashCommandEntry) => void;
+  onSelect: (row: SlashMenuRow) => void;
 }
 
-function scopeBadgeClasses(scope: SlashCommandEntry["scope"]): string {
-  switch (scope) {
-    case "project":
-      return "bg-emerald-500/15 text-emerald-700";
-    case "user":
-      return "bg-sky-500/15 text-sky-700";
-    case "plugin":
-      return "bg-violet-500/15 text-violet-700";
+/**
+ * Compose the visible row list from built-ins + the bridge catalog.
+ * Pure / exported so {@link ChatComposer} can keep `selectedIndex` in
+ * range and route the accept handler without duplicating the merge.
+ */
+export function buildSlashMenuRows(
+  query: string,
+  slashCommands: WireSlashCommand[] | null,
+): { builtins: SlashMenuRow[]; providers: SlashMenuRow[] } {
+  const needle = query.trim().toLowerCase();
+  const matchName = (name: string): boolean =>
+    needle === "" || name.toLowerCase().startsWith(needle);
+
+  const builtins: SlashMenuRow[] = [];
+  for (const c of BUILTIN_COMMANDS) {
+    if (!matchName(c.name)) continue;
+    builtins.push({ kind: "builtin", name: c.name, description: c.description });
   }
+
+  const providers: SlashMenuRow[] = [];
+  if (slashCommands !== null) {
+    for (const c of slashCommands) {
+      if (BUILTIN_NAMES.has(c.name)) continue;
+      if (!matchName(c.name)) continue;
+      providers.push({
+        kind: c.kind,
+        name: c.name,
+        description: c.description,
+        argumentHint: c.argumentHint,
+      });
+    }
+  }
+
+  return { builtins, providers };
 }
 
-export function ComposerSlashMenu({ items, selectedIndex, onHover, onSelect }: ComposerSlashMenuProps) {
+export function ComposerSlashMenu({
+  query,
+  slashCommands,
+  selectedIndex,
+  onHover,
+  onSelect,
+}: ComposerSlashMenuProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
+  const { builtins, providers } = buildSlashMenuRows(query, slashCommands);
+  const loading = slashCommands === null;
+  const hasBuiltins = builtins.length > 0;
+  const hasProviders = providers.length > 0;
+  const flatRows: SlashMenuRow[] = [...builtins, ...providers];
 
   useEffect(() => {
     const list = listRef.current;
@@ -37,7 +127,50 @@ export function ComposerSlashMenu({ items, selectedIndex, onHover, onSelect }: C
     if (row) row.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
-  if (items.length === 0) return null;
+  // Empty-state matrix per ADR-D02 / design.md.
+  //   - Both groups empty AND not loading ⇒ "No matching command".
+  //   - Both groups empty AND loading ⇒ "No matching command" (the
+  //     loading affordance fires only when SOMETHING renders alongside
+  //     it — without built-ins to anchor the menu the user just sees
+  //     the empty state).
+  if (!hasBuiltins && !hasProviders && !loading) {
+    return (
+      <div
+        ref={listRef}
+        role="listbox"
+        data-testid="composer-slash-menu"
+        className="absolute bottom-full left-0 right-0 mb-2 max-h-64 overflow-y-auto rounded-lg border shadow-lg z-10"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div
+          role="presentation"
+          className="px-3 py-1.5 text-xs italic"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          No matching command
+        </div>
+      </div>
+    );
+  }
+  if (!hasBuiltins && !hasProviders && loading) {
+    return (
+      <div
+        ref={listRef}
+        role="listbox"
+        data-testid="composer-slash-menu"
+        className="absolute bottom-full left-0 right-0 mb-2 max-h-64 overflow-y-auto rounded-lg border shadow-lg z-10"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div
+          role="presentation"
+          className="px-3 py-1.5 text-xs italic"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          No matching command
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -47,36 +180,153 @@ export function ComposerSlashMenu({ items, selectedIndex, onHover, onSelect }: C
       className="absolute bottom-full left-0 right-0 mb-2 max-h-64 overflow-y-auto rounded-lg border shadow-lg z-10"
       style={{ background: "var(--card)", borderColor: "var(--border)" }}
     >
-      {items.map((item, i) => (
-        <button
-          key={`${item.scope}:${item.name}`}
-          type="button"
-          role="option"
-          aria-selected={i === selectedIndex}
-          data-row-index={i}
-          onMouseDown={(e) => {
-            // Prevent the textarea from losing focus before onClick fires.
-            e.preventDefault();
-          }}
-          onClick={() => onSelect(item)}
-          onMouseEnter={() => onHover(i)}
-          className={clsx(
-            "w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs",
-            i === selectedIndex ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]/60",
+      {hasBuiltins && (
+        <>
+          <SectionHeader>Built-in</SectionHeader>
+          {builtins.map((row, i) =>
+            renderRow(row, i, selectedIndex, onHover, onSelect),
           )}
-        >
-          <span className="font-mono">/{item.name}</span>
-          <span className="flex-1" />
-          <span
-            className={clsx(
-              "text-[10px] font-mono rounded px-1.5 py-0.5",
-              scopeBadgeClasses(item.scope),
+        </>
+      )}
+      {/* Provider header renders whenever provider rows exist OR the
+          loading affordance is showing (so the user knows the SDK
+          catalog will land under that header). */}
+      {(hasProviders || loading) && (
+        <>
+          <SectionHeader>Provider</SectionHeader>
+          {hasProviders &&
+            providers.map((row, i) =>
+              renderRow(
+                row,
+                builtins.length + i,
+                selectedIndex,
+                onHover,
+                onSelect,
+              ),
             )}
-          >
-            {item.scope}
-          </span>
-        </button>
-      ))}
+          {loading && !hasProviders && (
+            <div
+              role="presentation"
+              data-testid="composer-slash-menu-loading"
+              aria-busy={true}
+              className="px-3 py-1.5 text-xs italic"
+              style={{ color: "var(--muted-foreground)" }}
+            >
+              Loading commands…
+            </div>
+          )}
+        </>
+      )}
+      {/* Suppress unused-binding warning — `flatRows` documents the
+          row-index mapping the parent uses when keyboard-navigating. */}
+      <span hidden>{flatRows.length}</span>
     </div>
+  );
+}
+
+function SectionHeader({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="px-3 pt-2 pb-1 text-[10px] font-mono uppercase tracking-wide"
+      style={{ color: "var(--muted-foreground)" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function renderRow(
+  row: SlashMenuRow,
+  rowIndex: number,
+  selectedIndex: number,
+  onHover: (index: number) => void,
+  onSelect: (row: SlashMenuRow) => void,
+): ReactNode {
+  return (
+    <button
+      key={`${row.kind}:${row.name}:${rowIndex}`}
+      type="button"
+      role="option"
+      aria-selected={rowIndex === selectedIndex}
+      data-row-index={rowIndex}
+      onMouseDown={(e) => {
+        e.preventDefault();
+      }}
+      onClick={() => onSelect(row)}
+      onMouseEnter={() => onHover(rowIndex)}
+      className={clsx(
+        "w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs",
+        rowIndex === selectedIndex ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]/60",
+      )}
+    >
+      <RowIcon kind={row.kind} />
+      <span className="font-mono">/{row.name}</span>
+      <span
+        className="truncate"
+        style={{ color: "var(--muted-foreground)" }}
+      >
+        {row.description}
+      </span>
+    </button>
+  );
+}
+
+function RowIcon({ kind }: { kind: SlashMenuRow["kind"] }) {
+  if (kind === "builtin") return <HexagonGlyph />;
+  if (kind === "skill") return <DiamondGlyph />;
+  return <SquareGlyph />;
+}
+
+/** Built-in row glyph — hexagon outline (ADR-D01). */
+function HexagonGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinejoin="round"
+      className="size-3.5 shrink-0"
+      style={{ color: "var(--muted-foreground)" }}
+      aria-hidden="true"
+    >
+      <polygon points="12 2 21 7 21 17 12 22 3 17 3 7" />
+    </svg>
+  );
+}
+
+/** Provider command row glyph — square outline (ADR-D01). */
+function SquareGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinejoin="round"
+      className="size-3.5 shrink-0"
+      style={{ color: "var(--muted-foreground)" }}
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+    </svg>
+  );
+}
+
+/** Skill row glyph — diamond outline (ADR-D01). */
+function DiamondGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinejoin="round"
+      className="size-3.5 shrink-0"
+      style={{ color: "var(--muted-foreground)" }}
+      aria-hidden="true"
+    >
+      <polygon points="12 2 22 12 12 22 2 12" />
+    </svg>
   );
 }

@@ -219,6 +219,7 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
     "dismissResumeBanner",
     "markInert",
     "markActive",
+    "setCustomName",
   ]) as ChatRepo;
   const wrappedChatItems = wrap(chatItems, ["append", "update", "clear"]) as ChatItemsRepo;
   const wrappedProjects = wrap(projects, ["create", "addPath", "removePath", "update", "delete"]) as ProjectRepo;

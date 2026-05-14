@@ -12,6 +12,12 @@ import * as path from "node:path";
 const SKIP = new Set([
   "node_modules",
   ".git",
+  ".svn",
+  ".hg",
+  ".idea",
+  ".vscode",
+  ".cache",
+  ".pytest_cache",
   "dist",
   "build",
   ".next",
@@ -39,7 +45,6 @@ export function walkCwd(root: string, opts: WalkOptions = {}): string[] {
     for (const e of entries) {
       if (out.length >= max) break;
       if (SKIP.has(e.name)) continue;
-      if (e.name.startsWith(".")) continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) {
         stack.push(full);

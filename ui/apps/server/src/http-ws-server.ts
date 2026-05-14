@@ -344,6 +344,16 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
           });
           return;
         }
+        if (envelope.kind === "model-settings-set") {
+          const chatId = envelope["chat-id"];
+          const body = envelope.body;
+          if (!chatId || typeof body !== "object" || body === null) {
+            send(makeError(chatId, "model-settings-set: missing chat-id or body"));
+            return;
+          }
+          opts.bridge.setModelSettings(chatId, body as Record<string, unknown>);
+          return;
+        }
         if (envelope.kind === "retry-session") {
           const chatId = envelope["chat-id"];
           if (!chatId) {

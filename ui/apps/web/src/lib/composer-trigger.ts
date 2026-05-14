@@ -1,17 +1,11 @@
 /**
- * Pure trigger-detection + ranking for the composer slash-command menu.
- *
- * Adapted from the t3code reference (`apps/web/src/composer-logic.ts`,
- * `composerSlashCommandSearch.ts`) but reduced to what loom needs:
- *   - detect a `/<query>` token at the start of the current line
- *   - rank a flat `SlashCommandEntry[]` list against the query
- *   - splice a replacement into a (text, cursor) pair
- *
- * No DOM, no React, no shared deps — kept pure so the static-test
- * convention (`apps/** /test/** /*.test.ts`, node-only) can exercise it.
+ * Pure trigger-detection helpers for the composer slash-command and
+ * @-file menus. Detects a `/<query>` token at the start of the current
+ * line, an `@<query>` token after whitespace, and splices a replacement
+ * into a (text, cursor) pair. No DOM, no React, no shared deps — kept
+ * pure so the static-test convention (`apps/** /test/** /*.test.ts`,
+ * node-only) can exercise it.
  */
-import type { SlashCommandEntry } from "./api";
-
 export interface SlashCommandTrigger {
   query: string;
   /** Inclusive — points at the leading `/`. */
@@ -110,53 +104,4 @@ export function replaceTextRange(
   const safeEnd = Math.max(safeStart, Math.min(text.length, rangeEnd));
   const nextText = `${text.slice(0, safeStart)}${replacement}${text.slice(safeEnd)}`;
   return { text: nextText, cursor: safeStart + replacement.length };
-}
-
-/**
- * Score a single command name against a normalized query. Lower is
- * better; `null` means "no match — drop from the list".
- *
- * Tiers (mirrors the t3code ranking shape, simplified):
- *   0 — exact match
- *   1 — prefix match
- *   2 — match at a `-` / `_` / `/` boundary
- *   3 — substring match anywhere
- *   null — no match
- */
-function scoreName(name: string, query: string): number | null {
-  if (query === "") return 3; // include everything, stable-sorted by name
-  const n = name.toLowerCase();
-  const q = query.toLowerCase();
-  if (n === q) return 0;
-  if (n.startsWith(q)) return 1;
-  for (const marker of ["-", "_", "/"]) {
-    let idx = -1;
-    while ((idx = n.indexOf(marker, idx + 1)) !== -1) {
-      if (n.slice(idx + 1).startsWith(q)) return 2;
-    }
-  }
-  if (n.includes(q)) return 3;
-  return null;
-}
-
-/**
- * Filter + sort a slash-command list by relevance to the query. Stable
- * ordering: same-score items keep the input order (which the server
- * already sorts alphabetically). Project-scope wins over user-scope
- * when scores tie at the boundary — handled by the server's dedup
- * step, so we don't re-apply it here.
- */
-export function rankSlashCommands(
-  items: ReadonlyArray<SlashCommandEntry>,
-  query: string,
-): SlashCommandEntry[] {
-  const trimmed = query.replace(/^\/+/, "");
-  const scored: Array<{ item: SlashCommandEntry; score: number; index: number }> = [];
-  items.forEach((item, index) => {
-    const s = scoreName(item.name, trimmed);
-    if (s === null) return;
-    scored.push({ item, score: s, index });
-  });
-  scored.sort((a, b) => a.score - b.score || a.index - b.index);
-  return scored.map((e) => e.item);
 }

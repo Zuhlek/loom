@@ -505,3 +505,115 @@ re-raised; findings the re-open closed do not.
 "Prior-finding verification" section); `.loom/composer-attachments-and-at-file/superseded/20260512T214740Z/review.md`
 (the prior pass); `ui/apps/server/src/process-manager/claude-session-bridge.ts`
 lines 1415-1459; `ui/apps/web/src/styles.css` lines 165-178.
+
+## 2026-05-13 — csd-717-swift-mapper-pr-feedback — Review pass
+
+**Cycle outcome:** conditional pass — 10 of 10 user stories shipped on
+`CSD-717-clean` of `repo/aper/aper-interfaces` (commits `e757f3d` ..
+`b92efa7`); 8 of 8 ADRs honoured in structure; `tsc` green on HEAD; one
+major finding (US-004 partial deletion) routed back to Build as a
+single follow-up task.
+
+**Cross-phase observation — done.md hygiene.** Of 10 AFK tasks, only 5
+produced `tasks/T-NNN.done.md` reports (T-001, T-003, T-004, T-005,
+T-007). The other 5 (T-002, T-006, T-008, T-009, T-010) shipped commits
+but skipped the done.md write step. T-007's done.md is an
+orchestrator-written reconstruction after a subagent usage-quota kill.
+
+The Review-found US-004 gap (two `parseSwiftDate` private helpers not
+deleted; 8 call sites un-migrated) correlates with the missing T-006
+done.md — Build never enumerated the call sites in an audit report, so
+the position/transaction-side asymmetry slipped through. With a done.md
+the subagent would have had to list "files changed" and would likely
+have noticed the transaction-side files were absent.
+
+**Cross-phase observation — Spec / Design rerun cost.** The Design QC
+flagged an ADR-08 vs US-008 AC1 contradiction; user softened the AC on
+rerun rather than reshape the design. Resolution was clean (one Spec
+edit + one ADR-08 update + one decisions.md Q05 revision), but it
+demonstrates that load-bearing ACs derived from a Spec-time grilling can
+be over-strict when subsequent Design work reveals a structural
+contradiction. The user's directive on this kind of contradiction is
+"soften the AC, keep the design"; QC review.md should surface "alternative:
+spec amendment" as a first-class resolution route alongside "rerun phase".
+
+**Cross-phase observation — calvin-bmpi as required reading.** Q02's
+resolution (always-emit pattern) was anchored entirely in calvin-bmpi's
+legacy `TransformTransactionsTask.transformMessages` template. Without
+that grounding the design would have invented a third pattern. Calvin-bmpi
+is off-limits for edits per existing user memory; this cycle confirms
+it is *required reading* for legacy-pattern audit when reviewer comments
+imply a template the agent hasn't seen. Update path captured in this
+project's `feedback.md`.
+
+**Cross-phase observation — P3 (zero duplication) in spec-driven cycles.**
+The principles-md P3 rule is "3+ occurrences require extraction". On
+this cycle, P3 was triggered by an *incomplete* extraction: the lifted
+helper exists, but two pre-existing duplicates were not deleted. P3's
+"Review check" wording ("scan the diff for repeated structural patterns")
+should be extended: also check that named-for-deletion duplicates from
+the task scope actually got deleted. A delete-failure is harder to spot
+than a copy-paste because the diff doesn't show the delete that didn't
+happen.
+
+**Cross-references:**
+`.loom/csd-717-swift-mapper-pr-feedback/{review,feedback,develop-log}.md`;
+`/Volumes/My Shared Files/repo/aper/aper-interfaces` commits `e757f3d` ..
+`b92efa7` on `CSD-717-clean`.
+
+## 2026-05-13 - sidebar-chat-titles - Review PASS with one MINOR
+
+Review audit of the eight-task graph against intent, design, plan, and
+75 / 75 test evidence. User had already approved at the Build gate and
+requested lifecycle closure.
+
+**Disposition.** PASS. 0 blocker / 0 major / 1 minor / 1 note.
+
+**Finding M-1 (MINOR).** `ui/apps/server/src/routes/chats.ts:251`
+introduced a comment `// empty-after-trim collapses to null per ADR-6.`
+Production code should not reference Loom artifacts (per user-memory
+`feedback_comment_style.md`). The rule was honoured everywhere else in
+this PR (LiveSidebar.tsx, ChatContextMenu.tsx changes, decorator,
+sidebar route, web api). One-line drift; ships as a follow-up nit.
+
+**N-1 (NOTE).** Pre-existing artifact references in untouched code
+(`lib/api.ts` US-001/US-003/T-006 banners; `ChatContextMenu.tsx`
+ADR-007). `git diff` confirms not introduced by this work — out of
+scope; track separately if retroactive enforcement is wanted.
+
+**Cross-phase observation — Review check vs. comment-style memory.**
+The principles.md P4 review check catches `legacy*` / `*V1` /
+commented-out code but does NOT explicitly catch artifact-ID leaks in
+comments. The user-memory rule (no `T-NNN` / `US-NNN` / `Q-NNN` /
+`ADR-NN` in production code) is enforced today by the Review Audit
+Agent reading the user-memory snippet, not by a principle. Worth
+considering whether to lift the comment-style rule into principles.md
+as a P2-style "naming/convention" item so it's enforced by every
+code-touching subagent rather than only at Review-time. The Build
+Task Builder has the same memory access, but a written principle would
+be a stronger guardrail.
+
+**Cross-phase observation — ADR validation in tests.** ADR-7 (fork
+drops custom_name) was specifically called out in the dispatch as
+something to verify was actually tested, not just claimed. The
+`chats-route-fork.test.ts` "forked chat is decorated and drops the
+source's custom_name to null" test does exactly the right thing:
+sets custom_name on the source, forks, asserts null on the fork's
+response body. Worth keeping as a pattern — any ADR whose decision
+flips an observable wire shape should land with a positive-and-
+negative-evidence test (source has X, fork has null) rather than just
+a positive-shape test (fork has the right shape).
+
+**Cross-references:**
+`.loom/sidebar-chat-titles/{review,feedback,develop-log}.md`;
+`.loom/sidebar-chat-titles/test-report.md`;
+`.loom/sidebar-chat-titles/tasks/T-001..T-008.done.md`.
+
+## 2026-05-14 - composer-t3code-triggers - verification-env mismatch surfaced at Build pre-flight
+
+Plan originally specified `node-test` (vitest static-source contract) as the verification environment. Build pre-flight discovered baseline `npm test` was 32 files / 372 tests red repo-wide because the test helpers resolve paths via `new URL("../...", import.meta.url).pathname`, which URL-encodes the `/Volumes/My Shared Files/` mount as `/Volumes/My%20Shared%20Files/`; `readFileSync` then ENOENTs. Plan was re-run mid-Build to switch to `cli-shell` (`tsc --noEmit` + `vite build` + per-task `grep`). Cross-project applicability: any Loom project running under a mounted-share path will hit this. The fix lives outside this project's scope (touches test helpers across the repo); the workaround is to pick `cli-shell` at Plan time.
+
+## 2026-05-14 - composer-t3code-triggers - keyboard contract lost in Lexical swap (Review blocker)
+
+The Lexical-migrated composer dropped the textarea's `onKeyDown` handler covering ArrowUp/ArrowDown menu nav, Enter/Tab accept, Escape dismiss latch, and bare Enter to submit. Design.md §"Keyboard contract" and ADR-006 prescribed a `ComposerKeyboardPlugin` registering five `KEY_*_COMMAND`s inside `ComposerEditor` to bubble `ComposerKeyIntent`s to the shell; that plugin was never implemented. `ComposerEditor` declares an `onSubmit` prop and a `focus()` ref method but neither is wired. The cli-shell gates (`tsc --noEmit` + `vite build` + grep) caught zero of this — the unused prop type-checks fine, the no-op method type-checks fine. The five smoke rounds chased visual issues but never re-exercised the keyboard contract that the deleted textarea owned, so the regression escaped the entire build. Surfaced as Blocker 1 in `review.md`. Process learning: when a migration replaces a wired event handler (textarea `onKeyDown`) with a framework-mediated equivalent (Lexical command registry), an explicit per-AC keyboard verification step needs to live somewhere — either in the per-task test sketch (impossible under cli-shell), or in the T-010 HITL checklist with one walk-through per key listed (was present, but the user verified visual / serialisation acceptance and didn't enumerate keyboard ACs individually).
+

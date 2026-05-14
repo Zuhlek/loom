@@ -18,6 +18,7 @@ import {
   deleteProject,
   forkChat,
   handoffChat,
+  renameChat,
   type ApiChat,
   type ApiProject,
   type SidebarLoomEntry,
@@ -68,6 +69,7 @@ export function LiveSidebar() {
   const [spawnFor, setSpawnFor] = useState<ApiProject | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [detachedIds, setDetachedIds] = useState<Set<string>>(() => new Set());
+  const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
 
   const groups = state?.groups ?? [];
   const unassigned = state?.unassigned ?? [];
@@ -100,6 +102,25 @@ export function LiveSidebar() {
     } catch (err) {
       console.warn("[loom] forkChat failed", err);
     }
+  };
+
+  const onRename = (chat: ApiChat) => {
+    setContextMenu(null);
+    setRenameTargetId(chat.id);
+  };
+
+  const onSubmitRename = async (chatId: string, value: string | null) => {
+    setRenameTargetId(null);
+    try {
+      await renameChat(chatId, value);
+      await refresh();
+    } catch (err) {
+      console.warn("[loom] renameChat failed", err);
+    }
+  };
+
+  const onCancelRename = () => {
+    setRenameTargetId(null);
   };
 
   const onDelete = async (chatId: string) => {
@@ -165,6 +186,9 @@ export function LiveSidebar() {
                 onDeleteProject={onDeleteProject}
                 onContextMenu={onContextMenu}
                 detachedIds={detachedIds}
+                renameTargetId={renameTargetId}
+                onSubmitRename={onSubmitRename}
+                onCancelRename={onCancelRename}
               />
             ))}
             {unassigned.length > 0 ? (
@@ -183,6 +207,9 @@ export function LiveSidebar() {
                     onDelete={onDelete}
                     onContextMenu={onContextMenu}
                     detached={detachedIds.has(c.id)}
+                    isRenaming={renameTargetId === c.id}
+                    onSubmitRename={(value) => onSubmitRename(c.id, value)}
+                    onCancelRename={onCancelRename}
                   />
                 ))}
               </div>
@@ -224,6 +251,7 @@ export function LiveSidebar() {
           position={{ x: contextMenu.x, y: contextMenu.y }}
           onClose={() => setContextMenu(null)}
           onHandoff={onHandoff}
+          onRename={onRename}
           onFork={onFork}
         />
       ) : null}
@@ -240,6 +268,9 @@ function ProjectGroup({
   onDeleteProject,
   onContextMenu,
   detachedIds,
+  renameTargetId,
+  onSubmitRename,
+  onCancelRename,
 }: {
   project: ApiProject;
   chats: ApiChat[];
@@ -249,6 +280,9 @@ function ProjectGroup({
   onDeleteProject: (project: ApiProject, deletedChatIds: string[]) => void | Promise<void>;
   onContextMenu: (chat: ApiChat, evt: React.MouseEvent) => void;
   detachedIds: Set<string>;
+  renameTargetId: string | null;
+  onSubmitRename: (chatId: string, value: string | null) => void | Promise<void>;
+  onCancelRename: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   return (
@@ -339,6 +373,9 @@ function ProjectGroup({
           onDelete={onDelete}
           onContextMenu={onContextMenu}
           detached={detachedIds.has(c.id)}
+          isRenaming={renameTargetId === c.id}
+          onSubmitRename={(value) => onSubmitRename(c.id, value)}
+          onCancelRename={onCancelRename}
         />
       ))}
     </div>
@@ -396,14 +433,21 @@ function ChatLink({
   onDelete,
   onContextMenu,
   detached,
+  isRenaming,
+  onSubmitRename,
+  onCancelRename,
 }: {
   chat: ApiChat;
   active: boolean;
   onDelete: (id: string) => void | Promise<void>;
   onContextMenu: (chat: ApiChat, evt: React.MouseEvent) => void;
   detached: boolean;
+  isRenaming: boolean;
+  onSubmitRename: (value: string | null) => void | Promise<void>;
+  onCancelRename: () => void;
 }) {
-  const label = chat.cwd.split("/").filter(Boolean).slice(-1)[0] ?? chat.cwd;
+  const cwdBasename = chat.cwd.split("/").filter(Boolean).slice(-1)[0] ?? chat.cwd;
+  const label = chat.custom_name ?? chat.auto_title ?? cwdBasename;
   const dot = DOT_FOR_MODE[chat.permission_mode] ?? "bg-emerald-500";
   const [confirming, setConfirming] = useState(false);
   return (
@@ -415,6 +459,29 @@ function ChatLink({
       title={`${chat.cwd} · ${chat.permission_mode}${chat.inert ? " · inert" : ""}`}
       onContextMenu={(evt) => onContextMenu(chat, evt)}
     >
+      {isRenaming ? (
+        <div className="flex-1 min-w-0 flex items-center gap-1.5">
+          <span className={clsx("size-1.5 rounded-full shrink-0", dot)} />
+          <input
+            autoFocus
+            defaultValue={label}
+            data-testid="chat-rename-input"
+            className="flex-1 min-w-0 bg-transparent border rounded px-1 text-xs outline-none"
+            style={{ borderColor: "var(--border)" }}
+            onKeyDown={(evt) => {
+              if (evt.key === "Enter") {
+                evt.preventDefault();
+                const trimmed = evt.currentTarget.value.trim();
+                onSubmitRename(trimmed.length === 0 ? null : trimmed);
+              } else if (evt.key === "Escape") {
+                evt.preventDefault();
+                onCancelRename();
+              }
+            }}
+            onBlur={() => onCancelRename()}
+          />
+        </div>
+      ) : (
       <Link href={`/chat/${chat.id}`} className="flex-1 min-w-0 overflow-hidden">
         <div className="flex items-center gap-1.5 cursor-pointer min-w-0">
           {detached ? (
@@ -427,6 +494,7 @@ function ChatLink({
           {chat.worktree_mode === "worktree" ? <span className="text-[10px] text-[var(--muted-foreground)] font-mono shrink-0">⎇</span> : null}
         </div>
       </Link>
+      )}
       {confirming ? (
         <div className="flex items-center gap-1 shrink-0">
           <button

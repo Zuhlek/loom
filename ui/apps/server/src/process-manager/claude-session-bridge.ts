@@ -34,10 +34,12 @@ import {
   type PermissionUpdate,
   type Query,
   type SDKAssistantMessage,
+  type SDKControlGetContextUsageResponse,
   type SDKMessage,
   type SDKPartialAssistantMessage,
   type SDKResultMessage,
   type SDKUserMessage,
+  type SlashCommand,
 } from "@anthropic-ai/claude-agent-sdk";
 
 import type { MetadataStore } from "../metadata-store/index.ts";
@@ -73,6 +75,7 @@ import type {
   UserTurnImage,
   WirePermissionMode,
 } from "../chat-protocol/frames.ts";
+import type { WireSlashCommand } from "../chat-protocol/messages.ts";
 
 // Re-export so existing `import { Task } from ".../claude-session-bridge.ts"`
 // call sites (if any are introduced in future) keep working. The single
@@ -95,6 +98,51 @@ export interface BridgeOptions {
   resolveSpawnCwd?: (input: SpawnInput) => Promise<ResolvedSpawnCwd>;
   /** Test seam: skip the real SDK query and capture the session instead. */
   startQueryOverride?: (session: ChatSession, mode: "create" | "resume") => void;
+  /** Test seam: intercept the SDK `query()` factory to capture `Options`. */
+  sdkQueryFactory?: (args: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => Query;
+}
+
+/**
+ * ADR-D07. Budget passed to the SDK `thinking: { type: 'enabled', budgetTokens }`
+ * when the user picks Ultrathink in the model-settings popup. Server-side
+ * single source of truth — kept here so the web mapping table at
+ * `ui/apps/web/src/components/chat/ModelSettingsPill.tsx` and this bridge
+ * agree without a duplicated literal.
+ */
+export const ULTRATHINK_BUDGET_TOKENS = 32_000;
+
+/** ADR-D04. SDK beta flag enabling the 1M context window. */
+const CONTEXT_1M_BETA = "context-1m-2025-08-07";
+
+/**
+ * ADR-D05. Curated set of slash-command names that classify as "skill"
+ * rows in the composer slash menu. The SDK `SlashCommand` shape has no
+ * `source` / `kind` field, so the bridge annotates each row by name
+ * before broadcasting; the client renders from the resulting `kind`.
+ * Single source of truth — renaming a skill is one edit here.
+ */
+export const SKILL_NAMES: ReadonlySet<string> = new Set<string>([
+  "weave",
+  "idea",
+  "forge",
+  "tune",
+  "build",
+  "review",
+  "explore-prototype",
+  "init",
+  "loop",
+  "schedule",
+  "security-review",
+  "simplify",
+  "update-config",
+  "keybindings-help",
+  "fewer-permission-prompts",
+  "claude-api",
+]);
+
+/** ADR-D05. Map an SDK-enumerated SlashCommand to the wire `kind`. */
+export function classifySlashCommand(command: SlashCommand): WireSlashCommand["kind"] {
+  return SKILL_NAMES.has(command.name) ? "skill" : "command";
 }
 
 export type TasksUpdateListener = (chatId: string, tasks: Task[]) => void;
@@ -258,6 +306,35 @@ export interface ChatSession {
    * never serialised on the wire.
    */
   currentMessageStartId: string | null;
+  /**
+   * T-004 / US-001 / US-002 / US-006. Last SDK-enumerated slash-command
+   * catalog (classified per {@link classifySlashCommand}). `null` until
+   * the first successful `supportedCommands()` lands. Re-attach uses the
+   * non-null value to backfill the joining client without waiting for
+   * the next enumeration.
+   */
+  slashCommands: WireSlashCommand[] | null;
+  /**
+   * T-004. Latches on the first non-error SDK message of a SDK run so
+   * the bridge enumerates `supportedCommands()` exactly once per spawn
+   * (and once per plugin-install signal). Reset on respawn.
+   */
+  attachConfirmed: boolean;
+  /**
+   * T-005 / ADR-D08. Last `getContextUsage()` reading rounded to whole
+   * percent. `null` until the first successful poll lands. Cached on
+   * the session to dedupe broadcasts: a fresh reading whose percentage
+   * delta is < 1 AND whose model is unchanged is suppressed.
+   */
+  contextUsage: ContextUsageSnapshot | null;
+}
+
+/** ADR-D08. Bridge-internal mirror of {@link ContextUsageUpdateFrame.body}. */
+export interface ContextUsageSnapshot {
+  percentage: number;
+  totalTokens: number;
+  maxTokens: number;
+  model: string;
 }
 
 /**
@@ -321,6 +398,7 @@ export class ClaudeSessionBridge {
   private config?: ResolvedConfig;
   private resolveSpawnCwdFn: (input: SpawnInput) => Promise<ResolvedSpawnCwd>;
   private startQueryOverride?: (session: ChatSession, mode: "create" | "resume") => void;
+  private sdkQueryFactory: (args: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => Query;
 
   constructor(private store: MetadataStore, opts: BridgeOptions = {}) {
     this.drainMs = opts.drainMs ?? DEFAULT_DRAIN_MS;
@@ -334,6 +412,7 @@ export class ClaudeSessionBridge {
           createWorktree: defaultCreateWorktree,
         }));
     this.startQueryOverride = opts.startQueryOverride;
+    this.sdkQueryFactory = opts.sdkQueryFactory ?? query;
   }
 
   onTasksUpdate(cb: TasksUpdateListener): () => void {
@@ -380,6 +459,33 @@ export class ClaudeSessionBridge {
       });
     }
     this.sendTo(client, snapshotFrame(session));
+    // T-004 / US-006. Backfill the joining client with the last
+    // enumerated catalog so late attachers don't wait for the next
+    // SDK re-enumeration. No-op until the first successful
+    // `supportedCommands()` lands.
+    if (session.slashCommands !== null) {
+      this.sendTo(client, {
+        kind: "slash-commands-update",
+        "chat-id": session.chatId,
+        body: { commands: session.slashCommands },
+      });
+    }
+    // T-005 / ADR-D08. Backfill the joining client with the cached
+    // usage snapshot first, then trigger a fresh poll so the indicator
+    // reflects the latest reading without waiting for the next idle.
+    if (session.contextUsage !== null) {
+      this.sendTo(client, {
+        kind: "context-usage-update",
+        "chat-id": session.chatId,
+        body: {
+          percentage: Math.round(session.contextUsage.percentage),
+          totalTokens: session.contextUsage.totalTokens,
+          maxTokens: session.contextUsage.maxTokens,
+          model: session.contextUsage.model,
+        },
+      });
+    }
+    void this.refreshContextUsage(session);
   }
 
   detach(chatId: string, client: WsClient): void {
@@ -547,6 +653,9 @@ export class ClaudeSessionBridge {
       latestTasks: null,
       currentTurnId: randomUUID(),
       currentMessageStartId: null,
+      slashCommands: null,
+      attachConfirmed: false,
+      contextUsage: null,
     };
 
     // `chat.inert` here means "previously drained / previously crashed
@@ -587,13 +696,24 @@ export class ClaudeSessionBridge {
       sdkOptions.allowDangerouslySkipPermissions = true;
     }
 
+    // ADR-D04 / US-009: re-read the chat row on every spawn so a mid-flight
+    // `model-settings-set` is picked up on the next respawn without
+    // disturbing the active Query.
+    const settings = this.store.chats.get(session.chatId)?.model_settings ?? null;
+    if (settings) {
+      if (settings.model) sdkOptions.model = settings.model;
+      if (settings.effort) sdkOptions.effort = settings.effort;
+      if (settings.thinking) sdkOptions.thinking = settings.thinking;
+      if (settings.contextWindow === "1m") sdkOptions.betas = [CONTEXT_1M_BETA];
+    }
+
     if (mode === "resume") {
       sdkOptions.resume = session.sessionId;
     } else {
       sdkOptions.sessionId = session.sessionId;
     }
 
-    const queryHandle = query({ prompt: session.inputQueue, options: sdkOptions });
+    const queryHandle = this.sdkQueryFactory({ prompt: session.inputQueue, options: sdkOptions });
     session.queryHandle = queryHandle;
 
     // PID isn't surfaced by the SDK; the older bridge stored it for
@@ -742,6 +862,9 @@ export class ClaudeSessionBridge {
     session.inputQueue = new UserMessageQueue();
     session.abortController = new AbortController();
     session.currentMessageStartId = null;
+    // T-004. Re-arm enumeration on respawn: the next non-error SDK
+    // message confirms the fresh attach and re-fires `supportedCommands()`.
+    session.attachConfirmed = false;
     // Replay buffered input into the fresh queue. Preserves FIFO order.
     const replay = session.pendingInput;
     session.pendingInput = [];
@@ -807,6 +930,23 @@ export class ClaudeSessionBridge {
   }
 
   private handleSdkMessage(session: ChatSession, msg: SDKMessage): void {
+    // T-004. The first non-error SDK message of a spawn confirms attach
+    // and triggers the initial `supportedCommands()` enumeration. A
+    // `plugin_install` completion re-fires enumeration so newly installed
+    // skills surface without a re-attach (US-006).
+    const isErrorResult = msg.type === "result" && (msg as { is_error?: boolean }).is_error === true;
+    const isPluginReload =
+      msg.type === "system" &&
+      (msg as { subtype?: string }).subtype === "plugin_install" &&
+      ((msg as { status?: string }).status === "completed" ||
+        (msg as { status?: string }).status === "installed");
+    if (!isErrorResult && !session.attachConfirmed) {
+      session.attachConfirmed = true;
+      void this.refreshSlashCommands(session);
+    } else if (isPluginReload) {
+      void this.refreshSlashCommands(session);
+    }
+
     switch (msg.type) {
       case "assistant":
         this.onAssistant(session, msg);
@@ -827,6 +967,85 @@ export class ClaudeSessionBridge {
         // Other SDK message variants are not yet rendered — ignore.
         break;
     }
+  }
+
+  /**
+   * T-004. Call `query.supportedCommands()`, classify each row via
+   * {@link classifySlashCommand}, store the catalog on the session, and
+   * broadcast a `slash-commands-update` frame. Generation-guarded so a
+   * late-resolving enumeration from a stale `Query` (post-respawn) is
+   * discarded. On throw: leave `session.slashCommands` at its prior
+   * value and emit no frame (Design `## Failure modes`).
+   */
+  private async refreshSlashCommands(session: ChatSession): Promise<void> {
+    const queryHandle = session.queryHandle;
+    if (!queryHandle) return;
+    let rows: SlashCommand[];
+    try {
+      rows = await queryHandle.supportedCommands();
+    } catch {
+      return;
+    }
+    if (session.queryHandle !== queryHandle) return;
+    const commands: WireSlashCommand[] = rows.map((row) => ({
+      name: row.name,
+      description: row.description,
+      argumentHint: row.argumentHint,
+      kind: classifySlashCommand(row),
+    }));
+    session.slashCommands = commands;
+    this.broadcast(session, {
+      kind: "slash-commands-update",
+      "chat-id": session.chatId,
+      body: { commands },
+    });
+  }
+
+  /**
+   * T-005 / ADR-D08. Poll `query.getContextUsage()`, round percentage to
+   * integer, and broadcast a `context-usage-update` frame unless the
+   * reading is suppressed (|Δpercentage| < 1 AND same model). Generation-
+   * guarded so a late resolution from a stale `Query` post-respawn is
+   * dropped. On throw: leave the cached snapshot untouched and emit no
+   * frame (Design `## Failure modes`).
+   */
+  private async refreshContextUsage(session: ChatSession): Promise<void> {
+    const queryHandle = session.queryHandle;
+    if (!queryHandle) return;
+    let reading: SDKControlGetContextUsageResponse;
+    try {
+      reading = await queryHandle.getContextUsage();
+    } catch {
+      return;
+    }
+    if (session.queryHandle !== queryHandle) return;
+    // Internal mirror keeps raw percentage so the suppression rule (raw
+    // delta < 1) survives the rounding applied for the wire payload.
+    const next: ContextUsageSnapshot = {
+      percentage: reading.percentage,
+      totalTokens: reading.totalTokens,
+      maxTokens: reading.maxTokens,
+      model: reading.model,
+    };
+    const prev = session.contextUsage;
+    if (
+      prev !== null &&
+      Math.abs(next.percentage - prev.percentage) < 1 &&
+      next.model === prev.model
+    ) {
+      return;
+    }
+    session.contextUsage = next;
+    this.broadcast(session, {
+      kind: "context-usage-update",
+      "chat-id": session.chatId,
+      body: {
+        percentage: Math.round(next.percentage),
+        totalTokens: next.totalTokens,
+        maxTokens: next.maxTokens,
+        model: next.model,
+      },
+    });
   }
 
   /** Materialise an assistant message (post-stream finalised content). */
@@ -1318,6 +1537,13 @@ export class ClaudeSessionBridge {
       "chat-id": session.chatId,
       body: { state, lastError: session.lastError },
     });
+    // T-005 / ADR-D08. Repoll the SDK's context-window breakdown on
+    // every transition into idle (turn completed). The bridge does NOT
+    // free-run-poll between turns — mid-turn percentages are noisy and
+    // not actionable.
+    if (state === "idle") {
+      void this.refreshContextUsage(session);
+    }
   }
 
   private broadcast(session: ChatSession, frame: ServerFrame): void {
@@ -1370,6 +1596,86 @@ export class ClaudeSessionBridge {
       const message = err instanceof Error ? err.message : String(err);
       this.appendItem(session, makeNotice(`Permission mode change failed: ${message}`, "error"));
     }
+  }
+
+  /**
+   * US-007 / US-008 / US-009. Merge a partial {@link WireModelSettings}
+   * patch into the chat-row JSON and broadcast a `chat-update` frame so
+   * attached clients re-derive pill labels. The active `Query` is NOT
+   * interrupted or respawned (US-009 AC1) — the change lands on the
+   * next `startQuery()` via {@link ChatSession.modelSettings} the row
+   * read at spawn time.
+   *
+   * Validation per Design `## Failure modes`:
+   *   - Unknown keys are silently dropped (no error).
+   *   - Invalid `effort` / `contextWindow` / `thinking` shapes yield an
+   *     `error` frame, NO persistence.
+   */
+  setModelSettings(chatId: string, patch: Partial<WireModelSettings>): void {
+    const session = this.sessions.get(chatId);
+    if (!session) return;
+    const cleaned: Partial<WireModelSettings> = {};
+    if ("model" in patch) {
+      const value = patch.model;
+      if (value !== null && typeof value !== "string") {
+        this.emitSettingsError(session, "model-settings-set: invalid model");
+        return;
+      }
+      cleaned.model = value;
+    }
+    if ("effort" in patch) {
+      const value = patch.effort;
+      if (
+        value !== null &&
+        value !== "low" &&
+        value !== "medium" &&
+        value !== "high" &&
+        value !== "xhigh" &&
+        value !== "max"
+      ) {
+        this.emitSettingsError(session, "model-settings-set: invalid effort");
+        return;
+      }
+      cleaned.effort = value;
+    }
+    if ("thinking" in patch) {
+      const value = patch.thinking;
+      if (
+        value !== null &&
+        (typeof value !== "object" ||
+          (value as { type?: unknown }).type !== "enabled" ||
+          typeof (value as { budgetTokens?: unknown }).budgetTokens !== "number")
+      ) {
+        this.emitSettingsError(session, "model-settings-set: invalid thinking");
+        return;
+      }
+      cleaned.thinking = value;
+    }
+    if ("contextWindow" in patch) {
+      const value = patch.contextWindow;
+      if (value !== null && value !== "200k" && value !== "1m") {
+        this.emitSettingsError(session, "model-settings-set: invalid contextWindow");
+        return;
+      }
+      cleaned.contextWindow = value;
+    }
+    if (Object.keys(cleaned).length === 0) return;
+    this.store.chats.update(chatId, { model_settings: cleaned });
+    const row = this.store.chats.get(chatId);
+    if (!row) return;
+    this.broadcast(session, {
+      kind: "chat-update",
+      "chat-id": chatId,
+      body: { chat: row },
+    });
+  }
+
+  private emitSettingsError(session: ChatSession, message: string): void {
+    this.broadcast(session, {
+      kind: "error",
+      "chat-id": session.chatId,
+      body: { message },
+    });
   }
 
   /**
@@ -1767,6 +2073,9 @@ export class ClaudeSessionBridge {
       latestTasks: null,
       currentTurnId: randomUUID(),
       currentMessageStartId: null,
+      slashCommands: null,
+      attachConfirmed: false,
+      contextUsage: null,
     };
     this.sessions.set(chatId, session);
   }

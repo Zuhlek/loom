@@ -128,3 +128,53 @@ is well inside P4's spirit but not strictly forbidden by P4's text.
 Source: `.loom/composer-attachments-and-at-file/feedback.md`,
 orchestrator dispatch context 2026-05-12, Build rerun audit notes
 in `develop-log.md` + `test-report.md`.
+
+## 2026-05-13 — csd-717-swift-mapper-pr-feedback — user-pushback patterns
+
+Patterns surfaced during the cycle. Full text + suggested /tune actions
+in `.loom/csd-717-swift-mapper-pr-feedback/feedback.md`. Summary:
+
+- **"No more clarifying questions" directive.** Issued mid-cycle and
+  applies repo-wide for this user, not just to one phase. /craft Spec
+  grilling should aim for one batched-question pass, not six sequential
+  ones. Promote to permanent user memory.
+
+- **"Structurally indifferent but reviewer-faithful".** When the
+  reviewer proposes a structural change (img 12 hierarchy rename), user
+  picks the *full* reviewer vision rather than the minimum that
+  addresses the literal text. /craft grilling should frame options as
+  "minimum / middle / full" with "full" tagged as reviewer-vision when
+  applicable.
+
+- **"Best-effort suggestion" preference.** User picks the
+  recommendation column in 5 of 6 decisions.md grilling questions.
+  Neutral option tables are a /craft anti-pattern for this user.
+
+- **"Willingness to soften an AC when evidence contradicts".** On
+  Design QC's ADR-08 vs US-008 AC1 contradiction, user softened AC1
+  (byte-identity → semantics-preservation) rather than reshape ADR-08.
+  QC review.md format should include "alternative: spec amendment" as a
+  first-class resolution route alongside "rerun phase".
+
+- **Existing pattern reconfirmed — "design push-back is expected".**
+  User pushed back on QC's recommended "controlled duplication" path
+  for ADR-08 with concrete reasoning grounded in reviewer img 12 intent.
+  Existing memory captures this pattern; no update needed.
+
+- **"Calvin-bmpi grounding load-bearing".** Q02 resolution would have
+  been wrong without calvin-bmpi audit. Existing `feedback_calvin_bmpi_offlimits.md`
+  memory says "read-only for audit"; should clarify "required reading
+  when reviewer comments imply a legacy template the agent hasn't seen".
+
+- **Process — done.md hygiene.** 5 of 10 AFK tasks shipped commits
+  without done.md. The one Review-major (US-004 partial deletion)
+  correlates with a missing T-006.done.md. Build contract should
+  require done.md before RETURN composition.
+
+Source: `.loom/csd-717-swift-mapper-pr-feedback/{review,feedback,develop-log}.md`,
+plus `decisions.md` Q01-Q06 resolutions and `pipeline.md` History rows.
+
+## 2026-05-14 - composer-t3code-triggers - verification-env pivot mid-Build + 5 smoke rounds accepted
+
+User accepted three pivots and one deferral: (1) verification environment swap from `node-test` to `cli-shell` at Plan rerun (workspace's `%20`-encoded mount path broke `import.meta.url`-based static-source contract tests); (2) five rounds of follow-up smoke-fix tasks T-011 → T-014 covering placeholder color via `color-mix`, slash empty-state copy / catalog-empty branch, `@`-menu frame, Stop/Queue icon-only buttons, browse-mode top-5; (3) slash-command catalog deferred to a follow-up seed once smoke confirmed Loom does not yet ship `/help`/`/init`/`/settings`; (4) three incidental pre-existing wiring fixes folded into T-014 (cwd prop omission, missing `/api/` proxy prefix, walk.ts over-filtering). Pattern: user is willing to absorb several short rerun rounds on UI work where each round closes one or two visual smoke issues — preference is many small fixes over one batched-up "polish pass." Net new at Review: two blockers (deleted keyboard handler in Lexical swap; redundant slash-shell duplication) not yet on user's radar — need HITL decision before close.
+

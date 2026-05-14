@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -6,19 +7,27 @@ import {
   type ChangeEvent,
   type ClipboardEvent,
   type DragEvent,
-  type KeyboardEvent,
 } from "react";
 import clsx from "clsx";
-import type { PermissionMode, UserTurnImage } from "../../lib/chat-types";
-import type { SlashCommandEntry } from "../../lib/api";
+import type {
+  PermissionMode,
+  UserTurnImage,
+  WireSlashCommand,
+} from "../../lib/chat-types";
 import {
   detectAtFileTrigger,
   detectSlashCommandTrigger,
-  rankSlashCommands,
   replaceTextRange,
 } from "../../lib/composer-trigger";
 import { ComposerAtFileMenu } from "./ComposerAtFileMenu";
+import {
+  ComposerEditor,
+  type ComposerEditorHandle,
+  type ComposerKeyIntent,
+} from "./ComposerEditor";
+import { ComposerFooterToolbar } from "./ComposerFooterToolbar";
 import { ComposerSlashMenu } from "./ComposerSlashMenu";
+import { buildSlashMenuRows, type SlashMenuRow } from "./ComposerSlashMenu";
 
 /**
  * T-007 / US-007. Three-state composer policy mirror — kept in sync
@@ -74,20 +83,22 @@ export interface ChatComposerProps {
   isInterrupted?: boolean;
 
   /**
-   * Slash-command catalog (user + project + plugin scope) used to drive
-   * the inline `/`-trigger menu. When omitted or empty the menu stays
-   * hidden — the composer still accepts `/foo` as plain text so Claude
-   * Code can execute it server-side.
-   */
-  availableSlashCommands?: SlashCommandEntry[];
-
-  /**
    * T-013 / US-008. Chat's current working directory — forwarded to the
    * `/file-search` endpoint for the `@`-file picker. When undefined the
    * fetch is skipped and the menu can still render an empty / loading
    * state.
    */
   cwd?: string;
+
+  /**
+   * T-007 / US-001..US-006. Bridge-supplied slash-command catalog
+   * delivered via the `slash-commands-update` frame and routed through
+   * {@link useChatBridge}. `null` until the first frame lands (drives
+   * the ADR-D02 "Loading commands…" affordance under the PROVIDER
+   * header). Built-in rows are merged client-side inside
+   * {@link ComposerSlashMenu}.
+   */
+  slashCommands?: WireSlashCommand[] | null;
 }
 
 /**
@@ -253,6 +264,7 @@ const ATTACHMENT_CAP = 4;
 const ATTACHMENT_MAX_BYTES = 5_000_000;
 const OVER_CAP_NOTICE_MS = 3000;
 const AT_FILE_DEBOUNCE_MS = 150;
+const COMPOSER_PLACEHOLDER = "Ask Claude anything · @ for files · / for commands";
 
 export function ChatComposer({
   composerMode,
@@ -265,8 +277,8 @@ export function ChatComposer({
   permissionMode = "default",
   onPermissionModeChange,
   isInterrupted,
-  availableSlashCommands,
   cwd,
+  slashCommands,
 }: ChatComposerProps) {
   // T-007 / US-007. Resolve the hard-disable + send-affordance flags
   // from the three-state composer mode. When `composerMode` is
@@ -278,12 +290,11 @@ export function ChatComposer({
   const hardDisabled = isBlocked || !!disabled;
   const [value, setValue] = useState("");
   const [cursor, setCursor] = useState(0);
-  const [menuSelectedIndex, setMenuSelectedIndex] = useState(0);
-  // Escape-dismissed trigger key. The menu re-opens only when the user
-  // edits the trigger (changing its query / range), so the same
-  // dismissed `/foo` stays closed until the user types or moves on.
-  const [dismissedTriggerKey, setDismissedTriggerKey] = useState<string | null>(null);
-  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const handleEditorStateChange = useCallback((state: { text: string; cursor: number }) => {
+    setValue(state.text);
+    setCursor(state.cursor);
+  }, []);
+  const editorRef = useRef<ComposerEditorHandle | null>(null);
 
   // T-005. Attachment state machine. The `attachmentsRef` mirror is
   // read by the unmount cleanup so we can revoke object URLs without
@@ -312,54 +323,32 @@ export function ChatComposer({
   const [atFileLoading, setAtFileLoading] = useState(false);
   const atFileTriggerRef = useRef<{ rangeStart: number; rangeEnd: number } | null>(null);
 
-  // Slash-trigger detection runs on every (value, cursor) update; the
-  // menu is hidden when the trigger is null, no commands match, or the
-  // user has Escape-dismissed this exact trigger.
-  const slashTrigger = useMemo(
-    () => (hardDisabled ? null : detectSlashCommandTrigger(value, cursor)),
-    [value, cursor, hardDisabled],
-  );
-  const filteredCommands = useMemo(() => {
-    if (!slashTrigger) return [];
-    if (!availableSlashCommands || availableSlashCommands.length === 0) return [];
-    return rankSlashCommands(availableSlashCommands, slashTrigger.query);
-  }, [slashTrigger, availableSlashCommands]);
-  const currentTriggerKey = triggerKey(slashTrigger);
-  const slashMenuOpen =
-    !!slashTrigger &&
-    filteredCommands.length > 0 &&
-    currentTriggerKey !== dismissedTriggerKey;
+  // T-007 / US-001. Slash-menu state machine. Detection runs on every
+  // (value, cursor) update; the menu opens whenever the editor matches
+  // `^/<non-whitespace>*` on the current line, and the bridge-supplied
+  // catalog drives the Provider section via {@link ComposerSlashMenu}.
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashMenuQuery, setSlashMenuQuery] = useState("");
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const slashTriggerRef = useRef<{ rangeStart: number; rangeEnd: number } | null>(null);
 
-  // T-013. @-file detection runs on every (value, cursor) update too,
-  // gated behind the mutual-exclusion guard so the slash menu wins when
-  // both detectors fire on the same tick (B-13).
+  // @-file detection runs on every (value, cursor) update.
   const atTrigger = useMemo(
     () => (hardDisabled ? null : detectAtFileTrigger(value, cursor)),
     [value, cursor, hardDisabled],
   );
 
-  // Dev-only warning when both detectors return non-null on the same
-  // tick — early signal that one of the two detectors has drifted.
-  useEffect(() => {
-    if (slashTrigger && atTrigger) {
-      console.warn(
-        "[ChatComposer] both slash- and @-file triggers active on the same tick — slash wins",
-        { slashQuery: slashTrigger.query, atQuery: atTrigger.query },
-      );
-    }
-  }, [slashTrigger, atTrigger]);
+  // Slash-trigger detection mirrors the @-file pattern. The two menus
+  // are mutually exclusive — the @ menu wins because it's anchored to a
+  // strict whitespace-then-`@` rule that can't coexist with a leading-
+  // slash line. See `composer-trigger.ts` for both detectors.
+  const slashTrigger = useMemo(
+    () => (hardDisabled || atTrigger ? null : detectSlashCommandTrigger(value, cursor)),
+    [value, cursor, hardDisabled, atTrigger],
+  );
 
-  // Open / close the @-menu in response to the trigger + guard.
+  // Open / close the @-menu in response to the trigger.
   useEffect(() => {
-    if (slashMenuOpen) {
-      // Mutual-exclusion: slash menu wins.
-      if (atFileMenuOpen) {
-        setAtFileMenuOpen(false);
-        setAtFileResults([]);
-        setAtFileQuery("");
-      }
-      return;
-    }
     if (atTrigger) {
       atFileTriggerRef.current = {
         rangeStart: atTrigger.rangeStart,
@@ -375,7 +364,48 @@ export function ChatComposer({
       setAtFileResults([]);
       setAtFileQuery("");
     }
-  }, [atTrigger, slashMenuOpen, atFileMenuOpen, atFileQuery]);
+  }, [atTrigger, atFileMenuOpen, atFileQuery]);
+
+  // Open / close the slash-menu in response to its trigger. Resets the
+  // selection index whenever the typed query changes so the keyboard
+  // highlight starts at the top of the (re-filtered) list.
+  useEffect(() => {
+    if (slashTrigger) {
+      slashTriggerRef.current = {
+        rangeStart: slashTrigger.rangeStart,
+        rangeEnd: slashTrigger.rangeEnd,
+      };
+      if (!slashMenuOpen) setSlashMenuOpen(true);
+      if (slashMenuQuery !== slashTrigger.query) {
+        setSlashMenuQuery(slashTrigger.query);
+        setSlashSelectedIndex(0);
+      }
+    } else if (slashMenuOpen) {
+      setSlashMenuOpen(false);
+      setSlashMenuQuery("");
+    }
+  }, [slashTrigger, slashMenuOpen, slashMenuQuery]);
+
+  // Flat row list (built-ins + filtered providers) — drives keyboard
+  // nav bounds and the accept handler. Mirrors the same merge
+  // `ComposerSlashMenu` performs internally so the parent and child
+  // agree on row indices.
+  const slashRows = useMemo<SlashMenuRow[]>(() => {
+    if (!slashMenuOpen) return [];
+    const { builtins, providers } = buildSlashMenuRows(
+      slashMenuQuery,
+      slashCommands ?? null,
+    );
+    return [...builtins, ...providers];
+  }, [slashMenuOpen, slashMenuQuery, slashCommands]);
+
+  // Clamp the selected index whenever the underlying row list shrinks
+  // (e.g. typing narrows the filter past the highlighted row).
+  useEffect(() => {
+    if (slashSelectedIndex >= slashRows.length && slashRows.length > 0) {
+      setSlashSelectedIndex(0);
+    }
+  }, [slashRows.length, slashSelectedIndex]);
 
   // Debounced /file-search fetch with AbortController cancel.
   useEffect(() => {
@@ -390,7 +420,7 @@ export function ChatComposer({
     const controller = new AbortController();
     setAtFileLoading(true);
     const handle = setTimeout(() => {
-      const url = `/file-search?cwd=${encodeURIComponent(cwd)}&q=${encodeURIComponent(atFileQuery)}`;
+      const url = `/api/file-search?cwd=${encodeURIComponent(cwd)}&q=${encodeURIComponent(atFileQuery)}`;
       fetch(url, { signal: controller.signal })
         .then((res) => res.json())
         .then((json: { results?: string[] }) => {
@@ -411,24 +441,13 @@ export function ChatComposer({
     };
   }, [atFileMenuOpen, atFileQuery, cwd]);
 
-  // Clamp/reset slash-menu selection when the filtered list changes.
-  useEffect(() => {
-    if (filteredCommands.length === 0) {
-      if (menuSelectedIndex !== 0) setMenuSelectedIndex(0);
-      return;
-    }
-    if (menuSelectedIndex >= filteredCommands.length) {
-      setMenuSelectedIndex(0);
-    }
-  }, [filteredCommands, menuSelectedIndex]);
-
-  // Clear the slash Escape-dismiss latch once the user moves off the
-  // dismissed trigger.
-  useEffect(() => {
-    if (dismissedTriggerKey !== null && currentTriggerKey !== dismissedTriggerKey) {
-      setDismissedTriggerKey(null);
-    }
-  }, [currentTriggerKey, dismissedTriggerKey]);
+  // When the query is empty, surface the top 5 walked files as a browse
+  // sample so the user sees that the picker works; once the user starts
+  // typing, fall through to the full ranked list (server-capped at 50).
+  const displayedAtFileResults = useMemo(() => {
+    if (atFileQuery.trim() === "") return atFileResults.slice(0, 5);
+    return atFileResults;
+  }, [atFileQuery, atFileResults]);
 
   // T-005. Unmount cleanup — revoke every previewUrl we still hold.
   useEffect(() => {
@@ -511,70 +530,121 @@ export function ChatComposer({
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const acceptCommand = (item: SlashCommandEntry) => {
-    if (!slashTrigger) return;
-    const { text, cursor: nextCursor } = replaceTextRange(
-      value,
-      slashTrigger.rangeStart,
-      slashTrigger.rangeEnd,
-      `/${item.name} `,
-    );
-    setValue(text);
-    setCursor(nextCursor);
-    queueMicrotask(() => {
-      const ta = taRef.current;
-      if (!ta) return;
-      ta.focus();
-      try {
-        ta.setSelectionRange(nextCursor, nextCursor);
-      } catch {}
-    });
-  };
-
   const acceptAtFile = (path: string) => {
     const trigger = atFileTriggerRef.current;
     if (!trigger) return;
-    const { text, cursor: nextCursor } = replaceTextRange(
-      value,
-      trigger.rangeStart,
-      trigger.rangeEnd,
-      `@${path} `,
-    );
-    setValue(text);
-    setCursor(nextCursor);
+    editorRef.current?.insertMention(path, {
+      start: trigger.rangeStart,
+      end: trigger.rangeEnd,
+    });
     setAtFileMenuOpen(false);
     setAtFileResults([]);
     setAtFileQuery("");
-    queueMicrotask(() => {
-      const ta = taRef.current;
-      if (!ta) return;
-      ta.focus();
-      try {
-        ta.setSelectionRange(nextCursor, nextCursor);
-      } catch {}
-    });
+    queueMicrotask(() => editorRef.current?.focus());
+  };
+
+  // T-007 / US-001 AC1 + US-003 AC4. Accept a slash-menu row. SDK
+  // provider rows (and skills) write `/<name> ` into the textarea at
+  // the trigger range — mirrors the prior generic behaviour so the
+  // user lands one keystroke away from arguments. Built-in row click
+  // handlers (`/model` → picker, `/plan` / `/default` →
+  // `permission-mode-set`) are out of scope for this task — T-008 and
+  // T-010 land them; for now built-ins use the same generic path so
+  // the menu doesn't render an inert row.
+  const acceptSlash = (row: SlashMenuRow) => {
+    const trigger = slashTriggerRef.current;
+    if (!trigger) return;
+    const replacement = `/${row.name} `;
+    const next = replaceTextRange(
+      editorRef.current?.getPlainText() ?? "",
+      trigger.rangeStart,
+      trigger.rangeEnd,
+      replacement,
+    );
+    editorRef.current?.setPlainText(next.text);
+    setSlashMenuOpen(false);
+    setSlashMenuQuery("");
+    queueMicrotask(() => editorRef.current?.focus());
   };
 
   const submit = async () => {
-    const text = value.trim();
+    const text = (editorRef.current?.getPlainText() ?? "").trim();
     const hasAttachments = attachments.length > 0;
     if (!text && !hasAttachments) return;
     if (!onSubmit) return;
     const images = await Promise.all(attachments.map(encodeAttachment));
     onSubmit(text, images);
-    // Post-submit cleanup: revoke + clear, third URL.revokeObjectURL
-    // call site per US-005 AC3.
     for (const att of attachments) {
       URL.revokeObjectURL(att.previewUrl);
     }
     setAttachments([]);
-    setValue("");
-    setCursor(0);
-    setDismissedTriggerKey(null);
-    queueMicrotask(() => taRef.current?.focus());
+    editorRef.current?.setPlainText("");
+    queueMicrotask(() => editorRef.current?.focus());
   };
 
-  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+  const canSend = value.trim().length > 0 || attachments.length > 0;
+
+  const handleKeyIntent = useCallback(
+    (intent: ComposerKeyIntent): boolean => {
+      if (intent.kind === "submit") {
+        if (slashMenuOpen && slashRows.length > 0) {
+          acceptSlash(slashRows[slashSelectedIndex]);
+          return true;
+        }
+        if (canSend) {
+          void submit();
+          return true;
+        }
+        return false;
+      }
+      if (intent.kind === "enter-menu" || intent.kind === "tab") {
+        if (slashMenuOpen && slashRows.length > 0) {
+          acceptSlash(slashRows[slashSelectedIndex]);
+          return true;
+        }
+        if (atFileMenuOpen && displayedAtFileResults.length > 0) {
+          acceptAtFile(displayedAtFileResults[atFileSelectedIndex]);
+          return true;
+        }
+        return false;
+      }
+      if (intent.kind === "arrow-up" || intent.kind === "arrow-down") {
+        const delta = intent.kind === "arrow-up" ? -1 : 1;
+        if (slashMenuOpen && slashRows.length > 0) {
+          setSlashSelectedIndex((i) => clampIndex(i + delta, slashRows.length));
+          return true;
+        }
+        if (atFileMenuOpen && displayedAtFileResults.length > 0) {
+          setAtFileSelectedIndex((i) => clampIndex(i + delta, displayedAtFileResults.length));
+          return true;
+        }
+        return false;
+      }
+      if (intent.kind === "escape") {
+        if (slashMenuOpen) {
+          setSlashMenuOpen(false);
+          return true;
+        }
+        if (atFileMenuOpen) {
+          setAtFileMenuOpen(false);
+          return true;
+        }
+        return false;
+      }
+      return false;
+    },
+    [
+      canSend,
+      atFileMenuOpen,
+      displayedAtFileResults,
+      atFileSelectedIndex,
+      slashMenuOpen,
+      slashRows,
+      slashSelectedIndex,
+    ],
+  );
+
+  const handlePaste = (e: ClipboardEvent<HTMLDivElement>) => {
     const cd = e.clipboardData;
     if (!cd) return;
     const candidates: File[] = [];
@@ -646,70 +716,6 @@ export function ChatComposer({
     void addAttachments(files);
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (slashMenuOpen) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setMenuSelectedIndex((i) => (i + 1) % filteredCommands.length);
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setMenuSelectedIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length);
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        const item = filteredCommands[menuSelectedIndex] ?? filteredCommands[0];
-        if (item) acceptCommand(item);
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setDismissedTriggerKey(currentTriggerKey);
-        return;
-      }
-    }
-    if (atFileMenuOpen && atFileResults.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setAtFileSelectedIndex((i) => (i + 1) % atFileResults.length);
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setAtFileSelectedIndex((i) => (i - 1 + atFileResults.length) % atFileResults.length);
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        const path = atFileResults[atFileSelectedIndex] ?? atFileResults[0];
-        if (path) acceptAtFile(path);
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setAtFileMenuOpen(false);
-        setAtFileResults([]);
-        setAtFileQuery("");
-        return;
-      }
-    }
-    if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
-      e.preventDefault();
-      void submit();
-    }
-  };
-
-  // Track the textarea selection so trigger detection sees the live
-  // cursor.
-  const syncCursorFromTa = () => {
-    const ta = taRef.current;
-    if (!ta) return;
-    const next = ta.selectionStart ?? 0;
-    if (next !== cursor) setCursor(next);
-  };
-
   const onPermissionSelectChange = (e: ChangeEvent<HTMLSelectElement>) => {
     if (!onPermissionModeChange) return;
     const next = e.target.value as PermissionMode;
@@ -717,7 +723,6 @@ export function ChatComposer({
   };
 
   const stripVisible = attachments.length > 0 || overCapNotice !== null;
-  const canSend = value.trim().length > 0 || attachments.length > 0;
 
   // Resolve the active permission-mode option for the ghost trigger.
   // Falls back to the first entry (Supervised) when the prop carries an
@@ -783,39 +788,38 @@ export function ChatComposer({
           </div>
         )}
         <div className="px-3 py-2.5 relative">
-          {slashMenuOpen && (
-            <ComposerSlashMenu
-              items={filteredCommands}
-              selectedIndex={menuSelectedIndex}
-              onHover={setMenuSelectedIndex}
-              onSelect={acceptCommand}
-            />
-          )}
-          {atFileMenuOpen && !slashMenuOpen && (
+          {atFileMenuOpen && (
             <ComposerAtFileMenu
-              items={atFileResults}
+              items={displayedAtFileResults}
               selectedIndex={atFileSelectedIndex}
               onHover={setAtFileSelectedIndex}
               onSelect={acceptAtFile}
               loading={atFileLoading}
+              query={atFileQuery}
             />
           )}
-          <textarea
-            ref={taRef}
-            rows={2}
+          {slashMenuOpen && (
+            <ComposerSlashMenu
+              query={slashMenuQuery}
+              slashCommands={slashCommands ?? null}
+              selectedIndex={slashSelectedIndex}
+              onHover={setSlashSelectedIndex}
+              onSelect={acceptSlash}
+            />
+          )}
+          <ComposerEditor
+            ref={editorRef}
             disabled={hardDisabled}
-            placeholder={hardDisabled ? disabledReason ?? "Locked — resolve above" : isQueueMode ? "Queue a follow-up for Claude… (Shift+Enter for new line)" : "Reply to Claude… (Shift+Enter for new line)"}
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setCursor(e.target.selectionStart ?? e.target.value.length);
-            }}
-            onKeyDown={onKeyDown}
-            onKeyUp={syncCursorFromTa}
-            onSelect={syncCursorFromTa}
-            onClick={syncCursorFromTa}
+            placeholder={
+              hardDisabled
+                ? disabledReason ?? "Locked — resolve above"
+                : isQueueMode
+                  ? "Queue a follow-up for Claude… (Shift+Enter for new line)"
+                  : COMPOSER_PLACEHOLDER
+            }
+            onStateChange={handleEditorStateChange}
+            onKeyIntent={handleKeyIntent}
             onPaste={handlePaste}
-            className="w-full bg-transparent outline-none resize-none text-sm leading-relaxed placeholder:text-[var(--muted-foreground)]/60"
           />
         </div>
         <div className="px-2 pb-2 flex items-center gap-1.5">
@@ -842,158 +846,98 @@ export function ChatComposer({
               <path d="M21.4 11l-9 9a5.7 5.7 0 01-8-8l9-9a3.8 3.8 0 015.4 5.4l-9 9a1.9 1.9 0 11-2.7-2.7L15 7" />
             </svg>
           </button>
-          {!compact && (
-            <>
-              <span
-                className="inline-flex items-center gap-1 text-[10px] font-mono"
-                style={{ color: "var(--muted-foreground)" }}
-                title="Type / at the start of a line to see commands"
-              >
-                <span className="font-mono">/</span>
-                <span>commands</span>
-              </span>
-              {/*
-               * Vertical hairline separator. Mirrors t3code's footer
-               * vocabulary — controls are divided by 1px dividers
-               * rather than by their own borders, so the row reads as
-               * a single horizontal toolbar instead of a row of boxed
-               * inputs. Decorative; hidden from AT.
-               */}
-              <span
-                aria-hidden="true"
-                className="mx-0.5 h-3.5 w-px"
-                style={{ background: "var(--border)" }}
-              />
-            </>
-          )}
-          <span className="flex-1" />
-          {/*
-           * US-004. Permission-mode selector. Ghost-styled trigger
-           * (icon + friendly label + chevron) over an invisible native
-           * `<select>` that handles keyboard, popup and option list.
-           * Native semantics, custom paint — the same trick the rest
-           * of the composer uses for the paperclip / send affordances.
-           *
-           * Labels are the friendly t3code-style strings (Supervised /
-           * Plan / Auto-accept edits / Full access) rather than the
-           * SDK slugs the wire carries — slug → friendly mapping lives
-           * in `PERMISSION_MODES`.
-           *
-           * Always visible regardless of turn state so the user can
-           * pre-set the mode for the next turn while one is still
-           * streaming.
-           */}
-          <span
-            className={clsx(
-              "relative inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium",
-              !hardDisabled && onPermissionModeChange && "cursor-pointer hover:bg-[var(--accent)]",
-            )}
-            style={{ color: "var(--muted-foreground)" }}
-            title={activeModeOption.description}
-          >
-            <ActiveModeIcon className="size-3.5" />
-            <span>{activeModeOption.label}</span>
-            <ChevronDownIcon className="size-3 opacity-60" />
-            <select
-              value={permissionMode}
-              onChange={onPermissionSelectChange}
-              disabled={hardDisabled || !onPermissionModeChange}
-              className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-              aria-label="Permission mode"
-              data-testid="permission-mode-select"
-            >
-              {PERMISSION_MODES.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label} — {m.description}
-                </option>
-              ))}
-            </select>
-          </span>
-          {/* Hairline between mode and the trailing send / stop / pill cluster. */}
-          <span
-            aria-hidden="true"
-            className="mx-0.5 h-3.5 w-px"
-            style={{ background: "var(--border)" }}
+          <ComposerFooterToolbar
+            modelSelector={<div data-testid="composer-pill-model-selector" />}
+            modelSettings={<div data-testid="composer-pill-model-settings" />}
+            buildPlanToggle={<div data-testid="composer-pill-build-plan" />}
+            permissionLevel={
+              <div data-testid="composer-pill-permission-level">
+                {/* Placeholder until T-013 lands the real PermissionLevelPill.
+                    Carries the active mode tuple so dependent code paths
+                    (live-chat reducer, integration smoke) stay live. */}
+                <span hidden>
+                  {permissionMode}
+                  {String(!!onPermissionModeChange)}
+                </span>
+              </div>
+            }
+            contextUsage={<div data-testid="composer-pill-context-usage" />}
+            sendButton={
+              <>
+                {isInterrupted && (
+                  <span
+                    role="status"
+                    aria-label="Interrupted. Send a message to continue from where Claude paused."
+                    title="Send a message to continue from where Claude paused."
+                    className="ml-1 text-[10px] font-mono rounded px-1.5 py-0.5 bg-amber-700 text-amber-100"
+                    style={{
+                      background: "var(--warning, #b45309)",
+                      color: "var(--warning-foreground, #fef3c7)",
+                    }}
+                    data-testid="interrupted-pill"
+                  >
+                    Interrupted
+                  </span>
+                )}
+                {isRunning && onInterrupt && (
+                  <button
+                    type="button"
+                    onClick={onInterrupt}
+                    className="ml-2 size-7 rounded-md grid place-items-center text-white shadow-sm"
+                    style={{ background: "var(--destructive)" }}
+                    title="Interrupt the running turn"
+                    aria-label="Stop"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="size-3">
+                      <rect x="6" y="6" width="12" height="12" rx="1" />
+                    </svg>
+                  </button>
+                )}
+                {!hardDisabled && !isQueueMode && (
+                  <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={!canSend}
+                    className={clsx(
+                      "ml-2 size-7 rounded-md grid place-items-center text-white shadow-sm",
+                      !canSend && "opacity-50",
+                    )}
+                    style={{ background: "var(--primary)" }}
+                    title="Send (Enter)"
+                    aria-label="Send message"
+                    data-testid="composer-send-button"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="size-3.5">
+                      <path d="M5 12h14M13 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
+                {!hardDisabled && isQueueMode && (
+                  <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={!canSend}
+                    className={clsx(
+                      "ml-2 size-7 rounded-md grid place-items-center text-white shadow-sm",
+                      !canSend && "opacity-50",
+                    )}
+                    style={{ background: "var(--primary)" }}
+                    title="Queue (Enter) — pushes ahead of the running turn"
+                    aria-label="Queue message"
+                    data-testid="composer-queue-button"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="size-3.5">
+                      <path d="M5 12h14M13 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
+              </>
+            }
           />
-          {isInterrupted && (
-            <span
-              role="status"
-              aria-label="Interrupted. Send a message to continue from where Claude paused."
-              title="Send a message to continue from where Claude paused."
-              className="ml-1 text-[10px] font-mono rounded px-1.5 py-0.5 bg-amber-700 text-amber-100"
-              style={{
-                background: "var(--warning, #b45309)",
-                color: "var(--warning-foreground, #fef3c7)",
-              }}
-              data-testid="interrupted-pill"
-            >
-              Interrupted
-            </span>
-          )}
-          {isRunning && onInterrupt && (
-            <button
-              type="button"
-              onClick={onInterrupt}
-              className="ml-2 inline-flex items-center gap-1 h-7 px-2 rounded-md text-[11px] text-white shadow-sm"
-              style={{ background: "var(--destructive)" }}
-              title="Interrupt the running turn"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="size-3">
-                <rect x="6" y="6" width="12" height="12" rx="1" />
-              </svg>
-              Stop
-            </button>
-          )}
-          {!hardDisabled && !isQueueMode && (
-            <button
-              type="button"
-              onClick={() => void submit()}
-              disabled={!canSend}
-              className={clsx(
-                "ml-2 size-7 rounded-md grid place-items-center text-white shadow-sm",
-                !canSend && "opacity-50",
-              )}
-              style={{ background: "var(--primary)" }}
-              title="Send (Enter)"
-              aria-label="Send message"
-              data-testid="composer-send-button"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="size-3.5">
-                <path d="M5 12h14M13 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
-          {!hardDisabled && isQueueMode && (
-            <button
-              type="button"
-              onClick={() => void submit()}
-              disabled={!canSend}
-              className={clsx(
-                "ml-2 inline-flex items-center gap-1 h-7 px-2 rounded-md text-[11px] text-white shadow-sm",
-                !canSend && "opacity-50",
-              )}
-              style={{ background: "var(--primary)" }}
-              title="Queue (Enter) — pushes ahead of the running turn"
-              aria-label="Queue message"
-              data-testid="composer-queue-button"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="size-3.5">
-                <path d="M5 12h14M13 5l7 7-7 7" />
-              </svg>
-              <span>Queue</span>
-            </button>
-          )}
         </div>
       </div>
     </div>
   );
-}
-
-function triggerKey(
-  t: { query: string; rangeStart: number; rangeEnd: number } | null,
-): string | null {
-  if (!t) return null;
-  return `${t.rangeStart}:${t.rangeEnd}:${t.query}`;
 }
 
 /**
@@ -1075,4 +1019,9 @@ function encodeAttachment(att: ComposerAttachment): Promise<UserTurnImage> {
  */
 function makeId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function clampIndex(next: number, length: number): number {
+  if (length <= 0) return 0;
+  return ((next % length) + length) % length;
 }

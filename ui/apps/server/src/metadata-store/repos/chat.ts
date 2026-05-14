@@ -3,6 +3,7 @@
  */
 import * as crypto from "node:crypto";
 import type { InMemoryStorage } from "../index.ts";
+import type { WireModelSettings } from "../../chat-protocol/messages.ts";
 
 function generateSessionId(): string {
   // randomUUID returns a v4 UUID — exactly what Claude Code expects
@@ -24,6 +25,14 @@ export interface ChatRow {
   resume_banner_dismissed: boolean;
   inert: boolean;
   created_at: string;
+  custom_name: string | null;
+  /**
+   * ADR-D03: single JSON column on `Chat` for the per-chat model tuple.
+   * `null` ⇒ Loom defaults apply at (re)spawn time. The repo is the
+   * single chokepoint — `get()` parses the stored JSON text into the
+   * typed object; `update()` merge-patches over the current row JSON.
+   */
+  model_settings: WireModelSettings | null;
 }
 
 export interface ChatCreate {
@@ -58,6 +67,19 @@ export interface ChatRepo {
   dismissResumeBanner(id: string): void;
   markInert(id: string): void;
   markActive(id: string): void;
+  setCustomName(id: string, customName: string | null): ChatRow;
+}
+
+/** Parse the on-disk JSON column into the typed object; null on miss / malformed. */
+function parseModelSettings(raw: unknown): WireModelSettings | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "object") return raw as WireModelSettings;
+  if (typeof raw !== "string") return null;
+  try {
+    return JSON.parse(raw) as WireModelSettings;
+  } catch {
+    return null;
+  }
 }
 
 export function chatRepo(storage: InMemoryStorage): ChatRepo {
@@ -83,12 +105,17 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
         resume_banner_dismissed: false,
         inert: false,
         created_at: now,
+        custom_name: null,
+        model_settings: null,
       };
-      storage.chats.set(c.id, row);
+      // Persist the JSON column as text-at-rest; parse on the way out.
+      storage.chats.set(c.id, { ...row, model_settings: null });
       return row;
     },
     get(id) {
-      return storage.chats.get(id) ?? null;
+      const raw = storage.chats.get(id);
+      if (!raw) return null;
+      return { ...raw, model_settings: parseModelSettings(raw.model_settings) } as ChatRow;
     },
     list() {
       return Array.from(storage.chats.values());
@@ -99,9 +126,21 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
     update(id, patch) {
       const row = storage.chats.get(id);
       if (!row) return null;
-      const next = { ...row, ...patch };
+      const next: any = { ...row, ...patch };
+      // model_settings is a JSON column with merge-patch semantics: the
+      // caller may pass a partial tuple and only the named fields land
+      // on the row; unmentioned siblings survive. Stored as text-at-rest.
+      if (Object.prototype.hasOwnProperty.call(patch, "model_settings")) {
+        const incoming = (patch as Partial<ChatRow>).model_settings;
+        if (incoming === null) {
+          next.model_settings = null;
+        } else {
+          const current = parseModelSettings(row.model_settings) ?? {};
+          next.model_settings = JSON.stringify({ ...current, ...incoming });
+        }
+      }
       storage.chats.set(id, next);
-      return next;
+      return { ...next, model_settings: parseModelSettings(next.model_settings) } as ChatRow;
     },
     delete(id) {
       return storage.chats.delete(id);
@@ -152,6 +191,12 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
     markActive(id) {
       const r = storage.chats.get(id);
       if (r) r.inert = false;
+    },
+    setCustomName(id, customName) {
+      const r = storage.chats.get(id);
+      if (!r) throw new Error("chat not found");
+      r.custom_name = customName;
+      return r;
     },
   };
 }

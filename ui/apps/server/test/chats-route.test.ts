@@ -162,4 +162,68 @@ describe("chats route", () => {
     expect(res.status).toBe(404);
     await store.close();
   });
+
+  test("POST /chats response is decorated with custom_name and auto_title", async () => {
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    const routes: Record<string, any> = {};
+    mountChatsRoute(routes, store);
+    const req = new Request("http://localhost/chats", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cwd: "/tmp/repo" }),
+    });
+    const res = await routes["/chats"](req, new URL(req.url));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.chat).toHaveProperty("custom_name");
+    expect(body.chat).toHaveProperty("auto_title");
+    expect(body.chat.custom_name).toBeNull();
+    expect(body.chat.auto_title).toBeNull();
+    await store.close();
+  });
+
+  test("GET /chats list decorates every row with custom_name and auto_title", async () => {
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    const renamed = store.chats.create({ id: "c1", cwd: "/tmp/a" });
+    store.chats.create({ id: "c2", cwd: "/tmp/b" });
+    store.chats.setCustomName(renamed.id, "Renamed");
+    store.chatItems.append(renamed.id, {
+      kind: "user-message",
+      id: "u1",
+      turnId: "t-1",
+      text: "first prompt for chat one",
+      createdAt: new Date().toISOString(),
+    });
+    const routes: Record<string, any> = {};
+    mountChatsRoute(routes, store);
+    const req = new Request("http://localhost/chats", { method: "GET" });
+    const res = await routes["/chats"](req, new URL(req.url));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.chats.length).toBe(2);
+    const c1 = body.chats.find((c: any) => c.id === "c1");
+    const c2 = body.chats.find((c: any) => c.id === "c2");
+    expect(c1.custom_name).toBe("Renamed");
+    expect(c1.auto_title).toBe("first prompt for chat one");
+    expect(c2.custom_name).toBeNull();
+    expect(c2.auto_title).toBeNull();
+    await store.close();
+  });
+
+  test("GET /chats/get response is decorated with custom_name and auto_title", async () => {
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    store.chats.create({ id: "c1", cwd: "/tmp/a" });
+    store.chats.setCustomName("c1", "Pinned");
+    const routes: Record<string, any> = {};
+    mountChatsRoute(routes, store);
+    const req = new Request("http://localhost/chats/get?id=c1", { method: "GET" });
+    const res = await routes["/chats/get"](req, new URL(req.url));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.chat).toHaveProperty("custom_name");
+    expect(body.chat).toHaveProperty("auto_title");
+    expect(body.chat.custom_name).toBe("Pinned");
+    expect(body.chat.auto_title).toBeNull();
+    await store.close();
+  });
 });

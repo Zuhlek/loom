@@ -262,3 +262,8 @@ DAG-construction time.
 `.loom/diff-features/tasks/T-002.done.md`;
 `.loom/diff-features/tasks/T-008.done.md` "Deviations from task spec"
 #2; `.loom/diff-features/review.md` finding R-002.
+
+## 2026-05-14 - composer-t3code-triggers - Spec/Design/Plan held up; Build dropped a contract Design had spelled out
+
+Spec / Design / Plan landed clean: design.md §"Keyboard contract" explicitly listed the eight key behaviours (ArrowUp/Down menu nav, Tab/Enter accept, Escape latch, Backspace at chip right, ArrowLeft/Right over chip, Shift+Enter newline, bare Enter submit) and ADR-006 specified the `ComposerKeyboardPlugin` to register five `KEY_*_COMMAND`s on the Lexical editor and bubble `ComposerKeyIntent`s to the shell. Plan flagged the keyboard ACs as "Not auto-verifiable under cli-shell — HITL via T-010". Build never implemented the plugin: `ComposerEditor` declares an `onSubmit` prop and a `focus()` ref method but neither is wired; the textarea's prior `onKeyDown` was deleted with no replacement. The cli-shell gates (tsc + vite build + grep) had no visibility into the missing wiring. Pattern: when Spec/Design name a runtime contract that the chosen verification environment cannot exercise, Plan needs to make the HITL checklist enumerate each AC by line — and Build needs an explicit "Design §X is realised by file Y, lines Z" mapping table on the task's done.md so reviewers can spot the gap before HITL. Worth feeding into Build task contract: a per-task "contract-realisation map" field that pairs design ADRs / spec ACs to concrete code locations.
+

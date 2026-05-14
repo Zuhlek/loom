@@ -8,10 +8,8 @@ import { describe, expect, test } from "vitest";
 import {
   detectAtFileTrigger,
   detectSlashCommandTrigger,
-  rankSlashCommands,
   replaceTextRange,
 } from "../src/lib/composer-trigger";
-import type { SlashCommandEntry } from "../src/lib/api";
 
 describe("detectSlashCommandTrigger", () => {
   test("returns null when the line does not start with /", () => {
@@ -130,48 +128,3 @@ describe("replaceTextRange", () => {
   });
 });
 
-describe("rankSlashCommands", () => {
-  const items: SlashCommandEntry[] = [
-    { name: "weave", scope: "user", filePath: "/u/weave.md" },
-    { name: "tune", scope: "user", filePath: "/u/tune.md" },
-    { name: "ultra-review", scope: "project", filePath: "/p/ultra-review.md" },
-    { name: "review", scope: "project", filePath: "/p/review.md" },
-    { name: "init", scope: "user", filePath: "/u/init.md" },
-  ];
-
-  test("returns all items in input order when query is empty", () => {
-    const out = rankSlashCommands(items, "");
-    expect(out.map((c) => c.name)).toEqual(["weave", "tune", "ultra-review", "review", "init"]);
-  });
-
-  test("exact match wins", () => {
-    const out = rankSlashCommands(items, "weave");
-    expect(out[0]!.name).toBe("weave");
-  });
-
-  test("prefix match ranks above substring match", () => {
-    const out = rankSlashCommands(items, "rev");
-    // "review" prefix-matches, "ultra-review" only substring-matches
-    expect(out[0]!.name).toBe("review");
-    expect(out.find((c) => c.name === "ultra-review")).toBeDefined();
-  });
-
-  test("boundary match (after `-`) ranks above plain substring", () => {
-    // For "review" against "ultra-review": prefix-match wouldn't fire,
-    // but boundary-after-`-` does. The "review" item itself prefix-matches
-    // and so still wins overall — the property under test is that
-    // ultra-review is included and ranks above pure-substring noise.
-    const out = rankSlashCommands(items, "review");
-    expect(out.map((c) => c.name)).toContain("ultra-review");
-  });
-
-  test("non-matching items are dropped", () => {
-    const out = rankSlashCommands(items, "xyznever");
-    expect(out).toEqual([]);
-  });
-
-  test("leading slashes in the query are stripped", () => {
-    const out = rankSlashCommands(items, "/weave");
-    expect(out[0]!.name).toBe("weave");
-  });
-});

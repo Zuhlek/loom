@@ -23,7 +23,6 @@ import { mountProjectsRoute } from "./routes/projects.ts";
 import { mountChatsRoute } from "./routes/chats.ts";
 import { mountDiscoverRoute } from "./routes/discover.ts";
 import { mountFileSearchRoute } from "./routes/file-search.ts";
-import { mountSlashCommandsRoute } from "./routes/slash-commands.ts";
 import { mountUploadImageRoute } from "./routes/upload-image.ts";
 import { mountDiffRoute } from "./routes/diff.ts";
 import { mountGitStatusRoute } from "./routes/git-status.ts";
@@ -135,7 +134,6 @@ if (isEntrypoint) {
   mountChatsRoute(routes, store, bridge);
   mountDiscoverRoute(routes);
   mountFileSearchRoute(routes);
-  mountSlashCommandsRoute(routes);
   mountUploadImageRoute(routes);
   mountDiffRoute(routes);
   mountGitStatusRoute(routes);

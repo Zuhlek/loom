@@ -14,7 +14,11 @@ import type {
   SessionLifecycle,
   Task,
   TurnState,
+  WireModelSettings,
+  WireSlashCommand,
 } from "./messages.ts";
+
+export type { WireModelSettings, WireSlashCommand };
 
 // ─── Client → Server ─────────────────────────────────────────────────
 
@@ -169,6 +173,16 @@ export interface RetrySessionFrame {
   "chat-id": string;
 }
 
+/**
+ * Partial patch of {@link WireModelSettings}. Server merges over the
+ * existing chat-row JSON so a single-pill change carries one field.
+ */
+export interface ModelSettingsSetFrame {
+  kind: "model-settings-set";
+  "chat-id": string;
+  body: Partial<WireModelSettings>;
+}
+
 export type ClientFrame =
   | AttachFrame
   | DetachFrame
@@ -179,7 +193,8 @@ export type ClientFrame =
   | PermissionModeSetFrame
   | PlanAcceptFrame
   | PlanRejectFrame
-  | RetrySessionFrame;
+  | RetrySessionFrame
+  | ModelSettingsSetFrame;
 
 // ─── Server → Client ─────────────────────────────────────────────────
 
@@ -268,6 +283,26 @@ export interface ChatUpdateFrame {
   body: { chat: ChatRow };
 }
 
+/** Push the SDK-enumerated catalog. Fired on attach and on reload. */
+export interface SlashCommandsUpdateFrame {
+  kind: "slash-commands-update";
+  "chat-id": string;
+  body: { commands: WireSlashCommand[] };
+}
+
+/** Push the SDK context-window breakdown. Fired post-turn (see ADR-D08). */
+export interface ContextUsageUpdateFrame {
+  kind: "context-usage-update";
+  "chat-id": string;
+  body: {
+    /** 0..100, rounded by the bridge. */
+    percentage: number;
+    totalTokens: number;
+    maxTokens: number;
+    model: string;
+  };
+}
+
 export type ServerFrame =
   | AttachedFrame
   | SnapshotFrame
@@ -279,6 +314,8 @@ export type ServerFrame =
   | TasksUpdateFrame
   | SessionStateFrame
   | ChatUpdateFrame
+  | SlashCommandsUpdateFrame
+  | ContextUsageUpdateFrame
   | ErrorFrame;
 
 /**

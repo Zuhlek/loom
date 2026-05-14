@@ -245,3 +245,34 @@ export interface Task {
   status: "pending" | "inProgress" | "completed";
   activeForm?: string;
 }
+
+/**
+ * Per-chat model settings persisted on the `Chat` row as a single JSON
+ * column (ADR-D03). NULL field ⇒ Loom default applies at (re)spawn time.
+ * Carried 1:1 on the wire `model-settings-set` frame and on the
+ * chat-row; no separate "for-dispatch" vs "for-render" shape. Mirror in
+ * `apps/web/src/lib/chat-types.ts` must stay byte-for-byte aligned.
+ */
+export interface WireModelSettings {
+  /** SDK `Options.model`. Identifier (e.g. `"claude-opus-4-7"`). */
+  model: string | null;
+  /** SDK `Options.effort`. Five SDK values; Ultrathink overflows into `thinking`. */
+  effort: "low" | "medium" | "high" | "xhigh" | "max" | null;
+  /** SDK `Options.thinking`. Only set when the pill is Ultrathink. */
+  thinking: { type: "enabled"; budgetTokens: number } | null;
+  /** Context window. `'200k'` ⇒ no betas; `'1m'` ⇒ `["context-1m-2025-08-07"]`. */
+  contextWindow: "200k" | "1m" | null;
+}
+
+/**
+ * One row in the SDK-enumerated slash-command catalog. Mirrors the SDK
+ * `SlashCommand` shape trimmed for the wire; `kind` is bridge-classified
+ * (ADR-D05). Mirror in `apps/web/src/lib/chat-types.ts` must stay
+ * byte-for-byte aligned.
+ */
+export interface WireSlashCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+  kind: "skill" | "command";
+}

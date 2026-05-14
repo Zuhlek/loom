@@ -9,7 +9,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@lexical/react": "^0.44.0",
     "clsx": "^2.1.1",
+    "lexical": "^0.44.0",
     "marked": "^18.0.3",
     "marked-shiki": "^1.2.1",
     "react": "^18.3.1",

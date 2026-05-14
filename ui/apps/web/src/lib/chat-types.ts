@@ -232,6 +232,23 @@ export type ServerFrame =
       "chat-id": string;
       body: { chat: ApiChat };
     }
+  | {
+      /** Push the SDK-enumerated catalog. Fired on attach and on reload. */
+      kind: "slash-commands-update";
+      "chat-id": string;
+      body: { commands: WireSlashCommand[] };
+    }
+  | {
+      /** Push the SDK context-window breakdown post-turn (ADR-D08). */
+      kind: "context-usage-update";
+      "chat-id": string;
+      body: {
+        percentage: number;
+        totalTokens: number;
+        maxTokens: number;
+        model: string;
+      };
+    }
   | { kind: "error"; "chat-id"?: string; body: { message: string } };
 
 export type ClientFrame =
@@ -311,10 +328,43 @@ export type ClientFrame =
        */
       kind: "retry-session";
       "chat-id": string;
+    }
+  | {
+      /**
+       * Per-chat model-settings patch. Server merges over the existing
+       * chat-row JSON; only changed pills carry a field.
+       */
+      kind: "model-settings-set";
+      "chat-id": string;
+      body: Partial<WireModelSettings>;
     };
 
 export interface Task {
   step: string;
   status: "pending" | "inProgress" | "completed";
   activeForm?: string;
+}
+
+/**
+ * Per-chat model settings — mirror of the server `WireModelSettings`
+ * byte-for-byte (see `apps/server/src/chat-protocol/messages.ts`).
+ * NULL field ⇒ Loom default applies at (re)spawn time.
+ */
+export interface WireModelSettings {
+  model: string | null;
+  effort: "low" | "medium" | "high" | "xhigh" | "max" | null;
+  thinking: { type: "enabled"; budgetTokens: number } | null;
+  contextWindow: "200k" | "1m" | null;
+}
+
+/**
+ * One row in the SDK-enumerated slash-command catalog — mirror of the
+ * server `WireSlashCommand` byte-for-byte. `kind` is bridge-classified
+ * (ADR-D05) and drives the menu's row icon.
+ */
+export interface WireSlashCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+  kind: "skill" | "command";
 }

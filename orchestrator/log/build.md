@@ -1,5 +1,160 @@
 # Build Log
 
+## 2026-05-14 - composer-slash-command-catalog - T-007-slash-menu-rewritten-grouped-iconed-loading
+
+Task: T-007 (Slash menu rewritten — grouped, iconed, loading affordance).
+Status: green, attempts 1, tests 22/22 new passing.
+
+Files changed:
+- `ui/apps/web/src/lib/use-chat-bridge.ts` (new) — `useChatBridge` hook
+  listening for `slash-commands-update` frames; exposes
+  `{ slashCommands: WireSlashCommand[] | null, handleServerFrame, reset }`.
+- `ui/apps/web/src/components/chat/ComposerSlashMenu.tsx` (new) — grouped
+  Built-in / Provider menu, three inline SVG glyphs (hexagon / square /
+  diamond per ADR-D01), ADR-D02 loading affordance with `aria-busy`,
+  client-side built-in catalog (`/model`, `/plan`, `/default`) merged
+  over the bridge-supplied SDK list with built-in-name collisions
+  filtered out; exports `buildSlashMenuRows` so the composer's keyboard
+  nav stays in lock-step with the rendered row indices.
+- `ui/apps/web/src/routes/live-chat.tsx` — imports `useChatBridge`,
+  instantiates it, routes `slash-commands-update` server frames through
+  `handleServerFrame`, calls `reset` on chat-id change, passes
+  `slashCommands` down to `<ChatComposer>`.
+- `ui/apps/web/src/components/chat/ChatComposer.tsx` — accepts a new
+  optional `slashCommands` prop, re-grew the slash-menu state machine
+  T-006 gutted (detect / filter / select / accept), mutually exclusive
+  with the `@`-file trigger, mounts `<ComposerSlashMenu>` adjacent to
+  `<ComposerAtFileMenu>` inside the editor's relative parent; `acceptSlash`
+  writes `/<name> ` via the surviving `replaceTextRange` helper. T-009's
+  footer-toolbar mount preserved.
+- `ui/apps/web/test/composer-slash-menu.test.ts` (new) — 22 static-source
+  contract assertions (node-only, matches project vitest config).
+- `.loom/composer-slash-command-catalog/tasks/T-007.test-log.txt` (new)
+  — red→green test log.
+
+Notes:
+- Red phase: 22/22 runtime assertion failures before implementation
+  (file-existence + readFileSync + regex assertions; no compile errors).
+- Green phase: attempt 1 hit one failure on a strict single-line
+  import regex; fix was an import-line split (no test weakened).
+- Pre-existing failures in older composer test files
+  (`composer-controls`, `composer-atfile-menu`, `composer-footer-toolbar`,
+  `composer-trigger`) are the `%20` URL-decoding artefact T-009's done
+  report logged — unrelated to this task.
+- Built-in row click handlers (`/plan` and `/default` → `permission-mode-set`,
+  `/model` → picker open) are explicitly out of scope per the task
+  spec; T-008 + T-010 land them. For T-007 built-in rows share the
+  generic SDK-row path (`/<name> ` into the textarea) so the menu
+  isn't rendered with three inert rows.
+
+## 2026-05-13 - sidebar-chat-titles - T-007-sidebar-label-resolution-and-inline-rename
+
+Task: T-007 (Sidebar label resolution and inline rename UX).
+Status: green, attempts 1, tests 12/12 new passing.
+
+Files changed:
+- `ui/apps/web/src/components/LiveSidebar.tsx` — imported `renameChat`
+  from `lib/api`; replaced the cwd-basename label line with the
+  `chat.custom_name ?? chat.auto_title ?? cwdBasename` resolution
+  chain; added `renameTargetId: string | null` state with three
+  handlers (`onRename`, `onSubmitRename`, `onCancelRename`); threaded
+  `isRenaming` / `onSubmitRename` / `onCancelRename` through
+  `ProjectGroup → ChatLink` for grouped chats and into the
+  unassigned-bucket `ChatLink`; rendered an autofocused `<input>` in
+  ChatLink when `isRenaming`, with Enter (non-empty trim →
+  `onSubmitRename(trimmed)`, empty trim → `onSubmitRename(null)`),
+  Escape, and blur keyboard handlers; the submit path calls
+  `renameChat(id, value)` then `refresh()` so the new label appears
+  without waiting up to 5 s for the next `/sidebar/state` poll.
+- `ui/apps/web/src/components/sidebar/ChatContextMenu.tsx` — added
+  `onRename(chat)` to `ChatContextMenuProps`; rendered a "Rename"
+  menuitem between "Handoff to terminal" and "Fork chat" using the
+  same `border-t` button-style, icon, and label-pair pattern.
+- `ui/apps/web/test/sidebar-inline-rename.test.ts` — new test file
+  (static-source scan, mirroring `chat-context-menu.test.ts` /
+  `live-sidebar-context-menu.test.ts` style; uses
+  `decodeURIComponent(new URL("../", import.meta.url).pathname)` to
+  resolve the `My Shared Files` space).
+
+Stories covered: US-002 (acc 1..5: context-menu placement, label
+swap, Enter-with-value rename + refresh, Escape/blur cancel, empty-
+trim clears), US-004 (acc 1..3: chain consistency across grouped /
+unassigned, tooltip preservation).
+
+Read-only surfaces respected: `lib/api.ts` imported but unedited
+(`renameChat` shipped in T-006); server T-001..T-005 routes
+untouched.
+
+Regression check: full web suite 389 passing / 373 failing — matches
+the pre-existing %20-encoded-path baseline noted in T-006's done.md;
+no test moved from green to red.
+
+Source: `.loom/sidebar-chat-titles/tasks/T-007.done.md`;
+`.loom/sidebar-chat-titles/tasks/T-007.test-log.txt`.
+
+## 2026-05-13 - sidebar-chat-titles - T-006-api-chat-rename-helper
+
+Task: T-006 (Extend `ApiChat` and ship `renameChat` web helper).
+Status: green, attempts 1, tests 6/6 new passing.
+
+Files changed:
+- `ui/apps/web/src/lib/api.ts` — added `custom_name: string | null` and
+  `auto_title: string | null` to `ApiChat`; exported `renameChat(id,
+  customName)` next to `forkChat` / `handoffChat`. The helper routes
+  through the shared `apiFetch` so non-2xx surfaces as `ApiError`, and
+  unwraps the `{ chat }` envelope on success.
+- `ui/apps/web/test/api-rename-chat.test.ts` — new vitest file. Covers
+  the wire-shape extension and four runtime acceptance criteria
+  (US-002 AC #3 + #5, US-006 AC #2 + #4). Mocks `globalThis.fetch` with
+  `vi.spyOn`, asserts URL/method/headers/body on the outbound request
+  and the parsed payload (or `ApiError` body) on the response.
+
+Invariants:
+- `chat-types.ts` untouched per spec (ApiChat lives in `lib/api.ts`).
+- `wire-mirror-drift.test.ts` (chat-protocol union guard) still green.
+- No new dependency, no commits, no pushes, no deploys.
+
+Source: `.loom/sidebar-chat-titles/tasks/T-006.done.md`.
+
+## 2026-05-13 - sidebar-chat-titles - T-002-decorate-chat-helper
+
+Task: T-002 (Add `decorateChat` helper with `auto_title` derivation).
+Status: **green**. Attempts: 1. Tests: 8/8 passing.
+
+New module `ui/apps/server/src/routes/chat-decorator.ts` exports
+`decorateChat(chat, store)` and `deriveAutoTitle(chatId, store)`.
+Pure projection over `store.chatItems.list(chatId)`: walks in `seq`
+order (the chat-items repo already returns items in insertion order
+matching `seq`), picks the first `kind === "user-message"` whose
+collapsed text is non-empty, returns
+`{ ...chat, custom_name, auto_title }` typed as `ApiChat`.
+Truncation cap is 60 visible chars, ending in `…` when truncated;
+whitespace collapse via `text.replace(/\s+/g, " ").trim()`.
+
+`ApiChat` is exported from the same module rather than a new
+`routes/shared-types.ts` (P5: only one producer, no consumers yet
+in this PR — T-003/T-004 will import from here).
+
+`chat.custom_name` is read defensively as `chat.custom_name ?? null`
+so the helper composes cleanly with both pre-T-001 rows (field
+absent) and post-T-001 rows (field present and `null` by default).
+This makes T-002 mergeable independently of T-001 ordering.
+
+Test coverage exercises US-001 AC #1 (collapse + 60-char truncate
+ending in ellipsis), AC #2 (null until first qualifying message;
+empty / non-user-only / leading-whitespace-only logs), AC #3 (freeze
+on first match), AC #4 (slash command verbatim), and one defensive
+test for `chatItems.list` returning `undefined`.
+
+Outcome: 8 new tests green. Server suite unchanged otherwise
+(1 pre-existing `loom-route-no-write.test.ts` failure due to
+`%20`-encoded path; unrelated). Web suite's 32 pre-existing failures
+share the same encoded-path root cause and pre-date this task.
+
+Source: `.loom/sidebar-chat-titles/tasks/T-002.done.md`;
+`.loom/sidebar-chat-titles/tasks/T-002.test-log.txt`;
+`.loom/sidebar-chat-titles/develop-log.md`.
+
 ## 2026-05-12 - diff-features - T-002-diff-file-card-extracted
 
 Task: T-002 (Extract `DiffFileCard` from `DiffPanel`; add controlled-scope props). Status: **green**. Attempts: 1.
@@ -1390,3 +1545,179 @@ attempt 2 notes; `.loom/composer-attachments-and-at-file/superseded/20260512T214
 Major #1 + Minor #1; `ui/apps/server/src/process-manager/claude-session-bridge.ts`
 lines ~1395-1442; `ui/apps/web/src/styles.css` lines ~166-179.
 
+
+
+## 2026-05-13 - csd-717-swift-mapper-pr-feedback - T-001 class-hierarchy rename
+
+**Status:** green (single attempt).
+**Files touched:** 30 (3 renames + 27 modifications, of which one was
+the rename-cascade self-references inside the renamed base classes).
+**Verification:** `npm run compile` exits 0; `grep` for old class
+names returns 0 hits; `git diff -B -M --find-renames=50
+
+## 2026-05-13 - csd-717-swift-mapper-pr-feedback - T-001 class-hierarchy rename
+
+**Status:** green (single attempt).
+**Files touched:** 30 (3 renames + 27 modifications, of which one was
+the rename-cascade self-references inside the renamed base classes).
+**Verification:** `npm run compile` exits 0; `grep` for old class
+names returns 0 hits; `git diff -B -M --find-renames=50%` pairs all
+three renames at 95-99% similarity.
+
+**Process learning — verification recipe for "swap" renames.**
+When a rename set moves file A to a new name AND moves a different
+file B into A's old path, `git diff -M` alone (without `-B`) reports
+the second move as a modify+delete rather than a rename, even though
+`git mv` was used and content is 98% similar. Pattern: always pair
+`-M` with `-B` (break detection) when verifying that a US-008-style
+"git diff -M renders renames" invariant holds for hierarchy renames.
+This is a candidate fix for the Forge plan-contract verification
+recipe.
+
+**Process learning — "byte-identical bodies" needs a carve-out.**
+The task signature said method bodies stay byte-identical. A class
+rename forces narrow self-reference edits: in
+`AbstractImportMapper.ts` (now `AbstractAityMapper.ts`), three
+`case AbstractImportMapper.STATIC` references inside `configure()`
+had to become `case AbstractAityMapper.STATIC` for tsc to accept the
+rename. Similarly `AityCinnamonWorkflow.ts`'s `instanceof
+AbstractAityMapper` check renamed to `instanceof AbstractAityCSVMapper`.
+These are pure symbol cascades, not semantic edits — but a strict
+reading of "byte-identical bodies" would forbid them. Recommendation:
+state the rule as "no semantic body change; symbol-rename cascades
+permitted."
+
+**Process learning — no-test-suite project adaptation.**
+`aper-interfaces` removed its test suite at commit `43af918`. The
+standard red-phase ("write a failing test") is not applicable. The
+task signature pre-authorized the deviation: red = "tsc green before
+edit," green = "tsc green after edit." This works but weakens
+Review's evidence base — only the type checker gates the change.
+For future tsc-only projects, Forge should mark this in
+`repo-context.md` so Plan-time acceptance criteria don't cite a
+non-existent test suite (T-001's spec did, line 56 "Existing test
+suite green" — was overridden by the task signature).
+
+**Cross-references:**
+`.loom/csd-717-swift-mapper-pr-feedback/tasks/T-001.done.md`;
+`.loom/csd-717-swift-mapper-pr-feedback/tasks/T-001.test-log.txt`;
+`.loom/csd-717-swift-mapper-pr-feedback/develop-log.md` "2026-05-13"
+entries; aper repo branch `CSD-717-clean` working tree (29 staged
+changes, not yet committed).
+
+## 2026-05-13 — sidebar-chat-titles/T-001 (build-task, green)
+
+T-001 landed the data-layer half of the sidebar-chat-titles feature: extended `ChatRow` in `ui/apps/server/src/metadata-store/repos/chat.ts` with `custom_name: string | null`, defaulted to `null` in `chats.create`, and added a `setCustomName(id, customName)` mutator that mirrors the existing in-place setter shape (throws `Error("chat not found")` on unknown id, returns the updated row). Registered `setCustomName` in the `wrap(chats, [...])` mutators array in `metadata-store/index.ts` so the debounced `persist()` fires on rename. Seven new tests in `ui/apps/server/test/metadata-store.test.ts` cover US-003 AC #1/2/4 (persist debounce via a real tmp `pglitePath`; serialize→hydrate round-trip across two init cycles; legacy snapshot with row missing the field hydrates as `undefined` so the `??` fallback fires), US-005 (create defaults `custom_name` to `null` — fork inherits the default through `routes/chats.ts /chats/fork` which calls `store.chats.create`, satisfying ADR-7 without touching the route), and US-006 AC #1/3/4 (store keeps the exact string passed — trim is T-005's job; `null` clears the field; unknown id throws without mutating any row).
+
+The store stays presentation-free per ADR-1 / Constraint "Decoration locus": no `auto_title` projection lives in the store. Snake_case persisted field stays snake_case on the wire, consistent with every other persisted ChatRow field; no schema-version bump.
+
+Outcome: 11/11 green in `metadata-store.test.ts` (4 pre-existing + 7 new); full server suite 247/248 passing (1 pre-existing failure in `loom-route-no-write.test.ts` is the same URL-encoded shared-volume path issue noted in T-002's entry — unrelated). Source: `.loom/sidebar-chat-titles/tasks/T-001.done.md`, `.loom/sidebar-chat-titles/tasks/T-001.test-log.txt`.
+
+## 2026-05-13 — sidebar-chat-titles/T-004 (build-task, green)
+
+T-004 wired `decorateChat` into `/sidebar/state`. `ui/apps/server/src/routes/sidebar.ts` imports `decorateChat` from `./chat-decorator.ts` (T-002's output) and maps every chat in `groups[].chats` and `unassigned[]` through it. Two-line behavioural diff plus one import; no new helpers, no schema changes, no edits to project/loom shape, no branching on `project_id` (per ADR-4 single resolution chain). Existing tests in `sidebar-route.test.ts` continue to pass — group ordering, loom auto-discovery, and unassigned-bucket criteria unchanged.
+
+Four new tests in `ui/apps/server/test/sidebar-route.test.ts` pin the wire surface: grouped chat with a non-empty user-message surfaces `auto_title` (US-001 AC #1); grouped chat with an empty chat-items log surfaces `auto_title: null` plus explicit key-presence assertion (US-001 AC #2); unassigned chat (`project_id === null`) carries the same decoration as a grouped chat (US-004 AC #2); aggregate scan over every grouped + unassigned chat asserts both `custom_name` and `auto_title` keys present (US-004 AC #1).
+
+Outcome: 7/7 green in `sidebar-route.test.ts`; T-004-relevant suite 39/39 green; full server suite 255/256 (1 pre-existing URL-encoded shared-volume path failure in `loom-route-no-write.test.ts`, unrelated, same as T-001/T-002).
+
+Source: `.loom/sidebar-chat-titles/tasks/T-004.done.md`; `.loom/sidebar-chat-titles/tasks/T-004.test-log.txt`; `.loom/sidebar-chat-titles/develop-log.md` "2026-05-13 — T-004" entry.
+
+## 2026-05-13 — sidebar-chat-titles/T-003 (build-task, green)
+
+T-003 wired `decorateChat` into `routes/chats.ts`. The four chat-shaped endpoints (`POST /chats`, `GET /chats`, `GET /chats/get`, `POST /chats/fork`) now return decorated responses with `custom_name` and `auto_title` keys. One import plus four small response-site edits; no schema changes, no new endpoints (rename stays in T-005). Fork uses T-001's `chats.create` default to set `custom_name = null` on the new row; this task verifies the wire shape (US-005 AC #1/#2).
+
+Four new tests across `chats-route.test.ts` and `chats-route-fork.test.ts` cover the wire surface: POST/GET/GET-by-id key-presence, two-chat list with one renamed and one fresh (no `null`-vs-`undefined` drift), and the fork test that renames the source then asserts `chat.custom_name === null` and `chat.auto_title === null` on the forked row.
+
+Outcome: 21/21 green in the `chats-route*` suites; full `apps/server` 255/256 (1 pre-existing URL-encoded shared-volume path failure in `loom-route-no-write.test.ts`, unrelated).
+
+Source: `.loom/sidebar-chat-titles/tasks/T-003.done.md`; `.loom/sidebar-chat-titles/tasks/T-003.test-log.txt`; `.loom/sidebar-chat-titles/develop-log.md` "2026-05-13 — T-003" entry.
+
+## 2026-05-13 — sidebar-chat-titles/T-005 (build-task, green)
+
+T-005 mounted `POST /chats/rename` in `ui/apps/server/src/routes/chats.ts` next to `/chats/fork`. Validation matrix per design.md: missing query `id` → 400 `missing id`; unparseable JSON → 400 `invalid body`; non-string non-null `customName` → 400 `invalid customName`; trimmed length > 80 → 400 `customName too long`; unknown chat → 404 `chat not found`; success → 200 `{ chat: decorateChat(row, store) }`. Trim runs before the length check (ADR-6); whitespace-only collapses to `null`; all validation precedes the repo call so failure paths never mutate state.
+
+Ten new tests in `ui/apps/server/test/chats-route-rename.test.ts` cover US-006 acc 1–4, the 80/81 boundary, whitespace-clear, the three envelope cases (missing id, non-JSON, `customName: 42`), and decoration coverage on the success body.
+
+Outcome: 10/10 green; full `apps/server` 265/266 (same pre-existing URL-encoded shared-volume path failure in `loom-route-no-write.test.ts`, unrelated). One attempt.
+
+Source: `.loom/sidebar-chat-titles/tasks/T-005.done.md`; `.loom/sidebar-chat-titles/tasks/T-005.test-log.txt`; `.loom/sidebar-chat-titles/develop-log.md` "2026-05-13 — T-005" entry.
+[T-001] 2026-05-13T15:09:49Z status=green attempts=1 files=5 ComposerEditor scaffold (Lexical) replaces <textarea> in ChatComposer; mention-node placeholder added
+[T-002] 2026-05-13T15:13:26Z status=green attempts=1 files=3 plain-text + caret bridge wired; ComposerStateBridge + ref handle live
+[T-008] 2026-05-13T15:15:55Z status=green attempts=1 files=1 deleted /-commands footer span
+[T-009] 2026-05-13T15:18:07Z status=green attempts=1 files=1 locked placeholder to Q03 string
+[T-007] 2026-05-13T15:20:42Z status=green attempts=1 files=2 added No matching command empty-state row + mutual-exclusion update
+[T-003] 2026-05-13T15:24:41Z status=green attempts=1 files=3 ComposerMentionNode + chip view
+[T-004] 2026-05-13T15:27:35Z status=green attempts=1 files=2 selectionFromPlainTextRange + insertMention impl
+[T-005] 2026-05-13T15:31:01Z status=green attempts=1 files=1 acceptAtFile routes through insertMention
+[T-006] 2026-05-13T15:34:22Z status=green attempts=1 files=0 submit reads from getPlainText; post-submit clear
+
+## 2026-05-13 - sidebar-chat-titles - Review confirms green build
+
+Build phase produced 8 / 8 tasks green on first attempt. Review audit
+confirms 75 / 75 new tests passing across the seven AFK tasks plus a
+clean HITL T-008 pass for the disk-round-trip persistence ACs (US-003
+acc 2 and acc 3).
+
+**Headline.** Zero failed cards. Zero re-attempts. The eight tasks
+shipped a fully observable two-layer naming feature
+(`custom_name ?? auto_title ?? cwd-basename`) with one new shared
+helper module (`routes/chat-decorator.ts`), one new endpoint
+(`POST /chats/rename`), one new web helper (`renameChat`), and the
+inline-rename UX on the sidebar.
+
+**Test bookkeeping.** Pre-existing baseline of 1 server failure
+(`loom-route-no-write.test.ts` — `%20`-encoded shared-volume path) and
+~373 web failures (same encoded-path class in static-source-scan tests
+that don't `decodeURIComponent` the URL pathname) is documented in
+`test-report.md ## Pre-existing baseline failures`. Every task's
+done.md confirms net-positive green and no regression from green to
+red. The Review audit accepted this baseline as out of scope.
+
+**HITL framing.** T-008 was scoped precisely: only the two ACs that
+genuinely require real-disk + real-browser round-trip (server-restart
+preservation and hard-refresh preservation of `custom_name`). All
+other ACs land via vitest. Good pattern for "small HITL slice,
+everything else automatable" features — keeps the lifecycle closeable
+without bloating the manual surface.
+
+**Mutation.** `tests.md` declared `Mutation Testing: no` upfront
+(presentation metadata, no money / security / irreversible operations).
+Review accepted; no mutation pass requested.
+
+**Cross-references:**
+`.loom/sidebar-chat-titles/test-report.md`;
+`.loom/sidebar-chat-titles/smoke-report.md`;
+`.loom/sidebar-chat-titles/review.md`.
+[T-011] 2026-05-13T16:14:56Z status=green attempts=1 files=3 smoke fixes (A,B,C,D,E)
+[T-012] 2026-05-13T17:33:05Z status=green attempts=1 files=4 follow-up smoke fixes (F,G,H)
+[T-013] 2026-05-13T17:44:51Z status=green attempts=1 files=3 second-round smoke fixes (I,J,K)
+
+## 2026-05-14 - composer-t3code-triggers - smoke-driven rerun cadence (5 rounds)
+
+Build closed 9 AFK tasks (T-001..T-009) green on first attempt and then absorbed 5 follow-up tasks (T-011, T-012, T-013, T-014) chasing issues the cli-shell gates could not see: placeholder color (Tailwind opacity modifier silently no-ops on hex CSS vars, fixed in T-013 via `color-mix(in srgb, var(--muted-foreground) 40%, transparent)`); slash empty-state branches (split into matched-query-empty vs catalog-empty); `@`-menu rendering when results are empty (added "Type to search files" / "No matching files" rows); Stop/Queue buttons rendering text labels after the editor swap relocated focus to icon shape; and three pre-existing wiring bugs (live-chat cwd prop omission, `/file-search` missing the `/api/` proxy prefix, walk.ts over-filtering with `startsWith(".")`). 5 rounds is a lot — the cli-shell verification envelope is rigorous about compilation but blind to runtime UX. Worth a "ui-project live-smoke" pre-flight gate that runs a 30-second dev-server pass when the diff touches `ui/apps/web/src/`; would have collapsed T-011..T-013 into one round.
+
+## 2026-05-14 - composer-t3code-triggers - pre-existing wiring bugs surfaced by smoke (T-014)
+
+The Lexical-rebuilt composer's new `@`-menu surface revealed three latent bugs in the textarea-era code: (1) `live-chat.tsx` never forwarded `chat.cwd` to `<ChatComposer>`, so the file-search fetch quietly skipped at the cwd-undefined branch; (2) the fetch URL was bare `/file-search` instead of `/api/file-search`, missing the Vite proxy prefix that the rest of the app uses; (3) `walkCwd` in `ui/apps/server/src/fs/walk.ts` had a `startsWith(".")` filter that dropped every dotfile-suffixed real path, so even with the proxy fixed the walk returned a tiny subset. Pattern: when adding visible UI on top of a silently-skipped wire path, prepare for the wire to *not actually work*. The smoke is the only place this shows.
+
+## 2026-05-14 - composer-t3code-triggers - Tailwind opacity modifier silently no-ops on hex CSS vars
+
+`text-[var(--muted-foreground)]/40` Tailwind syntax expects the CSS variable to contain an HSL channel expression (e.g. `216 14% 25%`) so Tailwind can splice the `40%` into an `hsl()` wrapper at build time. When `--muted-foreground` is a literal hex (`#57534e`), Tailwind cannot rewrite it and silently drops the opacity modifier — the produced CSS is `color: var(--muted-foreground);` with no alpha. T-011 and T-012 both attempted the fix at the Tailwind layer and both passed cli-shell green; only the visual smoke at T-013 forced the underlying-mechanism rewrite to `color: color-mix(in srgb, var(--muted-foreground) 40%, transparent)`, which works against any color space. Cross-project applicability: any Loom UI work that needs alpha on a CSS-var color needs `color-mix` (or migrate the variable to HSL-channel form).
+
+[review-T-014] 2026-05-14 status=failed blockers=1 major=4 minor=3 keyboard handler dropped during Lexical swap (US-007 AC2/AC3 + US-004 AC3 regressed); smoke-fix two-flag debt surfaced as Major 4 (initially flagged Blocker; reclassified after verifying the shell itself is consolidated and the duplication is prop-surface only); composer-t3code-triggers
+
+[T-015] 2026-05-14T08:02:29Z status=green attempts=1 files=2 keyboard plugin + focus() + handleKeyIntent (Review B1+M1)
+
+[T-016] 2026-05-14T08:14:00Z status=green attempts=1 files=4 review cleanup (M2 dead export, M4 single discriminator, Min3 linebreak comment; Min2 deferred per Review note)
+
+## 2026-05-14 - composer-t3code-triggers - build rerun after Review failed
+
+Build rerun dispatched after Review failed verdict (1 blocker, 4 major, 3 minor). T-015 (ComposerKeyboardPlugin per ADR-006 + focus() impl) closed Review Blocker 1 (US-007 AC2 Enter submits, US-007 AC3 keyboard mutual exclusion, US-004 AC3 Escape latch) and Major 1 (focus() no-op). T-016 (lean cleanup) closed Majors 2/4 + Minor 3; Minor 2 (`replaceTextRange` import) declined per Review's defer note. Major 3 (smoke-loop process finding) routed to `/tune build`. Cross-project learning to capture in tune: Lexical-style keyboard contracts need explicit per-AC HITL enumeration — the cli-shell envelope (`tsc --noEmit` + `vite build` + grep) cannot detect a no-op `focus()` body or an unused `onSubmit` prop because both type-check fine. When a migration replaces a wired event handler with a framework-mediated equivalent (e.g. textarea `onKeyDown` → Lexical command registry), the HITL smoke must bullet-by-bullet walk each key-driven AC rather than grouping "keyboard works" as one checklist item. Both tasks green on attempt 1.
+[T-009] 2026-05-14T11:10:37Z status=green attempts=1 files=3 composer-slash-command-catalog — ComposerFooterToolbar container + send-button regrouping; ChatComposer mounts toolbar with five `composer-pill-*` div stubs and a fragment-typed sendButton slot. Used existing node-test (vitest + node env + static-source regex) per project convention; the dispatch-context jsdom fallback was unnecessary because slot ordering can be asserted from JSX-position of `{slotName}` interpolations. Permission-dropdown live wiring intentionally regressed to a placeholder until T-013. PERMISSION_MODES + mode-icon exports left in place (P1 — out-of-scope cleanup).
+[T-002] 2026-05-14T11:11:00Z composer-slash-command-catalog status=green attempts=1 files=5 chat-row `model_settings` JSON column + repo parse/merge chokepoint; `WireModelSettings` declared in messages.ts and mirrored in chat-types.ts (T-001 had partial state — symbol imported without declaration; coordinated under the per-task lock).
+[T-001] 2026-05-14T09:13:54Z composer-slash-command-catalog status=green attempts=1 files=4 wire frames foundation — three new kinds (`slash-commands-update`, `context-usage-update`, `model-settings-set`) into the unions; helper aliases mirrored across three files; serializer routing inherited. Red phase enforced via direct `tsc --noEmit` since vitest erases types; green via 14 round-trip + type-membership tests. Pre-existing `ChatRow ↔ ApiChat` drift on `chat-update` is T-002 scope (it landed the new `model_settings` column on `ChatRow`); not widened here.
+[T-003] 2026-05-14T11:20:00Z composer-slash-command-catalog status=green attempts=1 files=2 bridge `startQuery()` plumbs SDK `Options` from chat-row model_settings on every spawn (`chatRepo.get()` re-read per US-009). `model`/`effort`/`thinking` injected when truthy; `betas: ['context-1m-2025-08-07']` derived bridge-internally from `contextWindow === '1m'` (ADR-D04); `contextWindow` never reaches Options. `ULTRATHINK_BUDGET_TOKENS = 32_000` exported (ADR-D07). New `sdkQueryFactory` test seam on `BridgeOptions` — the existing `startQueryOverride` cannot expose `Options` because it short-circuits the whole `startQuery` body. 8 vitest tests green on attempt 1; full server suite 41/42 pass (1 pre-existing unrelated `loom-route-no-write` URL-decode failure, same as T-002 log). T-004's attach/supportedCommands region left untouched per scope sequencing.
+[T-004] 2026-05-14T11:35:00Z composer-slash-command-catalog status=green attempts=1 files=2 bridge attach + message-loop region enumerates SDK slash commands. `SKILL_NAMES` (ADR-D05 curated set) + `classifySlashCommand(c)` exported. `ChatSession` grew `slashCommands: WireSlashCommand[] | null` + `attachConfirmed: boolean`; both reset on `attemptRestart` so respawns re-enumerate. `handleSdkMessage` latches a one-shot enumeration on the first non-`result-is_error` SDK message and refires on `system/plugin_install` messages with status `completed` or `installed` (US-006 re-fire path). `refreshSlashCommands` does the SDK call + map + broadcast under a `queryHandle`-identity guard so stale post-respawn resolutions are dropped. `supportedCommands()` rejection silently exits — catalog untouched, no frame. `attach()` backfills the joining client with a scoped `sendTo` (not broadcast) when the catalog is non-null. T-003's `startQuery()` body untouched. 7 vitest tests green on attempt 1; full server suite 291 passed (2 pre-existing unrelated `fabric-route*` failures, same `routes/loom.ts` missing import as documented in T-002/T-003).
+[T-005] 2026-05-14T11:46:00Z status=green attempts=1 files=3 Bridge polls SDK `getContextUsage()` on attach (after snapshot frame) + on every `setTurnState` transition into `idle` per ADR-D08. `ChatSession` grew `contextUsage: ContextUsageSnapshot | null` (exported interface; init null). `refreshContextUsage` rounds `percentage` for the wire but keeps the raw float in the in-memory cache so the suppression rule (raw |Δ|<1 AND same model) correctly suppresses the 42.3→42.6 example even when the rounded ints (42→43) cross an integer boundary. `queryHandle`-identity guard drops stale post-respawn resolutions; throw paths silently preserve the cache. New public `bridge.setModelSettings(chatId, patch)` validates the four known keys (effort against five SDK values; contextWindow against 200k/1m; thinking against `{type:'enabled',budgetTokens:number}`; model as string|null), drops unknown keys silently, and emits an `error` frame + skips persistence on any invalid known-key value. Successful patches go through `chatRepo.update({model_settings})` (T-002 merge-patch chokepoint) and broadcast a `chat-update` frame; active Query is never interrupted/respawned (US-009 AC1). New WS envelope handler in `http-ws-server.ts` routes `model-settings-set` → `bridge.setModelSettings`. 12 vitest tests green on red→green attempt 1; full server suite 303 passed (2 pre-existing unrelated `fabric-route*` failures, same `routes/loom.ts` missing import as T-002/T-003/T-004).
+[T-006] 2026-05-14T11:50:00Z status=green attempts=1 files=10 composer-slash-command-catalog — FS-scanner deletion end-to-end. Deleted `scan.ts`, `routes/slash-commands.ts`, `ComposerSlashMenu.tsx` + empty server `slash-commands/` dir; removed route mount in `index.ts`, `SlashCommandEntry`/`getSlashCommands` from web `lib/api.ts`, the `slashCommands` state + cwd-`useEffect` + prop pass-through in `live-chat.tsx`, and the full slash-menu state machine + `rankSlashCommands` helper inside `ChatComposer.tsx` / `composer-trigger.ts`. T-007 picks up the rewired bridge-supplied catalog. Red = grep-guard runtime assertion failure (`fs-slash-scanner-deleted.test.ts` 2/2 fail) → green 2/2 pass. Adjacent SDK-driven tests (`bridge-slash-commands` + `frames-composer-catalog`) untouched, 21/21 green. Preserved T-009's `ComposerFooterToolbar` mount per dispatch-context coordination note. Pre-existing repo-wide path-decoding test failures (URL.pathname not decoding `%20`) and missing `routes/loom-mockup.ts`/`loom-board.ts` imports unchanged — flagged in T-009 done report as environmental.

@@ -1,19 +1,11 @@
 /**
- * T-012 / US-008-009. Presentational @-file picker menu.
- *
- * Mirrors `ComposerSlashMenu.tsx`'s structure: parent-driven keyboard
- * navigation (selectedIndex / onHover), per-row onMouseDown
- * preventDefault to keep the textarea focused through the click,
- * onSelect emits the chosen path string.
- *
- * Rendering:
- *   - Outer container is role="listbox", absolute bottom-full,
- *     data-testid="composer-atfile-menu".
- *   - Per-row button: role="option", aria-selected wired to
- *     selectedIndex, mono basename + muted dirname.
- *   - Empty items + !loading → returns null.
- *   - Empty items + loading → single "Searching…" row inside the
- *     container.
+ * Presentational @-file picker menu. Mirrors {@link ComposerSlashMenu}:
+ * parent-driven keyboard navigation, per-row mousedown preventDefault to
+ * keep the editor focused, onSelect emits the chosen path. The frame
+ * renders whenever the parent mounts the component (trigger-active);
+ * the empty-state row is query-aware — "Type to search files" when the
+ * query is blank, "No matching files" once the user has typed and the
+ * search returned nothing.
  */
 import { useEffect, useRef } from "react";
 import clsx from "clsx";
@@ -24,6 +16,7 @@ export interface ComposerAtFileMenuProps {
   onHover: (index: number) => void;
   onSelect: (path: string) => void;
   loading?: boolean;
+  query?: string;
 }
 
 /**
@@ -44,7 +37,9 @@ export function ComposerAtFileMenu({
   onHover,
   onSelect,
   loading,
+  query,
 }: ComposerAtFileMenuProps) {
+  const hasQuery = (query ?? "").trim().length > 0;
   const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -53,8 +48,6 @@ export function ComposerAtFileMenu({
     const row = list.querySelector<HTMLElement>(`[data-row-index="${selectedIndex}"]`);
     if (row) row.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
-
-  if (items.length === 0 && !loading) return null;
 
   return (
     <div
@@ -70,6 +63,15 @@ export function ComposerAtFileMenu({
           style={{ color: "var(--muted-foreground)" }}
         >
           Searching…
+        </div>
+      ) : items.length === 0 ? (
+        <div
+          role="presentation"
+          data-testid="composer-atfile-menu-empty"
+          className="px-3 py-1.5 text-xs italic"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          {hasQuery ? "No matching files" : "Type to search files"}
         </div>
       ) : (
         items.map((path, i) => {

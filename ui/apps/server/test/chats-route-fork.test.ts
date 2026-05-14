@@ -68,4 +68,28 @@ describe("T-008 POST /chats/fork", () => {
     expect(res.status).toBe(405);
     await store.close();
   });
+
+  test("forked chat is decorated and drops the source's custom_name to null", async () => {
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    const src = store.chats.create({ id: "c-src", cwd: "/tmp/repo" });
+    store.chats.setCustomName(src.id, "Renamed");
+    store.chatItems.append(src.id, {
+      kind: "user-message",
+      id: "u1",
+      turnId: "t-1",
+      text: "source prompt",
+      createdAt: new Date().toISOString(),
+    });
+    const routes: Record<string, any> = {};
+    mountChatsRoute(routes, store);
+    const req = new Request(`http://localhost/chats/fork?id=${src.id}`, { method: "POST" });
+    const res = await routes["/chats/fork"](req, new URL(req.url));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.chat).toHaveProperty("custom_name");
+    expect(body.chat).toHaveProperty("auto_title");
+    expect(body.chat.custom_name).toBeNull();
+    expect(body.chat.auto_title).toBeNull();
+    await store.close();
+  });
 });

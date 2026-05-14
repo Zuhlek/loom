@@ -23,7 +23,8 @@ import { PermissionRequestInline } from "../components/chat/PermissionRequestInl
 import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker";
 import { useSnackbar } from "../components/ui/Snackbar";
 import { SessionRecoveryBanner } from "../components/chat/SessionRecoveryBanner";
-import { getChat, getSlashCommands, wsUrl, type ApiChat, type SlashCommandEntry } from "../lib/api";
+import { getChat, wsUrl, type ApiChat } from "../lib/api";
+import { useChatBridge } from "../lib/use-chat-bridge";
 import type {
   ChatItem,
   ClientFrame,
@@ -296,6 +297,10 @@ export function LiveChatRoute({ chatId }: Props) {
   const [state, dispatch] = useReducer(chatReducer, EMPTY_STATE);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [tasksUpdatedAt, setTasksUpdatedAt] = useState<number | null>(null);
+  // T-007 / US-006. Bridge-supplied slash-command catalog. `null` until
+  // the first `slash-commands-update` frame lands, at which point the
+  // composer flips its menu out of the "Loading commands…" state.
+  const bridge = useChatBridge();
   /**
    * T-007 / US-004 + US-005. Right-pane state is a discriminated
    * union: at most one of Tasks / Diff is mounted at a time, with
@@ -331,7 +336,6 @@ export function LiveChatRoute({ chatId }: Props) {
     setRightPane((p) => (p === "tasks" ? null : "tasks"));
   const onToggleDiff = () =>
     setRightPane((p) => (p === "diff" ? null : "diff"));
-  const [slashCommands, setSlashCommands] = useState<SlashCommandEntry[]>([]);
   const snackbar = useSnackbar();
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -347,19 +351,6 @@ export function LiveChatRoute({ chatId }: Props) {
     return () => { alive = false; };
   }, [chatId]);
 
-  // Fetch the slash-command catalog (user + project + plugin scope)
-  // once the chat row resolves, so the composer's `/`-trigger menu can
-  // surface project-scoped commands keyed off the chat's cwd. The
-  // catalog is read-only and small; we don't re-fetch on tab focus.
-  useEffect(() => {
-    if (!chat?.cwd) return;
-    let alive = true;
-    getSlashCommands(chat.cwd)
-      .then((r) => { if (alive) setSlashCommands(r.commands ?? []); })
-      .catch(() => { /* non-fatal — the composer just hides its menu */ });
-    return () => { alive = false; };
-  }, [chat?.cwd]);
-
   // (Re)connect the WebSocket on chatId change.
   useEffect(() => {
     closedByUserRef.current = false;
@@ -370,6 +361,7 @@ export function LiveChatRoute({ chatId }: Props) {
     setTasksUpdatedAt(null);
     setRightPane(null);
     tasksAutoOpenedRef.current = false;
+    bridge.reset();
 
     const connect = () => {
       if (cancelled || closedByUserRef.current) return;
@@ -429,6 +421,9 @@ export function LiveChatRoute({ chatId }: Props) {
               recoveryAttempt: frame.body.recoveryAttempt,
               lastError: frame.body.lastError,
             });
+            break;
+          case "slash-commands-update":
+            bridge.handleServerFrame(frame);
             break;
           case "tasks-update": {
             const incoming = frame.body?.tasks ?? null;
@@ -682,10 +677,11 @@ export function LiveChatRoute({ chatId }: Props) {
     : state.pendingQuestion
       ? "Answer the question to continue"
       : undefined;
-  // Top bar (right of logo). Tasks/Diff toggles have moved into the
-  // slim right rail (they belong to the chat content). The websocket
-  // status is now a coloured dot with a click-to-reveal info card,
-  // followed by the Settings icon — both anchored to the far right.
+  // Top bar (right of logo). Tasks/Diff toggles live in the slim right
+  // rail; the WebSocket status dot now lives at the bottom of that rail
+  // too (see `rightRail` below). The Settings icon is anchored to the
+  // far right inside a w-10 column whose width and left border mirror
+  // the rail beneath it, so the cog sits directly above the rail icons.
   const topBar = (
     <>
       <div className="flex-1 min-w-0">
@@ -693,41 +689,13 @@ export function LiveChatRoute({ chatId }: Props) {
           <p className="text-[10px] truncate" style={{ color: "var(--destructive)" }}>{chatErr}</p>
         ) : null}
       </div>
-      <div className="relative shrink-0">
+      <Link
+        href="/settings"
+        className="w-10 h-full flex items-center justify-center shrink-0"
+      >
         <button
           type="button"
-          data-testid="conn-status-dot"
-          onClick={() => setConnInfoOpen((v) => !v)}
-          className={clsx("size-2.5 rounded-full block", connDotBg(conn))}
-          aria-label={`websocket ${conn}`}
-          title={`websocket ${conn}`}
-        />
-        {connInfoOpen && (
-          <div
-            className="absolute right-0 top-full mt-1 z-40 rounded-md shadow-md text-[11px] px-3 py-2 min-w-[180px]"
-            style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--foreground)" }}
-            role="dialog"
-          >
-            <div className="flex items-center justify-between gap-3 mb-1">
-              <span className="font-medium">WebSocket</span>
-              <span className={clsx("text-[10px] font-mono px-1.5 py-0.5 rounded", connBg(conn))}>{conn}</span>
-            </div>
-            <p className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-              {conn === "open"
-                ? "Live — messages stream in real time."
-                : conn === "connecting"
-                  ? "Re-attaching to the chat session…"
-                  : conn === "closed"
-                    ? "Connection lost. Retrying every second for ~10 s."
-                    : "Not yet connected."}
-            </p>
-          </div>
-        )}
-      </div>
-      <Link href="/settings">
-        <button
-          type="button"
-          className="size-7 rounded-md grid place-items-center hover:bg-[var(--accent)] shrink-0"
+          className="size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]"
           style={{ color: "var(--muted-foreground)" }}
           aria-label="Settings"
           title="Settings"
@@ -764,9 +732,10 @@ export function LiveChatRoute({ chatId }: Props) {
         title={rightPane === "tasks" ? "Hide tasks" : "Show tasks"}
         aria-pressed={rightPane === "tasks"}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-          <path d="M9 6h11M9 12h11M9 18h11" />
-          <path d="M4 6h.01M4 12h.01M4 18h.01" strokeWidth={2.5} />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-4">
+          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+          <rect x="9" y="3" width="6" height="4" rx="1" />
+          <path d="M9 14l2 2 4-4" />
         </svg>
         {tasks && tasks.length > 0 ? (
           <span
@@ -799,6 +768,40 @@ export function LiveChatRoute({ chatId }: Props) {
           </svg>
         </button>
       )}
+      {/* WebSocket status dot — pinned to the bottom of the rail with
+          `mt-auto`. Click reveals an info card that opens upward so it
+          doesn't escape the viewport. */}
+      <div className="relative mt-auto mb-1">
+        <button
+          type="button"
+          data-testid="conn-status-dot"
+          onClick={() => setConnInfoOpen((v) => !v)}
+          className={clsx("size-2.5 rounded-full block", connDotBg(conn))}
+          aria-label={`websocket ${conn}`}
+          title={`websocket ${conn}`}
+        />
+        {connInfoOpen && (
+          <div
+            className="absolute right-0 bottom-full mb-1 z-40 rounded-md shadow-md text-[11px] px-3 py-2 min-w-[180px]"
+            style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--foreground)" }}
+            role="dialog"
+          >
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <span className="font-medium">WebSocket</span>
+              <span className={clsx("text-[10px] font-mono px-1.5 py-0.5 rounded", connBg(conn))}>{conn}</span>
+            </div>
+            <p className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+              {conn === "open"
+                ? "Live — messages stream in real time."
+                : conn === "connecting"
+                  ? "Re-attaching to the chat session…"
+                  : conn === "closed"
+                    ? "Connection lost. Retrying every second for ~10 s."
+                    : "Not yet connected."}
+            </p>
+          </div>
+        )}
+      </div>
     </aside>
   );
 
@@ -881,7 +884,8 @@ export function LiveChatRoute({ chatId }: Props) {
           permissionMode={state.permissionMode}
           onPermissionModeChange={changePermissionMode}
           isInterrupted={state.turnState === "interrupted"}
-          availableSlashCommands={slashCommands}
+          cwd={chat?.cwd}
+          slashCommands={bridge.slashCommands}
         />
     </AppLayout>
   );
