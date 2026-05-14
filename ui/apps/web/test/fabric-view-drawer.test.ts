@@ -1,17 +1,15 @@
 /**
- * Three-surface layout — drawer + rail (T-006, extended in T-007).
+ * Two-pane layout — main + always-visible file tree.
  *
  * Static-source scan (Vitest include = *.test.ts, environment = node,
  * no jsdom). Asserts:
- *   - the route consumes `AppLayout.rightDrawer` and `AppLayout.rightRail`
- *     slots and never introduces a new layout primitive.
- *   - `drawerOpen` + `selectedFile` state slots exist with the documented
- *     defaults.
- *   - the rail icon toggles drawer state; closing the rail also clears
- *     `selectedFile` (ADR-006).
- *   - the drawer panel is mounted iff `drawerOpen`.
- *   - the viewer column is mounted iff `drawerOpen && selectedFile !== null`.
- *   - `<FabricViewer>` is the viewer-column renderer.
+ *   - the route consumes `AppLayout.rightDrawer` and never re-introduces
+ *     the rail/toggle column.
+ *   - `selectedFile` state defaults to null; phase initialises from the
+ *     pipeline.
+ *   - `FileTreeDrawer` mounts unconditionally once data has loaded.
+ *   - the standalone right viewer column is gone (file content takes
+ *     over the center pane instead).
  *   - the legacy inline `marked.parse` call is gone from the route.
  */
 import { describe, expect, test } from "vitest";
@@ -21,17 +19,23 @@ import { fileURLToPath } from "node:url";
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const routePath = webRoot + "src/routes/fabric-view-live.tsx";
 
-describe("FabricViewLive — three-surface layout", () => {
+describe("FabricViewLive — two-pane layout", () => {
   const src = readFileSync(routePath, "utf8");
 
-  test("route wires rightDrawer and rightRail slots", () => {
+  test("route wires the rightDrawer slot", () => {
     expect(src).toMatch(/rightDrawer\s*=/);
-    expect(src).toMatch(/rightRail\s*=/);
   });
 
-  test("route holds drawerOpen state defaulting to false", () => {
-    expect(src).toMatch(/setDrawerOpen/);
-    expect(src).toMatch(/useState<boolean>\(false\)|useState\(false\)/);
+  test("route no longer wires a rightRail slot", () => {
+    expect(src).not.toMatch(/rightRail\s*=/);
+  });
+
+  test("rail-toggle test id is gone", () => {
+    expect(src).not.toMatch(/data-testid="fabric-tree-toggle"/);
+  });
+
+  test("drawerOpen state is gone (tree is always visible)", () => {
+    expect(src).not.toMatch(/setDrawerOpen|drawerOpen/);
   });
 
   test("route holds selectedFile state defaulting to null", () => {
@@ -39,42 +43,17 @@ describe("FabricViewLive — three-surface layout", () => {
     expect(src).toMatch(/useState<string \| null>\(null\)|useState<\s*string\s*\|\s*null\s*>\(\s*null\s*\)/);
   });
 
-  test("rail-icon close handler clears selectedFile (ADR-006)", () => {
-    expect(src).toMatch(/setSelectedFile\(null\)/);
+  test("FileTreeDrawer is mounted once data has loaded", () => {
+    expect(src).toMatch(/<FileTreeDrawer\b/);
+    expect(src).toMatch(/data\s*\?\s*\(\s*<FileTreeDrawer/);
   });
 
-  test("drawer-open gate guards both the tree and the viewer column", () => {
-    expect(src).toMatch(/drawerOpen\s*&&/);
-  });
-
-  test("viewer column mounts iff drawerOpen && selectedFile !== null", () => {
-    expect(src).toMatch(/drawerOpen\s*&&\s*selectedFile/);
-  });
-
-  test("viewer-column uses FabricViewer", () => {
-    expect(src).toMatch(/from\s+["']\.\.\/components\/fabric\/FabricViewer["']/);
-    expect(src).toMatch(/<FabricViewer\b/);
+  test("right viewer column is removed", () => {
+    expect(src).not.toMatch(/data-testid="fabric-viewer-column"/);
   });
 
   test("route no longer inlines `marked.parse`", () => {
     expect(src).not.toMatch(/marked\.parse\b/);
-  });
-
-  test("rail icon button carries the documented test id", () => {
-    expect(src).toMatch(/data-testid="fabric-tree-toggle"/);
-  });
-
-  test("drawer panel is rendered via the FileTreeDrawer component", () => {
-    expect(src).toMatch(/<FileTreeDrawer\b/);
-  });
-
-  test("top bar no longer carries data-testid='fabric-refresh'", () => {
-    const topBarSliceStart = src.indexOf("const topBar");
-    const topBarSliceEnd = src.indexOf("const rightRail");
-    expect(topBarSliceStart).toBeGreaterThan(-1);
-    expect(topBarSliceEnd).toBeGreaterThan(topBarSliceStart);
-    const topBarSlice = src.slice(topBarSliceStart, topBarSliceEnd);
-    expect(topBarSlice).not.toMatch(/data-testid="fabric-refresh"/);
   });
 
   test("FileTreeDrawer component file exists", () => {
@@ -87,20 +66,18 @@ describe("FileTreeDrawer component contract", () => {
   const drawerPath = webRoot + "src/components/fabric/FileTreeDrawer.tsx";
   const src = readFileSync(drawerPath, "utf8");
 
-  test("exports a named function `FileTreeDrawer` with the documented props", () => {
+  test("exports a named function `FileTreeDrawer` with the slim props", () => {
     expect(src).toMatch(/export\s+function\s+FileTreeDrawer\b/);
-    expect(src).toMatch(/rootLabel\s*:\s*string/);
-    expect(src).toMatch(/onRefresh\s*:\s*\(/);
+    expect(src).toMatch(/tree\s*:/);
+    expect(src).toMatch(/artifacts\s*:/);
+    expect(src).toMatch(/selectedPath\s*:/);
+    expect(src).toMatch(/onSelect\s*:/);
   });
 
-  test("renders the refresh icon button inside the header", () => {
-    expect(src).toMatch(/data-testid="fabric-refresh"/);
-    expect(src).toMatch(/onClick=\{[^}]*onRefresh/);
-  });
-
-  test("renders the root label uppercased + tracking-wider", () => {
-    expect(src).toMatch(/tracking-wider/);
-    expect(src).toMatch(/rootLabel\.toUpperCase\(\)/);
+  test("rootLabel header and refresh button are gone", () => {
+    expect(src).not.toMatch(/rootLabel/);
+    expect(src).not.toMatch(/data-testid="fabric-refresh"/);
+    expect(src).not.toMatch(/onRefresh/);
   });
 
   test("wraps FabricFileTree", () => {

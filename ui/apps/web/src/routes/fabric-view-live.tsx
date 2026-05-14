@@ -3,8 +3,11 @@
  *
  * Fetches `/api/fabric/:projectId/:fabricName` on mount and on prop
  * change. Auto-refreshes every 5 s so changes from a running /weave
- * chat appear without a manual reload. Markdown rendering is delegated
- * to {@link FabricMarkdown}; raw-file rendering to {@link FabricViewer}.
+ * chat appear without a manual reload. The center pane renders the
+ * artifact for the active phase by default; clicking a file in the
+ * always-visible right-hand tree overrides the pane with that file's
+ * content. The build phase's `board.md` renders through
+ * {@link KanbanView} (read-only) with a Kanban/Raw toggle.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
@@ -15,6 +18,8 @@ import { FabricEmptyState } from "../components/fabric/FabricEmptyState";
 import { FabricMarkdown } from "../components/fabric/FabricMarkdown";
 import { FabricViewer } from "../components/fabric/FabricViewer";
 import { FileTreeDrawer } from "../components/fabric/FileTreeDrawer";
+import { KanbanView } from "../components/fabric/KanbanView";
+import { parseBoardMarkdown } from "../components/fabric/board-parser";
 import {
   PHASE_TO_FILE,
   PHASE_EMPTY_COPY,
@@ -82,6 +87,8 @@ interface FabricViewLiveProps {
   fabricName: string;
 }
 
+type BoardViewMode = "kanban" | "raw";
+
 export function FabricViewLive({ projectId, fabricName }: FabricViewLiveProps) {
   const [data, setData] = useState<FabricViewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,8 +96,8 @@ export function FabricViewLive({ projectId, fabricName }: FabricViewLiveProps) {
   const [project, setProject] = useState<ApiProject | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPhase, setSelectedPhase] = useState<PhaseId | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [boardViewMode, setBoardViewMode] = useState<BoardViewMode>("kanban");
   const fetchAbort = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -142,7 +149,7 @@ export function FabricViewLive({ projectId, fabricName }: FabricViewLiveProps) {
     setError(null);
     setSelectedPhase(null);
     setSelectedFile(null);
-    setDrawerOpen(false);
+    setBoardViewMode("kanban");
     fetchData();
     const intervalId = window.setInterval(fetchData, 5000);
     const onOnline = () => {
@@ -173,80 +180,39 @@ export function FabricViewLive({ projectId, fabricName }: FabricViewLiveProps) {
 
   const phaseStepperCurrent = selectedPhase ?? "spec";
   const phaseFile = selectedPhase ? PHASE_TO_FILE[selectedPhase] : null;
-  const phaseFileContent =
-    phaseFile && data ? (data.artifacts[phaseFile] ?? null) : null;
+  const activeFile = selectedFile ?? phaseFile;
+  const activeContent =
+    activeFile && data ? (data.artifacts[activeFile] ?? null) : null;
   const fabricTreeEmpty = (data?.tree.length ?? 0) === 0;
+  const isBoardFile = activeFile === "board.md";
 
-  const toggleRail = () => {
-    setDrawerOpen((open) => {
-      const next = !open;
-      if (!next) setSelectedFile(null);
-      return next;
-    });
-  };
+  const boardColumns = useMemo(() => {
+    if (!isBoardFile || activeContent == null) return null;
+    return parseBoardMarkdown(activeContent);
+  }, [isBoardFile, activeContent]);
 
   const handleFileSelect = (path: string) => {
     setSelectedFile((prev) => (prev === path ? null : path));
   };
 
-  const viewerMounted = drawerOpen && selectedFile !== null;
+  const handlePhaseSelect = (id: PhaseId) => {
+    setSelectedPhase(id);
+    setSelectedFile(null);
+  };
 
-  const topBar = (
-    <div className="flex-1 min-w-0" />
-  );
+  const topBar = <div className="flex-1 min-w-0" />;
 
-  const rightRail = (
-    <aside
-      className="w-10 shrink-0 flex flex-col items-center border-l py-2 gap-1"
-      style={{ borderColor: "var(--border)", background: "var(--card)" }}
-    >
-      <button
-        type="button"
-        data-testid="fabric-tree-toggle"
-        onClick={toggleRail}
-        aria-pressed={drawerOpen}
-        className={clsx(
-          "size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]",
-          drawerOpen
-            ? "bg-blue-500/10 text-blue-600"
-            : "text-[var(--muted-foreground)]",
-        )}
-        title={drawerOpen ? "Hide file tree" : "Show file tree"}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="size-4"
-        >
-          <path d="M3 5a2 2 0 012-2h4l2 2h8a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" />
-          <path d="M8 11h8M8 15h5" />
-        </svg>
-      </button>
-    </aside>
-  );
-
-  const rightDrawer = drawerOpen && data ? (
+  const rightDrawer = data ? (
     <FileTreeDrawer
-      rootLabel={fabricName}
       tree={data.tree}
       artifacts={data.artifacts}
-      selectedPath={selectedFile}
+      selectedPath={activeFile}
       onSelect={handleFileSelect}
-      onRefresh={() => fetchData()}
     />
   ) : undefined;
 
   return (
-    <AppLayout
-      topBar={topBar}
-      leftDrawer={<LiveSidebar />}
-      rightDrawer={rightDrawer}
-      rightRail={rightRail}
-    >
+    <AppLayout topBar={topBar} leftDrawer={<LiveSidebar />} rightDrawer={rightDrawer}>
       {loading && !data && !notFound && (
         <div className="px-5 py-6 text-sm" style={{ color: "var(--muted-foreground)" }}>
           Loading fabric…
@@ -273,74 +239,105 @@ export function FabricViewLive({ projectId, fabricName }: FabricViewLiveProps) {
       )}
 
       {data && (
-        <div className="flex-1 flex min-h-0">
-          <div className="flex-1 flex flex-col min-w-0">
-            <div
-              className="shrink-0 flex items-center justify-center border-b px-5 py-3"
-              style={{ borderColor: "var(--border)" }}
-            >
-              <PhaseStepper
-                selected={phaseStepperCurrent}
-                states={phaseStates}
-                onSelect={(id) => setSelectedPhase(id)}
-              />
-            </div>
+        <div className="flex-1 flex flex-col min-h-0">
+          <div
+            className="shrink-0 flex items-center justify-center border-b px-5 py-3"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <PhaseStepper
+              selected={phaseStepperCurrent}
+              states={phaseStates}
+              onSelect={handlePhaseSelect}
+            />
+          </div>
+          {fabricTreeEmpty ? (
             <div className="flex-1 overflow-y-auto px-5 py-4">
               <div className="max-w-3xl mx-auto">
-                {fabricTreeEmpty ? (
-                  <p
-                    className="text-sm"
-                    style={{ color: "var(--muted-foreground)" }}
-                  >
-                    {FABRIC_EMPTY_COPY}
-                  </p>
-                ) : phaseFile ? (
-                  <>
-                    <div
-                      className="text-[10px] uppercase tracking-wide font-mono mb-1"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
-                      {phaseFile}
-                    </div>
-                    {phaseFileContent != null ? (
-                      <FabricMarkdown source={phaseFileContent} />
-                    ) : (
+                <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+                  {FABRIC_EMPTY_COPY}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div
+                className="shrink-0 flex items-center justify-between px-5 py-2"
+                style={{ borderBottom: "1px solid var(--border)" }}
+              >
+                <div
+                  className="text-[10px] uppercase tracking-wide font-mono"
+                  style={{ color: "var(--muted-foreground)" }}
+                  data-testid="fabric-active-file"
+                >
+                  {activeFile ?? ""}
+                </div>
+                {isBoardFile && activeContent != null ? (
+                  <BoardViewToggle value={boardViewMode} onChange={setBoardViewMode} />
+                ) : (
+                  <div />
+                )}
+              </div>
+              {isBoardFile && boardColumns && boardViewMode === "kanban" ? (
+                <KanbanView columns={boardColumns} />
+              ) : (
+                <div className="flex-1 overflow-y-auto px-5 py-4">
+                  <div className="max-w-3xl mx-auto">
+                    {activeContent != null && activeFile ? (
+                      <FabricViewer path={activeFile} content={activeContent} />
+                    ) : selectedPhase ? (
                       <p
                         className="text-sm"
                         style={{ color: "var(--muted-foreground)" }}
                       >
-                        {PHASE_EMPTY_COPY[selectedPhase ?? "spec"]}
+                        {PHASE_EMPTY_COPY[selectedPhase]}
                       </p>
-                    )}
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
-          {viewerMounted && selectedFile && (
-            <div
-              className="w-[420px] shrink-0 flex flex-col min-h-0 border-l overflow-y-auto"
-              style={{ borderColor: "var(--border)", background: "var(--card)" }}
-              data-testid="fabric-viewer-column"
-            >
-              <div className="px-3 pt-3 pb-1">
-                <div
-                  className="text-[10px] uppercase tracking-wide font-mono"
-                  style={{ color: "var(--muted-foreground)" }}
-                >
-                  {selectedFile}
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1 px-3 py-2 text-sm leading-relaxed">
-                <FabricViewer
-                  path={selectedFile}
-                  content={data.artifacts[selectedFile]}
-                />
-              </div>
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
     </AppLayout>
+  );
+}
+
+function BoardViewToggle({
+  value,
+  onChange,
+}: {
+  value: BoardViewMode;
+  onChange: (next: BoardViewMode) => void;
+}) {
+  return (
+    <div
+      className="inline-flex rounded-md border overflow-hidden text-[10px] font-mono"
+      style={{ borderColor: "var(--border)" }}
+      role="tablist"
+      aria-label="Board view"
+      data-testid="board-view-toggle"
+    >
+      {(["kanban", "raw"] as const).map((mode) => {
+        const active = value === mode;
+        return (
+          <button
+            key={mode}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(mode)}
+            data-testid={`board-view-${mode}`}
+            className={clsx("px-2 py-0.5 uppercase tracking-wide")}
+            style={{
+              background: active ? "var(--selected-row)" : "transparent",
+              color: active ? "var(--info-foreground)" : "var(--muted-foreground)",
+            }}
+          >
+            {mode}
+          </button>
+        );
+      })}
+    </div>
   );
 }

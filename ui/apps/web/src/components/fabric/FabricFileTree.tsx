@@ -129,7 +129,7 @@ function TreeRow({
         className="flex items-center gap-1 rounded px-1 py-[2px] select-none"
         style={{
           paddingLeft: 4 + depth * 10,
-          background: isActive ? "var(--accent)" : "transparent",
+          background: isActive ? "var(--selected-row)" : "transparent",
           color: isActive
             ? "var(--foreground)"
             : isReadable || node.isDirectory

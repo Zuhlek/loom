@@ -24,9 +24,8 @@ describe("FabricViewLive route wiring", () => {
     expect(src).toContain("5000");
     // Fetches the new live endpoint (not the static-demo route).
     expect(src).toContain("/api/fabric/");
-    // Manual refresh now lives inside the FileTreeDrawer header.
+    // File tree is always mounted via FileTreeDrawer.
     expect(src).toContain("FileTreeDrawer");
-    expect(src).toMatch(/onRefresh=\{[^}]*fetchData/);
     // Markdown rendering flows through the extracted FabricMarkdown
     // component instead of inline `marked.parse` in the route.
     expect(src).toContain("FabricMarkdown");

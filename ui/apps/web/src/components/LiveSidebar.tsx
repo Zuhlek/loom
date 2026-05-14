@@ -437,18 +437,24 @@ function FabricRow({
   fabric: SidebarFabricEntry;
   onArchive: (fabric: SidebarFabricEntry) => void | Promise<void>;
 }) {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const href = `/fabric/${fabric.projectId}/${encodeURIComponent(fabric.name)}`;
+  const active = location === href;
   const dotTitle = fabric.lifecycle === "complete"
     ? "done"
     : (fabric.phase ?? "no pipeline");
   return (
     <div
-      className="group flex items-center gap-1.5 px-2 py-1 min-w-0 rounded-md text-xs hover:bg-[var(--accent)]"
+      className={clsx(
+        "group flex items-center gap-1.5 px-2 py-1 min-w-0 rounded-md text-xs",
+        active ? "bg-[var(--selected-row)]" : "hover:bg-[var(--accent)]",
+      )}
       title={`${fabric.dotLoomPath} · ${dotTitle}`}
       data-testid="fabric-row"
+      data-active={active ? "true" : undefined}
     >
       <button
-        onClick={() => navigate(`/fabric/${fabric.projectId}/${encodeURIComponent(fabric.name)}`)}
+        onClick={() => navigate(href)}
         className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
       >
         {/* Phase circle (red→green, gray when done) — mirrors the chat-row

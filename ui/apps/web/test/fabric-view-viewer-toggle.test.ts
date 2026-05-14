@@ -1,13 +1,13 @@
 /**
- * Viewer-column toggle semantics (T-006 seeds, T-011 extends).
+ * File-selection semantics in the two-pane layout.
  *
  * Static-source scan (Vitest include = *.test.ts, environment = node,
  * no jsdom). Asserts:
- *   - file-row click handler uses the toggle-off pattern
- *     `(prev) => prev === clicked ? null : clicked`.
- *   - directory-row clicks never reach into the file-selection state.
- *   - the rail icon's highlighted state is driven by `drawerOpen`,
- *     not by `selectedFile`.
+ *   - clicking a file row toggles `selectedFile`; re-clicking the same
+ *     row clears it so the pane falls back to the phase artifact.
+ *   - picking a phase from the stepper clears any sticky `selectedFile`.
+ *   - the active-file highlight in the tree is driven by
+ *     `selectedFile ?? PHASE_TO_FILE[selectedPhase]`.
  */
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const routePath = webRoot + "src/routes/fabric-view-live.tsx";
 
-describe("FabricViewLive — viewer-column toggle semantics", () => {
+describe("FabricViewLive — file-selection semantics", () => {
   const src = readFileSync(routePath, "utf8");
 
   test("file-row handler toggles off when re-clicking the same path", () => {
@@ -25,28 +25,20 @@ describe("FabricViewLive — viewer-column toggle semantics", () => {
     );
   });
 
-  test("viewer-column gate requires both drawerOpen and selectedFile", () => {
-    expect(src).toMatch(/drawerOpen\s*&&\s*selectedFile\s*!==\s*null/);
+  test("phase-select handler clears selectedFile", () => {
+    expect(src).toMatch(/handlePhaseSelect/);
+    const start = src.indexOf("const handlePhaseSelect");
+    const end = src.indexOf("};", start);
+    const slice = src.slice(start, end);
+    expect(slice).toMatch(/setSelectedFile\(null\)/);
   });
 
-  test("rail icon `aria-pressed` is driven by drawerOpen", () => {
-    expect(src).toMatch(/aria-pressed=\{drawerOpen\}/);
+  test("tree selectedPath falls back to phase file when no file picked", () => {
+    expect(src).toMatch(/selectedFile\s*\?\?\s*phaseFile/);
   });
 
-  test("handleFileSelect goes through the route, not the tree", () => {
+  test("handleFileSelect goes through the route", () => {
     expect(src).toMatch(/handleFileSelect\b/);
     expect(src).toMatch(/<FileTreeDrawer\b[\s\S]*?onSelect=\{handleFileSelect\}/);
-  });
-
-  test("rail-icon close clears selectedFile (ADR-006)", () => {
-    expect(src).toMatch(/setSelectedFile\(null\)/);
-  });
-
-  test("rail icon highlighted state is NOT keyed by selectedFile", () => {
-    const railStart = src.indexOf("const rightRail");
-    const railEnd = src.indexOf("const rightDrawer", railStart);
-    const railSlice = src.slice(railStart, railEnd);
-    expect(railSlice).toMatch(/aria-pressed=\{drawerOpen\}/);
-    expect(railSlice).not.toMatch(/selectedFile/);
   });
 });
