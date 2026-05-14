@@ -30,14 +30,14 @@ export interface ApiProject {
   created_at: string;
 }
 
-export interface SidebarLoomEntry {
-  /** Stable id: `<projectId>__<loom-name>__<path-hash>`. */
+export interface SidebarFabricEntry {
+  /** Stable id: `<projectId>__<fabric-name>__<path-hash>`. */
   id: string;
   projectId: string;
   projectName: string;
-  /** The loom name (the directory name under .loom/). */
+  /** The fabric name (the directory name under .loom/). */
   name: string;
-  /** Which of the project's paths this loom sits under. */
+  /** Which of the project's paths this fabric sits under. */
   cwd: string;
   /** Absolute path to the .loom/<name>/ directory. */
   dotLoomPath: string;
@@ -59,7 +59,7 @@ export interface SidebarState {
   groups: Array<{
     project: ApiProject;
     chats: ApiChat[];
-    looms: SidebarLoomEntry[];
+    fabrics: SidebarFabricEntry[];
   }>;
   unassigned: ApiChat[];
   empty: boolean;

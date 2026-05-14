@@ -2,7 +2,7 @@ import { Route, Switch } from "wouter";
 import { DiscoverWizard } from "./routes/discover-wizard";
 import { LiveHome } from "./routes/live-home";
 import { LiveChatRoute } from "./routes/live-chat";
-import { LoomViewLive } from "./routes/loom-view-live";
+import { FabricViewLive } from "./routes/fabric-view-live";
 import { Settings } from "./routes/settings";
 import { SidebarStateProvider } from "./lib/sidebar-state";
 import { SnackbarProvider } from "./components/ui/Snackbar";
@@ -25,11 +25,11 @@ export function App() {
         <Route path="/chat/:id">
           {(params: { id: string }) => <LiveChatRoute chatId={params.id} />}
         </Route>
-        <Route path="/loom/:projectId/:loomName">
-          {(params: { projectId: string; loomName: string }) => (
-            <LoomViewLive
+        <Route path="/fabric/:projectId/:fabricName">
+          {(params: { projectId: string; fabricName: string }) => (
+            <FabricViewLive
               projectId={decodeURIComponent(params.projectId)}
-              loomName={decodeURIComponent(params.loomName)}
+              fabricName={decodeURIComponent(params.fabricName)}
             />
           )}
         </Route>

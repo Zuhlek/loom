@@ -1,4 +1,4 @@
-export type LoomFile = {
+export type FabricFile = {
   path: string;
   /** Relative depth (0 root) */
   depth?: number;
@@ -11,11 +11,11 @@ export type LoomFile = {
 
 export interface FileTreeViewProps {
   rootLabel: string;
-  files: LoomFile[];
+  files: FabricFile[];
   onSelect?: (path: string) => void;
 }
 
-/** Static-ish file tree rendered for the loom artifact view. */
+/** Static-ish file tree rendered for the fabric artifact view. */
 export function FileTreeView({ rootLabel, files, onSelect }: FileTreeViewProps) {
   return (
     <aside

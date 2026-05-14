@@ -3,7 +3,7 @@ import { useState } from "react";
 type Candidate = {
   path: string;
   repos: number;
-  looms: number;
+  fabrics: number;
   lastAccessed: string;
   recommended?: boolean;
   projectTags?: string[];
@@ -13,13 +13,13 @@ const DEFAULT_CANDIDATES: Candidate[] = [
   {
     path: "~/dev/repo",
     repos: 12,
-    looms: 3,
+    fabrics: 3,
     lastAccessed: "2h ago",
     recommended: true,
     projectTags: ["loom", "cinnamon", "visana", "+9 more"],
   },
-  { path: "~/code", repos: 5, looms: 0, lastAccessed: "14d ago" },
-  { path: "~/Documents/work", repos: 2, looms: 0, lastAccessed: "41d ago" },
+  { path: "~/code", repos: 5, fabrics: 0, lastAccessed: "14d ago" },
+  { path: "~/Documents/work", repos: 2, fabrics: 0, lastAccessed: "41d ago" },
 ];
 
 /** Mockup 01: first-run discover wizard. Static placeholder data. */
@@ -40,7 +40,7 @@ export function DiscoverWizard() {
           <div className="flex-1">
             <h1 className="text-base font-semibold tracking-tight">Welcome to loom</h1>
             <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-              Pick a workspace root so loom can discover your repos and looms.
+              Pick a workspace root so loom can discover your repos and fabrics.
             </p>
           </div>
           <span
@@ -96,7 +96,7 @@ export function DiscoverWizard() {
                       )}
                     </div>
                     <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-                      {c.repos} git repos · {c.looms} looms {c.looms > 0 ? "found" : ""} · last accessed {c.lastAccessed}
+                      {c.repos} git repos · {c.fabrics} fabrics {c.fabrics > 0 ? "found" : ""} · last accessed {c.lastAccessed}
                     </p>
                     {c.projectTags && (
                       <div className="flex flex-wrap gap-1 mt-1.5">

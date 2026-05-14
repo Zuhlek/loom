@@ -21,7 +21,7 @@ import {
   renameChat,
   type ApiChat,
   type ApiProject,
-  type SidebarLoomEntry,
+  type SidebarFabricEntry,
 } from "../lib/api";
 import clsx from "clsx";
 
@@ -39,10 +39,10 @@ const DOT_FOR_MODE: Record<ApiChat["permission_mode"], string> = {
 };
 
 /**
- * Phase → dot color for looms in the sidebar. The scale runs red →
+ * Phase → dot color for fabrics in the sidebar. The scale runs red →
  * green across the five `/weave` phases, mirroring the user's mental
  * model of "early/risky" to "almost shipped". A `lifecycle === "complete"`
- * loom overrides this with gray regardless of phase. Unknown / missing
+ * fabric overrides this with gray regardless of phase. Unknown / missing
  * phase falls back to a muted gray.
  */
 const DOT_FOR_PHASE: Record<string, string> = {
@@ -53,7 +53,7 @@ const DOT_FOR_PHASE: Record<string, string> = {
   review: "bg-emerald-500",
 };
 
-function loomDotClass(
+function fabricDotClass(
   phase: string | null | undefined,
   lifecycle: string | null | undefined,
 ): string {
@@ -217,19 +217,19 @@ export function LiveSidebar() {
           </>
         )}
 
-        {/* Looms section — auto-discovered .loom/<name>/ dirs in each
-            project's paths, grouped per project. */}
+        {/* Fabrics section — auto-discovered .loom/<name>/ dirs across
+            every project, rendered as a single flat list. */}
         <div className="px-1.5 pt-4 pb-1.5 flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-[0.12em] font-medium" style={{ color: "var(--muted-foreground)" }}>
-            Looms
+            Fabrics
           </span>
         </div>
-        {groups.some((g) => g.looms.length > 0) ? (
+        {groups.some((g) => g.fabrics.length > 0) ? (
           <div>
             {groups
-              .filter((g) => g.looms.length > 0)
-              .map((g) => (
-                <LoomProjectGroup key={g.project.id} project={g.project} looms={g.looms} />
+              .flatMap((g) => g.fabrics)
+              .map((f) => (
+                <FabricRow key={f.id} fabric={f} />
               ))}
           </div>
         ) : null}
@@ -382,48 +382,28 @@ function ProjectGroup({
   );
 }
 
-function LoomProjectGroup({
-  project,
-  looms,
-}: {
-  project: ApiProject;
-  looms: SidebarLoomEntry[];
-}) {
+function FabricRow({ fabric }: { fabric: SidebarFabricEntry }) {
   const [, navigate] = useLocation();
+  const dotTitle = fabric.lifecycle === "complete"
+    ? "done"
+    : (fabric.phase ?? "no pipeline");
   return (
-    <div className="mb-1 min-w-0">
-      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md">
-        <span className="size-4 rounded-sm grid place-items-center text-[9px] font-bold bg-emerald-500/15 text-emerald-700 uppercase shrink-0">
-          {project.name.slice(0, 1)}
-        </span>
-        <span className="text-xs font-medium flex-1 min-w-0 truncate text-[var(--foreground)]">{project.name}</span>
-        <span className="text-[10px] shrink-0" style={{ color: "var(--muted-foreground)" }}>{looms.length}</span>
-      </div>
-      {looms.map((f) => {
-        const dotTitle = f.lifecycle === "complete"
-          ? "done"
-          : (f.phase ?? "no pipeline");
-        return (
-          <button
-            key={f.id}
-            onClick={() => navigate(`/loom/${f.projectId}/${encodeURIComponent(f.name)}`)}
-            className="w-full flex items-center gap-1.5 px-2 py-1 ml-3 min-w-0 rounded-md text-xs hover:bg-[var(--accent)]"
-            title={`${f.dotLoomPath} · ${dotTitle}`}
-            data-testid="loom-row"
-          >
-            {/* Phase circle (red→green, gray when done) — mirrors the
-                chat-row dot so loom and chat entries share a shape. */}
-            <span
-              className={clsx(
-                "size-1.5 rounded-full shrink-0",
-                loomDotClass(f.phase, f.lifecycle),
-              )}
-            />
-            <span className="flex-1 min-w-0 truncate text-left">{f.name}</span>
-          </button>
-        );
-      })}
-    </div>
+    <button
+      onClick={() => navigate(`/fabric/${fabric.projectId}/${encodeURIComponent(fabric.name)}`)}
+      className="w-full flex items-center gap-1.5 px-2 py-1 min-w-0 rounded-md text-xs hover:bg-[var(--accent)]"
+      title={`${fabric.dotLoomPath} · ${dotTitle}`}
+      data-testid="fabric-row"
+    >
+      {/* Phase circle (red→green, gray when done) — mirrors the chat-row
+          dot so fabric and chat entries share a shape. */}
+      <span
+        className={clsx(
+          "size-1.5 rounded-full shrink-0",
+          fabricDotClass(fabric.phase, fabric.lifecycle),
+        )}
+      />
+      <span className="flex-1 min-w-0 truncate text-left">{fabric.name}</span>
+    </button>
   );
 }
 

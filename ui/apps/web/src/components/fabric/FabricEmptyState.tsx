@@ -1,29 +1,29 @@
 /**
- * LoomEmptyState — rendered by `LoomViewLive` when
- * `GET /loom/:projectId/:loomName` returns 404. Names the loom, the
- * project, and the project's declared paths so the user understands
- * the unresolvable-loom case without a generic "fetch failed"
- * surface (US-008 AC1, AC3).
+ * FabricEmptyState — rendered by `FabricViewLive` when
+ * `GET /fabric/:projectId/:fabricName` returns 404. Names the fabric,
+ * the project, and the project's declared paths so the user
+ * understands the unresolvable-fabric case without a generic "fetch
+ * failed" surface.
  */
 import { Link } from "wouter";
 
 interface Props {
-  loomName: string;
+  fabricName: string;
   projectName: string;
   paths: string[];
 }
 
-export function LoomEmptyState({ loomName, projectName, paths }: Props) {
+export function FabricEmptyState({ fabricName, projectName, paths }: Props) {
   return (
     <div
       className="px-6 py-10 max-w-2xl mx-auto"
-      data-testid="loom-empty-state"
+      data-testid="fabric-empty-state"
     >
       <h1 className="text-base font-semibold mb-1">
-        No loom directory at <code className="font-mono">{loomName}</code>
+        No fabric directory at <code className="font-mono">{fabricName}</code>
       </h1>
       <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-        Project <strong>{projectName}</strong> has no <code className="font-mono">.loom/{loomName}/</code> directory
+        Project <strong>{projectName}</strong> has no <code className="font-mono">.loom/{fabricName}/</code> directory
         under any of its declared paths.
       </p>
       {paths.length > 0 ? (

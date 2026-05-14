@@ -76,7 +76,7 @@ describe("T-010 dev/mockup route registrations are absent from App.tsx (US-004 A
     expect(app).toContain('path="/"');
     expect(app).toContain('path="/discover"');
     expect(app).toContain("/chat/:id");
-    expect(app).toContain("/loom/:projectId/:loomName");
+    expect(app).toContain("/fabric/:projectId/:fabricName");
     // T-001: settings route is now /settings/:variant? — the bare
     // `/settings` segment falls through to Workspace per ADR-004
     // via the optional variant param.

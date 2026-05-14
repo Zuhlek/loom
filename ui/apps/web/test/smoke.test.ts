@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 describe("apps/web frontend skeleton", () => {
   test("Vite entry index.html exists and mounts #root", () => {
@@ -14,7 +15,7 @@ describe("apps/web frontend skeleton", () => {
     const app = readFileSync(root + "src/App.tsx", "utf8");
     expect(app).toContain('path="/discover"');
     expect(app).toContain("/chat/:id");
-    expect(app).toContain("/loom/:projectId/:loomName");
+    expect(app).toContain("/fabric/:projectId/:fabricName");
     // T-001: settings route is /settings/:variant? — the active panel
     // is driven by the route segment rather than a hard-coded
     // constant. The bare `/settings` segment falls through to the
@@ -27,7 +28,7 @@ describe("apps/web frontend skeleton", () => {
       "src/routes/discover-wizard.tsx",
       "src/routes/live-home.tsx",
       "src/routes/live-chat.tsx",
-      "src/routes/loom-view-live.tsx",
+      "src/routes/fabric-view-live.tsx",
       "src/routes/spawn-chat-dialog-live.tsx",
       "src/routes/settings.tsx",
     ];
@@ -36,10 +37,10 @@ describe("apps/web frontend skeleton", () => {
     }
   });
 
-  test("Diff panel and loom components are in place", () => {
+  test("Diff panel and fabric components are in place", () => {
     expect(existsSync(root + "src/components/diff/DiffPanel.tsx")).toBe(true);
-    expect(existsSync(root + "src/components/loom/PhaseStepper.tsx")).toBe(true);
-    expect(existsSync(root + "src/components/loom/KanbanView.tsx")).toBe(true);
+    expect(existsSync(root + "src/components/fabric/PhaseStepper.tsx")).toBe(true);
+    expect(existsSync(root + "src/components/fabric/KanbanView.tsx")).toBe(true);
   });
 
   test("TasksPanel exists and exposes header + status icons for all three states", () => {

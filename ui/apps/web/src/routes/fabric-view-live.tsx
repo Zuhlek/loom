@@ -1,22 +1,22 @@
 /**
- * LoomViewLive — the real `/loom/:projectId/:loomName` route.
+ * FabricViewLive — the real `/fabric/:projectId/:fabricName` route.
  *
- * Fetches `/api/loom/:projectId/:loomName` on mount and on prop
+ * Fetches `/api/fabric/:projectId/:fabricName` on mount and on prop
  * change. Auto-refreshes every 5 s so changes from a running /weave
  * chat appear without a manual reload.
  *
  * Markdown rendering uses `marked` (~25 KB). DOMPurify is intentionally
- * skipped: loom artifacts are written by /weave on the user's own
+ * skipped: fabric artifacts are written by /weave on the user's own
  * machine, so the trust model is loose. If we ever start ingesting
- * untrusted markdown into the loom, this is the place to wire
+ * untrusted markdown into a fabric, this is the place to wire
  * sanitization.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import { AppLayout } from "../components/layout/AppLayout";
 import { LiveSidebar } from "../components/LiveSidebar";
-import { PhaseStepper, type PhaseId } from "../components/loom/PhaseStepper";
-import { LoomEmptyState } from "../components/loom/LoomEmptyState";
+import { PhaseStepper, type PhaseId } from "../components/fabric/PhaseStepper";
+import { FabricEmptyState } from "../components/fabric/FabricEmptyState";
 import { listProjects, type ApiProject } from "../lib/api";
 import { BACKEND_ONLINE_EVENT } from "../lib/useHealthPoll";
 
@@ -24,7 +24,7 @@ interface PipelineSummary {
   current: { phase: string | null; status: string | null };
 }
 
-interface LoomTreeEntry {
+interface FabricTreeEntry {
   path: string;
   name: string;
   isDirectory: boolean;
@@ -32,13 +32,13 @@ interface LoomTreeEntry {
   mtime: string;
 }
 
-interface LoomViewResponse {
+interface FabricViewResponse {
   projectId: string;
   projectName: string;
-  loomName: string;
+  fabricName: string;
   loomDir: string;
   pipeline: PipelineSummary | null;
-  tree: LoomTreeEntry[];
+  tree: FabricTreeEntry[];
   artifacts: Record<string, string>;
   mockupPages: string[];
 }
@@ -72,13 +72,13 @@ function phaseStatesFor(
   return states;
 }
 
-interface LoomViewLiveProps {
+interface FabricViewLiveProps {
   projectId: string;
-  loomName: string;
+  fabricName: string;
 }
 
-export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
-  const [data, setData] = useState<LoomViewResponse | null>(null);
+export function FabricViewLive({ projectId, fabricName }: FabricViewLiveProps) {
+  const [data, setData] = useState<FabricViewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [project, setProject] = useState<ApiProject | null>(null);
@@ -92,13 +92,12 @@ export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
     fetchAbort.current = ctrl;
     try {
       const res = await fetch(
-        `/api/loom/${encodeURIComponent(projectId)}/${encodeURIComponent(loomName)}`,
+        `/api/fabric/${encodeURIComponent(projectId)}/${encodeURIComponent(fabricName)}`,
         { signal: ctrl.signal },
       );
-      // US-008 AC1, AC3: a 404 means the loom directory does not
-      // exist under any of the project's declared paths. Render
-      // the dedicated empty state instead of the generic error
-      // chip (which previously surfaced "HTTP 404: ...").
+      // 404 means the fabric directory does not exist under any of the
+      // project's declared paths. Render the dedicated empty state
+      // instead of the generic error chip.
       if (res.status === 404) {
         setNotFound(true);
         setError(null);
@@ -123,7 +122,7 @@ export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
         setLoading(false);
         return;
       }
-      const json = (await res.json()) as LoomViewResponse;
+      const json = (await res.json()) as FabricViewResponse;
       setData(json);
       setError(null);
       setNotFound(false);
@@ -137,7 +136,7 @@ export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
       setError(e?.message ?? "fetch failed");
       setLoading(false);
     }
-  }, [projectId, loomName, selected]);
+  }, [projectId, fabricName, selected]);
 
   useEffect(() => {
     setLoading(true);
@@ -145,7 +144,7 @@ export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
     setError(null);
     fetchData();
     const id = window.setInterval(fetchData, 5000);
-    // US-005 AC2: refetch on backend-recovery event.
+    // Refetch on backend-recovery event.
     const onOnline = () => {
       void fetchData();
     };
@@ -155,7 +154,7 @@ export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
       window.removeEventListener(BACKEND_ONLINE_EVENT, onOnline);
       fetchAbort.current?.abort();
     };
-  }, [projectId, loomName, fetchData]);
+  }, [projectId, fabricName, fetchData]);
 
   const phase = phaseFromPipeline(data?.pipeline ?? null);
   const phaseStates = useMemo(
@@ -175,7 +174,7 @@ export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
 
   const topBar = (
     <button
-      data-testid="loom-refresh"
+      data-testid="fabric-refresh"
       onClick={() => fetchData()}
       className="ml-auto text-[11px] px-2 py-0.5 rounded hover:bg-[var(--accent)]"
       style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
@@ -189,26 +188,26 @@ export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
     <AppLayout topBar={topBar} leftDrawer={<LiveSidebar />}>
         {loading && !data && !notFound && (
           <div className="px-5 py-6 text-sm" style={{ color: "var(--muted-foreground)" }}>
-            Loading loom…
+            Loading fabric…
           </div>
         )}
-        {/* US-008 AC1: dedicated empty state for the unresolvable loom case. */}
+        {/* Dedicated empty state for the unresolvable fabric case. */}
         {notFound && (
-          <LoomEmptyState
-            loomName={loomName}
+          <FabricEmptyState
+            fabricName={fabricName}
             projectName={project?.name ?? projectId}
             paths={project?.paths ?? []}
           />
         )}
         {error && !notFound && (
           <div className="mx-5 mt-3 rounded border p-3 text-xs" style={{ borderColor: "rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.06)", color: "var(--destructive-foreground)" }}>
-            Failed to load loom: {error}
+            Failed to load fabric: {error}
           </div>
         )}
 
         {data && (
           <div className="flex-1 flex min-h-0">
-            <LoomFileTree
+            <FabricFileTree
               tree={data.tree}
               artifacts={data.artifacts}
               selected={selected}
@@ -220,11 +219,11 @@ export function LoomViewLive({ projectId, loomName }: LoomViewLiveProps) {
                 style={{ borderColor: "var(--border)" }}
               >
                 <PhaseStepper current={phase} states={phaseStates} />
-                {/* US-009 AC1: surface the read-only contract near the stepper. */}
+                {/* Surface the read-only contract near the stepper. */}
                 <p
                   className="text-[10px] font-mono"
                   style={{ color: "var(--muted-foreground)" }}
-                  data-testid="loom-readonly-hint"
+                  data-testid="fabric-readonly-hint"
                 >
                   read-only — pipeline owned by /weave
                 </p>
@@ -267,7 +266,7 @@ interface TreeNode {
   children: TreeNode[];
 }
 
-function buildTree(entries: LoomTreeEntry[]): TreeNode[] {
+function buildTree(entries: FabricTreeEntry[]): TreeNode[] {
   const byPath = new Map<string, TreeNode>();
   const roots: TreeNode[] = [];
   const sorted = [...entries].sort((a, b) => {
@@ -295,13 +294,13 @@ function buildTree(entries: LoomTreeEntry[]): TreeNode[] {
   return roots;
 }
 
-function LoomFileTree({
+function FabricFileTree({
   tree,
   artifacts,
   selected,
   onSelect,
 }: {
-  tree: LoomTreeEntry[];
+  tree: FabricTreeEntry[];
   artifacts: Record<string, string>;
   selected: string;
   onSelect: (name: string) => void;
