@@ -156,7 +156,12 @@ export function LiveSidebar() {
       className="w-64 shrink-0 flex flex-col border-r"
       style={{ borderColor: "var(--border)", background: "var(--card)" }}
     >
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-2">
+      {/* Strict 50/50 vertical split: top half = projects + chats,
+          bottom half = fabrics. Each half scrolls independently. */}
+      <div
+        className="basis-1/2 grow-0 shrink-0 min-h-0 overflow-y-auto overflow-x-hidden px-1.5 py-2"
+        data-testid="sidebar-chats-pane"
+      >
         {/* Projects + chats section */}
         <div className="px-1.5 pt-1 pb-1.5 flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-[0.12em] font-medium" style={{ color: "var(--muted-foreground)" }}>
@@ -216,10 +221,16 @@ export function LiveSidebar() {
             ) : null}
           </>
         )}
+      </div>
 
+      <div
+        className="basis-1/2 grow-0 shrink-0 min-h-0 overflow-y-auto overflow-x-hidden px-1.5 py-2 border-t"
+        style={{ borderColor: "var(--border)" }}
+        data-testid="sidebar-fabrics-pane"
+      >
         {/* Fabrics section — auto-discovered .loom/<name>/ dirs across
             every project, rendered as a single flat list. */}
-        <div className="px-1.5 pt-4 pb-1.5 flex items-center justify-between">
+        <div className="px-1.5 pt-1 pb-1.5 flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-[0.12em] font-medium" style={{ color: "var(--muted-foreground)" }}>
             Fabrics
           </span>
