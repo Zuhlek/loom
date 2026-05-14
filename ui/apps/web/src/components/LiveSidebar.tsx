@@ -14,6 +14,7 @@ import { SpawnChatModalLive } from "../routes/spawn-chat-dialog-live";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { ChatContextMenu } from "./sidebar/ChatContextMenu";
 import {
+  archiveFabric,
   deleteChat,
   deleteProject,
   forkChat,
@@ -23,6 +24,7 @@ import {
   type ApiProject,
   type SidebarFabricEntry,
 } from "../lib/api";
+import { FabricArchiveDialog } from "./fabric/FabricArchiveDialog";
 import clsx from "clsx";
 
 interface ContextMenuState {
@@ -70,6 +72,7 @@ export function LiveSidebar() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [detachedIds, setDetachedIds] = useState<Set<string>>(() => new Set());
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
 
   const groups = state?.groups ?? [];
   const unassigned = state?.unassigned ?? [];
@@ -149,6 +152,20 @@ export function LiveSidebar() {
 
   const onSpawnChat = (project: ApiProject) => {
     setSpawnFor(project);
+  };
+
+  const onArchiveFabric = async (fabric: SidebarFabricEntry) => {
+    try {
+      await archiveFabric({
+        id: fabric.id,
+        projectId: fabric.projectId,
+        fabricName: fabric.name,
+        cwd: fabric.cwd,
+      });
+      await refresh();
+    } catch (err) {
+      console.warn("[loom] archiveFabric failed", err);
+    }
   };
 
   return (
@@ -234,13 +251,27 @@ export function LiveSidebar() {
           <span className="text-[10px] uppercase tracking-[0.12em] font-medium" style={{ color: "var(--muted-foreground)" }}>
             Fabrics
           </span>
+          <button
+            onClick={() => setArchiveDialogOpen(true)}
+            className="size-4 rounded grid place-items-center hover:bg-[var(--accent)]"
+            style={{ color: "var(--muted-foreground)" }}
+            aria-label="Open fabric archive"
+            title="Archived fabrics"
+            data-testid="open-fabric-archive"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-3" aria-hidden>
+              <rect x="3" y="4" width="18" height="4" rx="1" />
+              <path d="M5 8v11a1 1 0 001 1h12a1 1 0 001-1V8" />
+              <path d="M10 12h4" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
         {groups.some((g) => g.fabrics.length > 0) ? (
           <div>
             {groups
               .flatMap((g) => g.fabrics)
               .map((f) => (
-                <FabricRow key={f.id} fabric={f} />
+                <FabricRow key={f.id} fabric={f} onArchive={onArchiveFabric} />
               ))}
           </div>
         ) : null}
@@ -256,6 +287,12 @@ export function LiveSidebar() {
         />
       ) : null}
       {spawnFor ? <SpawnChatModalLive onClose={() => setSpawnFor(null)} project={spawnFor} /> : null}
+      {archiveDialogOpen ? (
+        <FabricArchiveDialog
+          onClose={() => setArchiveDialogOpen(false)}
+          onAfterUnarchive={refresh}
+        />
+      ) : null}
       {contextMenu ? (
         <ChatContextMenu
           chat={contextMenu.chat}
@@ -393,28 +430,56 @@ function ProjectGroup({
   );
 }
 
-function FabricRow({ fabric }: { fabric: SidebarFabricEntry }) {
+function FabricRow({
+  fabric,
+  onArchive,
+}: {
+  fabric: SidebarFabricEntry;
+  onArchive: (fabric: SidebarFabricEntry) => void | Promise<void>;
+}) {
   const [, navigate] = useLocation();
   const dotTitle = fabric.lifecycle === "complete"
     ? "done"
     : (fabric.phase ?? "no pipeline");
   return (
-    <button
-      onClick={() => navigate(`/fabric/${fabric.projectId}/${encodeURIComponent(fabric.name)}`)}
-      className="w-full flex items-center gap-1.5 px-2 py-1 min-w-0 rounded-md text-xs hover:bg-[var(--accent)]"
+    <div
+      className="group flex items-center gap-1.5 px-2 py-1 min-w-0 rounded-md text-xs hover:bg-[var(--accent)]"
       title={`${fabric.dotLoomPath} · ${dotTitle}`}
       data-testid="fabric-row"
     >
-      {/* Phase circle (red→green, gray when done) — mirrors the chat-row
-          dot so fabric and chat entries share a shape. */}
-      <span
-        className={clsx(
-          "size-1.5 rounded-full shrink-0",
-          fabricDotClass(fabric.phase, fabric.lifecycle),
-        )}
-      />
-      <span className="flex-1 min-w-0 truncate text-left">{fabric.name}</span>
-    </button>
+      <button
+        onClick={() => navigate(`/fabric/${fabric.projectId}/${encodeURIComponent(fabric.name)}`)}
+        className="flex-1 min-w-0 flex items-center gap-1.5 text-left"
+      >
+        {/* Phase circle (red→green, gray when done) — mirrors the chat-row
+            dot so fabric and chat entries share a shape. */}
+        <span
+          className={clsx(
+            "size-1.5 rounded-full shrink-0",
+            fabricDotClass(fabric.phase, fabric.lifecycle),
+          )}
+        />
+        <span className="flex-1 min-w-0 truncate">{fabric.name}</span>
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          void onArchive(fabric);
+        }}
+        className="opacity-0 group-hover:opacity-100 size-4 rounded grid place-items-center hover:bg-[var(--background)] shrink-0"
+        style={{ color: "var(--muted-foreground)" }}
+        aria-label={`Archive fabric ${fabric.name}`}
+        title="Archive fabric"
+        data-testid="archive-fabric"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-3" aria-hidden>
+          <rect x="3" y="4" width="18" height="4" rx="1" />
+          <path d="M5 8v11a1 1 0 001 1h12a1 1 0 001-1V8" />
+          <path d="M10 12h4" strokeLinecap="round" />
+        </svg>
+      </button>
+    </div>
   );
 }
 

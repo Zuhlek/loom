@@ -187,6 +187,39 @@ export async function deleteProject(id: string): Promise<void> {
   }
 }
 
+export interface ArchivedFabric {
+  id: string;
+  projectId: string;
+  fabricName: string;
+  cwd: string;
+  archived_at: string;
+}
+
+export async function archiveFabric(input: {
+  id: string;
+  projectId: string;
+  fabricName: string;
+  cwd: string;
+}): Promise<{ archived: ArchivedFabric }> {
+  return apiFetch<{ archived: ArchivedFabric }>("/fabric/archive", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function unarchiveFabric(id: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>("/fabric/unarchive", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+}
+
+export async function listArchivedFabrics(): Promise<{ archived: ArchivedFabric[] }> {
+  return apiFetch<{ archived: ArchivedFabric[] }>("/fabric/archived");
+}
+
 export interface CwdEntry {
   name: string;
   path: string;

@@ -123,7 +123,7 @@ function scanFabrics(
           path.join(dotLoomPath, "pipeline.md"),
         );
         entries.push({
-          id: `${projectId}__${e.name}__${shortHash(cwd)}`,
+          id: fabricId(projectId, e.name, cwd),
           projectId,
           projectName,
           name: e.name,
@@ -141,6 +141,15 @@ function scanFabrics(
   return entries;
 }
 
+/**
+ * Stable id matching the sidebar's fabric-entry shape. The same id is
+ * used by the archive table so archive lookups stay aligned with the
+ * sidebar scan.
+ */
+export function fabricId(projectId: string, fabricName: string, cwd: string): string {
+  return `${projectId}__${fabricName}__${shortHash(cwd)}`;
+}
+
 export function mountSidebarRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   store: MetadataStore,
@@ -154,7 +163,9 @@ export function mountSidebarRoute(
         .map((c) => decorateChat(c, store));
       const fabrics: CachedFabrics["entries"] = [];
       for (const cwdPath of p.paths) {
-        fabrics.push(...scanFabrics(p.id, p.name, cwdPath));
+        for (const entry of scanFabrics(p.id, p.name, cwdPath)) {
+          if (!store.archivedFabrics.isArchived(entry.id)) fabrics.push(entry);
+        }
       }
       return { project: p, chats: groupChats, fabrics };
     });

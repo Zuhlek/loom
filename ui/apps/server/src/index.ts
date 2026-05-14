@@ -30,6 +30,7 @@ import { mountGitActionsRoute } from "./routes/git-actions.ts";
 import { mountFabricMockupRoute } from "./routes/fabric-mockup.ts";
 import { mountFabricBoardRoute } from "./routes/fabric-board.ts";
 import { mountFabricRoute } from "./routes/fabric.ts";
+import { mountFabricArchiveRoute } from "./routes/fabric-archive.ts";
 import { mountSettingsRoute } from "./routes/settings.ts";
 import { mountHooksAdminRoute } from "./routes/hooks-admin.ts";
 
@@ -141,6 +142,7 @@ if (isEntrypoint) {
   mountFabricMockupRoute(routes);
   mountFabricBoardRoute(routes);
   mountFabricRoute(routes, store);
+  mountFabricArchiveRoute(routes, store);
   mountSettingsRoute(routes, config);
   const loomPort = parseInt(process.env.LOOM_PORT ?? "3737", 10);
   mountHooksAdminRoute(routes, { receiverPort: loomPort });

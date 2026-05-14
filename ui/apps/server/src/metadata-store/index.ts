@@ -20,6 +20,7 @@ import { chatItemsRepo, type ChatItemsRepo, type ChatItemRow } from "./repos/cha
 import { projectRepo, type ProjectRepo } from "./repos/project.ts";
 import { pendingGateRepo, type PendingGateRepo } from "./repos/pending-gate.ts";
 import { hookRegistrationRepo, type HookRegistrationRepo } from "./repos/hook-registration.ts";
+import { archivedFabricRepo, type ArchivedFabricRepo, type ArchivedFabricRow } from "./repos/archived-fabric.ts";
 
 export interface MetadataStore {
   chats: ChatRepo;
@@ -33,6 +34,7 @@ export interface MetadataStore {
   projects: ProjectRepo;
   pendingGates: PendingGateRepo;
   hookRegistrations: HookRegistrationRepo;
+  archivedFabrics: ArchivedFabricRepo;
   close(): Promise<void>;
 }
 
@@ -53,6 +55,7 @@ export interface InMemoryStorage {
   projects: Map<string, any>;
   pendingGates: Map<string, any>; // key = chat_id|kind
   hookRegistrations: Map<string, any>;
+  archivedFabrics: Map<string, ArchivedFabricRow>; // key = fabric stable id
 }
 
 function newStorage(): InMemoryStorage {
@@ -61,6 +64,7 @@ function newStorage(): InMemoryStorage {
     projects: new Map(),
     pendingGates: new Map(),
     hookRegistrations: new Map(),
+    archivedFabrics: new Map(),
   };
 }
 
@@ -76,6 +80,7 @@ interface SerializedStorage {
    * a no-op.
    */
   chatItems?: ChatItemRow[];
+  archivedFabrics?: ArchivedFabricRow[];
 }
 
 function serialize(storage: InMemoryStorage): SerializedStorage {
@@ -94,6 +99,7 @@ function serialize(storage: InMemoryStorage): SerializedStorage {
     pendingGates: Array.from(storage.pendingGates.entries()).map(([key, value]) => ({ __key: key, value })),
     hookRegistrations: Array.from(storage.hookRegistrations.values()),
     chatItems,
+    archivedFabrics: Array.from(storage.archivedFabrics.values()),
   };
 }
 
@@ -105,6 +111,9 @@ function hydrate(storage: InMemoryStorage, data: SerializedStorage): void {
   }
   for (const h of data.hookRegistrations ?? []) {
     if (h && h.id) storage.hookRegistrations.set(h.id, h);
+  }
+  for (const a of data.archivedFabrics ?? []) {
+    if (a && a.id) storage.archivedFabrics.set(a.id, a);
   }
   // Restore the chat-items log. Group rows by chat and sort by seq so
   // the in-memory order matches what was persisted, regardless of how
@@ -191,6 +200,7 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
   const projects = projectRepo(storage);
   const pendingGates = pendingGateRepo(storage);
   const hookRegistrations = hookRegistrationRepo(storage);
+  const archivedFabrics = archivedFabricRepo(storage);
 
   const wrap = <T extends Record<string, any>>(repo: T, mutators: string[]): T => {
     const out: any = {};
@@ -225,6 +235,7 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
   const wrappedProjects = wrap(projects, ["create", "addPath", "removePath", "update", "delete"]) as ProjectRepo;
   const wrappedPendingGates = wrap(pendingGates, ["upsert", "delete", "deleteByChat"]) as PendingGateRepo;
   const wrappedHookRegistrations = wrap(hookRegistrations, ["upsert", "delete"]) as HookRegistrationRepo;
+  const wrappedArchivedFabrics = wrap(archivedFabrics, ["archive", "unarchive"]) as ArchivedFabricRepo;
 
   return {
     chats: wrappedChats,
@@ -232,6 +243,7 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
     projects: wrappedProjects,
     pendingGates: wrappedPendingGates,
     hookRegistrations: wrappedHookRegistrations,
+    archivedFabrics: wrappedArchivedFabrics,
     async close() {
       // Final flush.
       if (dbPath) {
@@ -244,8 +256,17 @@ export async function initMetadataStore(opts: InitOptions = {}): Promise<Metadat
       storage.projects.clear();
       storage.pendingGates.clear();
       storage.hookRegistrations.clear();
+      storage.archivedFabrics.clear();
     },
   };
 }
 
-export type { ChatRepo, ChatItemsRepo, ProjectRepo, PendingGateRepo, HookRegistrationRepo };
+export type {
+  ChatRepo,
+  ChatItemsRepo,
+  ProjectRepo,
+  PendingGateRepo,
+  HookRegistrationRepo,
+  ArchivedFabricRepo,
+  ArchivedFabricRow,
+};
