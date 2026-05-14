@@ -1,16 +1,16 @@
 /**
- * GET /loom/mockup/list?cwd=...&project=...
+ * GET /fabric/mockup/list?cwd=...&project=...
  *      → returns list of *.html files
- * GET /loom/mockup/file?cwd=...&project=...&file=...
+ * GET /fabric/mockup/file?cwd=...&project=...&file=...
  *      → returns the HTML body (Content-Security-Policy + sandboxed)
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-export function mountLoomMockupRoute(
+export function mountFabricMockupRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
 ): void {
-  routes["/loom/mockup/list"] = async (req, url) => {
+  routes["/fabric/mockup/list"] = async (req, url) => {
     const cwd = url.searchParams.get("cwd") ?? "";
     const project = url.searchParams.get("project") ?? "";
     if (!cwd || !project) return new Response(JSON.stringify({ error: "missing cwd or project" }), { status: 400 });
@@ -28,7 +28,7 @@ export function mountLoomMockupRoute(
     });
   };
 
-  routes["/loom/mockup/file"] = async (req, url) => {
+  routes["/fabric/mockup/file"] = async (req, url) => {
     const cwd = url.searchParams.get("cwd") ?? "";
     const project = url.searchParams.get("project") ?? "";
     const file = url.searchParams.get("file") ?? "";

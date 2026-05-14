@@ -1,12 +1,12 @@
 /**
- * Tests for /sidebar/state loom auto-discovery.
+ * Tests for /sidebar/state fabric auto-discovery.
  */
 import { describe, test, expect, afterAll } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { initMetadataStore } from "../src/metadata-store/index.ts";
-import { mountSidebarRoute, invalidateLoomCache } from "../src/routes/sidebar.ts";
+import { mountSidebarRoute, invalidateFabricCache } from "../src/routes/sidebar.ts";
 import type { UserMessageItem } from "../src/chat-protocol/messages.ts";
 
 function makeUserItem(id: string, text: string): UserMessageItem {
@@ -29,20 +29,20 @@ afterAll(() => {
   }
 });
 
-function makeProjectWithLooms(loomNames: string[]): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-test-"));
+function makeProjectWithFabrics(fabricNames: string[]): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "fabric-test-"));
   tmpRoots.push(root);
   fs.mkdirSync(path.join(root, ".loom"), { recursive: true });
-  for (const n of loomNames) {
+  for (const n of fabricNames) {
     fs.mkdirSync(path.join(root, ".loom", n), { recursive: true });
   }
   return root;
 }
 
-describe("sidebar route loom discovery", () => {
+describe("sidebar route fabric discovery", () => {
   test("GET /sidebar/state lists .loom/<name>/ entries per project path", async () => {
-    invalidateLoomCache();
-    const root = makeProjectWithLooms(["foo", "bar"]);
+    invalidateFabricCache();
+    const root = makeProjectWithFabrics(["foo", "bar"]);
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({ name: "alpha", paths: [root] });
     const routes: Record<string, any> = {};
@@ -52,11 +52,11 @@ describe("sidebar route loom discovery", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.groups.length).toBe(1);
-    const looms = body.groups[0].looms;
-    expect(looms.length).toBe(2);
-    const names = looms.map((f: any) => f.name).sort();
+    const fabrics = body.groups[0].fabrics;
+    expect(fabrics.length).toBe(2);
+    const names = fabrics.map((f: any) => f.name).sort();
     expect(names).toEqual(["bar", "foo"]);
-    for (const f of looms) {
+    for (const f of fabrics) {
       expect(f.projectId).toBe(proj.id);
       expect(f.projectName).toBe("alpha");
       expect(f.cwd).toBe(root);
@@ -66,9 +66,9 @@ describe("sidebar route loom discovery", () => {
     await store.close();
   });
 
-  test("loom discovery skips dot-prefixed entries and non-directories", async () => {
-    invalidateLoomCache();
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-test-"));
+  test("fabric discovery skips dot-prefixed entries and non-directories", async () => {
+    invalidateFabricCache();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "fabric-test-"));
     tmpRoots.push(root);
     fs.mkdirSync(path.join(root, ".loom", "real"), { recursive: true });
     fs.mkdirSync(path.join(root, ".loom", ".hidden"), { recursive: true });
@@ -81,13 +81,13 @@ describe("sidebar route loom discovery", () => {
     const req = new Request("http://localhost/sidebar/state", { method: "GET" });
     const res = await routes["/sidebar/state"](req, new URL(req.url));
     const body = await res.json();
-    const looms = body.groups[0].looms;
-    expect(looms.map((f: any) => f.name)).toEqual(["real"]);
+    const fabrics = body.groups[0].fabrics;
+    expect(fabrics.map((f: any) => f.name)).toEqual(["real"]);
     await store.close();
   });
 
   test("grouped chat with a non-empty user-message exposes auto_title", async () => {
-    invalidateLoomCache();
+    invalidateFabricCache();
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({ name: "alpha", paths: ["/tmp/a"] });
     const chat = store.chats.create({ id: "c-grouped", cwd: "/tmp/a", project_id: proj.id });
@@ -105,7 +105,7 @@ describe("sidebar route loom discovery", () => {
   });
 
   test("grouped chat with empty chatItems exposes auto_title null", async () => {
-    invalidateLoomCache();
+    invalidateFabricCache();
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({ name: "alpha", paths: ["/tmp/a"] });
     store.chats.create({ id: "c-empty", cwd: "/tmp/a", project_id: proj.id });
@@ -124,7 +124,7 @@ describe("sidebar route loom discovery", () => {
   });
 
   test("unassigned chat is decorated with custom_name and auto_title", async () => {
-    invalidateLoomCache();
+    invalidateFabricCache();
     const store = await initMetadataStore({ inMemoryOnly: true });
     const chat = store.chats.create({ id: "c-unassigned", cwd: "/tmp/orphan" });
     store.chatItems.append(chat.id, makeUserItem("u1", "first prompt here"));
@@ -144,7 +144,7 @@ describe("sidebar route loom discovery", () => {
   });
 
   test("every grouped and unassigned chat carries custom_name and auto_title keys", async () => {
-    invalidateLoomCache();
+    invalidateFabricCache();
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({ name: "alpha", paths: ["/tmp/a"] });
     store.chats.create({ id: "g1", cwd: "/tmp/a", project_id: proj.id });
@@ -167,19 +167,19 @@ describe("sidebar route loom discovery", () => {
     await store.close();
   });
 
-  test("project with no .loom/ directory yields zero looms", async () => {
-    invalidateLoomCache();
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-test-"));
+  test("project with no .loom/ directory yields zero fabrics", async () => {
+    invalidateFabricCache();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "fabric-test-"));
     tmpRoots.push(root);
 
     const store = await initMetadataStore({ inMemoryOnly: true });
-    store.projects.create({ name: "noloom", paths: [root] });
+    store.projects.create({ name: "nofabric", paths: [root] });
     const routes: Record<string, any> = {};
     mountSidebarRoute(routes, store);
     const req = new Request("http://localhost/sidebar/state", { method: "GET" });
     const res = await routes["/sidebar/state"](req, new URL(req.url));
     const body = await res.json();
-    expect(body.groups[0].looms).toEqual([]);
+    expect(body.groups[0].fabrics).toEqual([]);
     await store.close();
   });
 });

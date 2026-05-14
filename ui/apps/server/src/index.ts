@@ -27,9 +27,9 @@ import { mountUploadImageRoute } from "./routes/upload-image.ts";
 import { mountDiffRoute } from "./routes/diff.ts";
 import { mountGitStatusRoute } from "./routes/git-status.ts";
 import { mountGitActionsRoute } from "./routes/git-actions.ts";
-import { mountLoomMockupRoute } from "./routes/loom-mockup.ts";
-import { mountLoomBoardRoute } from "./routes/loom-board.ts";
-import { mountLoomRoute } from "./routes/loom.ts";
+import { mountFabricMockupRoute } from "./routes/fabric-mockup.ts";
+import { mountFabricBoardRoute } from "./routes/fabric-board.ts";
+import { mountFabricRoute } from "./routes/fabric.ts";
 import { mountSettingsRoute } from "./routes/settings.ts";
 import { mountHooksAdminRoute } from "./routes/hooks-admin.ts";
 
@@ -138,9 +138,9 @@ if (isEntrypoint) {
   mountDiffRoute(routes);
   mountGitStatusRoute(routes);
   mountGitActionsRoute(routes);
-  mountLoomMockupRoute(routes);
-  mountLoomBoardRoute(routes);
-  mountLoomRoute(routes, store);
+  mountFabricMockupRoute(routes);
+  mountFabricBoardRoute(routes);
+  mountFabricRoute(routes, store);
   mountSettingsRoute(routes, config);
   const loomPort = parseInt(process.env.LOOM_PORT ?? "3737", 10);
   mountHooksAdminRoute(routes, { receiverPort: loomPort });

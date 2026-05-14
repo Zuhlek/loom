@@ -1,12 +1,12 @@
 /**
- * GET /loom/:projectId/:loomName — READ-ONLY.
+ * GET /fabric/:projectId/:fabricName — READ-ONLY.
  *
  * The phase pipeline this surface exposes is owned by `/weave`,
  * which is the only writer to `pipeline.md`. This route exposes
- * **no** POST / PATCH / PUT / DELETE mutators for the loom view;
- * non-GET requests return 405. See US-009 (AC4, AC5).
+ * **no** POST / PATCH / PUT / DELETE mutators for the fabric view;
+ * non-GET requests return 405.
  *
- * Returns the live state of a loom directory:
+ * Returns the live state of a fabric directory:
  *   - pipeline:    parsed `pipeline.md` (markdown with `## Section`
  *                  headers and fenced ```text scalar bodies). Only
  *                  `current.phase` and `current.status` are surfaced.
@@ -16,13 +16,13 @@
  *                  the same relative path used in `tree`. Each capped
  *                  at 200 KB; truncated entries carry a marker tail.
  *   - mockupPages: filenames in the `mockup/` subdir (rendered via the
- *                  existing /loom/mockup/file iframe route).
+ *                  existing /fabric/mockup/file iframe route).
  *
  * Behaviour:
  *  - 405 if the request method is not GET (the read-only contract).
  *  - 404 if the project id is unknown.
- *  - 404 if no project path contains a `.loom/<loomName>/` directory.
- *  - 1-second TTL cache keyed by (projectId, loomName) so rapid sidebar
+ *  - 404 if no project path contains a `.loom/<fabricName>/` directory.
+ *  - 1-second TTL cache keyed by (projectId, fabricName) so rapid sidebar
  *    clicks don't repeatedly hit the disk.
  */
 import * as fs from "node:fs";
@@ -40,7 +40,7 @@ interface PipelineSummary {
   };
 }
 
-interface LoomTreeEntry {
+interface FabricTreeEntry {
   path: string;
   name: string;
   isDirectory: boolean;
@@ -48,25 +48,25 @@ interface LoomTreeEntry {
   mtime: string;
 }
 
-interface LoomViewResponse {
+interface FabricViewResponse {
   projectId: string;
   projectName: string;
-  loomName: string;
+  fabricName: string;
   loomDir: string;
   pipeline: PipelineSummary | null;
-  tree: LoomTreeEntry[];
+  tree: FabricTreeEntry[];
   artifacts: Record<string, string>;
   mockupPages: string[];
 }
 
 interface CachedView {
   at: number;
-  body: LoomViewResponse;
+  body: FabricViewResponse;
 }
 
 const cache = new Map<string, CachedView>();
 
-export function invalidateLoomViewCache(): void {
+export function invalidateFabricViewCache(): void {
   cache.clear();
 }
 
@@ -135,8 +135,8 @@ function readArtifact(filePath: string): string | null {
   }
 }
 
-function listTree(dir: string, maxDepth: number): LoomTreeEntry[] {
-  const out: LoomTreeEntry[] = [];
+function listTree(dir: string, maxDepth: number): FabricTreeEntry[] {
+  const out: FabricTreeEntry[] = [];
   const walk = (current: string, depth: number) => {
     if (depth > maxDepth) return;
     let dirents: fs.Dirent[];
@@ -145,8 +145,8 @@ function listTree(dir: string, maxDepth: number): LoomTreeEntry[] {
     } catch {
       return;
     }
-    const dirs: LoomTreeEntry[] = [];
-    const files: LoomTreeEntry[] = [];
+    const dirs: FabricTreeEntry[] = [];
+    const files: FabricTreeEntry[] = [];
     for (const e of dirents) {
       if (e.name.startsWith(".")) continue;
       const full = path.join(current, e.name);
@@ -157,7 +157,7 @@ function listTree(dir: string, maxDepth: number): LoomTreeEntry[] {
         continue;
       }
       const rel = path.relative(dir, full);
-      const entry: LoomTreeEntry = {
+      const entry: FabricTreeEntry = {
         path: rel,
         name: e.name,
         isDirectory: stat.isDirectory(),
@@ -193,14 +193,14 @@ function listMockupPages(dir: string): string[] {
 }
 
 /**
- * Resolve `.loom/<loomName>/` against a project's known paths. The
- * first hit wins so multi-path projects with overlapping loom names
+ * Resolve `.loom/<fabricName>/` against a project's known paths. The
+ * first hit wins so multi-path projects with overlapping fabric names
  * fall back to first-listed wins (sidebar discovery uses the same
  * order, so this stays consistent with how the user clicked it).
  */
-function resolveLoomDir(paths: string[], loomName: string): string | null {
+function resolveFabricDir(paths: string[], fabricName: string): string | null {
   for (const p of paths) {
-    const candidate = path.join(p, ".loom", loomName);
+    const candidate = path.join(p, ".loom", fabricName);
     if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
       return candidate;
     }
@@ -211,9 +211,9 @@ function resolveLoomDir(paths: string[], loomName: string): string | null {
 function buildView(
   projectId: string,
   projectName: string,
-  loomName: string,
+  fabricName: string,
   loomDir: string,
-): LoomViewResponse {
+): FabricViewResponse {
   let pipeline: PipelineSummary | null = null;
   const pipelinePath = path.join(loomDir, "pipeline.md");
   if (fs.existsSync(pipelinePath)) {
@@ -237,7 +237,7 @@ function buildView(
   return {
     projectId,
     projectName,
-    loomName,
+    fabricName,
     loomDir,
     pipeline,
     tree,
@@ -246,33 +246,33 @@ function buildView(
   };
 }
 
-export function mountLoomRoute(
+export function mountFabricRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   store: MetadataStore,
 ): void {
-  routes["/loom/:projectId/:loomName"] = async (req, url) => {
-    // Read-only contract (US-009 AC4): any non-GET request returns
-    // 405 — the phase pipeline is owned by /weave and the UI must
-    // not mutate it via this surface.
+  routes["/fabric/:projectId/:fabricName"] = async (req, url) => {
+    // Read-only contract: any non-GET request returns 405 — the phase
+    // pipeline is owned by /weave and the UI must not mutate it via
+    // this surface.
     if (req.method !== "GET") {
       return jsonResponse({ error: "method not allowed" }, 405);
     }
-    // Pathname is /loom/<projectId>/<loomName>; segments[2] = id, [3] = name.
+    // Pathname is /fabric/<projectId>/<fabricName>; segments[2] = id, [3] = name.
     const segs = url.pathname.split("/").filter((s) => s.length > 0);
-    if (segs.length !== 3 || segs[0] !== "loom") {
+    if (segs.length !== 3 || segs[0] !== "fabric") {
       return jsonResponse({ error: "bad request" }, 400);
     }
     const projectId = decodeURIComponent(segs[1] ?? "");
-    const loomName = decodeURIComponent(segs[2] ?? "");
-    if (!projectId || !loomName) {
-      return jsonResponse({ error: "missing projectId or loomName" }, 400);
+    const fabricName = decodeURIComponent(segs[2] ?? "");
+    if (!projectId || !fabricName) {
+      return jsonResponse({ error: "missing projectId or fabricName" }, 400);
     }
-    // Path-traversal guard: loom name must be a single segment.
-    if (loomName.includes("/") || loomName.includes("..")) {
-      return jsonResponse({ error: "invalid loomName" }, 400);
+    // Path-traversal guard: fabric name must be a single segment.
+    if (fabricName.includes("/") || fabricName.includes("..")) {
+      return jsonResponse({ error: "invalid fabricName" }, 400);
     }
 
-    const cacheKey = `${projectId}::${loomName}`;
+    const cacheKey = `${projectId}::${fabricName}`;
     const cached = cache.get(cacheKey);
     const now = Date.now();
     if (cached && now - cached.at < CACHE_TTL_MS) {
@@ -284,12 +284,12 @@ export function mountLoomRoute(
       return jsonResponse({ error: "project not found" }, 404);
     }
 
-    const loomDir = resolveLoomDir(project.paths, loomName);
+    const loomDir = resolveFabricDir(project.paths, fabricName);
     if (!loomDir) {
-      return jsonResponse({ error: "loom not found" }, 404);
+      return jsonResponse({ error: "fabric not found" }, 404);
     }
 
-    const body = buildView(projectId, project.name, loomName, loomDir);
+    const body = buildView(projectId, project.name, fabricName, loomDir);
     cache.set(cacheKey, { at: now, body });
     return jsonResponse(body, 200);
   };

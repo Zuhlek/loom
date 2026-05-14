@@ -25,7 +25,7 @@ import {
   type HandoffSession,
 } from "../process-manager/handoff.ts";
 import { decorateChat } from "./chat-decorator.ts";
-import { invalidateLoomCache } from "./sidebar.ts";
+import { invalidateFabricCache } from "./sidebar.ts";
 
 export interface ChatsRouteDeps {
   /** Injectable for tests. Defaults to the real launcher. */
@@ -123,8 +123,8 @@ export function mountChatsRoute(
     });
 
     // A new chat may run /weave and create a .loom/ directory; invalidate
-    // the loom cache so the next sidebar refresh re-scans.
-    invalidateLoomCache();
+    // the fabric cache so the next sidebar refresh re-scans.
+    invalidateFabricCache();
 
     return new Response(JSON.stringify({ chat: decorateChat(chat, store) }), {
       status: 200,
@@ -182,7 +182,7 @@ export function mountChatsRoute(
     // inherit stale timeline rows.
     store.chatItems.clear(id);
     store.chats.delete(id);
-    invalidateLoomCache();
+    invalidateFabricCache();
     return new Response(null, { status: 204 });
   };
 
@@ -213,7 +213,7 @@ export function mountChatsRoute(
       // session_id is omitted so chatRepo.create() generates a fresh
       // UUID. pid / inert / worktree_path reset to their defaults.
     });
-    invalidateLoomCache();
+    invalidateFabricCache();
     return new Response(JSON.stringify({ chat: decorateChat(forked, store) }), {
       status: 200,
       headers: { "content-type": "application/json" },

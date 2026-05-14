@@ -1,16 +1,16 @@
 /**
- * GET /sidebar/state — returns chats + projects + looms grouped per SR-37.
+ * GET /sidebar/state — returns chats + projects + fabrics grouped per project.
  *
- * Looms are auto-discovered as `.loom/<name>/` directories inside each
- * project's paths. Each loom entry is shaped:
+ * Fabrics are auto-discovered as `.loom/<name>/` directories inside each
+ * project's paths. Each fabric entry is shaped:
  *
  *   { id, projectId, projectName, name, cwd, dotLoomPath }
  *
  * The disk scan is cached briefly in-memory so back-to-back sidebar
  * refreshes don't hammer the filesystem. The cache is keyed per
  * (projectId, cwd) so individual project mutations don't blow away the
- * whole map. `invalidateLoomCache()` is exported for chat
- * create/delete to call when they may have changed loom state.
+ * whole map. `invalidateFabricCache()` is exported for chat
+ * create/delete to call when they may have changed fabric state.
  */
 import type { MetadataStore } from "../metadata-store/index.ts";
 import { decorateChat } from "./chat-decorator.ts";
@@ -18,9 +18,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 
-const LOOM_TTL_MS = 2_000;
+const FABRIC_TTL_MS = 2_000;
 
-interface CachedLooms {
+interface CachedFabrics {
   at: number;
   entries: Array<{
     id: string;
@@ -44,10 +44,10 @@ interface CachedLooms {
   }>;
 }
 
-const loomCache = new Map<string, CachedLooms>(); // key = `${projectId}::${cwd}`
+const fabricCache = new Map<string, CachedFabrics>(); // key = `${projectId}::${cwd}`
 
-export function invalidateLoomCache(): void {
-  loomCache.clear();
+export function invalidateFabricCache(): void {
+  fabricCache.clear();
 }
 
 function shortHash(s: string): string {
@@ -57,7 +57,7 @@ function shortHash(s: string): string {
 /**
  * Minimal `pipeline.md` reader — extracts the `Current phase` and
  * `Lifecycle state` fenced scalar bodies. Mirrors the parsing rules
- * used by `routes/loom.ts` (`## <Header>` sections + ```text``` fenced
+ * used by `routes/fabric.ts` (`## <Header>` sections + ```text``` fenced
  * bodies) but stays local to keep the sidebar scan cheap and avoid a
  * cross-route import. Returns `{ phase: null, lifecycle: null }` for
  * any missing/unreadable/unparsable file.
@@ -100,17 +100,17 @@ function readPipelineFields(pipelinePath: string): {
   };
 }
 
-function scanLooms(
+function scanFabrics(
   projectId: string,
   projectName: string,
   cwd: string,
-): CachedLooms["entries"] {
+): CachedFabrics["entries"] {
   const key = `${projectId}::${cwd}`;
-  const cached = loomCache.get(key);
+  const cached = fabricCache.get(key);
   const now = Date.now();
-  if (cached && now - cached.at < LOOM_TTL_MS) return cached.entries;
+  if (cached && now - cached.at < FABRIC_TTL_MS) return cached.entries;
 
-  const entries: CachedLooms["entries"] = [];
+  const entries: CachedFabrics["entries"] = [];
   const loomDir = path.join(cwd, ".loom");
   if (fs.existsSync(loomDir)) {
     try {
@@ -137,7 +137,7 @@ function scanLooms(
       // Permission errors etc — leave entries empty.
     }
   }
-  loomCache.set(key, { at: now, entries });
+  fabricCache.set(key, { at: now, entries });
   return entries;
 }
 
@@ -152,11 +152,11 @@ export function mountSidebarRoute(
       const groupChats = chats
         .filter((c: any) => c.project_id === p.id)
         .map((c) => decorateChat(c, store));
-      const looms: CachedLooms["entries"] = [];
+      const fabrics: CachedFabrics["entries"] = [];
       for (const cwdPath of p.paths) {
-        looms.push(...scanLooms(p.id, p.name, cwdPath));
+        fabrics.push(...scanFabrics(p.id, p.name, cwdPath));
       }
-      return { project: p, chats: groupChats, looms };
+      return { project: p, chats: groupChats, fabrics };
     });
     // Unassigned chats → a synthetic "Unassigned" group at the end.
     const unassigned = chats

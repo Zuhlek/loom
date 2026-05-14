@@ -1,14 +1,14 @@
 /**
- * GET /loom/board?cwd=...&project=...  → parsed board.md kanban
+ * GET /fabric/board?cwd=...&project=...  → parsed board.md kanban
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parseBoard } from "../loom/parse-board.ts";
 
-export function mountLoomBoardRoute(
+export function mountFabricBoardRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
 ): void {
-  routes["/loom/board"] = async (_req, url) => {
+  routes["/fabric/board"] = async (_req, url) => {
     const cwd = url.searchParams.get("cwd") ?? "";
     const project = url.searchParams.get("project") ?? "";
     if (!cwd || !project) return new Response(JSON.stringify({ error: "missing args" }), { status: 400 });

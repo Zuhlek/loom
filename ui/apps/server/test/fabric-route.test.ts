@@ -1,5 +1,5 @@
 /**
- * Tests for /loom/:projectId/:loomName.
+ * Tests for /fabric/:projectId/:fabricName.
  *
  * Seeds a temp project containing `.loom/foo/` with a `pipeline.md`
  * file (the markdown format written by
@@ -12,7 +12,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { initMetadataStore } from "../src/metadata-store/index.ts";
-import { mountLoomRoute, invalidateLoomViewCache } from "../src/routes/loom.ts";
+import { mountFabricRoute, invalidateFabricViewCache } from "../src/routes/fabric.ts";
 
 const tmpRoots: string[] = [];
 
@@ -24,10 +24,10 @@ afterAll(() => {
   }
 });
 
-function makeLoom(loomName: string, files: Record<string, string>): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-route-test-"));
+function makeFabric(fabricName: string, files: Record<string, string>): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "fabric-route-test-"));
   tmpRoots.push(root);
-  const loomDir = path.join(root, ".loom", loomName);
+  const loomDir = path.join(root, ".loom", fabricName);
   fs.mkdirSync(loomDir, { recursive: true });
   for (const [rel, body] of Object.entries(files)) {
     const full = path.join(loomDir, rel);
@@ -37,10 +37,10 @@ function makeLoom(loomName: string, files: Record<string, string>): string {
   return root;
 }
 
-describe("loom route", () => {
-  test("GET /loom/:projectId/:loomName returns pipeline + spec.md content", async () => {
-    invalidateLoomViewCache();
-    const root = makeLoom("foo", {
+describe("fabric route", () => {
+  test("GET /fabric/:projectId/:fabricName returns pipeline + spec.md content", async () => {
+    invalidateFabricViewCache();
+    const root = makeFabric("foo", {
       "pipeline.md": [
         "# Pipeline - foo",
         "",
@@ -73,19 +73,19 @@ describe("loom route", () => {
     const proj = store.projects.create({ name: "alpha", paths: [root] });
 
     const routes: Record<string, any> = {};
-    mountLoomRoute(routes, store);
+    mountFabricRoute(routes, store);
 
-    const handler = routes["/loom/:projectId/:loomName"];
+    const handler = routes["/fabric/:projectId/:fabricName"];
     expect(typeof handler).toBe("function");
 
-    const url = new URL(`http://localhost/loom/${proj.id}/foo`);
+    const url = new URL(`http://localhost/fabric/${proj.id}/foo`);
     const req = new Request(url, { method: "GET" });
     const res = await handler(req, url);
     expect(res.status).toBe(200);
     const body = await res.json();
 
     expect(body.projectId).toBe(proj.id);
-    expect(body.loomName).toBe("foo");
+    expect(body.fabricName).toBe("foo");
     expect(body.pipeline.current.phase).toBe("build");
     expect(body.pipeline.current.status).toBe("Pending");
 
@@ -106,46 +106,46 @@ describe("loom route", () => {
   });
 
   test("404 on missing project", async () => {
-    invalidateLoomViewCache();
+    invalidateFabricViewCache();
     const store = await initMetadataStore({ inMemoryOnly: true });
     const routes: Record<string, any> = {};
-    mountLoomRoute(routes, store);
-    const handler = routes["/loom/:projectId/:loomName"];
-    const url = new URL("http://localhost/loom/missing-id/foo");
+    mountFabricRoute(routes, store);
+    const handler = routes["/fabric/:projectId/:fabricName"];
+    const url = new URL("http://localhost/fabric/missing-id/foo");
     const res = await handler(new Request(url), url);
     expect(res.status).toBe(404);
     await store.close();
   });
 
-  test("404 on missing loom directory", async () => {
-    invalidateLoomViewCache();
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-route-test-"));
+  test("404 on missing fabric directory", async () => {
+    invalidateFabricViewCache();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "fabric-route-test-"));
     tmpRoots.push(root);
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({ name: "p", paths: [root] });
     const routes: Record<string, any> = {};
-    mountLoomRoute(routes, store);
-    const handler = routes["/loom/:projectId/:loomName"];
-    const url = new URL(`http://localhost/loom/${proj.id}/nope`);
+    mountFabricRoute(routes, store);
+    const handler = routes["/fabric/:projectId/:fabricName"];
+    const url = new URL(`http://localhost/fabric/${proj.id}/nope`);
     const res = await handler(new Request(url), url);
     expect(res.status).toBe(404);
     await store.close();
   });
 
-  test("rejects path-traversal loom names", async () => {
-    invalidateLoomViewCache();
+  test("rejects path-traversal fabric names", async () => {
+    invalidateFabricViewCache();
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({
       name: "p",
-      paths: [fs.mkdtempSync(path.join(os.tmpdir(), "loom-route-test-"))],
+      paths: [fs.mkdtempSync(path.join(os.tmpdir(), "fabric-route-test-"))],
     });
     tmpRoots.push(proj.paths[0]);
     const routes: Record<string, any> = {};
-    mountLoomRoute(routes, store);
-    const handler = routes["/loom/:projectId/:loomName"];
+    mountFabricRoute(routes, store);
+    const handler = routes["/fabric/:projectId/:fabricName"];
     // The encoded `..` survives URL parsing; the handler must reject it.
     const url = new URL(
-      `http://localhost/loom/${proj.id}/${encodeURIComponent("../etc")}`,
+      `http://localhost/fabric/${proj.id}/${encodeURIComponent("../etc")}`,
     );
     const res = await handler(new Request(url), url);
     expect(res.status).toBe(400);
@@ -153,15 +153,15 @@ describe("loom route", () => {
   });
 
   test("caches result within 1s window", async () => {
-    invalidateLoomViewCache();
-    const root = makeLoom("c1", { "spec.md": "first" });
+    invalidateFabricViewCache();
+    const root = makeFabric("c1", { "spec.md": "first" });
     const store = await initMetadataStore({ inMemoryOnly: true });
     const proj = store.projects.create({ name: "p", paths: [root] });
     const routes: Record<string, any> = {};
-    mountLoomRoute(routes, store);
-    const handler = routes["/loom/:projectId/:loomName"];
+    mountFabricRoute(routes, store);
+    const handler = routes["/fabric/:projectId/:fabricName"];
 
-    const url = new URL(`http://localhost/loom/${proj.id}/c1`);
+    const url = new URL(`http://localhost/fabric/${proj.id}/c1`);
     const r1 = await handler(new Request(url), url);
     expect(r1.status).toBe(200);
     const b1 = await r1.json();
