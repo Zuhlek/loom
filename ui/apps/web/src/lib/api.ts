@@ -39,6 +39,18 @@ export interface SidebarLoomEntry {
   cwd: string;
   /** Absolute path to the .loom/<name>/ directory. */
   dotLoomPath: string;
+  /**
+   * Current phase parsed from `pipeline.md` — one of
+   * "spec" | "design" | "plan" | "build" | "review", or null when the
+   * file is missing/unparsable. Drives the colored sidebar dot.
+   */
+  phase: string | null;
+  /**
+   * Lifecycle state from `pipeline.md` — typically "active" or
+   * "complete". When "complete" the sidebar dot renders gray
+   * regardless of phase.
+   */
+  lifecycle: string | null;
 }
 
 export interface SidebarState {

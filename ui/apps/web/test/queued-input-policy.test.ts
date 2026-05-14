@@ -253,7 +253,7 @@ describe("T-007 ChatComposer — three-mode rendering contract (US-007 AC1/AC3)"
   });
 });
 
-describe("T-007 live-chat — composer wiring + priority defaulting (US-007 AC2)", () => {
+describe("T-007 live-chat — composer wiring (US-007 AC2)", () => {
   test("live-chat passes `composerMode={composerMode(state)}` (or equivalent) to the composer", () => {
     const src = readFileSync(liveChatPath, "utf8");
     // The mount site supplies the composerMode prop sourced from the
@@ -266,43 +266,9 @@ describe("T-007 live-chat — composer wiring + priority defaulting (US-007 AC2)
     expect(hasMountWiring).toBe(true);
   });
 
-  test('queuePriority defaults to "next" in queue mode and "now" in ready mode', () => {
-    const src = readFileSync(liveChatPath, "utf8");
-    // The parent must derive the default queuePriority from the
-    // composer mode. We look for a ternary or assignment that maps
-    // "queue" → "next".
-    const hasQueueNextDefault =
-      /["']queue["']\s*[\?:]\s*[^,]*["']next["']/.test(src) ||
-      /["']next["']\s*[:\s]+["']queue["']/.test(src) ||
-      /mode\s*===\s*["']queue["']\s*\?\s*["']next["']/.test(src) ||
-      /queuePriority\s*=\s*[^=].*["']next["']/.test(src);
-    expect(hasQueueNextDefault).toBe(true);
-  });
-
-  test('submit handler emits `priority: "next"` on the wire when submitted in queue mode', () => {
-    const src = readFileSync(liveChatPath, "utf8");
-    // The user-turn submit must produce a body that carries
-    // priority "next" when the composer is in queue mode. The wire
-    // emission already exists from T-004 — we re-assert that the
-    // priority literal is wired (not stripped) for non-"now" values.
-    // Concretely the body-building branch must include the priority
-    // field in the non-"now" path, which is the existing shape from
-    // T-004: `priority === "now" ? { text } : { text, priority }`.
-    const hasPriorityEmission =
-      /\{\s*text\s*,\s*priority\s*\}/.test(src) ||
-      /priority\s*:\s*priority/.test(src) ||
-      /\bbody\b[^;]*\bpriority\b/.test(src);
-    expect(hasPriorityEmission).toBe(true);
-  });
-
-  test("submit handler omits priority (or uses 'now') in ready mode for byte-compat", () => {
-    const src = readFileSync(liveChatPath, "utf8");
-    // The wire shape from T-004: `priority === "now" ? { text } :
-    // { text, priority }`. We require the conditional to be present
-    // so the legacy byte shape is preserved.
-    const hasReadyByteCompat =
-      /priority\s*===\s*["']now["']\s*\?\s*\{\s*text\s*\}/.test(src) ||
-      /priority\s*===\s*["']now["'][^}]*\{\s*text\s*\}/.test(src);
-    expect(hasReadyByteCompat).toBe(true);
-  });
+  // The queue-priority defaulting tests that previously lived here have
+  // been removed alongside the priority-toggle UI. The composer no
+  // longer emits a `priority` field on user-turn frames — every submit
+  // relies on the server's default placement. The wire shape stays
+  // backward-compatible (server still accepts an optional `priority`).
 });

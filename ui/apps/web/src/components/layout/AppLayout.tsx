@@ -6,13 +6,19 @@ interface AppLayoutProps {
   topBar?: ReactNode;
   /** Left column. Renders nothing if omitted. */
   leftDrawer?: ReactNode;
-  /** Right column. Renders nothing if omitted. */
+  /** Right column (expanded panel). Renders nothing if omitted. */
   rightDrawer?: ReactNode;
+  /**
+   * Far-right slim rail — always visible icon strip that mirrors the
+   * left navigation drawer's chrome. Used to toggle which `rightDrawer`
+   * panel is visible (Tasks, Diff, …). Renders nothing if omitted.
+   */
+  rightRail?: ReactNode;
   /** Main pane content. Owns its own scrolling. */
   children: ReactNode;
 }
 
-export function AppLayout({ topBar, leftDrawer, rightDrawer, children }: AppLayoutProps) {
+export function AppLayout({ topBar, leftDrawer, rightDrawer, rightRail, children }: AppLayoutProps) {
   return (
     <div className="h-screen flex flex-col">
       <header className="topbar px-3 gap-3" style={{ background: "var(--card)" }}>
@@ -30,6 +36,7 @@ export function AppLayout({ topBar, leftDrawer, rightDrawer, children }: AppLayo
         {leftDrawer}
         <main className="flex-1 flex flex-col min-w-0">{children}</main>
         {rightDrawer}
+        {rightRail}
       </div>
     </div>
   );

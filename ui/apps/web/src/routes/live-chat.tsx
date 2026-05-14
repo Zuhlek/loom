@@ -10,6 +10,7 @@
  * snapshot so we don't accumulate stale state.
  */
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { Link } from "wouter";
 import clsx from "clsx";
 
 import { AppLayout } from "../components/layout/AppLayout";
@@ -34,7 +35,6 @@ import type {
   TurnState,
   UserTurnImage,
 } from "../lib/chat-types";
-import type { ComposerQueuePriority } from "../components/chat/ChatComposer";
 
 interface Props {
   chatId: string;
@@ -54,10 +54,9 @@ type ConnState = "idle" | "connecting" | "open" | "closed";
  *                   `error` — the `"interrupted"` case relies on the
  *                   SDK's implicit re-prime (US-005).
  *   - `"queue"`   : composer enabled but a turn is in flight. Send
- *                   button surfaces as "Queue"; submits push with
- *                   `priority: "next"` by default (the user can flip
- *                   the visible queue-priority toggle to "now" via the
- *                   T-004 composer control).
+ *                   button surfaces as "Queue"; submits land in the
+ *                   SDK's user-message queue and the server treats
+ *                   missing-priority as the default "now" placement.
  *   - `"blocked"` : a pending permission or AskUserQuestion is open;
  *                   the composer hard-disables until the user
  *                   resolves the inline picker / permission card.
@@ -93,8 +92,6 @@ interface ChatState {
   pendingQuestion: PendingQuestion | null;
   /** US-004. Current SDK permission mode driving the composer dropdown. */
   permissionMode: PermissionMode;
-  /** US-004 / US-007. Current composer queue-priority selection. */
-  queuePriority: ComposerQueuePriority;
   /**
    * T-003 / US-003 (chat-streaming-fixes). Millisecond epoch when the
    * active turn entered the `running` state. `null` whenever
@@ -126,13 +123,6 @@ const EMPTY_STATE: ChatState = {
   pendingPermission: null,
   pendingQuestion: null,
   permissionMode: "default",
-  // T-007 AC2 / US-007. The toggle defaults to "next" so that the
-  // first submit while a turn is running enqueues ahead by default
-  // per the SDK scheduler (ADR-004). In `ready` mode the toggle is
-  // not visible and the effective priority pinned to `"now"` at the
-  // composer mount site, so this initial value does not leak onto
-  // the wire for ready-mode submits.
-  queuePriority: "next",
   // T-003 / US-003. Set by the reducer's `turn-state` branch on the
   // idle→running transition; never set elsewhere. Initial value
   // `null` because EMPTY_STATE represents the pre-attach state where
@@ -151,7 +141,6 @@ type ChatAction =
   | { type: "pending-permission"; pending: PendingPermission | null }
   | { type: "pending-question"; pending: PendingQuestion | null }
   | { type: "permission-mode"; mode: PermissionMode }
-  | { type: "queue-priority"; priority: ComposerQueuePriority }
   | { type: "error-frame"; message: string }
   | { type: "dismiss-error" }
   | {
@@ -200,7 +189,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         // arrives on the chat row at attach time (a future T-NNN may
         // hydrate from the snapshot body).
         permissionMode: state.permissionMode,
-        queuePriority: state.queuePriority,
         activeTurnStartedAt,
         lifecycle: action.payload.body.lifecycle ?? "active",
         recoveryAttempt: action.payload.body.recoveryAttempt ?? 0,
@@ -269,8 +257,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, pendingQuestion: action.pending };
     case "permission-mode":
       return { ...state, permissionMode: action.mode };
-    case "queue-priority":
-      return { ...state, queuePriority: action.priority };
     case "error-frame": {
       // US-008 AC1 / AC4. Server-emitted `error` frame raises the
       // sticky banner the same way `turn-state` does — re-show with
@@ -321,6 +307,10 @@ export function LiveChatRoute({ chatId }: Props) {
    * mode).
    */
   const [rightPane, setRightPane] = useState<"tasks" | "diff" | null>(null);
+  // Connection-status popover open state. The websocket pill in the
+  // top-right of the top bar collapses to a coloured dot; clicking it
+  // toggles a small info card with the state name and reconnect detail.
+  const [connInfoOpen, setConnInfoOpen] = useState(false);
   const tasksAutoOpenedRef = useRef(false);
   // T-007. Mirror `rightPane` into a ref so the `tasks-update`
   // auto-open guard (inside the ws-attach effect closure, which
@@ -508,15 +498,27 @@ export function LiveChatRoute({ chatId }: Props) {
   }, [chatId]);
 
   const submitTurn = useCallback(
-    (text: string, priority: ComposerQueuePriority, images: UserTurnImage[]) => {
+    (text: string, images: UserTurnImage[]) => {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== ws.OPEN) return;
       // Construct the wire body incrementally so optional fields are
       // absent (not undefined) when not in use — the server treats
       // missing fields as their defaults (priority → "now", images →
-      // empty array) per ADR-004.
-      const body: ClientFrame extends { kind: "user-turn"; body: infer B } ? B : never = { text };
-      if (priority !== "now") body.priority = priority;
+      // empty array) per ADR-004. The composer no longer exposes a
+      // priority toggle, so every submit relies on the default "now"
+      // placement.
+      //
+      // The body shape is the `user-turn` variant of the discriminated
+      // `ClientFrame` union (chat-types.ts). We use `Extract<...>`
+      // rather than a naked `T extends ... ? B : never` conditional —
+      // when applied to a concrete union alias the conditional checks
+      // the whole union against the predicate (no distribution over a
+      // non-parameter), and since not every variant matches the
+      // predicate the result resolves to `never`. `Extract` is the
+      // idiom for "pick the matching variant" and yields the
+      // addressable body type.
+      type UserTurnBody = Extract<ClientFrame, { kind: "user-turn" }>["body"];
+      const body: UserTurnBody = { text };
       if (images.length > 0) body.images = images;
       sendFrame(ws, { kind: "user-turn", "chat-id": chatId, body });
     },
@@ -536,10 +538,6 @@ export function LiveChatRoute({ chatId }: Props) {
     },
     [chatId],
   );
-
-  const changeQueuePriority = useCallback((priority: ComposerQueuePriority) => {
-    dispatch({ type: "queue-priority", priority });
-  }, []);
 
   // US-008 AC3. Snackbar dismiss → flip the reducer's dismissed flag so
   // the same message doesn't re-raise on subsequent renders.
@@ -684,21 +682,10 @@ export function LiveChatRoute({ chatId }: Props) {
     : state.pendingQuestion
       ? "Answer the question to continue"
       : undefined;
-  // T-007 AC2. Mode-driven default queue-priority. While a turn is
-  // running (`mode === "queue"`) the submit pushes `priority: "next"`
-  // by default so the follow-up slots ahead of the streaming turn's
-  // continuation per the SDK's scheduler (ADR-004). Otherwise the
-  // submit pushes `priority: "now"`. The user's explicit toggle (T-004's
-  // visible queue-priority `<select>`, only rendered in queue mode)
-  // sits on top of this default — `state.queuePriority` is the
-  // override, applied only when the toggle is visible. In non-queue
-  // modes we hard-pin to `"now"` to keep the wire byte-compatible
-  // with legacy emitters.
-  const queueModeDefault: ComposerQueuePriority =
-    mode === "queue" ? "next" : "now";
-  const effectiveQueuePriority: ComposerQueuePriority =
-    mode === "queue" ? state.queuePriority : queueModeDefault;
-
+  // Top bar (right of logo). Tasks/Diff toggles have moved into the
+  // slim right rail (they belong to the chat content). The websocket
+  // status is now a coloured dot with a click-to-reveal info card,
+  // followed by the Settings icon — both anchored to the far right.
   const topBar = (
     <>
       <div className="flex-1 min-w-0">
@@ -706,18 +693,89 @@ export function LiveChatRoute({ chatId }: Props) {
           <p className="text-[10px] truncate" style={{ color: "var(--destructive)" }}>{chatErr}</p>
         ) : null}
       </div>
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          data-testid="conn-status-dot"
+          onClick={() => setConnInfoOpen((v) => !v)}
+          className={clsx("size-2.5 rounded-full block", connDotBg(conn))}
+          aria-label={`websocket ${conn}`}
+          title={`websocket ${conn}`}
+        />
+        {connInfoOpen && (
+          <div
+            className="absolute right-0 top-full mt-1 z-40 rounded-md shadow-md text-[11px] px-3 py-2 min-w-[180px]"
+            style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--foreground)" }}
+            role="dialog"
+          >
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <span className="font-medium">WebSocket</span>
+              <span className={clsx("text-[10px] font-mono px-1.5 py-0.5 rounded", connBg(conn))}>{conn}</span>
+            </div>
+            <p className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+              {conn === "open"
+                ? "Live — messages stream in real time."
+                : conn === "connecting"
+                  ? "Re-attaching to the chat session…"
+                  : conn === "closed"
+                    ? "Connection lost. Retrying every second for ~10 s."
+                    : "Not yet connected."}
+            </p>
+          </div>
+        )}
+      </div>
+      <Link href="/settings">
+        <button
+          type="button"
+          className="size-7 rounded-md grid place-items-center hover:bg-[var(--accent)] shrink-0"
+          style={{ color: "var(--muted-foreground)" }}
+          aria-label="Settings"
+          title="Settings"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1.03 1.56V21a2 2 0 01-4 0v-.09a1.7 1.7 0 00-1.11-1.56 1.7 1.7 0 00-1.87.34l-.06.06A2 2 0 014 17.93l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.56-1.03H3a2 2 0 010-4h.09A1.7 1.7 0 004.6 9.9a1.7 1.7 0 00-.34-1.87l-.06-.06A2 2 0 016.07 4l.06.06a1.7 1.7 0 001.87.34h.09A1.7 1.7 0 009.1 2.91V3a2 2 0 014 0v.09a1.7 1.7 0 001.03 1.56 1.7 1.7 0 001.87-.34l.06-.06A2 2 0 0119.93 7l-.06.06a1.7 1.7 0 00-.34 1.87v.09c.27.66.92 1.09 1.65 1.09H21a2 2 0 010 4h-.09c-.73 0-1.38.43-1.65 1.09z" />
+          </svg>
+        </button>
+      </Link>
+    </>
+  );
+
+  // Slim right rail — always visible vertical strip at the far right
+  // edge that mirrors the left nav drawer's chrome. The two icon
+  // buttons toggle which panel mounts in the (separate) right drawer
+  // slot. The active icon highlights blue. The Diff icon only shows
+  // for worktree-mode chats (`chat?.worktree_mode === "worktree"`).
+  const rightRail = (
+    <aside
+      className="w-10 shrink-0 flex flex-col items-center border-l py-2 gap-1"
+      style={{ borderColor: "var(--border)", background: "var(--card)" }}
+    >
       <button
         type="button"
         data-testid="tasks-toggle"
         onClick={onToggleTasks}
         className={clsx(
-          "text-[10px] font-mono px-1.5 py-0.5 rounded hover:bg-black/5 border",
-          rightPane === "tasks" && "bg-black/5",
+          "relative size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]",
+          rightPane === "tasks"
+            ? "bg-blue-500/10 text-blue-600"
+            : "text-[var(--muted-foreground)]",
         )}
-        style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
         title={rightPane === "tasks" ? "Hide tasks" : "Show tasks"}
+        aria-pressed={rightPane === "tasks"}
       >
-        Tasks{tasks && tasks.length > 0 ? ` (${tasks.length})` : ""}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+          <path d="M9 6h11M9 12h11M9 18h11" />
+          <path d="M4 6h.01M4 12h.01M4 18h.01" strokeWidth={2.5} />
+        </svg>
+        {tasks && tasks.length > 0 ? (
+          <span
+            className="absolute -top-0.5 -right-0.5 text-[9px] font-mono leading-none px-1 rounded-full"
+            style={{ background: "var(--primary)", color: "var(--primary-foreground, white)" }}
+          >
+            {tasks.length}
+          </span>
+        ) : null}
       </button>
       {chat?.worktree_mode === "worktree" && (
         <button
@@ -725,22 +783,23 @@ export function LiveChatRoute({ chatId }: Props) {
           data-testid="diff-toggle"
           onClick={onToggleDiff}
           className={clsx(
-            "text-[10px] font-mono px-1.5 py-0.5 rounded hover:bg-black/5 border",
-            rightPane === "diff" && "bg-black/5",
+            "size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]",
+            rightPane === "diff"
+              ? "bg-blue-500/10 text-blue-600"
+              : "text-[var(--muted-foreground)]",
           )}
-          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
           title={rightPane === "diff" ? "Hide diff" : "Show diff"}
+          aria-pressed={rightPane === "diff"}
         >
-          Diff
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+            <circle cx="6" cy="6" r="2" />
+            <circle cx="18" cy="18" r="2" />
+            <path d="M6 8v8a2 2 0 002 2h6" />
+            <path d="M18 16V8a2 2 0 00-2-2h-6" />
+          </svg>
         </button>
       )}
-      <span
-        className={clsx("text-[10px] font-mono px-1.5 py-0.5 rounded", connBg(conn))}
-        title={`websocket ${conn}`}
-      >
-        {conn}
-      </span>
-    </>
+    </aside>
   );
 
   return (
@@ -762,6 +821,7 @@ export function LiveChatRoute({ chatId }: Props) {
           />
         ) : undefined
       }
+      rightRail={rightRail}
     >
         <MessagesTimeline
           items={state.items}
@@ -820,8 +880,6 @@ export function LiveChatRoute({ chatId }: Props) {
           onInterrupt={interruptTurn}
           permissionMode={state.permissionMode}
           onPermissionModeChange={changePermissionMode}
-          queuePriority={effectiveQueuePriority}
-          onQueuePriorityChange={changeQueuePriority}
           isInterrupted={state.turnState === "interrupted"}
           availableSlashCommands={slashCommands}
         />
@@ -857,5 +915,18 @@ function connBg(c: ConnState): string {
       return "bg-red-500/15 text-red-700";
     default:
       return "bg-gray-500/15 text-gray-700";
+  }
+}
+
+function connDotBg(c: ConnState): string {
+  switch (c) {
+    case "open":
+      return "bg-emerald-500";
+    case "connecting":
+      return "bg-amber-500 animate-pulse";
+    case "closed":
+      return "bg-red-500";
+    default:
+      return "bg-gray-400";
   }
 }
