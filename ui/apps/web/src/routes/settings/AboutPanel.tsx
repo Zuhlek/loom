@@ -1,6 +1,5 @@
 /**
  * AboutPanel — fetches `/api/health` for the app version field.
- * US-001 AC4.
  */
 import { useEffect, useState } from "react";
 import { getHealth, type ApiHealth } from "../../lib/api";

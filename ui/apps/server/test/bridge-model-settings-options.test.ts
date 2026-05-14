@@ -13,10 +13,15 @@
  */
 import { describe, expect, test, vi } from "vitest";
 import { initMetadataStore } from "../src/metadata-store/index.ts";
-import {
-  ClaudeSessionBridge,
-  ULTRATHINK_BUDGET_TOKENS,
-} from "../src/process-manager/claude-session-bridge.ts";
+import { ClaudeSessionBridge } from "../src/process-manager/claude-session-bridge.ts";
+
+/**
+ * Ultrathink budget literal. The pill ({@link
+ * ui/apps/web/src/components/chat/ModelSettingsPill.tsx}) is the source
+ * of truth — the bridge receives this value via the wire
+ * `thinking.budgetTokens` field and never references its own constant.
+ */
+const ULTRATHINK_BUDGET_TOKENS = 32000;
 import type { Query } from "@anthropic-ai/claude-agent-sdk";
 import type { WireModelSettings } from "../src/chat-protocol/messages.ts";
 
@@ -58,10 +63,6 @@ function makeBridge(store: any, captured: Captured) {
 }
 
 describe("T-003 bridge plumbs SDK Options from chat-row", () => {
-  test("ULTRATHINK_BUDGET_TOKENS constant is 32000 (ADR-D07)", () => {
-    expect(ULTRATHINK_BUDGET_TOKENS).toBe(32000);
-  });
-
   test("model_settings === null: none of model/effort/thinking/betas land in Options", async () => {
     const store = await initMetadataStore({ inMemoryOnly: true });
     const chat = store.chats.create({ id: "c-null", cwd: "/tmp/repo" });

@@ -2,6 +2,7 @@
 name: weave
 description: Loom lifecycle orchestrator. Runs Spec, Design, Plan, Build, Review with human-in-the-loop transitions after each phase.
 user-invocable: true
+disable-model-invocation: true
 argument-hint: [project-name | ticket-id | command | free text]
 allowed-tools: Read, Write, Edit, Task, Bash, AskUserQuestion
 ---

@@ -19,9 +19,9 @@ export interface AssistantTextBlock {
   type: "text";
   text: string;
   /**
-   * T-002 / US-002 (chat-streaming-fixes), ADR-004. Bridge-internal
-   * marker used by the dense-blocks invariant: when the SDK's
-   * `content_block_start` arrives at an index past `aitem.blocks.length`,
+   * Bridge-internal marker used by the dense-blocks invariant:
+   * when the SDK's `content_block_start` arrives at an index past
+   * `aitem.blocks.length`,
    * the bridge backfills intermediate slots with
    * `{ type: "text", text: "", _placeholder: true }` so the array stays
    * dense end-to-end and survives `JSON.stringify` without holes turning
@@ -55,8 +55,8 @@ export interface AssistantToolUseBlock {
  *
  * The bridge transports the base-64 payload + media-type straight
  * through; the web client constructs a `data:<mediaType>;base64,<dataB64>`
- * URL for the `<img>` `src` attribute. No blob URLs, no server route —
- * see Design ADR-006.
+ * URL for the `<img>` `src` attribute. No blob URLs, no server
+ * route.
  */
 export interface ToolResultImage {
   /** MIME type, e.g. `"image/png"`, `"image/jpeg"`. */
@@ -72,9 +72,9 @@ export interface ToolResultSummary {
   text: string;
   isError: boolean;
   /**
-   * Optional image blocks extracted from the SDK's tool_result content
-   * array. Absent when the tool_result had no image blocks (legacy
-   * back-compat). See ADR-007.
+   * Optional image blocks extracted from the SDK's tool_result
+   * content array. Absent when the tool_result carried no image
+   * blocks.
    */
   images?: ToolResultImage[];
 }
@@ -106,9 +106,9 @@ export interface UserMessageItem {
   text: string;
   createdAt: string;
   /**
-   * Image attachments the user sent with this turn. Absent on legacy
-   * text-only messages and on replayed-from-snapshot items predating
-   * the attachments feature (back-compat per US-007 AC3).
+   * Image attachments the user sent with this turn. Absent on
+   * text-only messages and on replayed-from-snapshot items
+   * predating the attachments feature.
    */
   images?: UserMessageImage[];
 }
@@ -134,23 +134,25 @@ export interface SystemNoticeItem {
 }
 
 /**
- * US-003. Chat-level interactive plan proposal.
+ * Chat-level interactive plan proposal.
  *
- * Emitted by the bridge when Claude calls the `ExitPlanMode` tool while
- * the SDK is in `plan` permission mode. The plan body lives in
- * `planText` (markdown); `status` tracks the lifecycle:
- *   - `pending`   — initial state when the bridge first observes the
- *                   tool_use; the `ProposedPlanCard` renders Accept/
- *                   Reject buttons.
+ * Emitted by the bridge when Claude calls the `ExitPlanMode` tool
+ * while the SDK is in `plan` permission mode. The plan body lives
+ * in `planText` (markdown); `status` tracks the lifecycle:
+ *   - `pending`   — initial state when the bridge first observes
+ *                   the tool_use; the `ProposedPlanCard` renders
+ *                   Accept / Reject buttons.
  *   - `accepted`  — set after `acceptPlanProposal` runs
- *                   (`setPermissionMode("default")` + queued user-turn).
+ *                   (`setPermissionMode("default")` + queued
+ *                   user-turn).
  *   - `rejected`  — set after `rejectPlanProposal` runs (queued
- *                   reconsider user-turn; permission mode left at "plan").
+ *                   reconsider user-turn; permission mode left at
+ *                   "plan").
  *
- * The card stays visible in the timeline post-decision as an audit row
- * with greyed-out controls (Design `## Plan-proposed lifecycle`).
- * Per ADR-001 the chat-level card operates independently of loom's
- * orchestration-level Plan phase — no feed-back, no hiding.
+ * The card stays visible in the timeline post-decision as an audit
+ * row with greyed-out controls. The chat-level card operates
+ * independently of loom's orchestration-level Plan phase — no
+ * feed-back, no hiding.
  */
 export interface PlanProposedItem {
   kind: "plan-proposed";
@@ -247,11 +249,12 @@ export interface Task {
 }
 
 /**
- * Per-chat model settings persisted on the `Chat` row as a single JSON
- * column (ADR-D03). NULL field ⇒ Loom default applies at (re)spawn time.
+ * Per-chat model settings persisted on the `Chat` row as a single
+ * JSON column. NULL field ⇒ Loom default applies at (re)spawn time.
  * Carried 1:1 on the wire `model-settings-set` frame and on the
- * chat-row; no separate "for-dispatch" vs "for-render" shape. Mirror in
- * `apps/web/src/lib/chat-types.ts` must stay byte-for-byte aligned.
+ * chat-row; no separate "for-dispatch" vs "for-render" shape.
+ * Mirror in `apps/web/src/lib/chat-types.ts` must stay byte-for-byte
+ * aligned.
  */
 export interface WireModelSettings {
   /** SDK `Options.model`. Identifier (e.g. `"claude-opus-4-7"`). */
@@ -265,10 +268,10 @@ export interface WireModelSettings {
 }
 
 /**
- * One row in the SDK-enumerated slash-command catalog. Mirrors the SDK
- * `SlashCommand` shape trimmed for the wire; `kind` is bridge-classified
- * (ADR-D05). Mirror in `apps/web/src/lib/chat-types.ts` must stay
- * byte-for-byte aligned.
+ * One row in the SDK-enumerated slash-command catalog. Mirrors the
+ * SDK `SlashCommand` shape trimmed for the wire; `kind` is
+ * bridge-classified. Mirror in `apps/web/src/lib/chat-types.ts`
+ * must stay byte-for-byte aligned.
  */
 export interface WireSlashCommand {
   name: string;

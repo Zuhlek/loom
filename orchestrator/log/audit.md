@@ -1,5 +1,37 @@
 # Audit Log
 
+## 2026-05-14 - composer-slash-command-catalog - integration-grep-suite-misses-runtime-wiring
+
+Review verdict: FAIL. 4 Blockers, 5 Majors, 4 Minors, 3 Notes. Wire +
+bridge + per-component pills are correct and pass their unit tests;
+the integration into the live-chat route is the gap. Three of the four
+Blockers (B-01 missing `context-usage-update` case in the WS switch;
+B-02 `<ChatComposer>` JSX missing `modelSettings` / `onModelSettingsSet`
+props; B-03 web `ApiChat` missing `model_settings` field — fresh
+wire-mirror drift introduced by this build) made it past T-015's
+"integration smoke" because that suite is a `fs.readFileSync` + regex
+suite, not jsdom mounts (M-04 / P6). The static-grep suite reported
+48/48 green even though the runtime wiring was broken end-to-end — the
+regexes matched because the literal substrings exist in the source,
+but the matched calls supply `undefined` callbacks or unrouted frames.
+US-005 AC2/AC3 (context-usage indicator never updates from server
+data), US-007 AC1/AC4 + US-008 AC1/AC4 (model picks don't persist and
+don't render after reload) are all dead in production code. Three
+P3-class duplications surface in the pill components (M-01 chevron
+glyph 3×; M-02 four mode-icon glyphs duplicated across ChatComposer
+exports + PermissionLevelPill private + spawn-chat-dialog imports;
+M-03 `ULTRATHINK_BUDGET_TOKENS` declared in both bridge and pill with
+the bridge claiming "single source of truth"). Also B-04: six of the
+fifteen tasks (T-008/T-010/T-011/T-012/T-014/T-015) ship without the
+`test-log.txt` artefact `test-report.md` claims they have. Process
+learning: a static-grep integration suite gives false confidence; for
+any "Integration smoke" task in a project that crosses
+component-route-bridge layers, the tests must mount components and
+fire real frames, not regex source. See
+`.loom/composer-slash-command-catalog/feedback.md` for the candidate
+mitigation (escalate runtime-mount evidence weighting in `tests.md`'s
+"Integration smoke" entries).
+
 ## 2026-05-12 - weave-framework-hygiene - retro-run-clean-pass
 
 Review verdict: PASS. 0 blocker, 0 major, 0 minor findings on a 16-task
@@ -617,3 +649,80 @@ Plan originally specified `node-test` (vitest static-source contract) as the ver
 
 The Lexical-migrated composer dropped the textarea's `onKeyDown` handler covering ArrowUp/ArrowDown menu nav, Enter/Tab accept, Escape dismiss latch, and bare Enter to submit. Design.md §"Keyboard contract" and ADR-006 prescribed a `ComposerKeyboardPlugin` registering five `KEY_*_COMMAND`s inside `ComposerEditor` to bubble `ComposerKeyIntent`s to the shell; that plugin was never implemented. `ComposerEditor` declares an `onSubmit` prop and a `focus()` ref method but neither is wired. The cli-shell gates (`tsc --noEmit` + `vite build` + grep) caught zero of this — the unused prop type-checks fine, the no-op method type-checks fine. The five smoke rounds chased visual issues but never re-exercised the keyboard contract that the deleted textarea owned, so the regression escaped the entire build. Surfaced as Blocker 1 in `review.md`. Process learning: when a migration replaces a wired event handler (textarea `onKeyDown`) with a framework-mediated equivalent (Lexical command registry), an explicit per-AC keyboard verification step needs to live somewhere — either in the per-task test sketch (impossible under cli-shell), or in the T-010 HITL checklist with one walk-through per key listed (was present, but the user verified visual / serialisation acceptance and didn't enumerate keyboard ACs individually).
 
+## 2026-05-14 - fabric-details-overhaul - Design Interfaces table is the strongest audit lever
+
+Walking `design.md ## Interfaces` row-by-row against the actual files before reading any source produced the audit's strongest single-pass scan. Every interface row mapped to (a) a file at the documented path, (b) a prop shape matching the table, and (c) at least one dedicated `*.test.ts` covering it. The pattern made the audit linear: each row resolves to "file exists / props match / test file exists / test passes" — four trivial bash + grep checks per row, no source reading required to clear the conformance bar. Source reading was only needed for the principles walk (P5 dead exports, P1 dead locals) and for safety (`git status` + 405 contract). Reusable cue: when a Design phase produces a complete Interfaces table with one row per component + its prop shape, Review can clear ~80 % of the conformance bar with a four-line bash loop per row before reading any source.
+
+## 2026-05-14 - fabric-details-overhaul - P5 review check needs a "test-only export requires a test importer" rule
+
+Two new test-only exports landed without consumers: `__testing = { escapeHtml }` in `FabricMarkdown.tsx:164` and `__resetForTests` in `mermaid-loader.ts:33`. The Build subagent likely reused the shape from `shiki-loader.ts`'s `__resetForTests` (which *is* consumed by tests) under P2 (existing patterns first) and shipped the hook without checking for a downstream test importer in the same PR. P5's current review-check wording ("flag any new abstraction without ≥1 concrete consumer in the same diff") covers this, but the test-only-export sub-case slips through because the surface looks like prior art. Recommended sharpening: P5 review check should add an explicit clause — *"every test-only export (`__resetForTests`, `__testing`, `_internal`, etc.) must have at least one test importer in the same diff"*. Flagged as Minor on this build (cosmetic only); worth `/tune` curation as a recurring pattern.
+
+## 2026-05-14 - fabric-details-overhaul - Review verdict (Pass with accepted risk)
+
+**Outcome:** Pass with accepted risk. 0 blocker / 0 major / 3 minor / 1 note. All nine user stories (US-001..US-009) shipped; 105 / 105 fabric-related Vitest cases green on live re-run; every component in `design.md ## Interfaces` exists with the prescribed prop shape; ADR-001..ADR-009 honoured.
+
+**Findings:**
+- Minor — `FabricMarkdown.tsx:164` exports `__testing = { escapeHtml }` with zero consumers (P5).
+- Minor — `mermaid-loader.ts:33` exports `__resetForTests` with zero consumers (P5).
+- Minor — `PhaseStepper.tsx:65` declares `const isSelected` but never reads it (P1 dead local).
+- Note — Static-source `readFileSync` + `toMatch` test shape inherited from the existing harness; behaviour-vs-structure ceiling carries forward from `diff-features` and `composer-t3code-triggers`, not a regression.
+
+**Safety:** `git status` shows working-tree edits only; no commits, no pushes, no deploys; `calvin-bmpi/` untouched; server route's 405 non-GET contract preserved.
+
+**Cross-references:** `.loom/fabric-details-overhaul/{review,feedback,develop-log}.md`; `ui/apps/web/src/components/fabric/{FabricMarkdown,MermaidBlock,FabricViewer,FileTreeDrawer,FabricFileTree,JsonView,PhaseStepper,fabric-phase-map}.{tsx,ts}`; `ui/apps/web/src/lib/mermaid-loader.ts`; `ui/apps/server/src/routes/fabric.ts`.
+
+
+## 2026-05-14 - composer-slash-command-catalog - re-audit after fix-up cycle (PASS)
+
+Re-audit verdict: PASS — accepted as complete. 0 blocker / 0 major /
+2 minor / 4 notes. The five fix-up tasks (T-016 production wiring,
+T-017 test-log backfill, T-018 P3 icon + constant dedup, T-019 real
+runtime integration suite, T-020 dead-code + comment-style sweep)
+close every Blocker and every Major from the first audit pass plus
+the two important minors (m-03 Forge-artefact refs in source
+comments; m-04 narrative comments). Two minors remain: m-01 (bridge
+validator inline-duplication, explicitly deferred as cosmetic) and
+a new m-05' (one residual narrative-cadence comment at
+`live-chat.tsx:430-437` surviving T-020's sweep). No regressions
+introduced by the fix-up cycle — T-018's icon move + bridge export
+deletion leave a clean module graph; T-020's 33-file sweep preserves
+all load-bearing JSdoc `{@link}` cross-refs.
+
+**Process learning — fix-up cycle meta-finding.** The first review's
+M-04 (static-grep integration suite reporting 48/48 green while
+three Blockers shipped) was the most valuable finding of the
+original audit, because it identified the mechanism that hid the
+other three Blockers. T-019's `composer-integration.jsdom.test.ts`
+addresses that mechanism: 14 runtime scenarios under a hand-rolled
+React harness (`vi.mock("react", ...)` at the module boundary, NOT
+internal collaborators — P6 compliant) that assert on rendered JSX
+subtrees + captured callback arguments. Regression sensitivity
+verified — reverting B-01 fails 3 tests, reverting B-02 fails 2
+tests. Option-b "keep both suites" landed: the new jsdom suite
+catches runtime wiring breaks, the old `composer-integration.test.ts`
+source-grep suite (39 assertions) catches wire-mirror / wire-shape
+drift in `chat-types.ts` + toolbar-slot ordering — disjoint failure
+modes. Reusable cue for Plan-phase `tests.md` authoring: any task
+labelled "Integration smoke" crossing component-route-bridge layers
+MUST include a runtime-mount assertion alongside any source-grep
+contract. A regex matching `contextUsage={bridge.contextUsage}` in
+the route source does NOT catch a missing WS switch case routing the
+frame into the bridge in the first place.
+
+**Cross-references:**
+`.loom/composer-slash-command-catalog/{review,quality-review,develop-log,test-report}.md`;
+`.loom/composer-slash-command-catalog/tasks/T-016..T-020.{done.md,test-log.txt}`;
+`ui/apps/web/src/routes/live-chat.tsx`;
+`ui/apps/web/src/lib/api.ts`;
+`ui/apps/web/src/components/chat/composer-pill-icons.tsx`;
+`ui/apps/web/test/composer-integration.jsdom.test.ts`;
+`ui/apps/web/test/live-chat-wire-routing.test.ts`;
+`ui/apps/web/test/comment-style-sweep.test.ts`.
+
+## 2026-05-14 - skill-implicit-match-overfire - build-coordinator-subagent-lacks-task-tool
+
+The /weave Build phase coordinator subagent under raw Claude Code cannot dispatch its own Task subagents — the coordinator's tool allowlist does not include `Task`. The orchestrator session worked around this by dispatching each build-task agent directly, one per kick, instead of routing through the coordinator. Each task came back green on first attempt, so the workaround was clean; but the contract gap is structural and will recur every time Build runs under raw Claude Code (vs. an SDK harness that grants Task tool access). Mirrors `feedback_craft_coordinator_no_task_tool` in user auto-memory; logging it here so future audit sweeps see the recurring pattern.
+
+## 2026-05-14 - skill-implicit-match-overfire - spec-rerun-was-schema-compliance-recovery-after-chat-crash
+
+The Spec phase showed two "complete" entries in `pipeline.md` history because a mid-Spec chat crash forced a recovery dispatch. The second dispatch's contract was "confirm schema compliance after interruption" — not "regenerate artifacts" — and the agent correctly returned `complete` without rewriting `spec.md` / `decisions.md`. The gating contract in a recovery-after-crash dispatch is schema compliance, not artifact regeneration; the orchestrator's recovery method should make this explicit so the recovery agent does not inadvertently re-do work that already completed.

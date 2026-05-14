@@ -35,6 +35,7 @@ import type {
   SessionLifecycle,
   TurnState,
   UserTurnImage,
+  WireModelSettings,
 } from "../lib/chat-types";
 
 interface Props {
@@ -44,16 +45,14 @@ interface Props {
 type ConnState = "idle" | "connecting" | "open" | "closed";
 
 /**
- * T-007 / US-007 — Composer policy split per Design `## composerDisabled
- * policy split`. The legacy `composerDisabled = !!pendingPermission ||
- * !!pendingQuestion` boolean is replaced by a three-state selector so
- * the composer can distinguish "queued while running" from "hard-blocked
- * by a pending tool gate":
+ * Composer policy selector. Returns a three-state value the composer
+ * uses to distinguish "queued while running" from "hard-blocked by a
+ * pending tool gate":
  *
  *   - `"ready"`   : composer enabled; submit goes through as
  *                   priority `"now"`. Includes `idle`, `interrupted`,
  *                   `error` — the `"interrupted"` case relies on the
- *                   SDK's implicit re-prime (US-005).
+ *                   SDK's implicit re-prime.
  *   - `"queue"`   : composer enabled but a turn is in flight. Send
  *                   button surfaces as "Queue"; submits land in the
  *                   SDK's user-message queue and the server treats
@@ -83,24 +82,24 @@ interface ChatState {
   itemsById: Record<string, number>;
   turnState: TurnState;
   /**
-   * US-008. Sticky error banner state. Survives `snapshot` resets;
-   * only overwritten when a NEW error arrives (different message),
-   * and only hidden when the user explicitly dismisses. The banner
+   * Sticky error banner state. Survives `snapshot` resets; only
+   * overwritten when a NEW error arrives (different message), and
+   * only hidden when the user explicitly dismisses. The banner
    * renders iff `error && !error.dismissed`.
    */
   error: { message: string; dismissed: boolean } | null;
   pendingPermission: PendingPermission | null;
   pendingQuestion: PendingQuestion | null;
-  /** US-004. Current SDK permission mode driving the composer dropdown. */
+  /** Current SDK permission mode driving the composer dropdown. */
   permissionMode: PermissionMode;
   /**
-   * T-003 / US-003 (chat-streaming-fixes). Millisecond epoch when the
-   * active turn entered the `running` state. `null` whenever
-   * `turnState` is not `"running"`. Consumed by `<WorkingChip>` (via
-   * `<MessagesTimeline>`) to drive the "Working for Xs" elapsed
-   * counter. Set on the idle→running transition; preserved across
-   * multiple SDK messages within one turn (running→running); cleared
-   * on any transition out of `"running"`. See ADR-005.
+   * Millisecond epoch when the active turn entered the `running`
+   * state. `null` whenever `turnState` is not `"running"`. Consumed
+   * by `<WorkingChip>` (via `<MessagesTimeline>`) to drive the
+   * "Working for Xs" elapsed counter. Set on the idle→running
+   * transition; preserved across multiple SDK messages within one
+   * turn (running→running); cleared on any transition out of
+   * `"running"`.
    */
   activeTurnStartedAt: number | null;
   /**
@@ -124,10 +123,10 @@ const EMPTY_STATE: ChatState = {
   pendingPermission: null,
   pendingQuestion: null,
   permissionMode: "default",
-  // T-003 / US-003. Set by the reducer's `turn-state` branch on the
-  // idle→running transition; never set elsewhere. Initial value
-  // `null` because EMPTY_STATE represents the pre-attach state where
-  // no turn is running.
+  // Set by the reducer's `turn-state` branch on the idle→running
+  // transition; never set elsewhere. Initial value `null` because
+  // EMPTY_STATE represents the pre-attach state where no turn is
+  // running.
   activeTurnStartedAt: null,
   lifecycle: "active",
   recoveryAttempt: 0,
@@ -161,21 +160,20 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       items.forEach((it, i) => {
         itemsById[it.id] = i;
       });
-      // US-008 AC2: the sticky error banner survives `snapshot` resets.
-      // Only overwrite when the snapshot carries a NEW message (one
-      // we haven't already surfaced); otherwise preserve `state.error`
-      // verbatim (including the user's `dismissed` flag).
+      // Sticky error banner survives `snapshot` resets. Overwrite
+      // only when the snapshot carries a NEW message (not the one
+      // already surfaced); otherwise preserve `state.error` verbatim
+      // (including the `dismissed` flag).
       const incoming = action.payload.body.lastError;
       const error =
         incoming && incoming !== state.error?.message
           ? { message: incoming, dismissed: false }
           : state.error;
-      // T-003 / US-003 (ADR-005). On snapshot (initial attach or
-      // reconnect-after-drain) the wire does not carry the original
-      // turn-start timestamp (no-wire-shape constraint). If the
-      // snapshot says we're already running, seed `activeTurnStartedAt`
-      // to `Date.now()` — the chip restarts from 0s, which is the
-      // best we can do. Otherwise clear it.
+      // On snapshot (initial attach or reconnect-after-drain) the
+      // wire does not carry the original turn-start timestamp. If
+      // the snapshot reports `running`, seed `activeTurnStartedAt`
+      // to `Date.now()` — the chip restarts from 0s. Otherwise
+      // clear it.
       const activeTurnStartedAt =
         action.payload.body.turnState === "running" ? Date.now() : null;
       return {
@@ -187,8 +185,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         pendingQuestion: action.payload.body.pendingQuestion ?? null,
         // Preserve the locally-selected composer state across snapshots.
         // The server snapshot does not yet carry `permissionMode` — it
-        // arrives on the chat row at attach time (a future T-NNN may
-        // hydrate from the snapshot body).
+        // arrives on the chat row at attach time.
         permissionMode: state.permissionMode,
         activeTurnStartedAt,
         lifecycle: action.payload.body.lifecycle ?? "active",
@@ -220,23 +217,22 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, items };
     }
     case "turn-state": {
-      // US-008 AC1 / AC4. If the frame carries an error message,
-      // raise the sticky banner. When the message changes (or no
-      // banner is currently visible), reset `dismissed: false` so the
-      // banner re-shows even if the user had previously dismissed an
-      // older error. If the same message repeats, preserve the
-      // existing `dismissed` flag (no re-surfacing).
+      // If the frame carries an error message, raise the sticky
+      // banner. When the message changes (or no banner is currently
+      // visible), reset `dismissed: false` so the banner re-shows
+      // even after a prior dismissal of an older error. Same message
+      // repeating preserves the existing `dismissed` flag (no
+      // re-surfacing).
       let nextError = state.error;
       if (action.lastError) {
         if (!state.error || state.error.message !== action.lastError) {
           nextError = { message: action.lastError, dismissed: false };
         }
       }
-      // T-003 / US-003 (ADR-005). Manage `activeTurnStartedAt` across
-      // turn-state transitions:
+      // Manage `activeTurnStartedAt` across turn-state transitions:
       //   • idle/error/interrupted → running : seed Date.now()
       //   • running → running              : preserve (multi-SDK-message
-      //                                       within one turn — AC-4)
+      //                                       within one turn)
       //   • running → anything-else        : clear to null
       //   • anything-else → anything-else  : leave null
       const nextStartedAt =
@@ -259,16 +255,16 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "permission-mode":
       return { ...state, permissionMode: action.mode };
     case "error-frame": {
-      // US-008 AC1 / AC4. Server-emitted `error` frame raises the
-      // sticky banner the same way `turn-state` does — re-show with
+      // Server-emitted `error` frame raises the sticky banner the
+      // same way `turn-state` does — re-show with
       // `dismissed: false` when the message is new.
       if (state.error && state.error.message === action.message) return state;
       return { ...state, error: { message: action.message, dismissed: false } };
     }
     case "dismiss-error": {
-      // US-008 AC3. Hide the banner; keep the message around so
-      // future-snapshot novelty checks can compare against it. The
-      // banner re-shows only when a different message arrives.
+      // Hide the banner; keep the message around so future-snapshot
+      // novelty checks can compare against it. The banner re-shows
+      // only when a different message arrives.
       if (!state.error || state.error.dismissed) return state;
       return { ...state, error: { ...state.error, dismissed: true } };
     }
@@ -297,19 +293,18 @@ export function LiveChatRoute({ chatId }: Props) {
   const [state, dispatch] = useReducer(chatReducer, EMPTY_STATE);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [tasksUpdatedAt, setTasksUpdatedAt] = useState<number | null>(null);
-  // T-007 / US-006. Bridge-supplied slash-command catalog. `null` until
-  // the first `slash-commands-update` frame lands, at which point the
-  // composer flips its menu out of the "Loading commands…" state.
+  // Bridge-supplied slash-command catalog. `null` until the first
+  // `slash-commands-update` frame lands, at which point the composer
+  // flips its menu out of the "Loading commands…" state.
   const bridge = useChatBridge();
   /**
-   * T-007 / US-004 + US-005. Right-pane state is a discriminated
-   * union: at most one of Tasks / Diff is mounted at a time, with
-   * `null` collapsing the drawer. The Diff arm is gated at the
-   * consumer site on `chat?.worktree_mode === "worktree"` — the
-   * union itself stays mode-agnostic so the toggle handler can
-   * stay pure (the topbar conditionally renders the Diff button
-   * so the user never reaches `rightPane === "diff"` in local
-   * mode).
+   * Right-pane state is a discriminated union: at most one of Tasks
+   * / Diff is mounted at a time, with `null` collapsing the drawer.
+   * The Diff arm is gated at the consumer site on
+   * `chat?.worktree_mode === "worktree"` — the union itself stays
+   * mode-agnostic so the toggle handler can stay pure (the topbar
+   * conditionally renders the Diff button so the user never reaches
+   * `rightPane === "diff"` in local mode).
    */
   const [rightPane, setRightPane] = useState<"tasks" | "diff" | null>(null);
   // Connection-status popover open state. The websocket pill in the
@@ -317,21 +312,20 @@ export function LiveChatRoute({ chatId }: Props) {
   // toggles a small info card with the state name and reconnect detail.
   const [connInfoOpen, setConnInfoOpen] = useState(false);
   const tasksAutoOpenedRef = useRef(false);
-  // T-007. Mirror `rightPane` into a ref so the `tasks-update`
-  // auto-open guard (inside the ws-attach effect closure, which
-  // captures `rightPane` once per `chatId`) can read the current
-  // value without re-subscribing the WebSocket on every pane
-  // toggle.
+  // Mirror `rightPane` into a ref so the `tasks-update` auto-open
+  // guard (inside the ws-attach effect closure, which captures
+  // `rightPane` once per `chatId`) can read the current value
+  // without re-subscribing the WebSocket on every pane toggle.
   const rightPaneRef = useRef<"tasks" | "diff" | null>(null);
   useEffect(() => {
     rightPaneRef.current = rightPane;
   }, [rightPane]);
 
-  // T-007. Toggle handlers per design.md contract: flip to the
-  // discriminator when the other pane (or null) is open; flip back
-  // to `null` when the same pane is already open. Both use the
-  // functional setter so the click handler is referentially stable
-  // and the toggle is race-free vs. concurrent auto-open writes.
+  // Toggle handlers: flip to the discriminator when the other pane
+  // (or null) is open; flip back to `null` when the same pane is
+  // already open. Both use the functional setter so the click
+  // handler is referentially stable and the toggle is race-free vs.
+  // concurrent auto-open writes.
   const onToggleTasks = () =>
     setRightPane((p) => (p === "tasks" ? null : "tasks"));
   const onToggleDiff = () =>
@@ -425,22 +419,22 @@ export function LiveChatRoute({ chatId }: Props) {
           case "slash-commands-update":
             bridge.handleServerFrame(frame);
             break;
+          case "context-usage-update":
+            bridge.handleServerFrame(frame);
+            break;
           case "tasks-update": {
             const incoming = frame.body?.tasks ?? null;
             if (incoming) {
               setTasks(incoming);
               setTasksUpdatedAt(Date.now());
-              // T-007 / US-005 AC5. Auto-open only fires when the
-              // drawer is collapsed. If the user has manually
-              // opened the Diff pane we must not clobber their
-              // selection when the first tasks-update arrives —
-              // the ref still latches so we don't fight subsequent
-              // toggles, but the new precondition is
-              // `rightPane === null`. We read through
-              // `rightPaneRef.current` because this closure was
-              // captured at attach time (the effect deps are
-              // `[chatId]`) — the ref stays current via the mirror
-              // effect above.
+              // Auto-open only fires when the drawer is collapsed.
+              // If the user has manually opened the Diff pane the
+              // first `tasks-update` must not clobber that
+              // selection — the ref still latches so subsequent
+              // toggles are unaffected, but the precondition is
+              // `rightPane === null`. The closure was captured at
+              // attach time (the effect deps are `[chatId]`); the
+              // ref stays current via the mirror effect above.
               if (
                 !tasksAutoOpenedRef.current &&
                 rightPaneRef.current === null &&
@@ -453,9 +447,9 @@ export function LiveChatRoute({ chatId }: Props) {
             break;
           }
           case "error":
-            // US-008 AC1. Route the server's `error` frame through
-            // the reducer so it raises the sticky banner instead of
-            // disappearing into the console.
+            // Route the server's `error` frame through the reducer
+            // so it raises the sticky banner instead of disappearing
+            // into the console.
             console.warn("[loom] ws error frame:", frame.body?.message);
             if (frame.body?.message) {
               dispatch({ type: "error-frame", message: frame.body.message });
@@ -499,8 +493,8 @@ export function LiveChatRoute({ chatId }: Props) {
       // Construct the wire body incrementally so optional fields are
       // absent (not undefined) when not in use — the server treats
       // missing fields as their defaults (priority → "now", images →
-      // empty array) per ADR-004. The composer no longer exposes a
-      // priority toggle, so every submit relies on the default "now"
+      // empty array). The composer no longer exposes a priority
+      // toggle, so every submit relies on the default "now"
       // placement.
       //
       // The body shape is the `user-turn` variant of the discriminated
@@ -534,14 +528,26 @@ export function LiveChatRoute({ chatId }: Props) {
     [chatId],
   );
 
-  // US-008 AC3. Snackbar dismiss → flip the reducer's dismissed flag so
-  // the same message doesn't re-raise on subsequent renders.
+  const setModelSettings = useCallback(
+    (patch: Partial<WireModelSettings>) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== ws.OPEN) return;
+      sendFrame(ws, {
+        kind: "model-settings-set",
+        "chat-id": chatId,
+        body: patch,
+      });
+    },
+    [chatId],
+  );
+
+  // Snackbar dismiss → flip the reducer's dismissed flag so the
+  // same message doesn't re-raise on subsequent renders.
   const dismissError = useCallback(() => {
     dispatch({ type: "dismiss-error" });
   }, []);
 
-  // Surface session errors as a global snackbar instead of a stacked
-  // banner. Conditions mirror the legacy ChatErrorBanner gate:
+  // Surface session errors as a global snackbar. Conditions:
   //   - lifecycle === "active" (SessionRecoveryBanner owns the
   //     recovering/failed states)
   //   - turnState === "error" (banner is suppressed once the bridge
@@ -601,10 +607,10 @@ export function LiveChatRoute({ chatId }: Props) {
   );
 
   /**
-   * T-003 / US-003 AC3. Accept the latest `plan-proposed` item — the
-   * server bridge performs the `setPermissionMode("default")` + queued
-   * user-turn pair atomically. Per ADR-004 we do NOT auto-submit the
-   * composer's current draft and we do NOT debounce the mode change.
+   * Accept the latest `plan-proposed` item — the server bridge
+   * performs the `setPermissionMode("default")` + queued user-turn
+   * pair atomically. The composer's current draft is NOT
+   * auto-submitted and the mode change is NOT debounced.
    */
   const acceptPlanProposal = useCallback(
     (planId: string) => {
@@ -620,9 +626,9 @@ export function LiveChatRoute({ chatId }: Props) {
   );
 
   /**
-   * T-003 / US-003 AC4. Reject the latest `plan-proposed` item — the
-   * server bridge queues a reconsider user-turn and leaves permission
-   * mode at `"plan"`.
+   * Reject the latest `plan-proposed` item — the server bridge
+   * queues a reconsider user-turn and leaves permission mode at
+   * `"plan"`.
    */
   const rejectPlanProposal = useCallback(
     (planId: string) => {
@@ -638,7 +644,7 @@ export function LiveChatRoute({ chatId }: Props) {
   );
 
   /**
-   * US-001 AC5. Forward the picker's submit payload as a typed
+   * Forward the picker's submit payload as a typed
    * `question-response` ClientFrame. The bridge's
    * `respondToQuestion` resolves the SDK's pending tool call.
    */
@@ -661,7 +667,7 @@ export function LiveChatRoute({ chatId }: Props) {
   );
 
   const pp = state.pendingPermission;
-  // T-007. Three-state composer policy. `composerDisabled` is the
+  // Three-state composer policy. `composerDisabled` is the
   // hard-disable derivative used by ChatComposer's textarea + send
   // button; `"blocked"` is the only mode that hard-disables. The
   // queue-mode keeps the composer enabled so the user can type and
@@ -886,6 +892,9 @@ export function LiveChatRoute({ chatId }: Props) {
           isInterrupted={state.turnState === "interrupted"}
           cwd={chat?.cwd}
           slashCommands={bridge.slashCommands}
+          contextUsage={bridge.contextUsage}
+          modelSettings={chat?.model_settings ?? null}
+          onModelSettingsSet={setModelSettings}
         />
     </AppLayout>
   );

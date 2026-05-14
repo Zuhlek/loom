@@ -1,19 +1,17 @@
 /**
- * FabricView empty state for 404 + read-only hint.
+ * FabricView empty state for 404 + disclaimer removal.
  *
- * Static-source scan (matches the existing apps/web/test harness —
- * Vitest include = *.test.ts, environment = node, no jsdom).
+ * Static-source scan (Vitest include = *.test.ts, environment = node,
+ * no jsdom).
  *
  * Covers:
- *   - An unresolvable fabric (API 404) renders a dedicated empty
- *     state naming the fabric, the project, and the project's
- *     declared paths.
+ *   - An unresolvable fabric (API 404) renders a dedicated empty state
+ *     naming the fabric, the project, and the project's declared paths.
  *   - No generic HTTP-500 / "fetch failed" surface for the 404 case.
- *   - A "read-only — pipeline owned by /weave" hint renders near the
- *     phase stepper.
- *   - No clickable phase-mutation affordance is added to the phase
- *     grid (smoke check — the stepper has been read-only in the
- *     production build).
+ *   - The legacy "read-only — pipeline owned by /weave" disclaimer and
+ *     its `data-testid="fabric-readonly-hint"` element are removed.
+ *   - The locked empty-state copy (`FABRIC_EMPTY_COPY`) is imported
+ *     from `fabric-phase-map.ts` and rendered in the route.
  */
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
@@ -22,6 +20,7 @@ import { fileURLToPath } from "node:url";
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const fabricViewPath = webRoot + "src/routes/fabric-view-live.tsx";
 const emptyStatePath = webRoot + "src/components/fabric/FabricEmptyState.tsx";
+const phaseMapPath = webRoot + "src/components/fabric/fabric-phase-map.ts";
 
 describe("FabricEmptyState component file exists and exports the component", () => {
   test("FabricEmptyState.tsx exists at the expected path", () => {
@@ -63,14 +62,23 @@ describe("FabricViewLive renders the empty state on 404", () => {
   });
 });
 
-describe("FabricViewLive renders the read-only hint near the phase stepper", () => {
+describe("FabricViewLive no longer carries the disclaimer paragraph", () => {
   const src = readFileSync(fabricViewPath, "utf8");
-  test("source contains the read-only hint copy near the PhaseStepper render", () => {
-    expect(src).toMatch(/read-only/i);
-    expect(src).toMatch(/\/weave\b/);
-    const stepperIdx = src.indexOf("<PhaseStepper");
-    expect(stepperIdx).toBeGreaterThan(0);
-    const window400 = src.slice(Math.max(0, stepperIdx - 400), stepperIdx + 400);
-    expect(window400).toMatch(/read-only/i);
+
+  test("source does NOT contain the literal disclaimer copy", () => {
+    expect(src).not.toMatch(/read-only\s+—\s+pipeline owned by \/weave/);
+  });
+
+  test("source does NOT contain the legacy fabric-readonly-hint testid", () => {
+    expect(src).not.toMatch(/fabric-readonly-hint/);
+  });
+});
+
+describe("Locked empty-state copy lives in fabric-phase-map.ts", () => {
+  test("fabric-phase-map.ts exports FABRIC_EMPTY_COPY with the exact locked string", () => {
+    expect(existsSync(phaseMapPath)).toBe(true);
+    const src = readFileSync(phaseMapPath, "utf8");
+    expect(src).toMatch(/export const FABRIC_EMPTY_COPY/);
+    expect(src).toMatch(/No artifacts yet — pipeline is still initializing\./);
   });
 });

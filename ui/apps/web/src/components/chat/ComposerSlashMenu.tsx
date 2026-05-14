@@ -4,14 +4,14 @@
  * keep the editor focused, `onSelect` emits the selected row by index
  * into a flat list the parent computes via {@link buildSlashMenuRows}.
  *
- * Two sections per design.md §Component split:
+ * Two sections:
  *   - Built-in: three Loom-side rows (`/model`, `/plan`, `/default`)
- *     sourced from a local constant; T-008/T-010 land click handlers.
+ *     sourced from {@link BUILTIN_COMMANDS}.
  *   - Provider: rows from the bridge-supplied catalog
  *     ({@link WireSlashCommand}), with built-in name collisions
- *     suppressed (built-in wins — US-001 AC5).
+ *     suppressed so the built-in always wins.
  *
- * Empty-state matrix per design.md (ADR-D02):
+ * Empty-state matrix:
  *   - `slashCommands === null`, built-ins survive filter ⇒ Built-in
  *     group + "Loading commands…" italic muted row under PROVIDER
  *     header with `aria-busy="true"`.
@@ -21,7 +21,7 @@
  *   - Loaded `[]` + empty built-ins ⇒ "No matching command" row.
  *   - Otherwise both groups render.
  *
- * Row icons per ADR-D01 — three inline SVGs, zero new deps:
+ * Row icons — three inline SVGs, zero new deps:
  *   - Built-in    → hexagon outline
  *   - Provider    → square outline (`kind: 'command'`)
  *   - Skill       → diamond outline (`kind: 'skill'`)
@@ -33,8 +33,8 @@ import type { WireSlashCommand } from "../../lib/chat-types";
 /**
  * Built-in row shape. The three Loom-side commands `/model`, `/plan`,
  * `/default` open or toggle local UI state — they do NOT send a chat
- * turn (Spec US-001 AC3). T-008/T-010 land the per-row click handlers;
- * for T-007 the menu just renders them and reports selection by index.
+ * turn. The menu reports selection by index; the parent
+ * ({@link ChatComposer}) owns the click handlers.
  */
 export interface BuiltinSlashCommand {
   name: string;
@@ -118,7 +118,6 @@ export function ComposerSlashMenu({
   const loading = slashCommands === null;
   const hasBuiltins = builtins.length > 0;
   const hasProviders = providers.length > 0;
-  const flatRows: SlashMenuRow[] = [...builtins, ...providers];
 
   useEffect(() => {
     const list = listRef.current;
@@ -127,7 +126,7 @@ export function ComposerSlashMenu({
     if (row) row.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
-  // Empty-state matrix per ADR-D02 / design.md.
+  // Empty-state matrix.
   //   - Both groups empty AND not loading ⇒ "No matching command".
   //   - Both groups empty AND loading ⇒ "No matching command" (the
   //     loading affordance fires only when SOMETHING renders alongside
@@ -217,9 +216,6 @@ export function ComposerSlashMenu({
           )}
         </>
       )}
-      {/* Suppress unused-binding warning — `flatRows` documents the
-          row-index mapping the parent uses when keyboard-navigating. */}
-      <span hidden>{flatRows.length}</span>
     </div>
   );
 }
@@ -277,7 +273,7 @@ function RowIcon({ kind }: { kind: SlashMenuRow["kind"] }) {
   return <SquareGlyph />;
 }
 
-/** Built-in row glyph — hexagon outline (ADR-D01). */
+/** Built-in row glyph — hexagon outline. */
 function HexagonGlyph() {
   return (
     <svg
@@ -295,7 +291,7 @@ function HexagonGlyph() {
   );
 }
 
-/** Provider command row glyph — square outline (ADR-D01). */
+/** Provider command row glyph — square outline. */
 function SquareGlyph() {
   return (
     <svg
@@ -313,7 +309,7 @@ function SquareGlyph() {
   );
 }
 
-/** Skill row glyph — diamond outline (ADR-D01). */
+/** Skill row glyph — diamond outline. */
 function DiamondGlyph() {
   return (
     <svg

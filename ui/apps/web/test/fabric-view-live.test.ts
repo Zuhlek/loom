@@ -24,10 +24,12 @@ describe("FabricViewLive route wiring", () => {
     expect(src).toContain("5000");
     // Fetches the new live endpoint (not the static-demo route).
     expect(src).toContain("/api/fabric/");
-    // Manual refresh button is present and tagged for testing.
-    expect(src).toContain('data-testid="fabric-refresh"');
-    // Markdown rendering is wired.
-    expect(src).toContain("marked.parse");
+    // Manual refresh now lives inside the FileTreeDrawer header.
+    expect(src).toContain("FileTreeDrawer");
+    expect(src).toMatch(/onRefresh=\{[^}]*fetchData/);
+    // Markdown rendering flows through the extracted FabricMarkdown
+    // component instead of inline `marked.parse` in the route.
+    expect(src).toContain("FabricMarkdown");
   });
 
   test("App.tsx mounts the dynamic fabric route", () => {

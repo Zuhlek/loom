@@ -1,6 +1,6 @@
 /**
- * T-003 / US-006 AC1 — Defensive sanitiser for the WS `user-turn`
- * frame's `body.images` field.
+ * Defensive sanitiser for the WS `user-turn` frame's `body.images`
+ * field.
  *
  * Runs in `http-ws-server.ts`'s `user-turn` handler before forwarding
  * to `bridge.submitUserTurnWithPriority`. A misbehaving / malicious

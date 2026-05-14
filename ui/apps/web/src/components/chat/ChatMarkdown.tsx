@@ -13,7 +13,7 @@
  * synchronous JSX render by holding the latest parsed HTML in state
  * and updating it from a `useEffect` per text-delta. The streaming
  * caret element lives OUTSIDE the parsed HTML so it keeps rendering
- * correctly while the parse promise is still in-flight (US-002 AC4).
+ * correctly while the parse promise is still in-flight.
  *
  * Trust model: assistant output is rendered as HTML. `marked` is
  * invoked with `gfm` and `breaks` enabled; raw-HTML passthrough MUST

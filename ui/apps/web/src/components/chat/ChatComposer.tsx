@@ -12,6 +12,7 @@ import clsx from "clsx";
 import type {
   PermissionMode,
   UserTurnImage,
+  WireModelSettings,
   WireSlashCommand,
 } from "../../lib/chat-types";
 import {
@@ -28,24 +29,29 @@ import {
 import { ComposerFooterToolbar } from "./ComposerFooterToolbar";
 import { ComposerSlashMenu } from "./ComposerSlashMenu";
 import { buildSlashMenuRows, type SlashMenuRow } from "./ComposerSlashMenu";
+import { ContextUsageIndicator } from "./ContextUsageIndicator";
+import { ModelSelectorPill } from "./ModelSelectorPill";
+import { ModelSettingsPill } from "./ModelSettingsPill";
+import { PermissionLevelPill } from "./PermissionLevelPill";
+import { BuildPlanTogglePill } from "./BuildPlanTogglePill";
+import type { ContextUsageSnapshot } from "../../lib/use-chat-bridge";
 
 /**
- * T-007 / US-007. Three-state composer policy mirror — kept in sync
- * with `routes/live-chat.tsx`'s `ComposerMode` type. The composer
- * uses this to split hard-disable (blocked) from queue-while-running
- * (queue) from default-enabled (ready).
+ * Three-state composer policy mirror — kept in sync with
+ * `routes/live-chat.tsx`'s `ComposerMode` type. Splits hard-disable
+ * (blocked) from queue-while-running (queue) from default-enabled
+ * (ready).
  */
 export type ComposerMode = "ready" | "queue" | "blocked";
 
 export interface ChatComposerProps {
   /**
-   * T-007 / US-007. Three-state composer policy. The composer
-   * hard-disables iff `composerMode === "blocked"`; the queue mode
-   * changes the send affordance (label / title says "Queue") but
-   * keeps the textarea + button enabled so the user can push a
-   * follow-up while the turn streams. Optional for backwards-compat
-   * during a transition window — when omitted the composer falls
-   * back to the legacy `disabled` boolean derivation.
+   * Three-state composer policy. The composer hard-disables iff
+   * `composerMode === "blocked"`; the queue mode changes the send
+   * affordance (label / title says "Queue") but keeps the textarea +
+   * button enabled so the user can push a follow-up while the turn
+   * streams. When omitted the composer falls back to the `disabled`
+   * boolean derivation.
    */
   composerMode?: ComposerMode;
   /** Disabled when there is a pending AskUserQuestion or PermissionRequest. */
@@ -54,10 +60,9 @@ export interface ChatComposerProps {
   /** Compact narrows for the worktree-mode pane. */
   compact?: boolean;
   /**
-   * US-006 / T-010. Submit handler. Always receives `images` as an
-   * array (empty when no attachments are held). The composer no
-   * longer exposes a queue-priority selector — every submit is the
-   * default "now" priority on the wire.
+   * Submit handler. Always receives `images` as an array (empty when
+   * no attachments are held). Every submit is the default "now"
+   * priority on the wire.
    */
   onSubmit?: (text: string, images: UserTurnImage[]) => void;
   /** When true, the running turn is interruptable — shows a stop button. */
@@ -65,49 +70,79 @@ export interface ChatComposerProps {
   onInterrupt?: () => void;
 
   /**
-   * US-004. Permission-mode selector (always visible). The parent
-   * supplies the current mode + the dispatcher; the composer emits the
-   * selected mode through `onPermissionModeChange` and the route
-   * forwards it to the bridge via a `permission-mode-set` frame.
+   * Permission-mode selector (always visible). The parent supplies the
+   * current mode + the dispatcher; the composer emits the selected
+   * mode through `onPermissionModeChange` and the route forwards it
+   * to the bridge via a `permission-mode-set` frame.
    */
   permissionMode?: PermissionMode;
   onPermissionModeChange?: (mode: PermissionMode) => void;
 
   /**
-   * US-005. When true (parent derives from `turnState === "interrupted"`)
-   * the composer renders a distinct amber "Interrupted" pill adjacent
-   * to the Stop/Send control. The pill is informational; the SDK's
+   * When true (parent derives from `turnState === "interrupted"`) the
+   * composer renders a distinct amber "Interrupted" pill adjacent to
+   * the Stop/Send control. The pill is informational; the SDK's
    * implicit re-prime resumes the cancelled turn when the next user
    * message arrives via `UserMessageQueue`.
    */
   isInterrupted?: boolean;
 
   /**
-   * T-013 / US-008. Chat's current working directory — forwarded to the
-   * `/file-search` endpoint for the `@`-file picker. When undefined the
-   * fetch is skipped and the menu can still render an empty / loading
-   * state.
+   * Chat's current working directory — forwarded to the `/file-search`
+   * endpoint for the `@`-file picker. When undefined the fetch is
+   * skipped and the menu can still render an empty / loading state.
    */
   cwd?: string;
 
   /**
-   * T-007 / US-001..US-006. Bridge-supplied slash-command catalog
-   * delivered via the `slash-commands-update` frame and routed through
+   * Bridge-supplied slash-command catalog delivered via the
+   * `slash-commands-update` frame and routed through
    * {@link useChatBridge}. `null` until the first frame lands (drives
-   * the ADR-D02 "Loading commands…" affordance under the PROVIDER
-   * header). Built-in rows are merged client-side inside
+   * the "Loading commands…" affordance under the PROVIDER header).
+   * Built-in rows are merged client-side inside
    * {@link ComposerSlashMenu}.
    */
   slashCommands?: WireSlashCommand[] | null;
+
+  /**
+   * Optional external hook to open the model picker dropdown anchored
+   * to the model pill. The `/model` built-in dispatch always drives
+   * the local picker state ({@link ModelSelectorPill}); external
+   * callers may also subscribe for parity with other footer
+   * affordances.
+   */
+  onOpenModelPicker?: () => void;
+
+  /**
+   * Per-chat persisted model-settings tuple read from the chat-row.
+   * NULL ⇒ Loom defaults apply at SDK spawn time
+   * ({@link ModelSelectorPill} renders the SDK-default label).
+   */
+  modelSettings?: WireModelSettings | null;
+
+  /**
+   * Partial-patch emitter — the route forwards the patch into a
+   * `model-settings-set` client→server frame. The composer only emits
+   * the changed field per pill ({@link ModelSelectorPill} sends
+   * `{ model }`).
+   */
+  onModelSettingsSet?: (patch: Partial<WireModelSettings>) => void;
+
+  /**
+   * Bridge-supplied context-window utilisation. `null` until the
+   * first `context-usage-update` frame lands — the
+   * {@link ContextUsageIndicator} renders 0% in that case.
+   */
+  contextUsage?: ContextUsageSnapshot | null;
 }
 
 /**
- * T-005 / US-001..US-005. One held attachment inside the composer.
- * The `file` field is the original `File` (used for submit-time base64
- * encode); `previewUrl` is a `URL.createObjectURL(file)` blob URL used
- * exclusively for the in-composer thumbnail (revoked on remove, on
- * post-submit clear, and on unmount). `mediaType` is the sniffed /
- * declared MIME (defaults to image/png per US-001 AC3 when blank).
+ * One held attachment inside the composer. The `file` field is the
+ * original `File` (used for submit-time base64 encode); `previewUrl`
+ * is a `URL.createObjectURL(file)` blob URL used exclusively for the
+ * in-composer thumbnail (revoked on remove, on post-submit clear, and
+ * on unmount). `mediaType` is the sniffed / declared MIME (defaults
+ * to `image/png` when blank).
  */
 interface ComposerAttachment {
   id: string;
@@ -116,149 +151,6 @@ interface ComposerAttachment {
   previewUrl: string;
   filename: string;
 }
-
-/**
- * Inline SVG icons paired with each permission mode. We use raw SVGs
- * (no `lucide-react` dep) for parity with the rest of the composer
- * footer (paperclip, send-arrow, stop, …). Each icon takes a single
- * `className` so the caller can size / colour it via Tailwind utilities;
- * `currentColor` keeps the stroke in sync with the surrounding text
- * colour so the ghost-button hover treatment "just works".
- */
-export type ModeIconProps = { className?: string };
-
-export function ShieldIcon({ className }: ModeIconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  );
-}
-
-export function ClipboardListIcon({ className }: ModeIconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <rect x="8" y="2" width="8" height="4" rx="1" />
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-      <path d="M8 12h.01M12 12h4M8 16h.01M12 16h4" />
-    </svg>
-  );
-}
-
-export function PenLineIcon({ className }: ModeIconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-    </svg>
-  );
-}
-
-export function LockOpenIcon({ className }: ModeIconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <rect x="3" y="11" width="18" height="11" rx="2" />
-      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon({ className }: ModeIconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  );
-}
-
-/**
- * Permission-mode catalog. The `value` field carries the SDK literal
- * (it ships on the wire byte-for-byte via `permission-mode-set`); the
- * `label` and `description` are the human-readable strings shown in
- * the composer UI. The mapping mirrors the t3code runtime-mode vocab
- * (Supervised / Auto-accept edits / Full access) plus the Claude-Code-
- * specific "Plan" mode, so the user never sees an SDK slug like
- * `bypassPermissions`. The icon is rendered on the ghost trigger so
- * the current mode is scannable at a glance.
- */
-interface PermissionModeOption {
-  value: PermissionMode;
-  label: string;
-  description: string;
-  Icon: (props: ModeIconProps) => JSX.Element;
-}
-
-const PERMISSION_MODES: ReadonlyArray<PermissionModeOption> = [
-  {
-    value: "default",
-    label: "Supervised",
-    description: "Ask before commands and file changes.",
-    Icon: ShieldIcon,
-  },
-  {
-    value: "plan",
-    label: "Plan",
-    description: "Draft a plan without executing anything.",
-    Icon: ClipboardListIcon,
-  },
-  {
-    value: "acceptEdits",
-    label: "Auto-accept edits",
-    description: "Auto-approve edits, ask before other actions.",
-    Icon: PenLineIcon,
-  },
-  {
-    value: "bypassPermissions",
-    label: "Full access",
-    description: "Allow commands and edits without prompts.",
-    Icon: LockOpenIcon,
-  },
-];
 
 const ATTACHMENT_CAP = 4;
 const ATTACHMENT_MAX_BYTES = 5_000_000;
@@ -279,12 +171,14 @@ export function ChatComposer({
   isInterrupted,
   cwd,
   slashCommands,
+  onOpenModelPicker,
+  modelSettings,
+  onModelSettingsSet,
+  contextUsage,
 }: ChatComposerProps) {
-  // T-007 / US-007. Resolve the hard-disable + send-affordance flags
-  // from the three-state composer mode. When `composerMode` is
-  // omitted the legacy `disabled` boolean is the only signal — that
-  // path keeps the pre-T-007 behaviour for any caller that hasn't
-  // adopted the new prop yet.
+  // Resolve hard-disable + send-affordance flags from the three-state
+  // composer mode. When `composerMode` is omitted the `disabled`
+  // boolean is the only signal.
   const isBlocked = composerMode === "blocked";
   const isQueueMode = composerMode === "queue";
   const hardDisabled = isBlocked || !!disabled;
@@ -296,26 +190,26 @@ export function ChatComposer({
   }, []);
   const editorRef = useRef<ComposerEditorHandle | null>(null);
 
-  // T-005. Attachment state machine. The `attachmentsRef` mirror is
-  // read by the unmount cleanup so we can revoke object URLs without
-  // listing `attachments` in the effect's dependency array (which would
-  // re-fire the cleanup on every add/remove and double-revoke).
+  // Attachment state machine. The `attachmentsRef` mirror lets the
+  // unmount cleanup revoke object URLs without listing `attachments`
+  // in the effect's dependency array (which would re-fire the cleanup
+  // on every add/remove and double-revoke).
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [overCapNotice, setOverCapNotice] = useState<string | null>(null);
   const attachmentsRef = useRef<ComposerAttachment[]>([]);
   attachmentsRef.current = attachments;
   const overCapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // T-008. Drag state for the data-dragging highlight. The container
-  // toggles a `data-dragging` attribute that CSS keys off.
+  // Drag state for the data-dragging highlight. The container toggles
+  // a `data-dragging` attribute that CSS keys off.
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  // T-007. Hidden file-picker input ref.
+  // Hidden file-picker input ref.
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // T-013. Parallel @-file menu state (per ADR-D06). Runs alongside the
-  // slash-menu state above; the mutual-exclusion guard below ensures
-  // only one menu opens at a time.
+  // Parallel @-file menu state. Runs alongside the slash-menu state
+  // above; the mutual-exclusion guard below ensures only one menu
+  // opens at a time.
   const [atFileMenuOpen, setAtFileMenuOpen] = useState(false);
   const [atFileSelectedIndex, setAtFileSelectedIndex] = useState(0);
   const [atFileQuery, setAtFileQuery] = useState("");
@@ -323,8 +217,29 @@ export function ChatComposer({
   const [atFileLoading, setAtFileLoading] = useState(false);
   const atFileTriggerRef = useRef<{ rangeStart: number; rangeEnd: number } | null>(null);
 
-  // T-007 / US-001. Slash-menu state machine. Detection runs on every
-  // (value, cursor) update; the menu opens whenever the editor matches
+  // Local open state for the model selector dropdown. The `/model`
+  // built-in dispatch flips this to true; the pill owns its own
+  // outside-click + Escape close (parent-controlled per the
+  // ModelSelectorPill prop contract).
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+
+  // The Build/Plan toggle pill flips between `plan` and the user's
+  // last non-plan mode; the ref survives the flip back so picking
+  // "Plan" then "Build" lands on the same mode the user was in
+  // before. Seeded with `'default'` and updated whenever a non-plan
+  // `permissionMode` arrives from the parent (slash-command or
+  // PermissionLevelPill pick).
+  const lastNonPlanModeRef = useRef<PermissionMode>(
+    permissionMode === "plan" ? "default" : permissionMode,
+  );
+  useEffect(() => {
+    if (permissionMode !== "plan" && permissionMode !== lastNonPlanModeRef.current) {
+      lastNonPlanModeRef.current = permissionMode;
+    }
+  }, [permissionMode]);
+
+  // Slash-menu state machine. Detection runs on every (value, cursor)
+  // update; the menu opens whenever the editor matches
   // `^/<non-whitespace>*` on the current line, and the bridge-supplied
   // catalog drives the Provider section via {@link ComposerSlashMenu}.
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
@@ -449,7 +364,7 @@ export function ChatComposer({
     return atFileResults;
   }, [atFileQuery, atFileResults]);
 
-  // T-005. Unmount cleanup — revoke every previewUrl we still hold.
+  // Unmount cleanup — revoke every held `previewUrl`.
   useEffect(() => {
     return () => {
       for (const att of attachmentsRef.current) {
@@ -543,17 +458,29 @@ export function ChatComposer({
     queueMicrotask(() => editorRef.current?.focus());
   };
 
-  // T-007 / US-001 AC1 + US-003 AC4. Accept a slash-menu row. SDK
-  // provider rows (and skills) write `/<name> ` into the textarea at
-  // the trigger range — mirrors the prior generic behaviour so the
-  // user lands one keystroke away from arguments. Built-in row click
-  // handlers (`/model` → picker, `/plan` / `/default` →
-  // `permission-mode-set`) are out of scope for this task — T-008 and
-  // T-010 land them; for now built-ins use the same generic path so
-  // the menu doesn't render an inert row.
+  // Accept a slash-menu row. Built-in rows (`/model`, `/plan`,
+  // `/default`) fire Loom-side actions and never touch the textarea:
+  // `/plan` and `/default` dispatch through
+  // {@link onPermissionModeChange} (same prop chain as
+  // {@link PermissionLevelPill}); `/model` opens the model picker via
+  // {@link onOpenModelPicker}. SDK provider rows (and skills) write
+  // `/<name> ` into the textarea at the trigger range so the user
+  // lands one keystroke away from arguments.
   const acceptSlash = (row: SlashMenuRow) => {
     const trigger = slashTriggerRef.current;
     if (!trigger) return;
+    if (row.kind === "builtin") {
+      if (row.name === "plan") onPermissionModeChange?.("plan");
+      else if (row.name === "default") onPermissionModeChange?.("default");
+      else if (row.name === "model") {
+        setModelPickerOpen(true);
+        onOpenModelPicker?.();
+      }
+      setSlashMenuOpen(false);
+      setSlashMenuQuery("");
+      queueMicrotask(() => editorRef.current?.focus());
+      return;
+    }
     const replacement = `/${row.name} `;
     const next = replaceTextRange(
       editorRef.current?.getPlainText() ?? "",
@@ -565,6 +492,13 @@ export function ChatComposer({
     setSlashMenuOpen(false);
     setSlashMenuQuery("");
     queueMicrotask(() => editorRef.current?.focus());
+  };
+
+  // Forward the chosen model id as a partial `{ model }` patch — the
+  // route emits the `model-settings-set` frame.
+  const handleModelPick = (modelId: string) => {
+    onModelSettingsSet?.({ model: modelId });
+    setModelPickerOpen(false);
   };
 
   const submit = async () => {
@@ -716,21 +650,7 @@ export function ChatComposer({
     void addAttachments(files);
   };
 
-  const onPermissionSelectChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    if (!onPermissionModeChange) return;
-    const next = e.target.value as PermissionMode;
-    onPermissionModeChange(next);
-  };
-
   const stripVisible = attachments.length > 0 || overCapNotice !== null;
-
-  // Resolve the active permission-mode option for the ghost trigger.
-  // Falls back to the first entry (Supervised) when the prop carries an
-  // unknown SDK value — that should never happen in practice but keeps
-  // the trigger from rendering an empty pill if the wire ever drifts.
-  const activeModeOption =
-    PERMISSION_MODES.find((m) => m.value === permissionMode) ?? PERMISSION_MODES[0];
-  const ActiveModeIcon = activeModeOption.Icon;
 
   return (
     <div className={clsx("pt-1.5", compact ? "px-4 pb-4" : "px-5 pb-5")}>
@@ -847,21 +767,38 @@ export function ChatComposer({
             </svg>
           </button>
           <ComposerFooterToolbar
-            modelSelector={<div data-testid="composer-pill-model-selector" />}
-            modelSettings={<div data-testid="composer-pill-model-settings" />}
-            buildPlanToggle={<div data-testid="composer-pill-build-plan" />}
-            permissionLevel={
-              <div data-testid="composer-pill-permission-level">
-                {/* Placeholder until T-013 lands the real PermissionLevelPill.
-                    Carries the active mode tuple so dependent code paths
-                    (live-chat reducer, integration smoke) stay live. */}
-                <span hidden>
-                  {permissionMode}
-                  {String(!!onPermissionModeChange)}
-                </span>
-              </div>
+            modelSelector={
+              <ModelSelectorPill
+                value={modelSettings?.model ?? null}
+                onPick={handleModelPick}
+                open={modelPickerOpen}
+                onOpenChange={setModelPickerOpen}
+                disabled={hardDisabled}
+              />
             }
-            contextUsage={<div data-testid="composer-pill-context-usage" />}
+            modelSettings={
+              <ModelSettingsPill
+                value={modelSettings ?? null}
+                onPick={(patch) => onModelSettingsSet?.(patch)}
+                disabled={hardDisabled}
+              />
+            }
+            buildPlanToggle={
+              <BuildPlanTogglePill
+                mode={permissionMode}
+                onModeChange={(next) => onPermissionModeChange?.(next)}
+                lastNonPlanMode={lastNonPlanModeRef.current}
+                disabled={hardDisabled}
+              />
+            }
+            permissionLevel={
+              <PermissionLevelPill
+                mode={permissionMode}
+                onChange={(next) => onPermissionModeChange?.(next)}
+                disabled={hardDisabled}
+              />
+            }
+            contextUsage={<ContextUsageIndicator usage={contextUsage ?? null} />}
             sendButton={
               <>
                 {isInterrupted && (
@@ -941,7 +878,7 @@ export function ChatComposer({
 }
 
 /**
- * T-005 / US-001 AC3. MIME-resolution strategy:
+ * MIME-resolution strategy:
  *   1. If `file.type` already starts with `image/`, trust it.
  *   2. Otherwise (blank-type case, common for clipboard paste in some
  *      browsers) sniff the first 12 bytes against the four supported
@@ -985,10 +922,10 @@ async function resolveMediaType(file: File): Promise<string> {
 }
 
 /**
- * T-010. Read a held `ComposerAttachment` as `data:<mt>;base64,<b64>` at
- * submit time. Strip the prefix and return the UserTurnImage wire shape.
- * Done at submit time (not attach time) per B-14 / ADR-D05 — the
- * composer state holds the original `File` until send.
+ * Read a held `ComposerAttachment` as `data:<mt>;base64,<b64>` at
+ * submit time. Strip the prefix and return the {@link UserTurnImage}
+ * wire shape. Done at submit time (not attach time) — the composer
+ * state holds the original `File` until send.
  */
 function encodeAttachment(att: ComposerAttachment): Promise<UserTurnImage> {
   return new Promise((resolve, reject) => {

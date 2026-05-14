@@ -1,6 +1,6 @@
 /**
  * WorkspacePanel — read-only view of the workspace slice of
- * `GET /settings`. US-001 AC1.
+ * `GET /settings`.
  */
 import { useEffect, useState } from "react";
 import { getSettings, type ApiSettings } from "../../lib/api";

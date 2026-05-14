@@ -1,6 +1,5 @@
 /**
  * AuthPanel — read-only view of the auth slice of `GET /settings`.
- * US-001 AC3.
  */
 import { useEffect, useState } from "react";
 import { getSettings, type ApiSettings } from "../../lib/api";

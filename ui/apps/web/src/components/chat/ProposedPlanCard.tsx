@@ -1,5 +1,5 @@
 /**
- * ProposedPlanCard — renders a `PlanProposedItem` (US-003).
+ * ProposedPlanCard — renders a `PlanProposedItem`.
  *
  * Visual surface for the chat-level Accept/Reject flow: when Claude
  * issues an `ExitPlanMode` tool_use while the SDK is in `plan`

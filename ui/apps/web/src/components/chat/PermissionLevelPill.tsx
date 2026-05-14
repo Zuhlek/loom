@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import type { PermissionMode } from "../../lib/chat-types";
-import { LockOpenIcon, PenLineIcon, ShieldIcon, type ModeIconProps } from "./ChatComposer";
+import {
+  ChevronDownIcon,
+  LockOpenIcon,
+  PenLineIcon,
+  ShieldIcon,
+} from "./composer-pill-icons";
 
 /**
- * US-004 / T-013. Composer footer pill for the per-chat permission
- * mode. Renders three rows — Supervised / Auto-accept edits / Full
- * access — under a ghost trigger that shows the active mode + a
- * chevron. The `plan` SDK value is intentionally absent from the rows;
- * the Build/Plan toggle pill ({@link BuildPlanTogglePill}) owns the
- * flip into / out of `plan` per ADR-D06.
+ * Composer footer pill for the per-chat permission mode. Renders
+ * three rows — Supervised / Auto-accept edits / Full access — under
+ * a ghost trigger that shows the active mode + a chevron. The `plan`
+ * SDK value is intentionally absent from the rows; the Build/Plan
+ * toggle pill ({@link BuildPlanTogglePill}) owns the flip into / out
+ * of `plan`.
  *
  * Disabled iff the parent composer is hard-disabled (matches the
  * paperclip / send button treatment); the parent passes `disabled`
@@ -148,74 +153,3 @@ export function PermissionLevelPill({ mode, onChange, disabled }: PermissionLeve
   );
 }
 
-type IconProps = { className?: string };
-
-function ShieldIcon({ className }: IconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  );
-}
-
-function PenLineIcon({ className }: IconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-    </svg>
-  );
-}
-
-function LockOpenIcon({ className }: IconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <rect x="3" y="11" width="18" height="11" rx="2" />
-      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon({ className }: IconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  );
-}

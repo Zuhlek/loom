@@ -1,16 +1,15 @@
 /*
  * DiffFileCard — per-file diff card (header row + collapsible hunks).
  *
- * Lifted from `DiffPanel.tsx` (formerly the inlined JSX inside
- * `DiffPanel`'s `files.map(...)` body) with three additions:
+ * Card features:
  *   1. Internal collapse state owned by the card itself.
  *   2. Chevron toggle wired to the collapse setter.
  *   3. Optional `maxHeight` applied to the hunks container as an
  *      inline style (used by the slim Edit/Write approval variant in
  *      `InlineEditDiff`).
  *
- * Status badge palette (STATUS_BG / STATUS_FG) lifted from `DiffPanel.tsx`
- * during the T-002 extract; the card module now owns the constants.
+ * Status badge palette (STATUS_BG / STATUS_FG) is owned here; cards
+ * in `DiffPanel.tsx` import these constants.
  */
 import { useState } from "react";
 import clsx from "clsx";

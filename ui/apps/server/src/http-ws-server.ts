@@ -248,8 +248,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             rawPriority === "now" || rawPriority === "next" || rawPriority === "later"
               ? rawPriority
               : "now";
-          // T-003 / US-006 AC1. Defence-in-depth: filter malformed
-          // `body.images` before forwarding to the bridge.
+          // Defence-in-depth: filter malformed `body.images` before
+          // forwarding to the bridge.
           const images = sanitizeUserTurnImages(body?.images);
           opts.bridge.submitUserTurnWithPriority(chatId, text, priority, images);
           return;

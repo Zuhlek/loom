@@ -2,6 +2,7 @@
 name: explore-prototype
 description: Explore a running sales demo prototype via Puppeteer to extract requirements; output feeds a /weave project seed.
 user-invocable: true
+disable-model-invocation: true
 argument-hint: <url> [source-dir] [project-name]
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, AskUserQuestion, mcp__puppeteer__puppeteer_navigate, mcp__puppeteer__puppeteer_screenshot, mcp__puppeteer__puppeteer_click, mcp__puppeteer__puppeteer_evaluate, mcp__puppeteer__puppeteer_fill, mcp__puppeteer__puppeteer_hover, mcp__puppeteer__puppeteer_select
 ---

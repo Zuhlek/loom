@@ -1,5 +1,137 @@
 # Build Log
 
+## 2026-05-14 - composer-slash-command-catalog - T-015-integration-smoke
+
+Task: T-015 (Integration smoke — end-to-end happy path).
+Status: green, attempts 1, tests 48/48 new passing (39 browser + 9 server).
+
+Files changed:
+- `ui/apps/web/test/composer-integration.test.ts` (new) — browser
+  scenario; 39 static-source assertions walking the eight composer
+  steps (loading affordance → frame-arrived menu render → /plan
+  built-in dispatch → /model picker open → model pick → Ultrathink
+  + 1M model-settings emit → context-usage frame ring + warning →
+  Plan pill toggle). Plus toolbar slot-order block, live-chat
+  threading block, FS-scanner smoke-guard block (US-006 AC5), and
+  wire-shape mirror block.
+- `ui/apps/server/test/bridge-integration.test.ts` (new) — server
+  scenario; 9 assertions driving the real bridge through its
+  `attach()` + SDK message loop via the `sdkQueryFactory` test seam
+  used by `bridge-slash-commands.test.ts`,
+  `bridge-context-usage.test.ts`,
+  `bridge-model-settings-options.test.ts`. Walk: NULL settings ⇒
+  empty Options → setModelSettings persists + no Query.interrupt() +
+  chat-update broadcast → re-attach ⇒ next spawn carries the new
+  tuple with betas materialised from contextWindow='1m' →
+  plugin_install re-fires supportedCommands → idle re-polls
+  getContextUsage. Cross-checks for SKILL_NAMES, classifier, full
+  Ultrathink tuple, and no FS-scanner imports.
+
+Story-coverage matrix: every US-001..US-009 acceptance criterion
+fires ≥1 assertion in this task (detailed catalogue in the
+project's `tasks/T-015.done.md`).
+
+RED phase: both files seeded with `expect("red").toBe("green")`
+runtime failures (2/2 fail on first run).
+
+GREEN phase: filled in with the real walk; first full run 43/48
+green with 5 regex-shape misses (chat-types declares the three new
+frames inline on the discriminated union rather than as named
+exports; `ModelSelectorPill` exposes the persisted state via the
+catalog-resolved `label` rather than via a `model_settings` prop
+name; `ModelSettingsPill` exposes it via the summary label text).
+Three regex relaxations later — no test weakened, each tightened
+assertion still maps to its US AC — 48/48 green on attempt 1.
+
+Cross-check: 167/167 tests across 15 files in the project's test
+scope still green (every T-001..T-014 per-component test). The two
+new integration files run cleanly under both `apps/web` and
+`apps/server` vitest configurations. Pre-existing failures in
+unrelated files (`working-chip.test.ts` URL-encoded-path issue on
+the `My Shared Files` working dir; `chat-context-menu.test.ts` /
+`assistant-row-null-defense.test.ts` etc. from other projects'
+tickets) untouched — this task only adds two files.
+
+## 2026-05-14 - composer-slash-command-catalog - T-014-context-usage-indicator
+
+Task: T-014 (Context-usage indicator — circular SVG ring + warning state).
+Status: green, attempts 1, tests 17/17 new passing.
+
+Files changed:
+- `ui/apps/web/src/components/chat/ContextUsageIndicator.tsx` (new) —
+  28px circular ring built from two concentric `<circle>` elements.
+  Arc geometry: `strokeDasharray = 2πr`, `strokeDashoffset = 2πr *
+  (1 - percentage/100)`, rotated -90° so the arc starts at 12 o'clock
+  and grows clockwise. Percentage label centered in the ring via
+  `inline-grid place-items-center`. NULL `usage` ⇒ 0% (US-005 AC4).
+  Warning treatment kicks in at `percentage >= 90` — both arc stroke
+  and label switch to `var(--destructive)` (US-005 AC3). Tooltip via
+  `title=` surfaces `<totalTokens.toLocaleString()> /
+  <maxTokens.toLocaleString()> tokens · <model>`. `data-testid`
+  preserved on the wrapper so the T-009 footer-toolbar slot-wiring
+  contract continues to match.
+- `ui/apps/web/src/lib/use-chat-bridge.ts` — new `ContextUsageSnapshot`
+  interface mirrors the wire body; new `contextUsage` state slot init
+  null; `handleServerFrame` branches on `context-usage-update`;
+  `reset()` clears the cached snapshot to null. Hook return type
+  grew a single field.
+- `ui/apps/web/src/components/chat/ChatComposer.tsx` — imports
+  `ContextUsageIndicator` + the `ContextUsageSnapshot` type; new
+  optional `contextUsage?: ContextUsageSnapshot | null` prop on
+  `ChatComposerProps`; T-009 stub replaced with the real component
+  in the `contextUsage` slot of `ComposerFooterToolbar`.
+- `ui/apps/web/src/routes/live-chat.tsx` — single-line addition:
+  `contextUsage={bridge.contextUsage}` threaded through to
+  `<ChatComposer>` next to `slashCommands={bridge.slashCommands}`.
+- `ui/apps/web/test/context-usage-indicator.test.ts` (new) — 17
+  static-source assertions matching the project's node-runtime
+  test convention.
+
+Cross-check: `composer-footer-toolbar.test.ts` 11/11 green (T-013
+already relaxed the placeholder assertion to accept either the stub
+or the real swap-in pill), `model-selector-pill.test.ts` 17/17,
+`model-settings-pill.test.ts` 17/17, `permission-level-pill.test.ts`
+10/10, `build-plan-toggle-pill.test.ts` 12/12,
+`composer-builtin-dispatch.test.ts` 11/11. Pre-existing
+`working-chip.test.ts` ENOENT failures (URL-encoded-path bug — tests
+built paths via `new URL().pathname` instead of `fileURLToPath`;
+only manifests on this `My Shared Files` working dir) are unrelated
+and untouched.
+
+## 2026-05-14 - composer-slash-command-catalog - T-011-model-settings-pill
+
+Task: T-011 (Model settings pill — reasoning + context window).
+Status: green, attempts 1, tests 17/17 new passing.
+
+Files changed:
+- `ui/apps/web/src/components/chat/ModelSettingsPill.tsx` (new) —
+  combined reasoning + context-window pill. Trigger label
+  `<Reasoning> · <Context>`; click opens a two-radiogroup popover with
+  six reasoning rows (Low / Medium / High / Extra High / Max /
+  Ultrathink) and two context rows (200k / 1M). Picks emit partial
+  `WireModelSettings` patches per the design translation table;
+  Ultrathink maps to `{ effort: 'max', thinking: { type: 'enabled',
+  budgetTokens: 32000 } }`. Outside-click + Escape close pattern mirrors
+  `PermissionLevelPill`. NULL `value` falls back to `Extra High · 200k`.
+  The pill does NOT consult `isRunning` / `composerMode` — mid-flight
+  picks still emit (US-009 AC3).
+- `ui/apps/web/src/components/chat/ChatComposer.tsx` — imports the new
+  pill, mounts it in the `modelSettings` slot of `ComposerFooterToolbar`
+  with `value={modelSettings ?? null}`, `onPick` forwarding into the
+  T-010-established `onModelSettingsSet` partial-patch chain, and the
+  shared `hardDisabled` flag. Replaces the T-009 placeholder
+  `<div data-testid="composer-pill-model-settings" />`.
+- `ui/apps/web/test/model-settings-pill.test.ts` (new) — 17 static-source
+  assertions matching the project's node-runtime test convention
+  (per `permission-level-pill.test.ts` / `model-selector-pill.test.ts`).
+
+Cross-check: `model-selector-pill.test.ts` 17/17 green,
+`permission-level-pill.test.ts` 10/10 green,
+`composer-footer-toolbar.test.ts` 11/11 green. Pre-existing
+`composer-controls.test.ts` failures (T-004 `<select>` artefacts
+superseded by T-013's `PermissionLevelPill` extraction) are unchanged —
+not caused by this task.
+
 ## 2026-05-14 - composer-slash-command-catalog - T-007-slash-menu-rewritten-grouped-iconed-loading
 
 Task: T-007 (Slash menu rewritten — grouped, iconed, loading affordance).
@@ -1721,3 +1853,80 @@ Build rerun dispatched after Review failed verdict (1 blocker, 4 major, 3 minor)
 [T-004] 2026-05-14T11:35:00Z composer-slash-command-catalog status=green attempts=1 files=2 bridge attach + message-loop region enumerates SDK slash commands. `SKILL_NAMES` (ADR-D05 curated set) + `classifySlashCommand(c)` exported. `ChatSession` grew `slashCommands: WireSlashCommand[] | null` + `attachConfirmed: boolean`; both reset on `attemptRestart` so respawns re-enumerate. `handleSdkMessage` latches a one-shot enumeration on the first non-`result-is_error` SDK message and refires on `system/plugin_install` messages with status `completed` or `installed` (US-006 re-fire path). `refreshSlashCommands` does the SDK call + map + broadcast under a `queryHandle`-identity guard so stale post-respawn resolutions are dropped. `supportedCommands()` rejection silently exits — catalog untouched, no frame. `attach()` backfills the joining client with a scoped `sendTo` (not broadcast) when the catalog is non-null. T-003's `startQuery()` body untouched. 7 vitest tests green on attempt 1; full server suite 291 passed (2 pre-existing unrelated `fabric-route*` failures, same `routes/loom.ts` missing import as documented in T-002/T-003).
 [T-005] 2026-05-14T11:46:00Z status=green attempts=1 files=3 Bridge polls SDK `getContextUsage()` on attach (after snapshot frame) + on every `setTurnState` transition into `idle` per ADR-D08. `ChatSession` grew `contextUsage: ContextUsageSnapshot | null` (exported interface; init null). `refreshContextUsage` rounds `percentage` for the wire but keeps the raw float in the in-memory cache so the suppression rule (raw |Δ|<1 AND same model) correctly suppresses the 42.3→42.6 example even when the rounded ints (42→43) cross an integer boundary. `queryHandle`-identity guard drops stale post-respawn resolutions; throw paths silently preserve the cache. New public `bridge.setModelSettings(chatId, patch)` validates the four known keys (effort against five SDK values; contextWindow against 200k/1m; thinking against `{type:'enabled',budgetTokens:number}`; model as string|null), drops unknown keys silently, and emits an `error` frame + skips persistence on any invalid known-key value. Successful patches go through `chatRepo.update({model_settings})` (T-002 merge-patch chokepoint) and broadcast a `chat-update` frame; active Query is never interrupted/respawned (US-009 AC1). New WS envelope handler in `http-ws-server.ts` routes `model-settings-set` → `bridge.setModelSettings`. 12 vitest tests green on red→green attempt 1; full server suite 303 passed (2 pre-existing unrelated `fabric-route*` failures, same `routes/loom.ts` missing import as T-002/T-003/T-004).
 [T-006] 2026-05-14T11:50:00Z status=green attempts=1 files=10 composer-slash-command-catalog — FS-scanner deletion end-to-end. Deleted `scan.ts`, `routes/slash-commands.ts`, `ComposerSlashMenu.tsx` + empty server `slash-commands/` dir; removed route mount in `index.ts`, `SlashCommandEntry`/`getSlashCommands` from web `lib/api.ts`, the `slashCommands` state + cwd-`useEffect` + prop pass-through in `live-chat.tsx`, and the full slash-menu state machine + `rankSlashCommands` helper inside `ChatComposer.tsx` / `composer-trigger.ts`. T-007 picks up the rewired bridge-supplied catalog. Red = grep-guard runtime assertion failure (`fs-slash-scanner-deleted.test.ts` 2/2 fail) → green 2/2 pass. Adjacent SDK-driven tests (`bridge-slash-commands` + `frames-composer-catalog`) untouched, 21/21 green. Preserved T-009's `ComposerFooterToolbar` mount per dispatch-context coordination note. Pre-existing repo-wide path-decoding test failures (URL.pathname not decoding `%20`) and missing `routes/loom-mockup.ts`/`loom-board.ts` imports unchanged — flagged in T-009 done report as environmental.
+[T-008] 2026-05-14T14:36:00Z composer-slash-command-catalog status=green attempts=1 files=2 — built-in slash dispatch: `/plan`/`/default` → `onPermissionModeChange`, `/model` → new `onOpenModelPicker` prop stub. Generic write path preserved for SDK rows. 11 static-source tests (7 red → 11 green, attempt 1).
+[T-010] 2026-05-14T12:41:17Z composer-slash-command-catalog status=green attempts=1 files=3 — ModelSelectorPill (Claude-only dropdown: Opus 4.7/4.6/4.5, Sonnet 4.6, Haiku 4.5) mounted in ChatComposer's modelSelector slot; ChatComposerProps grew `modelSettings` + `onModelSettingsSet` partial-patch emitter (US-007 AC1); `/model` builtin opens the local picker via `setModelPickerOpen(true)` (US-003 AC1); NULL value renders `Claude (default)` (US-007 AC5). 17 static-source tests (17 red → 17 green, attempt 1).
+[T-012] 2026-05-14T14:50:30Z composer-slash-command-catalog status=green attempts=1 files=3 — BuildPlanTogglePill (single-click two-state pill, no popup) mounted in ChatComposer's `buildPlanToggle` slot per ADR-D06. Click flips `onModeChange('plan')` ⇔ `onModeChange(lastNonPlanMode)` through the existing `permission-mode-set` chain — no new wire frame, no new ChatComposerProps fields. New `lastNonPlanModeRef` in ChatComposer is seeded from the incoming `permissionMode` and refreshed via `useEffect` whenever a non-plan mode arrives (slash dispatch or PermissionLevelPill pick). PermissionLevelPill `plan`-row drop (US-004 AC4) verified as already-done from T-013, no-op edit there. 12 static-source tests (11 red → 12 green, attempt 1). `composer-footer-toolbar.test.ts` 11/11 + `permission-level-pill.test.ts` 10/10 still green; tsc clean.
+[T-016] 2026-05-14T15:37:00Z composer-slash-command-catalog status=green attempts=1 files=4 — Production wiring fix-up for review Blockers B-01/B-02/B-03. B-01: `live-chat.tsx` WS switch grew `case "context-usage-update": bridge.handleServerFrame(frame); break;` so context-usage frames stop being dropped client-side. B-02: new `setModelSettings = useCallback((patch) => sendFrame(ws, { kind: "model-settings-set", "chat-id": chatId, body: patch }), [chatId])` declared next to `changePermissionMode`; `<ChatComposer>` JSX threads `modelSettings={chat?.model_settings ?? null}` + `onModelSettingsSet={setModelSettings}`. B-03: `ApiChat` in `lib/api.ts` grew `model_settings: WireModelSettings | null` (+ `WireModelSettings` import from `chat-types`), aligning the web mirror with server `ChatRow`. `api-rename-chat.test.ts` fixture updated for the new required field (forced by the type, no test weakened). NEW `live-chat-wire-routing.test.ts` (10 assertions) — static-source regression checks for all three findings plus a runtime assertion against `useChatBridge.handleServerFrame({kind:"context-usage-update",...})` confirming the setter receives the body. Runtime path mocks React's `useState`/`useCallback` via top-level `vi.mock("react",...)` so the hook runs under the project's node-only vitest env (no new deps; T-019 owns the broader jsdom rework). RED: 7/10 runtime-assertion failures (3 already-green checks against the bridge/runtime React mock). GREEN: 10/10 on attempt 1. `tsc --noEmit` clean. Pre-existing URL-encoded-path failures (n-01) untouched: same 29/22 file split before and after.
+[T-018] 2026-05-14T15:45:00Z composer-slash-command-catalog status=green attempts=1 files=9 — P3 dedup fix-up for M-01/M-02/M-03. NEW `ui/apps/web/src/components/chat/composer-pill-icons.tsx` exports `ChevronDownIcon`/`ShieldIcon`/`ClipboardListIcon`/`PenLineIcon`/`LockOpenIcon`/`ModeIconProps` (SVGs lifted byte-for-byte). M-01: three pill components (`PermissionLevelPill`, `ModelSelectorPill`, `ModelSettingsPill`) deleted private `ChevronDownIcon` defs; chevron path literal `M6 9l6 6 6-6` now appears exactly once. M-02: `PermissionLevelPill` deleted its private `Shield/PenLine/LockOpen`; `ChatComposer.tsx` deleted the four icon exports + `ModeIconProps` (never used inside ChatComposer); `spawn-chat-dialog-live.tsx` switched import path to the shared module (direct-import option, not re-export). M-03: bridge `export const ULTRATHINK_BUDGET_TOKENS = 32_000` + its JSdoc deleted (grep-confirmed bridge never references its own export); `ModelSettingsPill.tsx` constant gained a JSdoc declaring the pill is now the SoT; `bridge-model-settings-options.test.ts` dropped the now-stale import + the "constant is 32000" assertion; remaining test bodies use a local `const ULTRATHINK_BUDGET_TOKENS = 32000` JSdoc-linked to the pill. NEW `composer-pill-icons.test.ts` (14 assertions): 14/14 red pre-impl, 14/14 green attempt 1. Cross-check: pill suites + composer-integration + bridge-model-settings-options all green; full server suite 325/325. Web tsc clean; server tsc unchanged (pre-existing TS5097/n-03 baseline only). `BuildPlanTogglePill.tsx`s own private `ClipboardListIcon` left as-is per P1 (smallest diff; not flagged by review, out of scope).
+[T-019] 2026-05-14T15:50:00Z composer-slash-command-catalog status=green attempts=1 files=1 — M-04 meta-fix. NEW `ui/apps/web/test/composer-integration.jsdom.test.ts` (14 tests) lands runtime behaviour coverage over the eight composer scenarios where T-015's source-grep suite missed B-01/B-02/B-03. Mounts each leaf component under a hand-rolled React harness mocking `useState`/`useEffect`/`useCallback`/`useMemo`/`useRef`/`createElement`/`Fragment` (no jsdom — vitest is node-only per `ui/vitest.config.ts`). Harness shares hook cells across renders so dispatched frames mutate state through the production setters. Eight scenarios: 42%/91% context-usage indicator stroke transition, slash-menu frame routing with skill icon dispatch + `/plan` SDK-collision suppression, null-frame Loading affordance, `/plan` built-in dispatch (no textarea write), model picker open + Claude model list, model-pick → `{ model }` patch wrapper, Ultrathink → effort=max + budgetTokens=32000, 1M context-window → contextWindow="1m", BuildPlan flip both directions. Plus a routing guard for the live-chat WS switch + the `<ChatComposer>` prop threading. Option (b) per M-04 reviewer — kept existing `composer-integration.test.ts` as static consistency net. Regression-sensitivity verified by temporarily reverting B-01 (3 tests fail) and B-02 (2 tests fail), restored, 14/14 green on attempt 1. Cross-check 134/134 green across the seven affected suites. tsc clean on web tier. M-04 closed; T-018 (comment sweep) still pending separately.
+
+[T-020] 2026-05-14T16:10:00Z composer-slash-command-catalog status=green attempts=1 files=33 — Dead code + comment sweep (M-05 + m-03 + m-04). `flatRows` + `<span hidden>` deleted from `ComposerSlashMenu`; every `T-NNN` / `US-NNN` / `ADR-D*` reference stripped from comments in `ui/apps/{web,server}/src` (plus the `styles.css` + migration SQL neighbours). Narrative / history phrasing rewritten in clean as-is style. NEW `comment-style-sweep.test.ts` grep-guard (red 2/2 → green 2/2, attempt 1). 147/147 affected component tests + 26/26 affected bridge tests green; tsc unchanged.
+
+## 2026-05-14 - fabric-details-overhaul - Review confirms 12-task build is sound
+
+Review-time verification on the 12-task fabric-details-overhaul build. Board: 12 / 12 Done. Aggregate test surface: 105 / 105 green on a live re-run across 12 fabric files (test-report's 114 figure includes two unchanged pre-existing files — `fabric-archive-route.test.ts`, `fabric-route-no-write.test.ts`). Design Interfaces walked row-by-row against the on-disk tree: `FabricMarkdown.tsx`, `MermaidBlock.tsx`, `FabricViewer.tsx`, `FileTreeDrawer.tsx`, `FabricFileTree.tsx` (extracted), `JsonView.tsx`, `fabric-phase-map.ts`, `lib/mermaid-loader.ts` all exist with the prop shapes documented in `design.md ## Interfaces`. Server route widening is the auditable `READABLE_EXTS = [".md", ".json", ".txt"]` allowlist + the existing 200 KB / null-byte guards. `mermaid ^11.4.1` declared and resolved to `11.15.0` after the post-QC `pnpm install`. Build-phase artefacts (12 done.md + 12 test-log.txt) all present.
+
+Three Minor findings recorded against P5 / P1 (two unused test-only exports + one unused local in `PhaseStepper`), one Note against the static-source harness ceiling — none blocker-grade, none gate the close.
+
+## 2026-05-14 - fabric-details-overhaul - Test-only export hooks need a same-PR test importer
+
+`mermaid-loader.ts`'s `__resetForTests` and `FabricMarkdown.tsx`'s `__testing = { escapeHtml }` both shipped without consumers. The mermaid-loader hook was shaped after `shiki-loader.ts`'s legitimately-consumed `__resetForTests`; the `FabricMarkdown` `__testing` slot looks like a generic helper-extraction pattern. Both pass `tsc` cleanly because TypeScript only warns on unused module-level exports when explicit configuration enables it. Build-side guidance: when adding a test-only export to a new module, write the importing test in the same task before pushing the file. P2 (existing patterns first) is not satisfied by mimicking the *shape* of prior art — only by mimicking both the shape AND its consumer.
+
+[T-001] 2026-05-14T16:53:00Z skill-implicit-match-overfire status=green attempts=1 files=3 — added `disable-model-invocation: true` to the YAML frontmatter of `orchestrator/weave/SKILL.md`, `orchestrator/tune/SKILL.md`, `orchestrator/explore-prototype/SKILL.md`. Pre-existing frontmatter keys (name, description, user-invocable, argument-hint, allowed-tools) preserved verbatim. cli-shell red→green: composite `grep -q '^disable-model-invocation: true$'` returned non-zero on all three pre-edit (runtime assertion fail), zero post-edit; AC2 preserved-keys grep set passes. Green on attempt 1.
+[T-002] 2026-05-14T16:54:22Z skill-implicit-match-overfire status=green attempts=1 files=2 — added `orchestrator/lib/session-store.sh` (five functions: session_store_path, session_store_write, session_store_read, session_store_owned_by_other, session_store_list_owned; atomic tmp+mv writes; source-only with no top-level side effects) and sibling test `orchestrator/lib/session-store.test.sh` (8 cases covering AC1-AC7, mirrors `orchestrator/lib/locks.test.sh` layout). Red showed `command not found` + path assertion failure; green showed 8/8 ok. Green on attempt 1.
+[T-003] 2026-05-14T17:07:00Z skill-implicit-match-overfire status=green attempts=1 files=2 — rewrote `orchestrator/hooks/auto-advance.sh` as sole writer of the session-ownership store (ADR-002): stop_hook_active recursion guard preserved verbatim; reads session_id + cwd from stdin JSON via jq; sources `orchestrator/lib/session-store.sh` through BASH_SOURCE/../lib; FALLBACK (empty/malformed JSON, missing session_id, unsourceable library) emits stderr marker and runs legacy global-scan; PINNED branch scopes advance candidate to the pinned project (silent zero-exit when not Pending; stale-pin emits LOOM_SESSION_STALE and falls through without deleting the record); NO-OWNER branch writes the record via session_store_write when exactly one Pending workspace is identifiable. First-fire project ID via mtime-walk of `${loom_root}/*/pipeline.md` (rejected transcript-tail scan — couples to Anthropic-internal JSONL format). Old global-scan moved into `run_fallback()` per delete-old-on-pivot; no parallel old/new top-level paths. Stop-hook stdout contract unchanged. Added sibling `orchestrator/hooks/auto-advance.test.sh` (9 cases). Red captured FALLBACK marker absent; green captured 9/9 ok. Green on attempt 1.
+
+## 2026-05-14 - composer-slash-command-catalog - fix-up cycle delivers all five tasks green on first attempt (Build → Review)
+
+Five fix-up tasks (T-016..T-020) dispatched after the first Review
+returned `failed` with 4 Blockers + 5 Majors + 4 Minors. All five
+landed green on attempt 1.
+
+- **T-016** (Production wiring fix-up for B-01/B-02/B-03): WS switch
+  + `setModelSettings` dispatcher + `<ChatComposer>` prop threading +
+  `ApiChat.model_settings` field. 4 files, 10 new runtime + static
+  assertions in `live-chat-wire-routing.test.ts` (mocks the React
+  module via `vi.mock` to exercise `useChatBridge.handleServerFrame`
+  under the project's node-only vitest environment without adding
+  jsdom).
+- **T-017** (B-04 backfill): six `T-NNN.test-log.txt` files materialised
+  via fresh `vitest --reporter=verbose` runs. Bookkeeping only — done
+  inline by the orchestrator, no subagent dispatch (and consequently
+  no `develop-log.md` entry).
+- **T-018** (M-01 + M-02 + M-03 P3 dedup): new shared
+  `composer-pill-icons.tsx` exports the six icon glyphs + the
+  `ModeIconProps` type alias; three pills + the spawn-chat dialog
+  import from the module; `ChatComposer.tsx` shed its four icon
+  exports; bridge `ULTRATHINK_BUDGET_TOKENS` export + JSdoc deleted
+  (pill is now the SoT). 14-test `composer-pill-icons.test.ts`
+  guards.
+- **T-019** (M-04 meta-fix): `composer-integration.jsdom.test.ts`
+  lands the real runtime-mount integration coverage that the first
+  pass's static-grep suite missed. Hand-rolled React harness (no
+  jsdom dep), 14 tests across 8 scenarios + 3 routing/threading
+  guards. Regression sensitivity confirmed (reverting B-01 fails 3,
+  reverting B-02 fails 2). Option-b kept-both: source-grep
+  `composer-integration.test.ts` retained as wire-shape drift net.
+- **T-020** (M-05 + m-03 + m-04 dead-code + comment sweep): `flatRows`
+  + `<span hidden>` deleted from `ComposerSlashMenu`; 179 lines
+  across 30 source files stripped of `T-NNN` / `US-NNN` / `ADR-D*`
+  references; narrative phrasings rewritten. New
+  `comment-style-sweep.test.ts` grep-guard locks the AC.
+
+Aggregate test surface after fix-up: 253/253 build-introduced tests
+green (web 198/198 across 14 files + server 55/55 across 6 files).
+Pre-existing repo-wide failures (n-01 URL-encoded paths, n-03 TS5097
+import-extension) unchanged. tsc clean on web tier.
+
+Re-audit (review.md attempt 2) verdict: PASS — accepted as complete.
+Two non-blocking minors remain (m-01 deferred cosmetic, m-05' one
+residual narrative comment).
+
+**Cross-references:**
+`.loom/composer-slash-command-catalog/{review,quality-review,develop-log,test-report}.md`;
+`.loom/composer-slash-command-catalog/tasks/T-016..T-020.{done.md,test-log.txt}`.
+[T-004] 2026-05-14T16:58:00Z skill-implicit-match-overfire status=green attempts=1 files=2 — rewrote `orchestrator/hooks/resume-on-start.sh` with three branches: FALLBACK (empty stdin / malformed JSON / missing `session_id` / missing library — emits `LOOM_SESSION_FALLBACK=1` + optional `LOOM_SESSION_STORE_MISSING=1` stderr markers and runs the legacy global-scan body verbatim), OWNED (record exists — emits `additionalContext` scoped to the pinned project only, ignoring other active workspaces per US-003 AC3; stale-project case emits `LOOM_SESSION_STALE=<sid>` stderr marker without deleting the record and falls through), NO-OWNER (record absent — lists active workspaces minus those `session_store_owned_by_other` reports as held by a different live session per US-002 AC3b). Read-only on the store (ADR-002). `LOOM_ROOT` resolved from payload `cwd` (`cwd/.loom`), falling back to env / `.loom` default. Stdout JSON envelope `{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:...}}` preserved verbatim. Library sourced via dirname-relative idiom for symlink transparency. NEW sibling `orchestrator/hooks/resume-on-start.test.sh` (7 cases): empty stdin FALLBACK + stderr marker, malformed JSON FALLBACK, OWNED scoping (projectY ignored under sess-A pinned to projectX), NO-OWNER filter (projectY owned by sess-other excluded for sess-fresh), exhausted NO-OWNER → silent empty stdout, stdout JSON envelope shape, payload-cwd supersedes shell `$PWD`. Every case snapshots `.sessions/` contents byte-for-byte before/after the hook call to guard the read-only invariant. Red captured assertion failure on the missing fallback marker; green 7/7 ok. Green on attempt 1.
+
+## 2026-05-14 - skill-implicit-match-overfire - first-fire-project-id-mtime-walk-vs-transcript-scan
+
+Plan deferred the first-fire writer's project-identification mechanism (mtime walk of `${loom_root}/*/pipeline.md` vs. transcript-tail scan of `transcript_path` for `/weave <name>`) to Build. T-003 chose mtime-walk on the grounds that (a) the existing `scan_pending_candidate` already implements it as part of the FALLBACK path, so the writer is a free reuse; (b) transcript-tail scan couples Loom to Anthropic-internal JSONL transcript format stability — the format is undocumented and Anthropic-owned. mtime-walk only fails when the user's filesystem doesn't track mtimes reliably (rare on macOS/Linux native; possible on SMB/NFS); transcript scan fails on any Anthropic-side format change. Robustness wins for mtime-walk here; the design contract is identical between the two mechanisms.

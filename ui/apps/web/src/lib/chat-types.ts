@@ -16,15 +16,15 @@ export interface AssistantTextBlock {
   type: "text";
   text: string;
   /**
-   * T-002 / US-002 (chat-streaming-fixes), ADR-004. Bridge-internal
-   * marker for dense-array filler blocks produced by
-   * `claude-session-bridge.ts` when `content_block_start` arrives at an
-   * index past the current `blocks.length`. The web's `AssistantRow.map`
-   * filters these out before discrimination so the streaming caret can't
-   * land on an invisible node. Excess metadata on an otherwise legal
-   * text block — NOT a new wire variant. Mirror of the server's
-   * `AssistantTextBlock._placeholder` field; both sides must declare it
-   * to keep `wire-mirror-drift.test.ts` passing.
+   * Bridge-internal marker for dense-array filler blocks produced
+   * by `claude-session-bridge.ts` when `content_block_start` arrives
+   * at an index past the current `blocks.length`. The web's
+   * `AssistantRow.map` filters these out before discrimination so
+   * the streaming caret can't land on an invisible node. Excess
+   * metadata on an otherwise legal text block — NOT a new wire
+   * variant. Mirror of the server's `AssistantTextBlock._placeholder`
+   * field; both sides must declare it to keep
+   * `wire-mirror-drift.test.ts` passing.
    */
   _placeholder?: boolean;
 }
@@ -47,7 +47,7 @@ export interface AssistantToolUseBlock {
  * One image block extracted from a tool_result content array. The
  * bridge transports the base-64 payload + media-type straight through;
  * the web client constructs a `data:<mediaType>;base64,<dataB64>`
- * URL for the `<img>` `src` attribute. No blob URLs (ADR-006).
+ * URL for the `<img>` `src` attribute. No blob URLs.
  */
 export interface ToolResultImage {
   mediaType: string;
@@ -58,7 +58,7 @@ export interface ToolResultImage {
 export interface ToolResultSummary {
   text: string;
   isError: boolean;
-  /** Optional images extracted from the SDK tool_result content array (ADR-007). */
+  /** Optional images extracted from the SDK tool_result content array. */
   images?: ToolResultImage[];
 }
 
@@ -69,7 +69,7 @@ export type AssistantBlock = AssistantTextBlock | AssistantThinkingBlock | Assis
  * server `UserMessageImage` byte-for-byte (see
  * `apps/server/src/chat-protocol/messages.ts`). The web client builds
  * `data:<mediaType>;base64,<dataB64>` URLs for `<img>` `src` — same
- * inline-data pattern as `ToolResultImage` (ADR-006).
+ * inline-data pattern as `ToolResultImage`.
  */
 export interface UserMessageImage {
   mediaType: string;
@@ -85,7 +85,7 @@ export interface UserMessageItem {
   createdAt: string;
   /**
    * Image attachments included with this turn. Absent for text-only
-   * legacy items / older snapshots (US-007 AC3).
+   * items / older snapshots.
    */
   images?: UserMessageImage[];
 }
@@ -109,7 +109,7 @@ export interface SystemNoticeItem {
 }
 
 /**
- * US-003. Chat-level interactive plan proposal — mirrors the server
+ * Chat-level interactive plan proposal — mirrors the server
  * `PlanProposedItem` byte-for-byte. The `ProposedPlanCard` renders this
  * with Accept/Reject buttons while `status === "pending"`; post-decision
  * the card stays visible with greyed-out controls as an audit row.
@@ -174,8 +174,8 @@ export interface ChatSnapshot {
 
 /**
  * SDK PermissionMode subset surfaced on the wire. Mirrors the four
- * modes US-004 AC1 exposes in the composer dropdown — matches the
- * server `WirePermissionMode` byte-for-byte.
+ * modes the composer dropdown exposes — matches the server
+ * `WirePermissionMode` byte-for-byte.
  */
 export type PermissionMode =
   | "default"
@@ -239,7 +239,7 @@ export type ServerFrame =
       body: { commands: WireSlashCommand[] };
     }
   | {
-      /** Push the SDK context-window breakdown post-turn (ADR-D08). */
+      /** Push the SDK context-window breakdown post-turn. */
       kind: "context-usage-update";
       "chat-id": string;
       body: {
@@ -300,11 +300,9 @@ export type ClientFrame =
     }
   | {
       /**
-       * T-003 / US-003 AC3. Accept the latest `plan-proposed` item.
-       * The server bridge calls `setPermissionMode("default")` and
-       * queues an "execute the plan" user-turn (see Design
-       * `## Plan-proposed lifecycle`). Per ADR-004 no composer draft
-       * is auto-submitted.
+       * Accept the latest `plan-proposed` item. The server bridge
+       * calls `setPermissionMode("default")` and queues an "execute
+       * the plan" user-turn. No composer draft is auto-submitted.
        */
       kind: "plan-accept";
       "chat-id": string;
@@ -312,9 +310,9 @@ export type ClientFrame =
     }
   | {
       /**
-       * T-003 / US-003 AC4. Reject the latest `plan-proposed` item.
-       * The server bridge queues a reconsider user-turn and leaves
-       * permission mode at `"plan"`.
+       * Reject the latest `plan-proposed` item. The server bridge
+       * queues a reconsider user-turn and leaves permission mode at
+       * `"plan"`.
        */
       kind: "plan-reject";
       "chat-id": string;
@@ -360,7 +358,7 @@ export interface WireModelSettings {
 /**
  * One row in the SDK-enumerated slash-command catalog — mirror of the
  * server `WireSlashCommand` byte-for-byte. `kind` is bridge-classified
- * (ADR-D05) and drives the menu's row icon.
+ * and drives the menu's row icon.
  */
 export interface WireSlashCommand {
   name: string;

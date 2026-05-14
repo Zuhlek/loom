@@ -53,10 +53,10 @@ export interface AtFileTrigger {
 /**
  * Returns a trigger iff the cursor is at the end of an `@<word>` token
  * whose `@` is at start-of-line / after whitespace and whose body has
- * no whitespace. Used by the composer's `@`-file picker (US-008 AC1,
- * AC4). Mirrors `detectSlashCommandTrigger`'s shape.
+ * no whitespace. Used by the composer's `@`-file picker. Mirrors
+ * `detectSlashCommandTrigger`'s shape.
  *
- * Detection rule (per design ADR-D07 / B-15):
+ * Detection rule:
  *   1. Clamp the cursor.
  *   2. Walk back from cursor-1 to find the nearest `@` on the current
  *      line. If none, return null.

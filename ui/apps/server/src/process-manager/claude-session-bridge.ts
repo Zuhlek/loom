@@ -102,21 +102,12 @@ export interface BridgeOptions {
   sdkQueryFactory?: (args: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => Query;
 }
 
-/**
- * ADR-D07. Budget passed to the SDK `thinking: { type: 'enabled', budgetTokens }`
- * when the user picks Ultrathink in the model-settings popup. Server-side
- * single source of truth — kept here so the web mapping table at
- * `ui/apps/web/src/components/chat/ModelSettingsPill.tsx` and this bridge
- * agree without a duplicated literal.
- */
-export const ULTRATHINK_BUDGET_TOKENS = 32_000;
-
-/** ADR-D04. SDK beta flag enabling the 1M context window. */
+/** SDK beta flag enabling the 1M context window. */
 const CONTEXT_1M_BETA = "context-1m-2025-08-07";
 
 /**
- * ADR-D05. Curated set of slash-command names that classify as "skill"
- * rows in the composer slash menu. The SDK `SlashCommand` shape has no
+ * Curated set of slash-command names that classify as "skill" rows
+ * in the composer slash menu. The SDK `SlashCommand` shape has no
  * `source` / `kind` field, so the bridge annotates each row by name
  * before broadcasting; the client renders from the resulting `kind`.
  * Single source of truth — renaming a skill is one edit here.
@@ -140,7 +131,7 @@ export const SKILL_NAMES: ReadonlySet<string> = new Set<string>([
   "claude-api",
 ]);
 
-/** ADR-D05. Map an SDK-enumerated SlashCommand to the wire `kind`. */
+/** Map an SDK-enumerated SlashCommand to the wire `kind`. */
 export function classifySlashCommand(command: SlashCommand): WireSlashCommand["kind"] {
   return SKILL_NAMES.has(command.name) ? "skill" : "command";
 }
@@ -234,11 +225,11 @@ interface PendingQuestionState {
 }
 
 /**
- * T-003. Tracks the latest pending `plan-proposed` item so Accept /
- * Reject can correlate the user's button click back to the originating
+ * Tracks the latest pending `plan-proposed` item so Accept / Reject
+ * can correlate the user's button click back to the originating
  * ExitPlanMode tool_use. Only one plan can be in-flight per session
  * (the SDK only emits one tool_use at a time, and ExitPlanMode runs
- * inside a single turn) — Design `## In-memory state`.
+ * inside a single turn).
  */
 interface PendingPlanProposal {
   /** `PlanProposedItem.id`; not the SDK tool_use id. */
@@ -268,9 +259,9 @@ export interface ChatSession {
   turnState: TurnState;
   lastError: string | undefined;
   pendingPermission: PendingPermissionState | null;
-  /** US-001. Active AskUserQuestion request, if any. Only one in-flight per session. */
+  /** Active AskUserQuestion request, if any. Only one in-flight per session. */
   pendingQuestion: PendingQuestionState | null;
-  /** T-003 / US-003. Latest pending plan proposal, if any. */
+  /** Latest pending plan proposal, if any. */
   pendingPlan: PendingPlanProposal | null;
   /** Generation counter; bumped on respawn so stale callbacks are ignored. */
   generation: number;
@@ -299,7 +290,7 @@ export interface ChatSession {
   /** Current turn id used to group items. Bumped on each user turn. */
   currentTurnId: string;
   /**
-   * T-001 / US-001. SDK-level `message.id` captured from the most recent
+   * SDK-level `message.id` captured from the most recent
    * `message_start` event. Set in `onPartial`'s `message_start` branch;
    * read by `resolveAssistantItemId` on every subsequent
    * `content_block_*` event; cleared on `message_stop`. Bridge-internal;
@@ -307,29 +298,29 @@ export interface ChatSession {
    */
   currentMessageStartId: string | null;
   /**
-   * T-004 / US-001 / US-002 / US-006. Last SDK-enumerated slash-command
-   * catalog (classified per {@link classifySlashCommand}). `null` until
-   * the first successful `supportedCommands()` lands. Re-attach uses the
-   * non-null value to backfill the joining client without waiting for
-   * the next enumeration.
+   * Last SDK-enumerated slash-command catalog (classified per
+   * {@link classifySlashCommand}). `null` until the first successful
+   * `supportedCommands()` lands. Re-attach uses the non-null value to
+   * backfill the joining client without waiting for the next
+   * enumeration.
    */
   slashCommands: WireSlashCommand[] | null;
   /**
-   * T-004. Latches on the first non-error SDK message of a SDK run so
-   * the bridge enumerates `supportedCommands()` exactly once per spawn
+   * Latches on the first non-error SDK message of a SDK run so the
+   * bridge enumerates `supportedCommands()` exactly once per spawn
    * (and once per plugin-install signal). Reset on respawn.
    */
   attachConfirmed: boolean;
   /**
-   * T-005 / ADR-D08. Last `getContextUsage()` reading rounded to whole
-   * percent. `null` until the first successful poll lands. Cached on
-   * the session to dedupe broadcasts: a fresh reading whose percentage
-   * delta is < 1 AND whose model is unchanged is suppressed.
+   * Last `getContextUsage()` reading rounded to whole percent. `null`
+   * until the first successful poll lands. Cached on the session to
+   * dedupe broadcasts: a fresh reading whose percentage delta is < 1
+   * AND whose model is unchanged is suppressed.
    */
   contextUsage: ContextUsageSnapshot | null;
 }
 
-/** ADR-D08. Bridge-internal mirror of {@link ContextUsageUpdateFrame.body}. */
+/** Bridge-internal mirror of {@link ContextUsageUpdateFrame.body}. */
 export interface ContextUsageSnapshot {
   percentage: number;
   totalTokens: number;
@@ -338,11 +329,11 @@ export interface ContextUsageSnapshot {
 }
 
 /**
- * T-002 / US-002 (ADR-004). Dense-array filler block used to backfill
- * sparse intermediate slots before a `content_block_start` index write.
- * `_placeholder: true` survives `JSON.stringify` (it's a normal own
- * property) and is filtered by the web's `AssistantRow.map` before
- * discrimination — the marker is excess metadata on an otherwise legal
+ * Dense-array filler block used to backfill sparse intermediate
+ * slots before a `content_block_start` index write. `_placeholder:
+ * true` survives `JSON.stringify` (a normal own property) and is
+ * filtered by the web's `AssistantRow.map` before discrimination —
+ * the marker is excess metadata on an otherwise legal
  * `AssistantTextBlock`, NOT a new wire variant.
  */
 function makePlaceholderBlock(): AssistantBlock {
@@ -350,8 +341,8 @@ function makePlaceholderBlock(): AssistantBlock {
 }
 
 /**
- * T-002 / US-002 AC-1, AC-2 (ADR-004). Ensure the blocks array is dense
- * up to (but not including) `targetIdx` by pushing placeholder blocks.
+ * Ensure the blocks array is dense up to (but not including)
+ * `targetIdx` by pushing placeholder blocks.
  * Called BEFORE every `aitem.blocks[idx] = ...` write in the
  * `content_block_start` branch so the array never carries sparse holes
  * that `JSON.stringify` would emit as literal `null`s on the wire.
@@ -367,8 +358,8 @@ function ensureDense(blocks: AssistantBlock[], targetIdx: number): void {
 }
 
 /**
- * T-001 / US-001 AC-1, AC-5 (ADR-003). Resolve the stable assistant-item
- * id for a streaming partial. Prefers the SDK-level `message.id`
+ * Resolve the stable assistant-item id for a streaming partial.
+ * Prefers the SDK-level `message.id`
  * captured from the most recent `message_start` event on this session.
  * Falls back to `msg.uuid` ONLY if no `message_start` was observed before
  * the first `content_block_start` for this partial-stream — logs a
@@ -459,10 +450,9 @@ export class ClaudeSessionBridge {
       });
     }
     this.sendTo(client, snapshotFrame(session));
-    // T-004 / US-006. Backfill the joining client with the last
-    // enumerated catalog so late attachers don't wait for the next
-    // SDK re-enumeration. No-op until the first successful
-    // `supportedCommands()` lands.
+    // Backfill the joining client with the last enumerated catalog
+    // so late attachers don't wait for the next SDK re-enumeration.
+    // No-op until the first successful `supportedCommands()` lands.
     if (session.slashCommands !== null) {
       this.sendTo(client, {
         kind: "slash-commands-update",
@@ -470,9 +460,9 @@ export class ClaudeSessionBridge {
         body: { commands: session.slashCommands },
       });
     }
-    // T-005 / ADR-D08. Backfill the joining client with the cached
-    // usage snapshot first, then trigger a fresh poll so the indicator
-    // reflects the latest reading without waiting for the next idle.
+    // Backfill the joining client with the cached usage snapshot
+    // first, then trigger a fresh poll so the indicator reflects the
+    // latest reading without waiting for the next idle.
     if (session.contextUsage !== null) {
       this.sendTo(client, {
         kind: "context-usage-update",
@@ -508,8 +498,8 @@ export class ClaudeSessionBridge {
 
   /**
    * Forward a `user-turn` frame from a WS client. Thin wrapper around
-   * `submitUserTurnWithPriority(text, "now")` — the SDK-side priority
-   * default per US-007 / ADR-004.
+   * `submitUserTurnWithPriority(text, "now")` — the default SDK-side
+   * priority.
    */
   submitUserTurn(chatId: string, text: string): void {
     this.submitUserTurnWithPriority(chatId, text, "now");
@@ -576,10 +566,9 @@ export class ClaudeSessionBridge {
       this.store.chats.setSessionId(chat.id, sessionId);
     }
 
-    // T-004 (US-002 / ADR-002). Resolve the cwd via the worktree-mode
-    // helper before we kick off the SDK query. The helper never throws;
-    // a non-null fallbackReason becomes a one-shot system-notice in the
-    // timeline (ADR-006).
+    // Resolve the cwd via the worktree-mode helper before kicking
+    // off the SDK query. The helper never throws; a non-null
+    // fallbackReason becomes a one-shot system-notice in the timeline.
     const resolved = await this.resolveSpawnCwdFn({
       chat: { id: chat.id, cwd: chat.cwd, worktree_mode: chat.worktree_mode },
       config: { worktreesRoot: this.config?.worktreesRoot ?? null },
@@ -696,7 +685,7 @@ export class ClaudeSessionBridge {
       sdkOptions.allowDangerouslySkipPermissions = true;
     }
 
-    // ADR-D04 / US-009: re-read the chat row on every spawn so a mid-flight
+    // Re-read the chat row on every spawn so a mid-flight
     // `model-settings-set` is picked up on the next respawn without
     // disturbing the active Query.
     const settings = this.store.chats.get(session.chatId)?.model_settings ?? null;
@@ -862,8 +851,8 @@ export class ClaudeSessionBridge {
     session.inputQueue = new UserMessageQueue();
     session.abortController = new AbortController();
     session.currentMessageStartId = null;
-    // T-004. Re-arm enumeration on respawn: the next non-error SDK
-    // message confirms the fresh attach and re-fires `supportedCommands()`.
+    // Re-arm enumeration on respawn: the next non-error SDK message
+    // confirms the fresh attach and re-fires `supportedCommands()`.
     session.attachConfirmed = false;
     // Replay buffered input into the fresh queue. Preserves FIFO order.
     const replay = session.pendingInput;
@@ -930,10 +919,10 @@ export class ClaudeSessionBridge {
   }
 
   private handleSdkMessage(session: ChatSession, msg: SDKMessage): void {
-    // T-004. The first non-error SDK message of a spawn confirms attach
+    // The first non-error SDK message of a spawn confirms attach
     // and triggers the initial `supportedCommands()` enumeration. A
-    // `plugin_install` completion re-fires enumeration so newly installed
-    // skills surface without a re-attach (US-006).
+    // `plugin_install` completion re-fires enumeration so newly
+    // installed skills surface without a re-attach.
     const isErrorResult = msg.type === "result" && (msg as { is_error?: boolean }).is_error === true;
     const isPluginReload =
       msg.type === "system" &&
@@ -970,12 +959,12 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * T-004. Call `query.supportedCommands()`, classify each row via
-   * {@link classifySlashCommand}, store the catalog on the session, and
-   * broadcast a `slash-commands-update` frame. Generation-guarded so a
-   * late-resolving enumeration from a stale `Query` (post-respawn) is
-   * discarded. On throw: leave `session.slashCommands` at its prior
-   * value and emit no frame (Design `## Failure modes`).
+   * Call `query.supportedCommands()`, classify each row via
+   * {@link classifySlashCommand}, store the catalog on the session,
+   * and broadcast a `slash-commands-update` frame. Generation-guarded
+   * so a late-resolving enumeration from a stale `Query`
+   * (post-respawn) is discarded. On throw: leave
+   * `session.slashCommands` at its prior value and emit no frame.
    */
   private async refreshSlashCommands(session: ChatSession): Promise<void> {
     const queryHandle = session.queryHandle;
@@ -1002,12 +991,12 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * T-005 / ADR-D08. Poll `query.getContextUsage()`, round percentage to
-   * integer, and broadcast a `context-usage-update` frame unless the
-   * reading is suppressed (|Δpercentage| < 1 AND same model). Generation-
-   * guarded so a late resolution from a stale `Query` post-respawn is
-   * dropped. On throw: leave the cached snapshot untouched and emit no
-   * frame (Design `## Failure modes`).
+   * Poll `query.getContextUsage()`, round percentage to integer, and
+   * broadcast a `context-usage-update` frame unless the reading is
+   * suppressed (|Δpercentage| < 1 AND same model). Generation-guarded
+   * so a late resolution from a stale `Query` post-respawn is
+   * dropped. On throw: leave the cached snapshot untouched and emit
+   * no frame.
    */
   private async refreshContextUsage(session: ChatSession): Promise<void> {
     const queryHandle = session.queryHandle;
@@ -1050,13 +1039,13 @@ export class ClaudeSessionBridge {
 
   /** Materialise an assistant message (post-stream finalised content). */
   private onAssistant(session: ChatSession, msg: SDKAssistantMessage): void {
-    // T-001 / US-001 AC-4 (ADR-007). Key by `msg.message.id` so the
-    // streaming row (created by `onPartial` under the same id) coalesces
-    // with the canonical final-assistant row. `msg.uuid` is the SDK-event
-    // UUID and is NOT the same string as `msg.message.id`. Without this
-    // paired migration the final-message path would `appendItem` a new
-    // row and US-001 AC-4 ("never more than one assistant-message row
-    // per `message.id`") would be unimplementable.
+    // Key by `msg.message.id` so the streaming row (created by
+    // `onPartial` under the same id) coalesces with the canonical
+    // final-assistant row. `msg.uuid` is the SDK-event UUID and is
+    // NOT the same string as `msg.message.id`. Without this paired
+    // migration the final-message path would `appendItem` a new row
+    // and break the invariant of "never more than one
+    // assistant-message row per `message.id`".
     const messageId = (msg.message as { id?: string }).id;
     if (typeof messageId !== "string" || messageId.length === 0) {
       console.warn(
@@ -1070,10 +1059,10 @@ export class ClaudeSessionBridge {
         : msg.uuid;
     const blocks: AssistantBlock[] = [];
     const content = (msg.message as { content?: unknown[] }).content;
-    // T-003: collect ExitPlanMode tool_use blocks for post-pass dispatch.
-    // We append the parent assistant message first (audit trail per
-    // Design `## Plan-proposed lifecycle`), then emit one
-    // `plan-proposed` item per ExitPlanMode block found.
+    // Collect ExitPlanMode tool_use blocks for post-pass dispatch.
+    // The parent assistant message is appended first (audit trail),
+    // then one `plan-proposed` item is emitted per ExitPlanMode
+    // block found.
     const planProposals: Array<{ toolUseId: string; planText: string }> = [];
     if (Array.isArray(content)) {
       for (const block of content) {
@@ -1125,10 +1114,9 @@ export class ClaudeSessionBridge {
       this.appendItem(session, item);
     }
 
-    // T-003 / US-003 AC1: emit a `plan-proposed` item for each
-    // ExitPlanMode tool_use observed on this assistant message. Per
-    // Design `## Failure modes`: empty plan body → append a
-    // `system-notice` and skip the plan-proposed item.
+    // Emit a `plan-proposed` item for each ExitPlanMode tool_use
+    // observed on this assistant message. Empty plan body → append
+    // a `system-notice` and skip the plan-proposed item.
     for (const proposal of planProposals) {
       this.handlePlanProposal(session, proposal.planText, proposal.toolUseId);
     }
@@ -1143,12 +1131,13 @@ export class ClaudeSessionBridge {
 
     const t = (event as { type?: string }).type;
 
-    // T-001 / US-001 AC-1. Capture `event.message.id` BEFORE any item
-    // lookup so subsequent content_block_* branches use the stable id.
-    // `message_start` is the first event for any logical Claude message
-    // per the SDK's typed event union (BetaRawMessageStartEvent precedes
-    // any content block). No item is created on this branch — the next
-    // content_block_start does the create-or-update work.
+    // Capture `event.message.id` BEFORE any item lookup so
+    // subsequent content_block_* branches use the stable id.
+    // `message_start` is the first event for any logical Claude
+    // message per the SDK's typed event union
+    // (BetaRawMessageStartEvent precedes any content block). No item
+    // is created on this branch — the next content_block_start does
+    // the create-or-update work.
     if (t === "message_start") {
       const startEvent = event as { message?: { id?: string } };
       const messageId = startEvent.message?.id;
@@ -1179,11 +1168,10 @@ export class ClaudeSessionBridge {
 
     if (t === "content_block_start") {
       const idx = (event as { index?: number }).index ?? aitem.blocks.length;
-      // T-002 / US-002 AC-1 (ADR-004). Backfill sparse intermediate
-      // slots BEFORE the index write so the array stays dense
-      // end-to-end and survives `JSON.stringify` without holes
-      // becoming literal `null`s. No-op when `idx <=
-      // aitem.blocks.length`.
+      // Backfill sparse intermediate slots BEFORE the index write
+      // so the array stays dense end-to-end and survives
+      // `JSON.stringify` without holes becoming literal `null`s.
+      // No-op when `idx <= aitem.blocks.length`.
       ensureDense(aitem.blocks, idx);
       const block = (event as { content_block?: unknown }).content_block as
         | { type?: string; text?: string; thinking?: string; id?: string; name?: string; input?: Record<string, unknown> }
@@ -1203,11 +1191,11 @@ export class ClaudeSessionBridge {
         aitem.blocks[idx] = toolBlock;
         session.toolUseToAssistantId.set(block.id, id);
       } else {
-        // T-002 / US-002. Unknown block type — leave the placeholder at
-        // `idx` rather than overwriting with `undefined` (which would
-        // re-introduce a sparse hole). The web's AssistantRow filters
-        // placeholders before discrimination, so the unknown slot
-        // renders as nothing (US-002 AC-5).
+        // Unknown block type — leave the placeholder at `idx`
+        // rather than overwriting with `undefined` (which would
+        // re-introduce a sparse hole). The web's AssistantRow
+        // filters placeholders before discrimination, so the
+        // unknown slot renders as nothing.
         if (aitem.blocks.length === idx) {
           aitem.blocks.push(makePlaceholderBlock());
         }
@@ -1228,9 +1216,9 @@ export class ClaudeSessionBridge {
     } else if (t === "message_stop") {
       // Stream finished for this assistant message; final `assistant`
       // message will arrive next with the canonical content.
-      // T-001 / US-001 AC-3. Clear the per-message scratch so the NEXT
-      // SDK message within the same user turn (multi-tool case) starts
-      // a fresh message_start → currentMessageStartId chain.
+      // Clear the per-message scratch so the NEXT SDK message
+      // within the same user turn (multi-tool case) starts a fresh
+      // `message_start → currentMessageStartId` chain.
       aitem.streaming = false;
       session.currentMessageStartId = null;
     }
@@ -1301,8 +1289,8 @@ export class ClaudeSessionBridge {
       toolUseID: string;
     },
   ): Promise<PermissionResult> {
-    // US-001 AC1. AskUserQuestion is permission-gated by the SDK, but
-    // the UI surface is a dedicated picker (not the generic permission
+    // AskUserQuestion is permission-gated by the SDK, but the UI
+    // surface is a dedicated picker (not the generic permission
     // card). Branch here before the pending-permission path so the
     // question + options surface on a typed `pending-question` frame.
     if (toolName === "AskUserQuestion") {
@@ -1350,8 +1338,8 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * US-001 AC1. Parse an AskUserQuestion tool input into a
-   * `PendingQuestion`, broadcast a `pending-question` frame, and stash
+   * Parse an AskUserQuestion tool input into a `PendingQuestion`,
+   * broadcast a `pending-question` frame, and stash
    * the SDK's `resolve` closure so `respondToQuestion` can drive it
    * when the user submits the picker.
    *
@@ -1537,10 +1525,10 @@ export class ClaudeSessionBridge {
       "chat-id": session.chatId,
       body: { state, lastError: session.lastError },
     });
-    // T-005 / ADR-D08. Repoll the SDK's context-window breakdown on
-    // every transition into idle (turn completed). The bridge does NOT
-    // free-run-poll between turns — mid-turn percentages are noisy and
-    // not actionable.
+    // Repoll the SDK's context-window breakdown on every transition
+    // into idle (turn completed). The bridge does NOT free-run-poll
+    // between turns — mid-turn percentages are noisy and not
+    // actionable.
     if (state === "idle") {
       void this.refreshContextUsage(session);
     }
@@ -1575,12 +1563,12 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * US-004. Push a permission-mode change through to the live SDK Query
-   * handle so the SDK's tool-gate behaviour switches immediately. Per
-   * ADR-004, calls are NOT debounced or coalesced; each invocation is
+   * Push a permission-mode change through to the live SDK Query
+   * handle so the SDK's tool-gate behaviour switches immediately.
+   * Calls are NOT debounced or coalesced; each invocation is
    * forwarded to the SDK in-order. No-op when the chat has no live
-   * session (the next attach will spawn with whatever `permission_mode`
-   * the chat row holds).
+   * session (the next attach will spawn with whatever
+   * `permission_mode` the chat row holds).
    */
   async setPermissionMode(chatId: string, mode: WirePermissionMode): Promise<void> {
     const session = this.sessions.get(chatId);
@@ -1590,26 +1578,25 @@ export class ClaudeSessionBridge {
     try {
       await queryHandle.setPermissionMode(mode as SdkPermissionMode);
     } catch (err) {
-      // Surface the failure as a session-scoped notice. Per design's
-      // `## Failure modes`, we do NOT roll back any user-turn that was
-      // already queued — the user explicitly asked for both.
+      // Surface the failure as a session-scoped notice. A user-turn
+      // already queued is NOT rolled back — the user explicitly
+      // asked for both.
       const message = err instanceof Error ? err.message : String(err);
       this.appendItem(session, makeNotice(`Permission mode change failed: ${message}`, "error"));
     }
   }
 
   /**
-   * US-007 / US-008 / US-009. Merge a partial {@link WireModelSettings}
-   * patch into the chat-row JSON and broadcast a `chat-update` frame so
-   * attached clients re-derive pill labels. The active `Query` is NOT
-   * interrupted or respawned (US-009 AC1) — the change lands on the
-   * next `startQuery()` via {@link ChatSession.modelSettings} the row
-   * read at spawn time.
+   * Merge a partial {@link WireModelSettings} patch into the
+   * chat-row JSON and broadcast a `chat-update` frame so attached
+   * clients re-derive pill labels. The active `Query` is NOT
+   * interrupted or respawned — the change lands on the next
+   * `startQuery()` via the chat-row read at spawn time.
    *
-   * Validation per Design `## Failure modes`:
+   * Validation:
    *   - Unknown keys are silently dropped (no error).
-   *   - Invalid `effort` / `contextWindow` / `thinking` shapes yield an
-   *     `error` frame, NO persistence.
+   *   - Invalid `effort` / `contextWindow` / `thinking` shapes yield
+   *     an `error` frame, NO persistence.
    */
   setModelSettings(chatId: string, patch: Partial<WireModelSettings>): void {
     const session = this.sessions.get(chatId);
@@ -1679,10 +1666,10 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * US-004 / US-007. Submit a user-turn with an explicit SDK priority
-   * field. The priority is set on the `SDKUserMessage` pushed onto the
-   * input queue; the SDK-side scheduler does the actual prioritisation
-   * (the bridge's queue stays FIFO per ADR-004).
+   * Submit a user-turn with an explicit SDK priority field. The
+   * priority is set on the `SDKUserMessage` pushed onto the input
+   * queue; the SDK-side scheduler does the actual prioritisation
+   * (the bridge's queue stays FIFO).
    */
   submitUserTurnWithPriority(
     chatId: string,
@@ -1694,16 +1681,15 @@ export class ClaudeSessionBridge {
     if (!session) return;
     const trimmed = text.trim();
     const hasImages = images != null && images.length > 0;
-    // T-002 / US-006 AC4: relax the blank-input guard so an
-    // images-only-no-text turn is still legitimate. Empty text +
-    // empty/undefined images stays rejected.
+    // Relax the blank-input guard so an images-only-no-text turn
+    // is still legitimate. Empty text + empty/undefined images
+    // stays rejected.
     if (!trimmed && !hasImages) return;
 
     session.currentTurnId = randomUUID();
-    // T-001 / US-001. Reset the per-message scratch id at every turn
-    // boundary for symmetry with the state-flow diagram in design.md.
-    // A new message_start will populate it for the first SDK message
-    // of the new turn.
+    // Reset the per-message scratch id at every turn boundary. A
+    // new `message_start` populates it for the first SDK message of
+    // the new turn.
     session.currentMessageStartId = null;
     const item: UserMessageItem = {
       kind: "user-message",
@@ -1711,17 +1697,17 @@ export class ClaudeSessionBridge {
       turnId: session.currentTurnId,
       text: trimmed,
       createdAt: new Date().toISOString(),
-      // T-002 / US-006: stamp images onto the appended UserMessageItem
-      // so MessagesTimeline's UserRow can render thumbnails (T-004).
+      // Stamp images onto the appended UserMessageItem so
+      // {@link MessagesTimeline}'s `UserRow` can render thumbnails.
       ...(hasImages ? { images: images.map((img) => ({ ...img })) } : {}),
     };
     this.appendItem(session, item);
 
-    // T-002 / US-006 AC2-4. Build SDK message content. The SDK's
-    // `MessageParam['content']` is `string | ContentBlockParam[]`; we
-    // build the array shape when there are images and the plain string
-    // shape otherwise. Both shapes are first-class for the SDK — no
-    // legacy/fallback branching, just two type-correct constructions.
+    // Build SDK message content. The SDK's
+    // `MessageParam['content']` is `string | ContentBlockParam[]`;
+    // build the array shape when there are images and the plain
+    // string shape otherwise. Both shapes are first-class for the
+    // SDK — two type-correct constructions, no fallback branching.
     //
     // Indexed access through `SDKUserMessage` keeps the bridge typed
     // against the live SDK contract without pulling `@anthropic-ai/sdk`
@@ -1745,10 +1731,10 @@ export class ClaudeSessionBridge {
                 // is intentionally typed `string` to keep the wire schema
                 // permissive; the runtime trust boundary is the
                 // `sanitizeUserTurnImages` filter in `http-ws-server.ts`
-                // (T-003 / US-006 AC1). The SDK only accepts a narrow
-                // union here, so we assert at this boundary — invalid
-                // MIMEs will be rejected by the SDK downstream rather
-                // than the bridge silently emitting an `unknown`.
+                // The SDK only accepts a narrow union here, so the
+                // value is asserted at this boundary — invalid MIMEs
+                // are rejected by the SDK downstream rather than the
+                // bridge silently emitting an `unknown`.
                 media_type: img.mediaType as SdkImageMediaType,
                 data: img.dataB64,
               },
@@ -1790,23 +1776,23 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * T-003 / US-003 AC3. Accept the latest pending plan proposal.
+   * Accept the latest pending plan proposal.
    *
-   * Side-effect chain (per Design `## Plan-proposed lifecycle`):
+   * Side-effect chain:
    *   1. `Query.setPermissionMode("default")` on the live SDK Query
    *      handle — permission gate reverts so the next user-turn
    *      executes tools without the plan-mode lockout.
    *   2. Queue a "Please execute the plan as proposed" user-turn via
    *      the existing `submitUserTurnWithPriority(text, "now")` path.
    *   3. Flip the plan-proposed item's `status` to `"accepted"` and
-   *      broadcast an `item-update` so attached clients re-render the
-   *      card with greyed-out controls.
+   *      broadcast an `item-update` so attached clients re-render
+   *      the card with greyed-out controls.
    *
-   * Per ADR-004 the `setPermissionMode` call is NOT debounced and is
-   * NOT coalesced with composer-footer selector changes. Per ADR-004
-   * (3) we also do NOT auto-submit any composer draft on Accept — only
-   * the canonical execute user-turn is queued. Defensive guards drop
-   * the call when no matching pending plan exists in the session.
+   * The `setPermissionMode` call is NOT debounced and is NOT
+   * coalesced with composer-footer selector changes. No composer
+   * draft is auto-submitted on Accept — only the canonical execute
+   * user-turn is queued. Defensive guards drop the call when no
+   * matching pending plan exists in the session.
    */
   async acceptPlanProposal(chatId: string, planId: string): Promise<void> {
     const session = this.sessions.get(chatId);
@@ -1816,8 +1802,8 @@ export class ClaudeSessionBridge {
     if (item.status !== "pending") return;
 
     // 1. Flip permission mode back to default. Errors surface as a
-    //    session-scoped system-notice via the existing wrapper; we do
-    //    NOT roll back the queued user-turn (Design `## Failure modes`).
+    //    session-scoped system-notice via the existing wrapper; the
+    //    queued user-turn is NOT rolled back.
     await this.setPermissionMode(chatId, "default");
     // 2. Queue the execute user-turn. The text is canonical (Plan-time
     //    constant) so the user gets the same observable outcome whether
@@ -1837,12 +1823,12 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * T-003 / US-003 AC4. Reject the latest pending plan proposal.
+   * Reject the latest pending plan proposal.
    *
    * Queues a "Please reconsider the plan; do not execute it as-is"
-   * user-turn via `submitUserTurnWithPriority(text, "now")` and flips
-   * the item's status to `"rejected"`. Permission mode is left
-   * unchanged — the SDK remains in `"plan"` per AC4.
+   * user-turn via `submitUserTurnWithPriority(text, "now")` and
+   * flips the item's status to `"rejected"`. Permission mode is
+   * left unchanged — the SDK remains in `"plan"`.
    */
   async rejectPlanProposal(chatId: string, planId: string): Promise<void> {
     const session = this.sessions.get(chatId);
@@ -1851,9 +1837,9 @@ export class ClaudeSessionBridge {
     if (!item || item.kind !== "plan-proposed") return;
     if (item.status !== "pending") return;
 
-    // Queue the reconsider user-turn. Per AC4 permission mode is left
-    // unchanged — the SDK stays in "plan" so Claude knows to issue a
-    // revised plan rather than start executing.
+    // Queue the reconsider user-turn. Permission mode is left
+    // unchanged — the SDK stays in "plan" so Claude knows to issue
+    // a revised plan rather than start executing.
     this.submitUserTurnWithPriority(
       chatId,
       "Please reconsider the plan; do not execute it as-is.",
@@ -1868,13 +1854,13 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * T-003 / US-003 AC1. Emit a `plan-proposed` ChatItem in response to
-   * an observed `ExitPlanMode` tool_use. Sets `session.pendingPlan` so
-   * the matching Accept/Reject frame can find the item by id without
+   * Emit a `plan-proposed` ChatItem in response to an observed
+   * `ExitPlanMode` tool_use. Sets `session.pendingPlan` so the
+   * matching Accept/Reject frame can find the item by id without
    * re-parsing the tool_use block.
    *
-   * Empty / non-string plan bodies append a `system-notice` and skip
-   * the plan-proposed item per Design `## Failure modes`.
+   * Empty / non-string plan bodies append a `system-notice` and
+   * skip the plan-proposed item.
    */
   private handlePlanProposal(
     session: ChatSession,
@@ -1905,18 +1891,17 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * US-001 AC5. Resolve a pending AskUserQuestion request.
+   * Resolve a pending AskUserQuestion request.
    *
-   * AskUserQuestion is permission-gated by the SDK; the bridge replies
-   * with `behavior: "allow"` and packs the user's selected answers
-   * into `updatedInput` so the SDK forwards them back to Claude as the
-   * tool's effective input. This mirrors t3code's resolution path
-   * (Design `## Bridge interface additions`).
+   * AskUserQuestion is permission-gated by the SDK; the bridge
+   * replies with `behavior: "allow"` and packs the user's selected
+   * answers into `updatedInput` so the SDK forwards them back to
+   * Claude as the tool's effective input.
    *
-   * Stale / mismatched ids are dropped silently per Design
-   * `## Failure modes` (the slow-client guard); the matching
-   * `pending-question {body: null}` clearing frame is emitted on the
-   * happy path when the question is consumed.
+   * Stale / mismatched ids are dropped silently (slow-client
+   * guard); the matching `pending-question {body: null}` clearing
+   * frame is emitted on the happy path when the question is
+   * consumed.
    */
   respondToQuestion(
     chatId: string,
@@ -1964,13 +1949,13 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * US-001 AC1 / red phase. Synthetic entry point used by the T-002
-   * test suite to exercise `handleCanUseTool` without spinning up a
-   * real SDK session. Mirrors the SDK's `canUseTool` callback signature.
+   * Synthetic entry point used by the AskUserQuestion test suite
+   * to exercise `handleCanUseTool` without spinning up a real SDK
+   * session. Mirrors the SDK's `canUseTool` callback signature.
    *
-   * Returns the same promise the SDK would await; tests can resolve it
-   * by invoking `respondToQuestion` (post-implementation) and observe
-   * the broadcast side effects.
+   * Returns the same promise the SDK would await; tests can resolve
+   * it by invoking `respondToQuestion` and observe the broadcast
+   * side effects.
    */
   __test__invokeCanUseTool(
     chatId: string,
@@ -1993,11 +1978,11 @@ export class ClaudeSessionBridge {
   }
 
   /**
-   * T-006 red phase. Synthetic entry point used by the
-   * `bridge-image-flatten.test.ts` suite to push a hand-crafted
-   * SDKMessage through the bridge's dispatch path (`handleSdkMessage`)
-   * without driving the real SDK. Exposes private routing for unit
-   * tests; production code paths go through `runLoop` instead.
+   * Synthetic entry point used by the `bridge-image-flatten.test.ts`
+   * suite to push a hand-crafted SDKMessage through the bridge's
+   * dispatch path (`handleSdkMessage`) without driving the real SDK.
+   * Exposes private routing for unit tests; production code paths
+   * go through `runLoop` instead.
    */
   __test__handleSdkMessage(chatId: string, msg: unknown): void {
     const session = this.sessions.get(chatId);

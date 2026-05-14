@@ -110,9 +110,9 @@ export interface QuestionResponseFrame {
 
 /**
  * SDK PermissionMode subset surfaced on the wire. Matches the SDK's
- * `PermissionMode` enum exactly for the four modes US-004 AC1 exposes
- * in the composer dropdown — the SDK-internal `dontAsk` / `auto`
- * variants are intentionally omitted.
+ * `PermissionMode` enum exactly for the four modes the composer
+ * dropdown exposes — the SDK-internal `dontAsk` / `auto` variants
+ * are intentionally omitted.
  */
 export type WirePermissionMode =
   | "default"
@@ -127,16 +127,16 @@ export interface PermissionModeSetFrame {
 }
 
 /**
- * T-003 / US-003. Accept the latest `plan-proposed` item.
+ * Accept the latest `plan-proposed` item.
  *
  * Bridge handler: `bridge.acceptPlanProposal(chatId, planId)` calls
- * `Query.setPermissionMode("default")` and queues a user-turn ("Please
- * execute the plan as proposed"). The plan-proposed item's status
- * flips to `"accepted"` via an item-update broadcast.
+ * `Query.setPermissionMode("default")` and queues a user-turn
+ * ("Please execute the plan as proposed"). The plan-proposed item's
+ * status flips to `"accepted"` via an item-update broadcast.
  *
- * Per ADR-004: NOT debounced; NOT coalesced with composer-footer
- * permission-mode changes. Accept does NOT auto-submit any composer
- * draft — only the dedicated execute user-turn is queued.
+ * NOT debounced; NOT coalesced with composer-footer permission-mode
+ * changes. Accept does NOT auto-submit any composer draft — only
+ * the dedicated execute user-turn is queued.
  */
 export interface PlanAcceptFrame {
   kind: "plan-accept";
@@ -145,12 +145,12 @@ export interface PlanAcceptFrame {
 }
 
 /**
- * T-003 / US-003. Reject the latest `plan-proposed` item.
+ * Reject the latest `plan-proposed` item.
  *
- * Bridge handler: `bridge.rejectPlanProposal(chatId, planId)` queues a
- * user-turn ("Please reconsider the plan; do not execute it as-is")
- * WITHOUT touching permission mode (the SDK stays in `"plan"`). The
- * item's status flips to `"rejected"`.
+ * Bridge handler: `bridge.rejectPlanProposal(chatId, planId)` queues
+ * a user-turn ("Please reconsider the plan; do not execute it
+ * as-is") WITHOUT touching permission mode (the SDK stays in
+ * `"plan"`). The item's status flips to `"rejected"`.
  */
 export interface PlanRejectFrame {
   kind: "plan-reject";
@@ -290,7 +290,7 @@ export interface SlashCommandsUpdateFrame {
   body: { commands: WireSlashCommand[] };
 }
 
-/** Push the SDK context-window breakdown. Fired post-turn (see ADR-D08). */
+/** Push the SDK context-window breakdown. Fired post-turn. */
 export interface ContextUsageUpdateFrame {
   kind: "context-usage-update";
   "chat-id": string;
@@ -319,9 +319,9 @@ export type ServerFrame =
   | ErrorFrame;
 
 /**
- * Serialise a typed ServerFrame to the on-wire JSON string. The single
- * place untyped envelope writes are funnelled through, restoring the
- * type-safety boundary mandated by Spec `## Constraints` and US-009.
+ * Serialise a typed ServerFrame to the on-wire JSON string. The
+ * single place untyped envelope writes are funnelled through —
+ * preserves the wire's type-safety boundary.
  *
  * Wire shape is preserved verbatim — `JSON.stringify` is a no-op on the
  * envelope structure. The helper exists so the type-check fires before

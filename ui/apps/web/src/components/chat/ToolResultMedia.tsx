@@ -3,14 +3,12 @@
  * inline element (single image) or a thumbnail strip (multi-image),
  * with a focus-trapped lightbox modal for full-viewport viewing.
  *
- * Per Design ADR-003 this ships all three variants in one phase
- * (single inline + click-to-expand, multi-image gallery, focus-trap)
- * without phasing. Per ADR-006 image bytes flow as base-64 + mediaType
- * on the wire and the web constructs `data:<mediaType>;base64,<dataB64>`
- * URLs locally — no blob URLs, no server route. Per ADR-007 the
- * component prop is `images: ToolResultImage[]`.
+ * Image bytes flow as base-64 + mediaType on the wire and the web
+ * constructs `data:<mediaType>;base64,<dataB64>` URLs locally — no
+ * blob URLs, no server route. Component prop is
+ * `images: ToolResultImage[]`.
  *
- * Accessibility (US-006 AC4):
+ * Accessibility:
  *   - Lightbox traps focus inside the portal while open; Tab/Shift+Tab
  *     cycle the focusable buttons. Previously focused element is
  *     restored on close.
@@ -18,7 +16,7 @@
  *   - Backdrop click closes the lightbox.
  *   - Left / Right arrows cycle the gallery in multi-image mode.
  *
- * Failure mode (US-006 AC5):
+ * Failure mode:
  *   - `<img>` `onError` swaps the failed image for an "image
  *     unavailable" placeholder cell without throwing.
  */

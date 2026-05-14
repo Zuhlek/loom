@@ -12,9 +12,10 @@
  *                  `current.phase` and `current.status` are surfaced.
  *   - tree:        flat directory listing at depth ≤ 2, sorted
  *                  (directories first, then files, alphabetically).
- *   - artifacts:   contents of every `.md` file in the tree, keyed by
- *                  the same relative path used in `tree`. Each capped
- *                  at 200 KB; truncated entries carry a marker tail.
+ *   - artifacts:   contents of every `.md`, `.json`, `.txt` file in
+ *                  the tree, keyed by the same relative path used in
+ *                  `tree`. Each capped at 200 KB; truncated entries
+ *                  carry a marker tail.
  *   - mockupPages: filenames in the `mockup/` subdir (rendered via the
  *                  existing /fabric/mockup/file iframe route).
  *
@@ -32,6 +33,7 @@ import type { MetadataStore } from "../metadata-store/index.ts";
 const ARTIFACT_MAX_BYTES = 200 * 1024;
 const TREE_MAX_DEPTH = 2;
 const CACHE_TTL_MS = 1_000;
+const READABLE_EXTS = [".md", ".json", ".txt"] as const;
 
 interface PipelineSummary {
   current: {
@@ -227,7 +229,8 @@ function buildView(
   const tree = listTree(loomDir, TREE_MAX_DEPTH);
   const artifacts: Record<string, string> = {};
   for (const entry of tree) {
-    if (entry.isDirectory || !entry.name.endsWith(".md")) continue;
+    if (entry.isDirectory) continue;
+    if (!READABLE_EXTS.some((ext) => entry.name.endsWith(ext))) continue;
     const content = readArtifact(path.join(loomDir, entry.path));
     if (content != null) artifacts[entry.path] = content;
   }

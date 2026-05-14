@@ -2,6 +2,7 @@
  * API client. All endpoints go through Vite's `/api` proxy in dev; in
  * production a same-origin server would serve the bundle directly.
  */
+import type { WireModelSettings } from "./chat-types";
 
 const API_BASE = "/api";
 
@@ -21,6 +22,7 @@ export interface ApiChat {
   created_at: string;
   custom_name: string | null;
   auto_title: string | null;
+  model_settings: WireModelSettings | null;
 }
 
 export interface ApiProject {
@@ -138,7 +140,7 @@ export async function createProject(body: CreateProjectBody): Promise<{ project:
   });
 }
 
-/** US-003. Launch a system terminal that re-attaches to the chat's PTY. */
+/** Launch a system terminal that re-attaches to the chat's PTY. */
 export async function handoffChat(id: string): Promise<{ ok: true; command: string }> {
   return apiFetch<{ ok: true; command: string }>(
     `/chats/handoff?id=${encodeURIComponent(id)}`,
@@ -146,7 +148,7 @@ export async function handoffChat(id: string): Promise<{ ok: true; command: stri
   );
 }
 
-/** US-003. Clone a chat row (same cwd / permission_mode / worktree_mode). */
+/** Clone a chat row (same cwd / permission_mode / worktree_mode). */
 export async function forkChat(id: string): Promise<{ chat: ApiChat }> {
   return apiFetch<{ chat: ApiChat }>(
     `/chats/fork?id=${encodeURIComponent(id)}`,
@@ -248,7 +250,7 @@ export async function listRecentCwds(limit = 10): Promise<{ cwds: string[] }> {
 }
 
 /**
- * GET /settings — Workspace + Worktrees + Auth panel data (US-001).
+ * GET /settings — Workspace + Worktrees + Auth panel data.
  *
  * Mirrors `ui/apps/server/src/routes/settings.ts` response shape.
  */
@@ -284,7 +286,7 @@ export function wsUrl(): string {
 }
 
 // ---------------------------------------------------------------------------
-// T-006 — Git wire types and client functions
+// Git wire types and client functions
 // ---------------------------------------------------------------------------
 
 /** Response shape of `GET /git/status` (server: `routes/git-status.ts`). */

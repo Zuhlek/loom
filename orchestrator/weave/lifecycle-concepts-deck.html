@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lifecycle Contract Theory</title>
+  <style>
+    :root {
+      --bg: #f7f7f4;
+      --panel: #fff;
+      --text: #202124;
+      --muted: #6b706d;
+      --line: #deded8;
+      --accent: #0f766e;
+      --accent-soft: #e1f1ee;
+      --warn: #9a5b13;
+      --bad: #a54233;
+      --good: #3c7350;
+      --radius: 8px;
+      --nav: 260px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) var(--nav);
+      min-height: 100vh;
+    }
+
+    main {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 18px;
+    }
+
+    header,
+    .controls,
+    nav {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 56px;
+      padding: 10px 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .slide-frame {
+      position: relative;
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .slide {
+      display: none;
+      min-height: calc(100vh - 156px);
+      padding: 46px 56px;
+      align-content: start;
+      gap: 22px;
+    }
+
+    .slide.active {
+      display: grid;
+    }
+
+    .kicker {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      max-width: 900px;
+      font-size: 36px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      max-width: 850px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .lead {
+      color: var(--text);
+      font-size: 22px;
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      max-width: 980px;
+    }
+
+    .step {
+      min-width: 112px;
+      padding: 12px 14px;
+      background: #fafafa;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      text-align: center;
+      font-weight: 650;
+    }
+
+    .step.accent {
+      background: var(--accent-soft);
+      border-color: #b8d8d2;
+      color: #07544f;
+    }
+
+    .arrow {
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      max-width: 980px;
+    }
+
+    .card {
+      padding: 16px;
+      background: #fbfbfa;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 17px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    li {
+      margin: 6px 0;
+      color: var(--text);
+      font-size: 16px;
+    }
+
+    table {
+      width: 100%;
+      max-width: 1040px;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #ecece8;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .badge.good { background: #e2eee4; color: var(--good); }
+    .badge.warn { background: #f4e7ce; color: var(--warn); }
+    .badge.bad { background: #f4ded9; color: var(--bad); }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 50px;
+      padding: 8px;
+    }
+
+    button {
+      min-width: 42px;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button:hover {
+      background: var(--accent-soft);
+      border-color: #b8d8d2;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      border-radius: 0;
+      border-top: 0;
+      border-right: 0;
+      border-bottom: 0;
+      padding: 14px;
+    }
+
+    nav h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+    }
+
+    .toc {
+      display: grid;
+      gap: 4px;
+    }
+
+    .toc button {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 8px;
+      align-items: start;
+      width: 100%;
+      padding: 8px;
+      min-height: 0;
+      border-color: transparent;
+      background: transparent;
+      text-align: left;
+    }
+
+    .toc button.active {
+      background: var(--accent-soft);
+      border-color: #b8d8d2;
+    }
+
+    .num {
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .title {
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.25;
+    }
+
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; }
+      nav {
+        position: static;
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        margin: 12px;
+      }
+      .toc {
+        display: flex;
+        overflow-x: auto;
+      }
+      .toc button {
+        min-width: 180px;
+      }
+      main {
+        padding: 12px;
+      }
+      .slide {
+        min-height: 560px;
+        padding: 30px 24px;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      h2 {
+        font-size: 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <main>
+      <header>
+        <h1>Lifecycle Contract Theory</h1>
+        <div class="meta"><span id="count">1 / 1</span></div>
+      </header>
+
+      <section class="slide-frame">
+        <article class="slide active" data-title="Lifecycle As Contracts">
+          <div class="kicker">Theory</div>
+          <h2>Lifecycle As Contracts</h2>
+          <p class="lead">A contracted lifecycle treats delivery as a chain of explicit agreements, not as one continuous agent context.</p>
+          <div class="grid">
+            <div class="card">
+              <h3>Contract</h3>
+              <ul>
+                <li>owned by one phase</li>
+                <li>read by downstream phases</li>
+                <li>stable enough to audit</li>
+                <li>cheap enough to rerun locally</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Effect</h3>
+              <ul>
+                <li>less implicit state</li>
+                <li>clearer failure ownership</li>
+                <li>smaller repair surface</li>
+                <li>better traceability</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="slide" data-title="Phase Algebra">
+          <div class="kicker">Model</div>
+          <h2>Phase Algebra</h2>
+          <div class="flow">
+            <div class="step accent">Spec<br>intent</div>
+            <div class="arrow">-></div>
+            <div class="step">Design<br>structure</div>
+            <div class="arrow">-></div>
+            <div class="step accent">Plan<br>graph</div>
+            <div class="arrow">-></div>
+            <div class="step">Build<br>evidence</div>
+            <div class="arrow">-></div>
+            <div class="step accent">Review<br>judgement</div>
+          </div>
+          <p>Each phase narrows uncertainty in a different domain. The phase boundary matters because the question type changes.</p>
+        </article>
+
+        <article class="slide" data-title="Traceability Spine">
+          <div class="kicker">Model</div>
+          <h2>Traceability Spine</h2>
+          <div class="flow">
+            <div class="step">Intent</div>
+            <div class="arrow">-></div>
+            <div class="step accent">US-NNN</div>
+            <div class="arrow">-></div>
+            <div class="step">ADR</div>
+            <div class="arrow">-></div>
+            <div class="step accent">T-NNN</div>
+            <div class="arrow">-></div>
+            <div class="step">Tests</div>
+            <div class="arrow">-></div>
+            <div class="step">Findings</div>
+          </div>
+          <p>The useful invariant: every task should explain which story it satisfies, and every finding should explain which contract it violates.</p>
+        </article>
+
+        <article class="slide" data-title="Spec Theory">
+          <div class="kicker">Phase</div>
+          <h2>Spec: Intent Model</h2>
+          <p class="lead">Spec converts raw request language into stable user-facing obligations.</p>
+          <div class="grid">
+            <div class="card">
+              <h3>Owns</h3>
+              <ul>
+                <li>what is being built</li>
+                <li>who receives value</li>
+                <li>scope boundaries</li>
+                <li>acceptance criteria</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Does Not Own</h3>
+              <ul>
+                <li>component structure</li>
+                <li>implementation order</li>
+                <li>test harness mechanics</li>
+                <li>code-level tradeoffs</li>
+              </ul>
+            </div>
+          </div>
+          <p>Theoretical value: separate product ambiguity from technical ambiguity.</p>
+        </article>
+
+        <article class="slide" data-title="Design Theory">
+          <div class="kicker">Phase</div>
+          <h2>Design: Structural Model</h2>
+          <p class="lead">Design maps obligations onto components, interfaces, data, state, and failure modes.</p>
+          <div class="grid">
+            <div class="card">
+              <h3>Inputs</h3>
+              <ul>
+                <li>stories</li>
+                <li>constraints</li>
+                <li>repo conventions</li>
+                <li>accepted decisions</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Outputs</h3>
+              <ul>
+                <li>system shape</li>
+                <li>interfaces</li>
+                <li>data/state model</li>
+                <li>ADRs and rejected alternatives</li>
+              </ul>
+            </div>
+          </div>
+          <p>Theoretical value: Design may interpret Spec, but it cannot silently rewrite it.</p>
+        </article>
+
+        <article class="slide" data-title="Plan Theory">
+          <div class="kicker">Phase</div>
+          <h2>Plan: Executable Graph</h2>
+          <p class="lead">Plan translates structure into a graph Build can execute without inventing the work order.</p>
+          <div class="grid">
+            <div class="card">
+              <h3>Graph Invariants</h3>
+              <ul>
+                <li>no dangling dependencies</li>
+                <li>no cycles</li>
+                <li>every story covered</li>
+                <li>verification environment declared</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Task Invariants</h3>
+              <ul>
+                <li>stable T-NNN identity</li>
+                <li>vertical slice shape</li>
+                <li>AFK / HITL class</li>
+                <li>story references</li>
+              </ul>
+            </div>
+          </div>
+          <p>Theoretical value: move sequencing intelligence out of Build and into a checkable artifact.</p>
+        </article>
+
+        <article class="slide" data-title="Build Theory">
+          <div class="kicker">Phase</div>
+          <h2>Build: Isolated Execution</h2>
+          <p class="lead">Build should execute planned slices, not reinterpret the project.</p>
+          <div class="grid">
+            <div class="card">
+              <h3>Coordinator</h3>
+              <ul>
+                <li>reads board</li>
+                <li>dispatches ready tasks</li>
+                <li>moves cards</li>
+                <li>aggregates evidence</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Worker</h3>
+              <ul>
+                <li>fresh context</li>
+                <li>one task scope</li>
+                <li>red -> green loop</li>
+                <li>done report</li>
+              </ul>
+            </div>
+          </div>
+          <p>Theoretical value: failure and context debris stay local to the task.</p>
+        </article>
+
+        <article class="slide" data-title="Review Theory">
+          <div class="kicker">Phase</div>
+          <h2>Review: Independent Judgement</h2>
+          <p class="lead">Review compares the built result against upstream contracts and produces owned findings.</p>
+          <div class="grid">
+            <div class="card">
+              <h3>Checks</h3>
+              <ul>
+                <li>intent satisfaction</li>
+                <li>design conformance</li>
+                <li>plan completion</li>
+                <li>test evidence</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Finding Shape</h3>
+              <ul>
+                <li>severity</li>
+                <li>evidence</li>
+                <li>expected vs actual</li>
+                <li>owner phase</li>
+              </ul>
+            </div>
+          </div>
+          <p>Theoretical value: review is not another test run; it is contract interpretation.</p>
+        </article>
+
+        <article class="slide" data-title="Control Boundaries">
+          <div class="kicker">Control</div>
+          <h2>Control Boundaries</h2>
+          <div class="flow">
+            <div class="step">Phase returns</div>
+            <div class="arrow">-></div>
+            <div class="step accent">Human gate</div>
+            <div class="arrow">-></div>
+            <div class="step">Continue</div>
+            <div class="arrow">-></div>
+            <div class="step">Rerun</div>
+            <div class="arrow">-></div>
+            <div class="step">Go back</div>
+          </div>
+          <p>Gates are not just UI pauses. They are control points where token spend, scope movement, and downstream invalidation become explicit.</p>
+          <p>Quality checks are optional meta-passes: useful when uncertainty is high, wasteful when the phase contract is already obvious.</p>
+        </article>
+
+        <article class="slide" data-title="Context Economics">
+          <div class="kicker">Performance</div>
+          <h2>Context Economics</h2>
+          <p class="lead">The lifecycle spends tokens to reduce uncertainty before expensive implementation context accumulates.</p>
+          <div class="flow">
+            <div class="step">Upfront contracts</div>
+            <div class="arrow">-></div>
+            <div class="step accent">smaller task prompts</div>
+            <div class="arrow">-></div>
+            <div class="step">less shared history</div>
+            <div class="arrow">-></div>
+            <div class="step accent">cheaper repair</div>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Pressure</th><th>Continuous Shape</th><th>Contracted Shape</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Planning cost</td><td><span class="badge good">lower</span></td><td><span class="badge warn">higher</span></td></tr>
+              <tr><td>Build context</td><td><span class="badge warn">shared / growing</span></td><td><span class="badge good">isolated / bounded</span></td></tr>
+              <tr><td>Rerun cost</td><td><span class="badge warn">broad</span></td><td><span class="badge good">phase-local</span></td></tr>
+              <tr><td>Audit cost</td><td><span class="badge warn">implicit</span></td><td><span class="badge good">indexed</span></td></tr>
+            </tbody>
+          </table>
+        </article>
+
+        <article class="slide" data-title="KPI Theory">
+          <div class="kicker">Performance</div>
+          <h2>KPI Theory</h2>
+          <p class="lead">Metrics should test whether contracts reduce downstream entropy.</p>
+          <table>
+            <thead>
+              <tr><th>Concept</th><th>Signal</th><th>Interpretation</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Traceability</td><td>story coverage</td><td>Plan preserved intent</td></tr>
+              <tr><td>Autonomy</td><td>AFK completion rate</td><td>tasks were executable enough</td></tr>
+              <tr><td>Reliability</td><td>phase reruns</td><td>contracts were stable enough</td></tr>
+              <tr><td>Quality</td><td>Review blockers / majors</td><td>upstream contracts caught the right risks</td></tr>
+              <tr><td>Cost</td><td>tokens per accepted story</td><td>lifecycle cost scaled with value</td></tr>
+            </tbody>
+          </table>
+        </article>
+      </section>
+
+      <div class="controls">
+        <div>
+          <button id="prev" type="button" aria-label="Previous slide">Prev</button>
+          <button id="next" type="button" aria-label="Next slide">Next</button>
+        </div>
+        <div class="hint">Use arrow keys, space, or the contents list.</div>
+      </div>
+    </main>
+
+    <nav aria-label="Slide contents">
+      <h2>Contents</h2>
+      <div class="toc" id="toc"></div>
+    </nav>
+  </div>
+
+  <script>
+    const slides = [...document.querySelectorAll(".slide")];
+    const toc = document.getElementById("toc");
+    const count = document.getElementById("count");
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+    let index = 0;
+
+    slides.forEach((slide, i) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.innerHTML = `<span class="num">${String(i + 1).padStart(2, "0")}</span><span class="title">${slide.dataset.title}</span>`;
+      button.addEventListener("click", () => show(i));
+      toc.appendChild(button);
+    });
+
+    const tocButtons = [...toc.querySelectorAll("button")];
+
+    function show(nextIndex) {
+      index = Math.max(0, Math.min(nextIndex, slides.length - 1));
+      slides.forEach((slide, i) => slide.classList.toggle("active", i === index));
+      tocButtons.forEach((button, i) => button.classList.toggle("active", i === index));
+      count.textContent = `${index + 1} / ${slides.length}`;
+      prev.disabled = index === 0;
+      next.disabled = index === slides.length - 1;
+      location.hash = `slide-${index + 1}`;
+    }
+
+    function indexFromHash() {
+      const match = location.hash.match(/slide-(\d+)/);
+      return match ? Number(match[1]) - 1 : 0;
+    }
+
+    prev.addEventListener("click", () => show(index - 1));
+    next.addEventListener("click", () => show(index + 1));
+    addEventListener("hashchange", () => show(indexFromHash()));
+    addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight" || event.key === " " || event.key === "PageDown") {
+        event.preventDefault();
+        show(index + 1);
+      }
+      if (event.key === "ArrowLeft" || event.key === "PageUp") {
+        event.preventDefault();
+        show(index - 1);
+      }
+    });
+
+    show(indexFromHash());
+  </script>
+</body>
+</html>

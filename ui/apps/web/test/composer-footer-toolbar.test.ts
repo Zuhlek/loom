@@ -127,20 +127,26 @@ describe("T-009 ChatComposer — mounts ComposerFooterToolbar with placeholder p
     expect(src).toMatch(/sendButton=\{/);
   });
 
-  test("placeholder pills are tagged with data-testid attributes covering each slot", () => {
+  test("each slot is wired — either as a placeholder stub or as the real T-010..T-014 pill component", () => {
     const src = readFileSync(composerPath, "utf8");
-    // Stubs are inline `<div>`s; each carries a data-testid that
-    // T-010..T-014 will use as the swap-in anchor for the real pill.
-    const STUB_TEST_IDS = [
-      "composer-pill-model-selector",
-      "composer-pill-model-settings",
-      "composer-pill-build-plan",
-      "composer-pill-permission-level",
-      "composer-pill-context-usage",
+    // Stubs are inline `<div>`s tagged with a data-testid; the real pill
+    // component (e.g. `<PermissionLevelPill ... />`) replaces the stub once
+    // its owning task lands. Either form satisfies the slot-wired contract.
+    const SLOTS: ReadonlyArray<{ testId: string; component: string }> = [
+      { testId: "composer-pill-model-selector", component: "ModelSelectorPill" },
+      { testId: "composer-pill-model-settings", component: "ModelSettingsPill" },
+      { testId: "composer-pill-build-plan", component: "BuildPlanTogglePill" },
+      { testId: "composer-pill-permission-level", component: "PermissionLevelPill" },
+      { testId: "composer-pill-context-usage", component: "ContextUsageIndicator" },
     ];
-    for (const testId of STUB_TEST_IDS) {
-      const re = new RegExp(`data-testid=["']${testId}["']`);
-      expect(src, `ChatComposer must render a stub tagged ${testId}`).toMatch(re);
+    for (const { testId, component } of SLOTS) {
+      const stubRe = new RegExp(`data-testid=["']${testId}["']`);
+      const realRe = new RegExp(`<${component}\\b`);
+      const wired = stubRe.test(src) || realRe.test(src);
+      expect(
+        wired,
+        `ChatComposer must wire the ${testId} slot — either as a stub with that testId or as a <${component}> mount`,
+      ).toBe(true);
     }
   });
 });

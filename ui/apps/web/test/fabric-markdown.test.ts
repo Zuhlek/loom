@@ -1,0 +1,59 @@
+/**
+ * FabricMarkdown component contract (T-001).
+ *
+ * Static-source scan (Vitest include = *.test.ts, environment = node,
+ * no jsdom). Asserts:
+ *   - the component file exists at the documented path and exports
+ *     `FabricMarkdown` with a `{ source: string }` prop.
+ *   - the module configures marked with `gfm: true, breaks: false`
+ *     (authored markdown, not chat prose).
+ *   - the render path emits a single `<article>` and uses
+ *     `dangerouslySetInnerHTML`.
+ *   - the route consumes `<FabricMarkdown>` and no longer inlines
+ *     `marked.parse` directly.
+ */
+import { describe, expect, test } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
+const componentPath =
+  webRoot + "src/components/fabric/FabricMarkdown.tsx";
+const routePath = webRoot + "src/routes/fabric-view-live.tsx";
+
+describe("FabricMarkdown component contract", () => {
+  test("FabricMarkdown.tsx exists at the documented path", () => {
+    expect(existsSync(componentPath)).toBe(true);
+  });
+
+  test("exports a named function `FabricMarkdown` with a `source` prop", () => {
+    const src = readFileSync(componentPath, "utf8");
+    expect(src).toMatch(/export\s+function\s+FabricMarkdown\b/);
+    expect(src).toMatch(/source\s*:\s*string/);
+  });
+
+  test("module configures marked with gfm: true and breaks: false", () => {
+    const src = readFileSync(componentPath, "utf8");
+    expect(src).toMatch(/marked\.setOptions\(/);
+    expect(src).toMatch(/gfm\s*:\s*true/);
+    expect(src).toMatch(/breaks\s*:\s*false/);
+  });
+
+  test("render path produces a single <article> via dangerouslySetInnerHTML", () => {
+    const src = readFileSync(componentPath, "utf8");
+    expect(src).toMatch(/<article\b/);
+    expect(src).toMatch(/dangerouslySetInnerHTML/);
+  });
+
+  test("falls back to a <pre> wrapping the raw source on marked.parse error", () => {
+    const src = readFileSync(componentPath, "utf8");
+    expect(src).toMatch(/<pre\b/);
+    expect(src).toMatch(/catch\b/);
+  });
+
+  test("Route imports FabricMarkdown from the components directory", () => {
+    const src = readFileSync(routePath, "utf8");
+    expect(src).toMatch(/from\s+["']\.\.\/components\/fabric\/FabricMarkdown["']/);
+    expect(src).toMatch(/<FabricMarkdown\b/);
+  });
+});

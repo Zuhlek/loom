@@ -1,7 +1,7 @@
 /**
  * AskUserQuestionPicker — renders a `PendingQuestion` payload.
  *
- * Per US-001 / T-002 the picker supports:
+ * The picker supports:
  *   - Single-select (default; rendered as radio rows).
  *   - Multi-select (`multiSelect: true`; rendered as checkbox rows;
  *     selected ids accumulate in a `string[]` until submit).

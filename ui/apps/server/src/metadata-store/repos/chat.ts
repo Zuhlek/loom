@@ -27,7 +27,7 @@ export interface ChatRow {
   created_at: string;
   custom_name: string | null;
   /**
-   * ADR-D03: single JSON column on `Chat` for the per-chat model tuple.
+   * Single JSON column on `Chat` for the per-chat model tuple.
    * `null` ⇒ Loom defaults apply at (re)spawn time. The repo is the
    * single chokepoint — `get()` parses the stored JSON text into the
    * typed object; `update()` merge-patches over the current row JSON.

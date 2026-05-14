@@ -152,6 +152,92 @@ describe("fabric route", () => {
     await store.close();
   });
 
+  test("artifacts map includes .json files", async () => {
+    invalidateFabricViewCache();
+    const root = makeFabric("ext-json", {
+      "config.json": '{"hello": "world"}',
+    });
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    const proj = store.projects.create({ name: "p", paths: [root] });
+    const routes: Record<string, any> = {};
+    mountFabricRoute(routes, store);
+    const handler = routes["/fabric/:projectId/:fabricName"];
+    const url = new URL(`http://localhost/fabric/${proj.id}/ext-json`);
+    const res = await handler(new Request(url), url);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.artifacts["config.json"]).toBe('{"hello": "world"}');
+    await store.close();
+  });
+
+  test("artifacts map includes .txt files", async () => {
+    invalidateFabricViewCache();
+    const root = makeFabric("ext-txt", {
+      "notes.txt": "plain text content\nsecond line",
+    });
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    const proj = store.projects.create({ name: "p", paths: [root] });
+    const routes: Record<string, any> = {};
+    mountFabricRoute(routes, store);
+    const handler = routes["/fabric/:projectId/:fabricName"];
+    const url = new URL(`http://localhost/fabric/${proj.id}/ext-txt`);
+    const res = await handler(new Request(url), url);
+    const body = await res.json();
+    expect(body.artifacts["notes.txt"]).toBe("plain text content\nsecond line");
+    await store.close();
+  });
+
+  test("artifacts map excludes non-allowlisted extensions", async () => {
+    invalidateFabricViewCache();
+    const root = makeFabric("ext-skip", {
+      "run.sh": "#!/bin/bash\necho hi",
+      "spec.md": "# kept",
+    });
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    const proj = store.projects.create({ name: "p", paths: [root] });
+    const routes: Record<string, any> = {};
+    mountFabricRoute(routes, store);
+    const handler = routes["/fabric/:projectId/:fabricName"];
+    const url = new URL(`http://localhost/fabric/${proj.id}/ext-skip`);
+    const res = await handler(new Request(url), url);
+    const body = await res.json();
+    const treeNames = body.tree.map((t: any) => t.name);
+    expect(treeNames).toContain("run.sh");
+    expect(body.artifacts["run.sh"]).toBeUndefined();
+    expect(body.artifacts["spec.md"]).toContain("kept");
+    await store.close();
+  });
+
+  test("oversize .json artifact carries truncation marker", async () => {
+    invalidateFabricViewCache();
+    const big = "x".repeat(250 * 1024);
+    const root = makeFabric("ext-big", {
+      "big.json": big,
+    });
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    const proj = store.projects.create({ name: "p", paths: [root] });
+    const routes: Record<string, any> = {};
+    mountFabricRoute(routes, store);
+    const handler = routes["/fabric/:projectId/:fabricName"];
+    const url = new URL(`http://localhost/fabric/${proj.id}/ext-big`);
+    const res = await handler(new Request(url), url);
+    const body = await res.json();
+    expect(body.artifacts["big.json"]).toMatch(/truncated at/);
+    await store.close();
+  });
+
+  test("non-GET method returns 405", async () => {
+    invalidateFabricViewCache();
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    const routes: Record<string, any> = {};
+    mountFabricRoute(routes, store);
+    const handler = routes["/fabric/:projectId/:fabricName"];
+    const url = new URL("http://localhost/fabric/anything/foo");
+    const res = await handler(new Request(url, { method: "POST" }), url);
+    expect(res.status).toBe(405);
+    await store.close();
+  });
+
   test("caches result within 1s window", async () => {
     invalidateFabricViewCache();
     const root = makeFabric("c1", { "spec.md": "first" });

@@ -35,21 +35,20 @@ interface Props {
   items: ChatItem[];
   turnState: TurnState;
   /**
-   * T-003 / US-003 (chat-streaming-fixes). Millisecond epoch when the
-   * active turn entered `running`. Owned by `live-chat.tsx`'s reducer
-   * (`activeTurnStartedAt` field; ADR-005). When non-null and
-   * `turnState === "running"`, MessagesTimeline renders a single
-   * sibling-row WorkingChip at the bottom of the scroll container
-   * with a live "Working for Xs" elapsed counter (ADR-001, US-003).
+   * Millisecond epoch when the active turn entered `running`. Owned
+   * by `live-chat.tsx`'s reducer (`activeTurnStartedAt` field). When
+   * non-null and `turnState === "running"`, MessagesTimeline renders
+   * a single sibling-row WorkingChip at the bottom of the scroll
+   * container with a live "Working for Xs" elapsed counter.
    */
   activeTurnStartedAt: number | null;
   /**
-   * T-003 / US-003. Called when the user clicks Accept on a
-   * `plan-proposed` card. The parent route translates this into a
-   * `plan-accept` ClientFrame carrying the plan item's id.
+   * Called when the user clicks Accept on a `plan-proposed` card.
+   * The parent route translates this into a `plan-accept`
+   * ClientFrame carrying the plan item's id.
    */
   onPlanAccept?: (planId: string) => void;
-  /** T-003 / US-003. Counterpart for Reject. */
+  /** Counterpart for Reject. */
   onPlanReject?: (planId: string) => void;
 }
 
@@ -247,10 +246,10 @@ function UserRow({ item }: { item: UserMessageItem }) {
   // The bubble's background is the loom-blue-tinted user token so it
   // visually distinguishes the user's turn from the agent's bubble.
   //
-  // T-004 / US-007: when `item.images?.length` is non-zero render a
-  // thumbnail row above the text. Each thumbnail is an inline `data:`
-  // URL — mirrors `ToolResultMedia.tsx`'s ADR-006 transport (no blob
-  // URLs, no server route).
+  // When `item.images?.length` is non-zero render a thumbnail row
+  // above the text. Each thumbnail is an inline `data:` URL —
+  // mirrors `ToolResultMedia.tsx`'s transport (no blob URLs, no
+  // server route).
   const images = item.images ?? [];
   const hasImages = images.length > 0;
   return (
@@ -294,21 +293,17 @@ function UserRow({ item }: { item: UserMessageItem }) {
 }
 
 function AssistantRow({ item }: { item: AssistantMessageItem }) {
-  // T-003 / US-003 (chat-streaming-fixes). The legacy
-  // `blocks.length === 0 && streaming` "Thinking…" placeholder was
-  // removed here: WorkingChip (rendered once per turn at the bottom
-  // of the timeline) now covers the "assistant is working" UX. The
-  // old placeholder also contributed to bug-1's row spam because it
-  // rendered per-row instead of per-turn.
+  // WorkingChip (rendered once per turn at the bottom of the
+  // timeline) covers the "assistant is working" UX, so no per-row
+  // "Thinking…" placeholder is rendered here.
   //
-  // T-002 / US-002 (chat-streaming-fixes), ADR-004. Defensive filter +
-  // optional chaining on every block-type discriminator. The filter
-  // drops null/undefined entries (belt-and-suspenders against future
-  // bridge regressions) AND ADR-004 `_placeholder: true` markers
-  // backfilled by the bridge's `ensureDense` step. The streaming caret
-  // index check below uses the FILTERED `arr.length` so it lands on
-  // the last RENDERED block — without this it could light up an
-  // invisible placeholder.
+  // Defensive filter + optional chaining on every block-type
+  // discriminator. The filter drops null/undefined entries
+  // (belt-and-suspenders against future bridge regressions) AND
+  // `_placeholder: true` markers backfilled by the bridge's
+  // `ensureDense` step. The streaming caret index check below uses
+  // the FILTERED `arr.length` so it lands on the last RENDERED
+  // block — without this it could light up an invisible placeholder.
   //
   // WhatsApp-style bubble: consecutive `text` blocks render together
   // inside a single AssistantTextBubble; `tool_use` and `thinking`
@@ -375,8 +370,7 @@ function AssistantRow({ item }: { item: AssistantMessageItem }) {
       rendered.push(<ToolUseCard key={block.id} block={block} />);
       return;
     }
-    // Unknown block kind — render nothing rather than throwing
-    // (US-002 AC-5).
+    // Unknown block kind — render nothing rather than throwing.
   });
   flushTextRun(`text-tail`);
 
@@ -431,9 +425,9 @@ function ThinkingBlock({ text }: { text: string }) {
 }
 
 /**
- * T-003 / US-003 AC2. Render the chat-level Proposed-Plan card. Per
- * ADR-001 the card is shown unconditionally whenever a `plan-proposed`
- * item exists — there is no hiding based on loom's pipeline phase.
+ * Render the chat-level Proposed-Plan card. The card is shown
+ * unconditionally whenever a `plan-proposed` item exists — there is
+ * no hiding based on loom's pipeline phase.
  */
 function PlanProposedRow({
   item,

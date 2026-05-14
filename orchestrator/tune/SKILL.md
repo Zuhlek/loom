@@ -2,6 +2,7 @@
 name: tune
 description: Give feedback, curate develop-log learnings, and analyze session transcripts for insights.
 user-invocable: true
+disable-model-invocation: true
 argument-hint: [<feedback> | review | insights]
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, AskUserQuestion
 ---

@@ -49,9 +49,9 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
     mountedRef.current = true;
     refresh();
     const timer = setInterval(refresh, 5000);
-    // US-005 AC2: when the global health hook recovers, refetch
-    // immediately so the user doesn't wait up to 5 s for the
-    // last-good groups to refresh.
+    // When the global health hook recovers, refetch immediately so
+    // the user doesn't wait up to 5 s for the last-good groups to
+    // refresh.
     const onOnline = () => {
       void refresh();
     };

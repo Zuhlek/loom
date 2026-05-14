@@ -1,11 +1,8 @@
 /**
- * ChatErrorBanner — T-008 / US-008.
- *
  * Sticky error banner rendered above the composer. The banner is
- * sticky in the sense that it survives `snapshot` server frames (the
- * old `lastError` field was clobbered on each snapshot); the only
- * ways to leave the banner state are explicit dismiss or a new error
- * arriving (which overwrites with `dismissed: false`).
+ * sticky in the sense that it survives `snapshot` server frames —
+ * the only ways to leave the banner state are explicit dismiss or
+ * a new error arriving (which overwrites with `dismissed: false`).
  *
  * Render policy lives in `live-chat.tsx`: the route renders this
  * component iff `state.error && !state.error.dismissed`. The dismiss

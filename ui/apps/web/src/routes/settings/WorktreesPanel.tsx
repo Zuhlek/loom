@@ -1,6 +1,6 @@
 /**
  * WorktreesPanel — read-only view of the worktrees slice of
- * `GET /settings`. US-001 AC2.
+ * `GET /settings`.
  */
 import { useEffect, useState } from "react";
 import { getSettings, type ApiSettings } from "../../lib/api";

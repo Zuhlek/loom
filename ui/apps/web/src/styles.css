@@ -163,7 +163,7 @@ body::after {
 }
 
 /*
- * ChatComposer drop-target highlight (T-008 / US-003 AC1).
+ * ChatComposer drop-target highlight.
  *
  * The composer container toggles `data-dragging` on/off while a file
  * drag is hovering it (React serialises `true` to `data-dragging="true"`

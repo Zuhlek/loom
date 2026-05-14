@@ -19,7 +19,7 @@ import {
   type ModeIconProps,
   PenLineIcon,
   ShieldIcon,
-} from "../components/chat/ChatComposer";
+} from "../components/chat/composer-pill-icons";
 
 type PermissionMode = ApiChat["permission_mode"];
 
