@@ -12,7 +12,8 @@ I/O signature for the top-level Loom orchestrator. The orchestrator coordinates 
 
 | Name | Source | Required | Description |
 | --- | --- | --- | --- |
-| `$ARGUMENTS` | Slash command argument | optional | Project name, ticket ID, or free text used to resolve or create a workspace |
+| `$ARGUMENTS` | Slash command argument | optional | Project name, ticket ID, or free text used to resolve or create a workspace; may include the flag `--answers <path>` (see below) |
+| `--answers <path>` | Parsed from `$ARGUMENTS` | optional | Path to a `.answers.yaml` file (strict-subset YAML per `lib/answer-queue.py` / ADR-006). When present, the orchestrator copies the file to `.loom/<project>/.answers.yaml` before dispatching the Spec phase; the Spec grilling agent consumes from it instead of surfacing `AskUserQuestion`. The orchestrator deletes the staged copy after Spec returns so re-runs do not replay stale answers. Silently inert for any phase other than Spec. |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | required when resuming | Canonical state file; absence implies new workspace |
 | `seed.md` | `.loom/<project>/seed.md` | required for new projects | Raw user input that seeds the Spec phase |
 | Phase agent body | `phases/<current-phase>/phase.md` | required at dispatch | Body half of the phase agent's system prompt |

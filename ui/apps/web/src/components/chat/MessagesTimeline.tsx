@@ -92,16 +92,40 @@ export function MessagesTimeline({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Track whether the user has scrolled away from the bottom; only
-  // auto-scroll when they're already near the floor.
+  // Track stick-to-bottom by USER INTENT, not scroll position.
+  //
+  // Earlier this read `distance < 64` on every scroll event and wrote
+  // the result into `stickToBottomRef`. That created a race: a
+  // programmatic `scrollToBottom()` writes `scrollTop = scrollHeight`,
+  // but the browser fires the resulting scroll event asynchronously.
+  // Between the write and the handler, late-rendered content (markdown
+  // code blocks, syntax highlighting, images) can grow `scrollHeight`.
+  // The handler then sees `scrollTop` against the NEW `scrollHeight`,
+  // computes a non-zero distance, and incorrectly concludes the user
+  // had scrolled away — disabling auto-stick for the rest of the
+  // session. Symptom: long chats with markdown never land at the
+  // bottom even on hard refresh.
+  //
+  // Fix: only an UPWARD scroll delta from a position that is no longer
+  // at the bottom counts as "the user scrolled away". Programmatic
+  // scrolls only ever move scrollTop downward (or leave it pinned),
+  // so they cannot trip this. Coming back to the bottom by any means
+  // re-arms auto-stick.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    let lastScrollTop = el.scrollTop;
     const onScroll = () => {
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
       const atBottom = distance < 64;
-      stickToBottomRef.current = atBottom;
+      const movedUp = el.scrollTop < lastScrollTop;
+      if (movedUp && !atBottom) {
+        stickToBottomRef.current = false;
+      } else if (atBottom) {
+        stickToBottomRef.current = true;
+      }
       setIsAtBottom(atBottom);
+      lastScrollTop = el.scrollTop;
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);

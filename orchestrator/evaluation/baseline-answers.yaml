@@ -1,0 +1,28 @@
+# Canned answer queue for the bookmarks baseline seed.
+# Consumed in order by the Spec grilling agent when /weave is invoked
+# with --answers <this-file>. Each entry pre-answers one Q<n> the agent
+# would otherwise surface via AskUserQuestion.
+#
+# These answers favour the minimal-surface direction from the seed:
+# flat list, reject duplicates, no search, immutable bookmarks,
+# newest-first only.
+answers:
+  # Q01: tags/categories vs flat list
+  - q_id: Q01
+    answer: "Flat list (no tags / no categories)"
+  # Q02: duplicate URL handling
+  - q_id: Q02
+    answer: "Reject duplicate URLs with an inline error"
+  # Q03: search box
+  - q_id: Q03
+    answer: "Chronological list only (no search)"
+  # Q04: editability after creation
+  - q_id: Q04
+    answer: "Immutable once added (no edit)"
+  # Q05: sort order
+  - q_id: Q05
+    answer: "Newest-first only"
+  # FIFO fall-through answers for any extra branching Spec generates.
+  - answer: "(A)"
+  - answer: "(A)"
+  - answer: "(A)"

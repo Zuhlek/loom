@@ -16,7 +16,9 @@ I/O signature between `/weave` and the Spec Grilling Agent.
 | `seed.md` | `.loom/<project>/seed.md` | yes | Raw user input to clarify |
 | `spec.md` | `.loom/<project>/spec.md` | on rerun | Prior run's output (starting point, not blank slate) |
 | `decisions.md` | `.loom/<project>/decisions.md` | on rerun | Prior decision slots |
-| `repo-context.md` | `.loom/<project>/repo-context.md` | on subsequent dispatch | Findings from the first-dispatch Explore subagent |
+| `repo-digest.md` | `.loom/.cache/repo-digest.md` | when cached | Cross-fabric stable repo facts; reused across fabrics |
+| `repo-digest.manifest.json` | `.loom/.cache/repo-digest.manifest.json` | when cached | Versioning surface for the digest (`schema_version`, `git_head`, `tracked_files` sha256) |
+| `repo-context.md` | `.loom/<project>/repo-context.md` | on subsequent dispatch | Seed-relevant slice from the first-dispatch Explore subagent |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | when present | Quality Check findings to address |
 | `methods/grilling.md` | `orchestrator/weave/phases/spec/methods/grilling.md` | yes | Six-rule question discipline, dispatch flow, slot conventions, revisit mechanic |
 | `methods/categories.md` | `orchestrator/weave/phases/spec/methods/categories.md` | yes | Per-category briefing templates and validation |
@@ -94,8 +96,24 @@ Success criteria: `status: complete` in RETURN AND Design phase can proceed with
 #### `repo-context.md`
 
 - Path: `.loom/<project>/repo-context.md`.
-- Written on first dispatch only by the Explore subagent's findings.
-- Subsequent dispatches read this file instead of re-exploring.
+- Seed-relevant slice. Written on first dispatch from the Explore subagent's findings.
+- Cross-references `.loom/.cache/repo-digest.md` rather than restating shared facts.
+- Subsequent dispatches read this file (plus the digest) instead of re-exploring.
+
+#### `.loom/.cache/repo-digest.md` and `.loom/.cache/repo-digest.manifest.json`
+
+- Side-effect cache, NOT a per-fabric producer write. Lives outside `.loom/<project>/` because it is shared across fabrics; QC does not validate it as part of the producer contract.
+- Maintained on first dispatch per `phase.md` Work Loop step 2: trusted as-is when `schema_version` and `git_head` match; partial refresh on tracked-file sha256 mismatch; full rebuild when absent.
+- Manifest shape:
+  ```json
+  {
+    "schema_version": 1,
+    "git_head": "<sha>",
+    "generated_at": "<iso8601>",
+    "tracked_files": { "<repo-relative path>": "<sha256>" }
+  }
+  ```
+- `tracked_files` records only files the digest cites — not the whole tree.
 
 ## Throws
 

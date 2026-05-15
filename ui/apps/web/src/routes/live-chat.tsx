@@ -833,6 +833,7 @@ export function LiveChatRoute({ chatId }: Props) {
       rightRail={rightRail}
     >
         <MessagesTimeline
+          key={chatId}
           items={state.items}
           turnState={state.turnState}
           activeTurnStartedAt={state.activeTurnStartedAt}

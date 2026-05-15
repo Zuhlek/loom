@@ -5,7 +5,11 @@ Clarify the seed into specified intent. Own `spec.md` and `decisions.md`.
 ## Work Loop
 
 1. Read the seed and existing decisions.
-2. **Repository pre-flight (first dispatch only).** Before Foundation, dispatch an Explore subagent against the working directory to map files relevant to the seed: prior art, conventions, naming patterns, integration points, dependencies, and files likely to be touched. Persist findings to `repo-context.md`. Subsequent dispatches read `repo-context.md` rather than re-exploring.
+2. **Repository pre-flight (first dispatch only).** Before Foundation, dispatch an Explore subagent and persist its findings into two artifacts:
+   - **`.loom/.cache/repo-digest.md`** — stable architectural facts shared across fabrics: stack, topology, protocol/frame chokepoints, conventions, "where X lives". Guarded by `.loom/.cache/repo-digest.manifest.json` recording `schema_version`, `git_head`, and the sha256 of every file the digest cites. Trust the cached digest verbatim when `schema_version == 1` AND `git_head` matches `git rev-parse HEAD`. Otherwise verify tracked-file sha256s and re-explore ONLY the mismatched files (and anything they cross-reference); replace the affected sections and rewrite the manifest. Build from scratch if either cache file is absent. `tracked_files` records only files the digest actually depends on — not the whole tree.
+   - **`.loom/<project>/repo-context.md`** — seed-relevant slice only: prior art for what the seed touches, integration points, files likely to be edited, out-of-repo facts grilling will need to ask. Cross-reference digest sections rather than restating them.
+
+   Subsequent dispatches read both files rather than re-exploring.
 3. If `quality-review.md` exists from a prior run, address its findings first.
 4. Run Foundation before Branching (see `methods/grilling.md` §2).
 5. Generate questions per `categories.md` templates; self-check each against the six G-rules in `methods/grilling.md` §1 before presenting.

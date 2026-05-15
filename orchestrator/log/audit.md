@@ -726,3 +726,55 @@ The /weave Build phase coordinator subagent under raw Claude Code cannot dispatc
 ## 2026-05-14 - skill-implicit-match-overfire - spec-rerun-was-schema-compliance-recovery-after-chat-crash
 
 The Spec phase showed two "complete" entries in `pipeline.md` history because a mid-Spec chat crash forced a recovery dispatch. The second dispatch's contract was "confirm schema compliance after interruption" — not "regenerate artifacts" — and the agent correctly returned `complete` without rewriting `spec.md` / `decisions.md`. The gating contract in a recovery-after-crash dispatch is schema compliance, not artifact regeneration; the orchestrator's recovery method should make this explicit so the recovery agent does not inadvertently re-do work that already completed.
+
+## 2026-05-15 - loom-eval-harness - review-cycle-cross-phase-audit-observations
+
+Review of the loom-eval-harness build (12/12 tasks Done, 36/36 tests green).
+Three cross-phase audit observations worth retaining for the global pattern
+library:
+
+**1. Sub-agent code duplication for hot-path self-containment is principled,
+not lazy.** The harness intentionally duplicates a ~10-line
+`atomic_write_text` helper across four Python files
+(`eval-aggregate.py`, `answer-queue.py`, `eval-orchestrator-row.py`,
+`analyze.py`) rather than extracting a shared `lib/_atomic_write.py`. This
+breaks the literal P3 "3+ requires extraction" rule but is justified by a
+constraint the rule does not express: the capture hook (and any /weave-side
+helper that wraps it) must boot fast and not depend on a relative-import
+structure that the existing `orchestrator/hooks/*.py` files deliberately
+avoid. The right framing for Review on this kind of case is "documented
+trade-off + clear comments wins over rule-of-thumb"; mark minor, do not
+block.
+
+**2. Bootstrap projects that build their own tooling are structurally
+exempt from their own measurement.** This project ships a SubagentStop hook
+that captures token / duration data for every subagent dispatch — but the
+hook is not yet installed when the project's own build runs, so the
+project's own `usage.jsonl` is empty. The aggregator handled the absent
+file gracefully (zero-totals). This is the correct chicken-and-egg
+behaviour for bootstrap projects; the pattern recurs whenever Loom adds a
+new orchestrator-side capability. Review's correct stance is "note as
+meta-property; verify graceful empty-state handling; do not block".
+
+**3. Drive-by edits in dirty working-tree state must be triaged by mtime,
+not by `git diff`.** Review's initial scan of `git status` flagged
+`orchestrator/weave/phases/spec/methods/grilling.md` as carrying a
+suspicious extra line about `.loom/.cache/repo-digest.md` not anywhere in
+the project's scope. Mtime triage revealed that the `repo-digest` cache
+architecture sits in a separate cluster of pre-existing dirty files
+(`weave/phases/spec/phase.md`, `phase.signature.md`,
+`weave/methods/create-project.md`, `weave/lifecycle-concepts-toc.md`,
+`ui/*`) all dated several hours before the harness build started. The
+harness's T-009 edit to grilling.md added the "Non-interactive answer
+queue" subsection alongside the pre-existing reference; it did NOT
+introduce that line. Reusable cue: when reviewing a working tree with
+multi-project drift, `stat -f "%Sm %N"` is the disambiguator, not the
+diff. The classifier for "is this drive-by from THIS project's build" is
+mtime vs. earliest task-completion timestamp.
+
+**Cross-references:**
+`.loom/loom-eval-harness/{review,develop-log,test-report}.md`;
+`.loom/loom-eval-harness/tasks/T-001..T-012.done.md`;
+`orchestrator/hooks/capture-subagent-eval.{sh,py}`;
+`orchestrator/lib/{eval-aggregate.py,answer-queue.py,eval-orchestrator-row.py}`;
+`orchestrator/evaluation/{analyze.py,run-baseline.sh}`.

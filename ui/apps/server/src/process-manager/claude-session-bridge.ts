@@ -257,6 +257,14 @@ export interface ChatSession {
   /** Tracks which assistant message holds a given tool_use_id, for result wiring. */
   toolUseToAssistantId: Map<string, string>;
   turnState: TurnState;
+  /**
+   * Epoch ms when the session most recently entered `turnState === "running"`.
+   * Set by `setTurnState` on every idle/error/interrupted → running edge and
+   * cleared when leaving running. Echoed on the wire via `ChatSnapshot.turnStartedAt`
+   * so a reconnecting client can keep the working-timer counting from the
+   * original start rather than restarting at 0 on every navigation/refresh.
+   */
+  turnStartedAtMs: number | null;
   lastError: string | undefined;
   pendingPermission: PendingPermissionState | null;
   /** Active AskUserQuestion request, if any. Only one in-flight per session. */
@@ -628,6 +636,7 @@ export class ClaudeSessionBridge {
       itemsById,
       toolUseToAssistantId,
       turnState: "idle",
+      turnStartedAtMs: null,
       lastError: undefined,
       pendingPermission: null,
       pendingQuestion: null,
@@ -1520,6 +1529,15 @@ export class ClaudeSessionBridge {
       session.lastError = undefined;
     }
     session.turnState = state;
+    // Manage the turn-start epoch so reconnecting clients can keep the
+    // working-timer counting from the original start (not Date.now() at
+    // snapshot time). Only stamp/clear on real edges — the early-return
+    // above already guards running→running no-ops.
+    if (state === "running") {
+      session.turnStartedAtMs = Date.now();
+    } else {
+      session.turnStartedAtMs = null;
+    }
     this.broadcast(session, {
       kind: "turn-state",
       "chat-id": session.chatId,
@@ -2044,6 +2062,7 @@ export class ClaudeSessionBridge {
       itemsById: new Map(),
       toolUseToAssistantId: new Map(),
       turnState: "idle",
+      turnStartedAtMs: null,
       lastError: undefined,
       pendingPermission: null,
       pendingQuestion: null,

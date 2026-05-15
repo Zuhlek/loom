@@ -1,4 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
+import {
+  PHASE_GROUP_META,
+  PHASE_GROUP_ORDER,
+  PIPELINE_PATH,
+  partitionByPhase,
+  type PhaseGroupId,
+} from "./fabric-phase-files";
 
 export interface FabricTreeEntry {
   path: string;
@@ -67,29 +74,231 @@ export function FabricFileTree({
   selectedPath,
   onSelect,
 }: FabricFileTreeProps) {
-  const roots = useMemo(() => buildTree(tree), [tree]);
+  const buckets = useMemo(() => partitionByPhase(tree), [tree]);
+  const pipelineEntry = useMemo(
+    () => tree.find((e) => !e.isDirectory && e.path === PIPELINE_PATH) ?? null,
+    [tree],
+  );
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
     initialCollapsedFromTree(tree),
   );
   const toggle = useCallback(
-    (path: string) => setCollapsed((map) => ({ ...map, [path]: !(map[path] ?? true) })),
+    (path: string) =>
+      setCollapsed((map) => ({ ...map, [path]: !(map[path] ?? true) })),
+    [],
+  );
+  const [phasesCollapsed, setPhasesCollapsed] = useState<
+    Record<PhaseGroupId, boolean>
+  >(() => ({
+    spec: false,
+    design: false,
+    plan: false,
+    build: false,
+    review: false,
+    misc: false,
+  }));
+  const togglePhase = useCallback(
+    (id: PhaseGroupId) =>
+      setPhasesCollapsed((map) => ({ ...map, [id]: !map[id] })),
     [],
   );
   return (
     <>
-      {roots.map((node) => (
-        <TreeRow
-          key={node.path}
-          node={node}
-          depth={0}
-          collapsed={collapsed}
-          toggle={toggle}
+      {pipelineEntry && (
+        <PipelineRow
+          entry={pipelineEntry}
           artifacts={artifacts}
           selectedPath={selectedPath}
           onSelect={onSelect}
         />
-      ))}
+      )}
+      {PHASE_GROUP_ORDER.map((id) => {
+        const entries = buckets[id];
+        if (entries.length === 0) return null;
+        return (
+          <PhaseSection
+            key={id}
+            id={id}
+            entries={entries}
+            open={!phasesCollapsed[id]}
+            onTogglePhase={togglePhase}
+            collapsed={collapsed}
+            toggle={toggle}
+            artifacts={artifacts}
+            selectedPath={selectedPath}
+            onSelect={onSelect}
+          />
+        );
+      })}
     </>
+  );
+}
+
+interface PipelineRowProps {
+  entry: FabricTreeEntry;
+  artifacts: Record<string, string>;
+  selectedPath: string | null;
+  onSelect: (path: string) => void;
+}
+
+function PipelineRow({
+  entry,
+  artifacts,
+  selectedPath,
+  onSelect,
+}: PipelineRowProps) {
+  const isReadable = artifacts[entry.path] != null;
+  const isActive = entry.path === selectedPath;
+  return (
+    <div
+      data-testid={`fabric-file-row-${entry.path}`}
+      data-selected={isActive ? "true" : undefined}
+      data-readable={isReadable ? "true" : "false"}
+      onClick={() => {
+        if (isReadable) onSelect(entry.path);
+      }}
+      className="flex items-center gap-1.5 rounded px-1 py-1 mb-1 select-none"
+      style={{
+        background: isActive
+          ? "var(--selected-row)"
+          : "rgba(59,130,246,0.08)",
+        borderWidth: 1,
+        borderStyle: "solid",
+        borderColor: "var(--border)",
+        color: isReadable ? "var(--foreground)" : "var(--muted-foreground)",
+        cursor: isReadable ? "pointer" : "default",
+        opacity: isReadable ? 1 : 0.55,
+      }}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        className="size-3.5 shrink-0"
+        style={{ color: "var(--info)" }}
+        aria-hidden
+      >
+        <circle cx="6" cy="6" r="2" />
+        <circle cx="18" cy="6" r="2" />
+        <circle cx="6" cy="18" r="2" />
+        <circle cx="18" cy="18" r="2" />
+        <path d="M8 6h8M6 8v8M18 8v8M8 18h8" strokeLinecap="round" />
+      </svg>
+      <span className="truncate flex-1 text-[11px] font-medium">
+        {entry.name}
+      </span>
+      <span
+        className="text-[9px] tabular-nums"
+        style={{ color: "var(--muted-foreground)" }}
+      >
+        {humanSize(entry.size)}
+      </span>
+    </div>
+  );
+}
+
+interface PhaseSectionProps {
+  id: PhaseGroupId;
+  entries: FabricTreeEntry[];
+  open: boolean;
+  onTogglePhase: (id: PhaseGroupId) => void;
+  collapsed: Record<string, boolean>;
+  toggle: (path: string) => void;
+  artifacts: Record<string, string>;
+  selectedPath: string | null;
+  onSelect: (path: string) => void;
+}
+
+function PhaseSection({
+  id,
+  entries,
+  open,
+  onTogglePhase,
+  collapsed,
+  toggle,
+  artifacts,
+  selectedPath,
+  onSelect,
+}: PhaseSectionProps) {
+  const meta = PHASE_GROUP_META[id];
+  const roots = useMemo(() => buildTree(entries), [entries]);
+  const fileCount = useMemo(
+    () => entries.filter((e) => !e.isDirectory).length,
+    [entries],
+  );
+  const isMisc = id === "misc";
+  return (
+    <div data-testid={`fabric-phase-group-${id}`} className="mb-1">
+      <button
+        type="button"
+        onClick={() => onTogglePhase(id)}
+        aria-expanded={open}
+        data-testid={`fabric-phase-header-${id}`}
+        className="w-full flex items-center gap-1.5 px-1 py-1 rounded select-none"
+        style={{
+          background: isMisc ? "rgba(245,158,11,0.10)" : "transparent",
+        }}
+      >
+        <ChevronIcon open={open} />
+        {meta.num ? (
+          <span
+            className="size-3.5 rounded-full grid place-items-center text-[9px] font-bold shrink-0"
+            style={{
+              borderWidth: 1,
+              borderStyle: "solid",
+              borderColor: "var(--border)",
+              color: "var(--muted-foreground)",
+            }}
+          >
+            {meta.num}
+          </span>
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            className="size-3.5 shrink-0"
+            style={{ color: "var(--warning)" }}
+            aria-hidden
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v4" strokeLinecap="round" />
+            <circle cx="12" cy="17" r="0.8" fill="currentColor" />
+          </svg>
+        )}
+        <span
+          className="text-[11px] font-medium flex-1 text-left"
+          style={{
+            color: isMisc
+              ? "var(--warning-foreground)"
+              : "var(--foreground)",
+          }}
+        >
+          {meta.num ? `P${meta.num} ${meta.label}` : meta.label}
+        </span>
+        <span
+          className="text-[9px] tabular-nums"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          {fileCount}
+        </span>
+      </button>
+      {open &&
+        roots.map((node) => (
+          <TreeRow
+            key={node.path}
+            node={node}
+            depth={1}
+            collapsed={collapsed}
+            toggle={toggle}
+            artifacts={artifacts}
+            selectedPath={selectedPath}
+            onSelect={onSelect}
+          />
+        ))}
+    </div>
   );
 }
 

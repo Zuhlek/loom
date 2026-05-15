@@ -49,7 +49,7 @@ Grilling is **staged** — a direct application of the Double Diamond framework.
 
 Gather context. **No decisions yet.**
 
-Read `repo-context.md` (produced by the Spec agent's repository pre-flight — see `phase.md` Work Loop step 2) before generating Foundation questions. Never ask the user for a fact the repo states directly — pull it from `repo-context.md` and treat it as established. Foundation questions fill the gaps the repo cannot answer (team context, value bar, constraints not in code).
+Read `.loom/.cache/repo-digest.md` AND `repo-context.md` (both produced by the Spec agent's repository pre-flight — see `phase.md` Work Loop step 2) before generating Foundation questions. The digest carries stable cross-fabric facts; `repo-context.md` carries the seed-relevant slice. Never ask the user for a fact either file states directly — treat them as established. Foundation questions fill the gaps the repo cannot answer (team context, value bar, constraints not in code).
 
 - Existing situation — current architecture, team, prior choices, integration points.
 - Value bar — what does "done" mean? what is the success criterion?
@@ -95,6 +95,57 @@ The agent MAY re-enter Foundation mid-Branching if a Branching question reveals 
 The Spec Grilling Agent surfaces every question via `AskUserQuestion` and runs the entire grilling loop inside a single Task dispatch — generate Q, surface, persist the answer, generate the next Q, surface, persist, … — exiting only on `phase-complete` (close branch) or `stop-requested` (user picked Stop).
 
 `decisions.md` is the audit / recovery surface, not the primary answer surface — every answer is mirrored into the matching `<!-- loom:answer-slot -->` region as it is captured.
+
+### Non-interactive answer queue
+
+Before calling `AskUserQuestion` for any question Q<n>, the agent MUST first
+consult `.loom/<project>/.answers.yaml` (staged by `/weave --answers <path>`
+per ADR-001). The flow:
+
+1. Generate Q<n> exactly as in the interactive path (briefing block,
+   triage, etc.). Question generation is unchanged.
+2. Check whether `.loom/<project>/.answers.yaml` exists. If absent or
+   empty: fall through to the interactive `AskUserQuestion` surface
+   (the field mapping below).
+3. Otherwise, shell out:
+
+   ```bash
+   python3 orchestrator/lib/answer-queue.py pop "<project>" --q-id "Q<n>"
+   ```
+
+   Capture the JSON on stdout. Cases:
+
+   - `{"q_id": "Q<n>", "answer": "<value>"}` → use `<value>` as the user's
+     pick. Mirror into the matching `<!-- loom:answer-slot -->` region
+     **exactly** as if the user had selected it via the picker
+     (suffix-strip the `(Recommended)` marker if the literal answer
+     carries it; flip `Status: answered`; persist via
+     `orchestrator/lib/atomic-write.sh`).
+   - `{"answer": "<value>"}` → no q_id binding; same as above, value
+     used verbatim. (This is the FIFO entry path; the queue author
+     intentionally left q_id off.)
+   - `{}` → queue exhausted OR no entry matches Q<n>. Write `[stop]` to
+     the slot and exit the loop with `STATUS: stop-requested` (same
+     terminal state as the user clicking Stop in interactive mode). The
+     orchestrator's gate surfaces this naturally; in `run-baseline.sh`
+     mode the failure is logged and the next iteration proceeds (US-003
+     AC-4).
+
+4. The agent does NOT invent answers, does NOT silently fall back to its
+   own recommendation, and does NOT block indefinitely. Queue exhaustion
+   is a clean stop, not a coercion.
+
+5. `Explain more` and the revisit mechanic (§5) DO NOT apply in
+   non-interactive mode — there is no human on the other end to elaborate
+   for. If the queue's answer is something the agent would normally treat
+   as a `push back` / `side requirement` / free-text via the slot-body
+   parsing rules below, the same parsing applies (e.g. the queue can
+   include literal `[push back: <text>]` to drive the revisit path
+   non-interactively).
+
+The question-generation loop (§3 triage) runs structurally unchanged —
+only the ASK step (§4) gains the pre-check above. This matches US-003
+AC-3 ("Spec runs structurally unchanged").
 
 ### AskUserQuestion field mapping
 

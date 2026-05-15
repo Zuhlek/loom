@@ -3,3 +3,11 @@
 docs
 __pycache__/
 *.pyc
+
+# Eval-harness analysis output and filed baseline / version runs are
+# tracked in git (per loom-eval-harness US-004 AC-3). Pin a non-ignore
+# so future top-level rules cannot accidentally shadow it.
+!orchestrator/evaluation/
+!orchestrator/evaluation/**
+!loom/orchestrator/evaluation/
+!loom/orchestrator/evaluation/**

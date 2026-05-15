@@ -28,6 +28,46 @@ Do not produce phase artifacts yourself. Phase agents own their artifacts.
 
 The RETURN schema is no longer a sibling YAML file: it is the fenced `yaml` block under `### Return block` inside `phase.signature.md` / `quality-check.signature.md`. See Phase Cycle step 3c below for the extraction rule.
 
+## `--answers <path>` Flag (Non-Interactive Spec)
+
+At workspace-resolution time (before the Phase Cycle starts), parse
+`$ARGUMENTS` for a `--answers <path>` flag. Treat it as optional, position-
+independent, and case-sensitive (exactly `--answers`). The flag's value is a
+filesystem path to a `.answers.yaml` file (strict-subset YAML per
+`orchestrator/lib/answer-queue.py` / ADR-006).
+
+Lifecycle:
+
+1. **Stage.** If `--answers <path>` is present, copy the file verbatim to
+   `.loom/<project>/.answers.yaml` (overwrite any prior copy). Do this AFTER
+   the workspace exists and BEFORE the first Spec dispatch. If the source
+   path does not exist, fail dispatch with a clear `missing-file:` error
+   before any Task is started (do not silently fall back to interactive
+   mode — the user asked for non-interactive and got a typo).
+
+2. **Inert outside Spec.** The flag changes nothing for Design / Plan /
+   Build / Review. If `/weave` resumes a project whose `Current phase` is
+   not Spec, parse and ignore the flag silently. (Non-Spec phases never
+   call `AskUserQuestion` for question/answer flow, so the staged file is
+   never consulted by them.)
+
+3. **Cleanup.** After Spec returns (whether the user picks `Continue`,
+   `Rerun phase`, or any other path through the gate), delete
+   `.loom/<project>/.answers.yaml`. This ensures a manual re-run of Spec
+   (via the rerun gate, or a later `/weave` without `--answers`) re-enters
+   interactive mode rather than replaying stale answers.
+
+4. **Re-staging on rerun.** If the user picks `Rerun phase` at the Spec
+   gate AND `--answers` was supplied for this `/weave` invocation, re-stage
+   the file before the rerun dispatch (the post-Spec cleanup in step 3 will
+   have removed it). If `--answers` was NOT supplied, the rerun proceeds
+   interactively as today.
+
+Consumption of the staged file lives entirely inside the Spec grilling
+agent body (`phases/spec/methods/grilling.md` — see ADR-001). The `/weave`
+orchestrator only stages and cleans up; it never reads or peeks
+`.answers.yaml` itself.
+
 ## State Contract
 
 `pipeline.md` is canonical. It contains stable Markdown sections:
@@ -58,7 +98,14 @@ The RETURN schema is no longer a sibling YAML file: it is the fenced `yaml` bloc
    b. Dispatch the matching phase agent in a fresh Task session. The system prompt is the deterministic concatenation of the body and signature files (see "Dispatch concatenation" below).
    c. Ensure return schema compliance: parse the RETURN block from the Task's reply and check it against the fenced `yaml` schema embedded in `phases/<phase>/phase.signature.md` under `## Returns` › `### Return block` (see "Schema-compliance extraction" below). This check is silent — on mismatch, re-dispatch the same agent with the schema mismatch as the rerun instruction (do not surface to the user). See `methods/recovery.md` for redispatch policy.
    d. Surface the rerun-or-continue decision (see below) via AskUserQuestion.
-   e. On continue: update pipeline.md, advance phase, loop to (a).
+   e. On continue: emit one orchestrator-row to `.loom/<project>/usage.jsonl`
+      for the just-completed phase by shelling out to
+      `python3 orchestrator/lib/eval-orchestrator-row.py --project <p> --phase <just-completed>`
+      (per design.md § Orchestrator-row capture + ADR-004 + the helper algorithm
+      in `orchestrator/lib/ORCHESTRATOR_TRANSCRIPT.md`). Then update
+      pipeline.md, advance phase, loop to (a). The helper is idempotent and
+      safe to re-invoke; it appends nothing when no new orchestrator turns
+      have happened since the last emit.
    f. On rerun: re-dispatch the same phase agent with prior artifacts (+ optional Quality Check findings), loop to (c).
 4. On Review continue: set Lifecycle state = complete, report and exit.
 ```

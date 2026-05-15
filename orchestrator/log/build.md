@@ -1930,3 +1930,259 @@ residual narrative comment).
 ## 2026-05-14 - skill-implicit-match-overfire - first-fire-project-id-mtime-walk-vs-transcript-scan
 
 Plan deferred the first-fire writer's project-identification mechanism (mtime walk of `${loom_root}/*/pipeline.md` vs. transcript-tail scan of `transcript_path` for `/weave <name>`) to Build. T-003 chose mtime-walk on the grounds that (a) the existing `scan_pending_candidate` already implements it as part of the FALLBACK path, so the writer is a free reuse; (b) transcript-tail scan couples Loom to Anthropic-internal JSONL transcript format stability — the format is undocumented and Anthropic-owned. mtime-walk only fails when the user's filesystem doesn't track mtimes reliably (rare on macOS/Linux native; possible on SMB/NFS); transcript scan fails on any Anthropic-side format change. Robustness wins for mtime-walk here; the design contract is identical between the two mechanisms.
+
+## 2026-05-15 - loom-eval-harness - T-002-autonomous-duration-probe
+
+Task: T-002 (Probe autonomous-duration computation against a real transcript).
+Status: green, attempts 1, discovery probe (no executable tests per tests.md).
+
+Findings recorded at `orchestrator/hooks/AUTONOMOUS_DURATION.md`. Verified
+across 5 Claude Code session transcripts under
+`~/.claude/projects/-Volumes-My-Shared-Files-repo-loom/`:
+
+- `assistant.message.usage` carries the four token buckets but NO explicit
+  per-turn server-timing field (no `server_time_ms`, `latency_ms`,
+  `processing_time_ms`, or top-level `durationMs`).
+- The only timing signal is the row-level ISO-8601 `timestamp`.
+
+Adopted Option 1 from the task body: sum
+`(assistant.timestamp − preceding-non-assistant.timestamp)` deltas across
+assistant turns. Defensive future-field check shipped in the algorithm so
+T-001 auto-upgrades if the SDK ever exposes an explicit per-turn timing.
+
+T-001 can copy §"Computation chosen for T-001" pseudocode verbatim.
+
+## 2026-05-15 - loom-eval-harness - T-006-orchestrator-transcript-probe
+
+Task: T-006 (Probe orchestrator transcript-path access from /weave session).
+Status: green, attempts 1, discovery probe (no executable tests per tests.md).
+
+Findings recorded at `orchestrator/lib/ORCHESTRATOR_TRANSCRIPT.md`. Verified
+empirically:
+
+- `CLAUDE_CODE_SESSION_ID` IS exposed to slash-command bodies as an env var.
+- `CLAUDE_TRANSCRIPT_PATH` is NOT exposed.
+- The cwd-encoding convention used by `~/.claude/projects/<encoded>/` is
+  slash-and-space → hyphen (verified by `ls` of the resolved path).
+- Filesystem-scan fallback documented for the missing-env-var edge case.
+- Synthetic-crash sentinel fallback documented for the broken-environment
+  edge case (keeps US-001 AC-3 honest).
+
+T-007 can copy `orchestrator_transcript_path()` verbatim.
+
+## 2026-05-15 - loom-eval-harness - T-005-answer-queue
+
+Task: T-005 (Answer-queue library peeks and pops from .answers.yaml).
+Status: green, attempts 1, 11/11 tests pass on Python 3.9.6 stdlib unittest.
+
+Files changed:
+- `orchestrator/lib/answer-queue.py` (new) — CLI with `peek` and `pop`
+  subcommands. Strict-subset YAML parser (~110 lines including grammar
+  errors). Atomic-write via `tempfile.mkstemp` + `os.replace`. JSON output
+  shape: full entry / `{"answer": "x"}` for FIFO-only / `{}` for empty.
+- `orchestrator/lib/test_answer_queue.py` (new) — 11 unit tests covering
+  peek + pop + FIFO + q_id matching + empty/absent file + grammar errors
+  with line numbers + atomic-write contract.
+
+Test contract correction (recorded in `tasks/T-005.done.md`): one assertion
+was originally a literal-prefix proxy for "file parseable after pop"; fixed
+to assert the real contract (re-invoke `peek`, require rc=0). Strict
+improvement over the proxy — keeps user comment headers preserved across
+pops, which is the desired behaviour.
+
+Implements ADR-006 (handwritten YAML-subset parser, no PyYAML dep).
+
+## 2026-05-15 - loom-eval-harness - T-008-weave-answers-staging
+
+Task: T-008 (/weave parses --answers and stages .answers.yaml).
+Status: green, attempts 1, prompt-edit (no executable tests per task body).
+
+Files changed:
+- `orchestrator/weave/signature.md` — Params table adds `--answers <path>`
+  row between `$ARGUMENTS` and `pipeline.md`.
+- `orchestrator/weave/SKILL.md` — new `## --answers <path> Flag
+  (Non-Interactive Spec)` H2 inserted before `## State Contract`. Four-
+  step lifecycle (Stage, Inert-outside-Spec, Cleanup, Re-stage-on-rerun)
+  with cross-references to ADR-001 + ADR-006.
+
+Consumption (the load-bearing change in the Spec grilling agent body)
+remains as T-009. Manual gate is M2 (`run-baseline.sh --n 2`), downstream.
+
+## 2026-05-15 - loom-eval-harness - T-001-capture-hook
+
+Task: T-001 (Capture hook writes one usage.jsonl row per direct-subagent
+invocation).
+Status: green, attempts 1, 7/7 tests pass on Python 3.9.6 stdlib unittest.
+
+Files changed:
+- `orchestrator/hooks/capture-subagent-eval.sh` — thin bash shim
+  mirroring `validate-subagent-output.sh` shape; returns 0
+  unconditionally.
+- `orchestrator/hooks/capture-subagent-eval.py` — transcript parser:
+  resolve project from cwd, sum token buckets, compute wall_ms
+  (last-first ts) and autonomous_ms (timestamp-delta per
+  AUTONOMOUS_DURATION.md + defensive future-field check). Sub-subagent
+  rollup via `.eval-rollup/<parent>.jsonl` per ADR-003. O_APPEND used for
+  line-atomicity. Crash sentinel on parse failure.
+- `orchestrator/hooks/test_capture_subagent_eval.py` — 7 smoke tests:
+  AC-1 clean OK row (token sums + autonomous=3500ms + wall=4000ms
+  arithmetic), AC-4 crash sentinel, AC-5/AC-6 forbidden-field exclusions,
+  AC-7 validator-files-untouched static check, no-op outside Loom,
+  no-op on missing transcript, append-not-overwrite.
+
+Hook registration in settings.example.json deferred to T-012 per the task
+boundary. Sub-subagent rollup end-to-end test deferred to M1 (live
+/weave run) since fabricating a parent/child sidechain pair in a unit
+test would couple the test to SDK-internal session linkage details that
+aren't deterministically exposed.
+
+## 2026-05-15 - loom-eval-harness - T-003-aggregator
+
+Task: T-003 (Aggregator writes usage.md from usage.jsonl).
+Status: green, attempts 1, 8/8 tests pass on Python 3.9.6 stdlib unittest.
+
+Files changed:
+- `orchestrator/lib/eval-aggregate.py` — reads usage.jsonl, renders
+  usage.md with per-phase totals + orchestrator-vs-subagent split +
+  run totals + Crashed-invocations section. Atomic via tempfile +
+  os.replace. Orphan-rollup sweep (ADR-003).
+- `orchestrator/lib/test_eval_aggregate.py` — 8 unit tests covering the
+  G2 acceptance gates plus orphan-rollup folding, atomic-write contract,
+  and explicit negative assertions on review.md (not created, not
+  modified when pre-existing).
+
+review.md is never touched (US-002 AC-2 verified by negative test).
+
+## 2026-05-15 - loom-eval-harness - T-007-orchestrator-row
+
+Task: T-007 (Orchestrator-row helper emits per-phase rows at phase
+boundary).
+Status: green, attempts 1, 4/4 tests pass on Python 3.9.6 stdlib unittest.
+
+Files changed:
+- `orchestrator/lib/eval-orchestrator-row.py` — reads the current /weave
+  session's transcript (via CLAUDE_CODE_SESSION_ID + cwd-encoding per
+  ORCHESTRATOR_TRANSCRIPT.md), slices to suffix after the pointer uuid,
+  sums orchestrator-only assistant turns (isSidechain=False), subtracts
+  the sum of subagent rows already in usage.jsonl for this phase, clamps
+  the delta at 0, appends one row, updates the pointer atomically.
+  Synthetic crashed row when transcript can't be read.
+- `orchestrator/lib/test_eval_orchestrator_row.py` — 4 unit tests:
+  emit-one-row math, idempotency on re-invocation, pointer-file written,
+  missing-transcript → crashed sentinel.
+- `orchestrator/weave/SKILL.md` — Phase Cycle step 3e amended: shell out
+  to the helper before pipeline.md advance. Idempotency noted inline.
+
+## 2026-05-15 - loom-eval-harness - T-009-spec-grilling-queue-consume
+
+Task: T-009 (Spec grilling agent consumes from .answers.yaml before
+AskUserQuestion).
+Status: green, attempts 1, prompt-edit (no executable tests per task
+body).
+
+Files changed:
+- `orchestrator/weave/phases/spec/methods/grilling.md` — new
+  `### Non-interactive answer queue` sub-section inside §4
+  `AskUserQuestion dispatch`, before `### AskUserQuestion field mapping`.
+  Five-step flow: generate Q<n>, presence-check `.answers.yaml`, shell
+  to `answer-queue.py pop`, three JSON-stdout cases handled, stop on
+  exhaustion via `[stop]` slot + `STATUS: stop-requested`. Explicit
+  notes that the agent does not invent answers, fall back to
+  recommendations, or block.
+
+Queue-pop semantics are unit-tested under T-005 (test_answer_queue.py:
+11/11 green). Live integration is the M2 gate.
+
+## 2026-05-15 - loom-eval-harness - T-010-analyzer
+
+Task: T-010 (Analyze.py renders analysis.html across version folders).
+Status: green, attempts 1, 6/6 tests pass on Python 3.9.6 stdlib
+unittest.
+
+Files changed:
+- `orchestrator/evaluation/analyze.py` — METRICS registry (6 tuples);
+  collect() walks `<root>/<version>/<run>/usage.jsonl`, computes
+  per-version per-phase means pooling all runs (crashed rows excluded),
+  baseline-first ordering. render_html() emits self-contained HTML
+  with inline JSON data + Chart.js bar charts (one per metric × phase
+  + one totals row per metric). Atomic write via tempfile + os.replace.
+- `orchestrator/evaluation/test_analyze.py` — 6 unit tests covering G4
+  acceptance gates: multi-version-with-baseline-first, baseline-only
+  empty-tree, metric-registry round-trip, crashed-row exclusion,
+  no-prose-in-body, no-tmp-leftovers.
+- `orchestrator/evaluation/chartjs/chart.min.js` (vendored) — Chart.js
+  4.4.0 UMD bundle, 205 KB, sourced from cdn.jsdelivr.net 2026-05-15.
+- `orchestrator/evaluation/chartjs/VERSION` — source URL + date.
+
+## 2026-05-15 - loom-eval-harness - T-004-review-wires-aggregator
+
+Task: T-004 (Review phase invokes the aggregator at complete).
+Status: green, attempts 1, prompt-edit (no executable tests).
+
+Files changed:
+- `orchestrator/weave/phases/review/phase.md` — new `## On completion`
+  section: shell to `python3 orchestrator/lib/eval-aggregate.py
+  <project>` at review-complete; forbid touching review.md; treat
+  aggregator failure as non-blocking observability.
+
+## 2026-05-15 - loom-eval-harness - T-011-run-baseline
+
+Task: T-011 (run-baseline.sh drives N weave runs with --answers).
+Status: green, attempts 1, no executable tests per task body; M2 live
+gate.
+
+Files changed:
+- `orchestrator/evaluation/run-baseline.sh` — bash N-loop with `set
+  -uo pipefail`, argument parser (`--n / --seed / --answers` with both
+  `--flag value` and `--flag=value` forms; `-h/--help`), per-iter
+  failure-isolation, no workspace mv/cp/delete.
+- `orchestrator/evaluation/baseline-seed.md` — vendored copy of
+  `docs/seeds/bookmarks-baseline.md` (harness owns its copy per
+  Plan/Spec constraint).
+- `orchestrator/evaluation/baseline-answers.yaml` — canned q_id-bound
+  answers for Q01..Q05 (the five "things I have not decided" in the
+  seed) plus three FIFO fall-through entries.
+
+`bash -n` and `--help` exercise pass syntax/usage smoke.
+
+## 2026-05-15 - loom-eval-harness - T-012-final-wiring
+
+Task: T-012 (Register hook + artifacts.sh entries + .gitignore
+non-ignore).
+Status: green, attempts 1, config/static edits verified by hand.
+
+Files changed:
+- `orchestrator/hooks/settings.example.json` — second SubagentStop
+  entry added (`capture-subagent-eval.sh`); validator entry untouched.
+  jq parses clean.
+- `orchestrator/lib/artifacts.sh` `_kind_for_path` — added
+  `usage.jsonl) echo "usage jsonl false"` and
+  `usage.md) echo "usage markdown false"`. Exercised manually.
+- `.gitignore` — appended explicit non-ignore lines for
+  `orchestrator/evaluation/**` and `loom/orchestrator/evaluation/**`
+  (protective; nothing was shadowing today). `git status --ignored`
+  confirms tracked-by-default.
+
+## 2026-05-15 - loom-eval-harness - Build phase complete
+
+All 12 tasks green. Story coverage matrix (per plan.md):
+- US-001 (capture per invocation + per phase): T-001, T-002, T-006, T-007 — all green.
+- US-002 (per-run summary): T-003, T-004 — all green.
+- US-003 (automated runner): T-005, T-008, T-009, T-011 — all green.
+- US-004 (manual filing convention): T-012 (`.gitignore` non-ignore +
+  `usage.*` artifacts.sh kinds) — green.
+- US-005 (analyzer): T-010 — green.
+
+Test suite (Python 3.9.6 stdlib unittest):
+- `orchestrator/lib/test_answer_queue.py`        — 11/11
+- `orchestrator/hooks/test_capture_subagent_eval.py` —  7/7
+- `orchestrator/lib/test_eval_aggregate.py`      —  8/8
+- `orchestrator/lib/test_eval_orchestrator_row.py` —  4/4
+- `orchestrator/evaluation/test_analyze.py`      —  6/6
+Total: 36/36 passing.
+
+Manual gates remaining (out-of-scope for Build per plan.md):
+- M1: live /weave run produces non-empty usage.jsonl + <500ms hook.
+- M2: `run-baseline.sh --n 2` produces two finished workspaces with
+  per-iter failure isolation.
+- M3: `python3 analyze.py` + browser-open analysis.html offline.
