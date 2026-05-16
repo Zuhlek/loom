@@ -17,7 +17,8 @@ import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const appPath = webRoot + "src/App.tsx";
 const srcRoot = webRoot + "src";
 

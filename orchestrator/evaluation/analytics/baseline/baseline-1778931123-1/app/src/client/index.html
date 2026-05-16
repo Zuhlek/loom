@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bookmarks</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script type="module" src="/static/main.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Bookmarks</h1>
+      </header>
+      <form id="save-form" novalidate>
+        <label>
+          URL
+          <input id="url" name="url" type="text" autocomplete="off" />
+          <output id="url-error" class="field-error"></output>
+        </label>
+        <label>
+          Title
+          <input id="title" name="title" type="text" autocomplete="off" />
+          <output id="title-error" class="field-error"></output>
+        </label>
+        <button type="submit">Save</button>
+        <output id="form-error" class="form-error"></output>
+      </form>
+      <section id="list" aria-live="polite"></section>
+    </main>
+  </body>
+</html>

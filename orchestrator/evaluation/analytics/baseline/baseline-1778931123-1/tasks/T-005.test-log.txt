@@ -1,0 +1,56 @@
+=== RED: T-005 build-client ===
+ RUN  v1.6.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app
+
+ ❯ test/build-client.test.ts  (3 tests) 403ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/build-client.test.ts > build-client (T-005)
+Error: build-client exited 1
+stdout: 
+stderr: npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+/Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app/scripts/build-client.ts:1
+throw new Error('not implemented');
+      ^
+
+Error: not implemented
+    at <anonymous> (/Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app/scripts/build-client.ts:1:7)
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v25.8.2
+
+ ❯ <anonymous> scripts/build-client.ts:1:7
+ ❯ test/build-client.test.ts:17:13
+     15|     });
+     16|     if (result.status !== 0) {
+     17|       throw new Error(
+       |             ^
+     18|         `build-client exited ${result.status}\nstdout: ${result.stdout…
+     19|       );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests   (3)
+   Start at  13:54:54
+   Duration  550ms (transform 22ms, setup 0ms, collect 20ms, tests 403ms, environment 0ms, prepare 49ms)
+
+
+=== GREEN: T-005 build-client ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+ RUN  v1.6.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app
+
+ ✓ test/build-client.test.ts  (3 tests) 419ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  13:56:21
+   Duration  565ms (transform 20ms, setup 0ms, collect 17ms, tests 419ms, environment 0ms, prepare 47ms)
+

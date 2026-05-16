@@ -30,7 +30,8 @@
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const routePath = webRoot + "src/routes/live-chat.tsx";
 const containerPath = webRoot + "src/components/diff/DiffPanelContainer.tsx";
 

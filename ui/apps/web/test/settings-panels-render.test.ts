@@ -11,7 +11,8 @@
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const panelDir = webRoot + "src/routes/settings";
 const apiPath = webRoot + "src/lib/api.ts";
 

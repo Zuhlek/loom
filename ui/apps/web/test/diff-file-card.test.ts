@@ -40,7 +40,8 @@ import { existsSync, readFileSync } from "node:fs";
 
 import type { DiffFile, DiffLine } from "../src/components/diff/DiffPanel";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const cardPath = webRoot + "src/components/diff/DiffFileCard.tsx";
 const panelPath = webRoot + "src/components/diff/DiffPanel.tsx";
 

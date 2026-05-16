@@ -20,7 +20,8 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const containerPath = webRoot + "src/components/diff/DiffPanelContainer.tsx";
 
 describe("T-008 action chain — required call sites", () => {

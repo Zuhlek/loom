@@ -53,7 +53,8 @@
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const chipPath = webRoot + "src/components/chat/WorkingChip.tsx";
 const timelinePath = webRoot + "src/components/chat/MessagesTimeline.tsx";
 const liveChatPath = webRoot + "src/routes/live-chat.tsx";

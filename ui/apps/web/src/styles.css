@@ -109,6 +109,33 @@ body::after {
 }
 .awaiting-pulse { animation: loom-pulse 2s ease-in-out infinite; }
 
+/*
+ * loom-row-pulse — sidebar chat rows that have produced assistant
+ * output the user hasn't viewed yet. Uses a tinted background that
+ * fades in and out rather than opacity on the whole row, so the
+ * label text stays legible. Color is keyed off --info (the same
+ * blue used by the "working" dot) for visual continuity.
+ */
+@keyframes loom-row-pulse {
+  0%, 100% { background-color: color-mix(in srgb, var(--info, #2563eb) 8%, transparent); }
+  50%      { background-color: color-mix(in srgb, var(--info, #2563eb) 22%, transparent); }
+}
+.unread-pulse { animation: loom-row-pulse 2s ease-in-out infinite; }
+
+/*
+ * loom-row-pulse-warn — sidebar chat rows that are blocked on the
+ * user (a permission prompt or AskUserQuestion is outstanding).
+ * Same motion as the unread pulse, but tinted with --warning (amber)
+ * to match the `!` glyph. Renders on top of the unread pulse: if a
+ * chat is both unread and needs input, "needs input" wins on the
+ * background, just like it does on the glyph.
+ */
+@keyframes loom-row-pulse-warn {
+  0%, 100% { background-color: color-mix(in srgb, var(--warning, #d97706) 10%, transparent); }
+  50%      { background-color: color-mix(in srgb, var(--warning, #d97706) 28%, transparent); }
+}
+.needs-input-pulse { animation: loom-row-pulse-warn 1.6s ease-in-out infinite; }
+
 @keyframes loom-spin {
   to { transform: rotate(360deg); }
 }

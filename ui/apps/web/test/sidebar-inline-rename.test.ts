@@ -32,7 +32,8 @@
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
-const webRoot = decodeURIComponent(new URL("../", import.meta.url).pathname);
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const sidebarPath = webRoot + "src/components/LiveSidebar.tsx";
 const menuPath = webRoot + "src/components/sidebar/ChatContextMenu.tsx";
 

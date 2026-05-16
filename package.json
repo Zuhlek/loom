@@ -1,0 +1,11 @@
+{
+  "name": "loom-eval-harness",
+  "private": true,
+  "description": "Wrapper scripts for the loom evaluation harness. See orchestrator/evaluation/README.md.",
+  "scripts": {
+    "eval:setup":  "bash orchestrator/evaluation/setup.sh",
+    "eval:run":    "bash orchestrator/evaluation/run-baseline.sh --n 1",
+    "eval:pool":   "bash orchestrator/evaluation/run-baseline.sh --n 5",
+    "eval:analyse": "python3 orchestrator/evaluation/analyze.py && open orchestrator/evaluation/analysis.html"
+  }
+}

@@ -160,6 +160,13 @@ export interface PendingQuestion {
 export interface ChatSnapshot {
   items: ChatItem[];
   turnState: TurnState;
+  /**
+   * Epoch ms when the bridge most recently entered `turnState === "running"`,
+   * or `null` when not running. Server-supplied so the working-timer survives
+   * WS reconnect / page refresh. Optional for back-compat with older servers
+   * that don't yet emit the field — the reducer falls back to `Date.now()`.
+   */
+  turnStartedAt?: number | null;
   lastError?: string;
   pendingPermission?: PendingPermission | null;
   pendingQuestion?: PendingQuestion | null;

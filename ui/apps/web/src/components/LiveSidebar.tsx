@@ -10,6 +10,7 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { useSidebarState } from "../lib/sidebar-state";
+import { useUnreadChats } from "../lib/unread-chats";
 import { SpawnChatModalLive } from "../routes/spawn-chat-dialog-live";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { ChatContextMenu } from "./sidebar/ChatContextMenu";
@@ -22,6 +23,7 @@ import {
   renameChat,
   type ApiChat,
   type ApiProject,
+  type ChatLiveState,
   type SidebarFabricEntry,
 } from "../lib/api";
 import { FabricArchiveDialog } from "./fabric/FabricArchiveDialog";
@@ -66,6 +68,7 @@ function fabricDotClass(
 
 export function LiveSidebar() {
   const { state, error, refresh } = useSidebarState();
+  const { isUnread, markRead } = useUnreadChats();
   const [location, navigate] = useLocation();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [spawnFor, setSpawnFor] = useState<ApiProject | null>(null);
@@ -211,6 +214,8 @@ export function LiveSidebar() {
                 renameTargetId={renameTargetId}
                 onSubmitRename={onSubmitRename}
                 onCancelRename={onCancelRename}
+                isUnread={isUnread}
+                onMarkRead={markRead}
               />
             ))}
             {unassigned.length > 0 ? (
@@ -232,6 +237,8 @@ export function LiveSidebar() {
                     isRenaming={renameTargetId === c.id}
                     onSubmitRename={(value) => onSubmitRename(c.id, value)}
                     onCancelRename={onCancelRename}
+                    unread={isUnread(c.id)}
+                    onMarkRead={() => markRead(c.id)}
                   />
                 ))}
               </div>
@@ -319,6 +326,8 @@ function ProjectGroup({
   renameTargetId,
   onSubmitRename,
   onCancelRename,
+  isUnread,
+  onMarkRead,
 }: {
   project: ApiProject;
   chats: ApiChat[];
@@ -331,6 +340,8 @@ function ProjectGroup({
   renameTargetId: string | null;
   onSubmitRename: (chatId: string, value: string | null) => void | Promise<void>;
   onCancelRename: () => void;
+  isUnread: (chatId: string) => boolean;
+  onMarkRead: (chatId: string) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   return (
@@ -424,6 +435,8 @@ function ProjectGroup({
           isRenaming={renameTargetId === c.id}
           onSubmitRename={(value) => onSubmitRename(c.id, value)}
           onCancelRename={onCancelRename}
+          unread={isUnread(c.id)}
+          onMarkRead={() => onMarkRead(c.id)}
         />
       ))}
     </div>
@@ -489,6 +502,57 @@ function FabricRow({
   );
 }
 
+/**
+ * Per-chat status glyph rendered after the chat name in the sidebar. Lets
+ * the user tell at a glance whether a chat is actively working, waiting on
+ * their input, or idle — without having to open it. Sourced from the
+ * server-supplied `chat.live` snapshot (polled with the rest of the
+ * sidebar state every ~5s).
+ *
+ *   • `needsInput`   → amber `!` (highest priority; a permission or
+ *                       AskUserQuestion is outstanding).
+ *   • `running`      → pulsing blue dot (matches the WorkingChip motif
+ *                       inside the chat view).
+ *   • `error`        → red dot.
+ *   • idle / null    → no glyph (default).
+ */
+function LiveStatusGlyph({ live }: { live: ChatLiveState | null }) {
+  if (!live) return null;
+  if (live.needsInput) {
+    return (
+      <span
+        className="text-[10px] font-bold shrink-0"
+        style={{ color: "var(--warning, #d97706)" }}
+        title="Waiting for your input"
+        data-testid="chat-live-needs-input"
+      >
+        !
+      </span>
+    );
+  }
+  if (live.turnState === "running") {
+    return (
+      <span
+        className="size-1.5 rounded-full shrink-0 animate-pulse"
+        style={{ background: "var(--info, #2563eb)" }}
+        title="Working"
+        data-testid="chat-live-running"
+      />
+    );
+  }
+  if (live.turnState === "error") {
+    return (
+      <span
+        className="size-1.5 rounded-full shrink-0"
+        style={{ background: "var(--destructive, #dc2626)" }}
+        title="Error"
+        data-testid="chat-live-error"
+      />
+    );
+  }
+  return null;
+}
+
 function ChatLink({
   chat,
   active,
@@ -498,6 +562,8 @@ function ChatLink({
   isRenaming,
   onSubmitRename,
   onCancelRename,
+  unread,
+  onMarkRead,
 }: {
   chat: ApiChat;
   active: boolean;
@@ -507,19 +573,32 @@ function ChatLink({
   isRenaming: boolean;
   onSubmitRename: (value: string | null) => void | Promise<void>;
   onCancelRename: () => void;
+  unread?: boolean;
+  onMarkRead?: () => void;
 }) {
   const cwdBasename = chat.cwd.split("/").filter(Boolean).slice(-1)[0] ?? chat.cwd;
   const label = chat.custom_name ?? chat.auto_title ?? cwdBasename;
   const dot = DOT_FOR_MODE[chat.permission_mode] ?? "bg-emerald-500";
   const [confirming, setConfirming] = useState(false);
+  // Don't pulse the currently-open chat; the unread effect clears its
+  // flag on the next tick, but the visual fights with the active-row
+  // accent in the meantime. `needsInput` follows the same rule —
+  // once you're looking at the chat, the permission prompt is right
+  // there in the view, no need to pulse the sidebar row.
+  const showNeedsInput = !!chat.live?.needsInput && !active;
+  const showUnread = !!unread && !active && !showNeedsInput;
   return (
     <div
       className={clsx(
         "group flex items-center gap-1.5 px-2 py-1 ml-3 min-w-0 rounded-md text-xs",
         active ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]",
+        showNeedsInput && "needs-input-pulse",
+        showUnread && "unread-pulse",
       )}
-      title={`${chat.cwd} · ${chat.permission_mode}${chat.inert ? " · inert" : ""}`}
+      title={`${chat.cwd} · ${chat.permission_mode}${chat.inert ? " · inert" : ""}${showNeedsInput ? " · waiting for your input" : showUnread ? " · unread reply" : ""}`}
       onContextMenu={(evt) => onContextMenu(chat, evt)}
+      data-unread={showUnread ? "true" : undefined}
+      data-needs-input={showNeedsInput ? "true" : undefined}
     >
       {isRenaming ? (
         <div className="flex-1 min-w-0 flex items-center gap-1.5">
@@ -544,7 +623,11 @@ function ChatLink({
           />
         </div>
       ) : (
-      <Link href={`/chat/${chat.id}`} className="flex-1 min-w-0 overflow-hidden">
+      <Link
+        href={`/chat/${chat.id}`}
+        className="flex-1 min-w-0 overflow-hidden"
+        onClick={() => onMarkRead?.()}
+      >
         <div className="flex items-center gap-1.5 cursor-pointer min-w-0">
           {detached ? (
             <span className="text-[10px] text-[var(--muted-foreground)] font-mono shrink-0" title="detached">↗</span>
@@ -552,6 +635,7 @@ function ChatLink({
             <span className={clsx("size-1.5 rounded-full shrink-0", dot)} />
           )}
           <span className="flex-1 min-w-0 truncate">{label}</span>
+          <LiveStatusGlyph live={chat.live ?? null} />
           {chat.inert ? <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">·z</span> : null}
           {chat.worktree_mode === "worktree" ? <span className="text-[10px] text-[var(--muted-foreground)] font-mono shrink-0">⎇</span> : null}
         </div>

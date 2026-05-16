@@ -1,0 +1,116 @@
+=== RED: T-001 scaffold ===
+ ❯ test/scaffold.test.ts  (5 tests | 5 failed) 5ms
+   ❯ test/scaffold.test.ts > workspace scaffold (T-001) > has package.json with start and test scripts
+     → expected undefined to be 'tsx scripts/build-client.ts && tsx sr…' // Object.is equality
+   ❯ test/scaffold.test.ts > workspace scaffold (T-001) > declares the locked stack dependencies
+     → missing express: expected { vitest: '^1.6.0', …(2) } to have property "express"
+   ❯ test/scaffold.test.ts > workspace scaffold (T-001) > has tsconfig.json with strict mode and ES2022
+     → ENOENT: no such file or directory, open '/Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app/tsconfig.json'
+   ❯ test/scaffold.test.ts > workspace scaffold (T-001) > has .gitignore covering node_modules, dist, sqlite files
+     → ENOENT: no such file or directory, open '/Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app/.gitignore'
+   ❯ test/scaffold.test.ts > workspace scaffold (T-001) > has a README.md documenting npm install/start/test
+     → expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/scaffold.test.ts > workspace scaffold (T-001) > has package.json with start and test scripts
+AssertionError: expected undefined to be 'tsx scripts/build-client.ts && tsx sr…' // Object.is equality
+
+- Expected: 
+"tsx scripts/build-client.ts && tsx src/server.ts"
+
++ Received: 
+undefined
+
+ ❯ test/scaffold.test.ts:16:32
+     14|       resolve(appRoot, 'package.json')
+     15|     );
+     16|     expect(pkg.scripts?.start).toBe('tsx scripts/build-client.ts && ts…
+       |                                ^
+     17|     expect(pkg.scripts?.test).toBe('vitest run');
+     18|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  test/scaffold.test.ts > workspace scaffold (T-001) > declares the locked stack dependencies
+AssertionError: missing express: expected { vitest: '^1.6.0', …(2) } to have property "express"
+ ❯ test/scaffold.test.ts:39:38
+     37|       '@types/supertest',
+     38|     ]) {
+     39|       expect(all, `missing ${name}`).toHaveProperty(name);
+       |                                      ^
+     40|     }
+     41|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  test/scaffold.test.ts > workspace scaffold (T-001) > has tsconfig.json with strict mode and ES2022
+Error: ENOENT: no such file or directory, open '/Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app/tsconfig.json'
+ ❯ Proxy.readFileSync node:fs:436:20
+ ❯ readJson test/scaffold.test.ts:8:21
+      6| 
+      7| function readJson<T = unknown>(p: string): T {
+      8|   return JSON.parse(readFileSync(p, 'utf8')) as T;
+       |                     ^
+      9| }
+     10| 
+ ❯ test/scaffold.test.ts:44:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -2, code: 'ENOENT', syscall: 'open', path: '/Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app/tsconfig.json' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  test/scaffold.test.ts > workspace scaffold (T-001) > has .gitignore covering node_modules, dist, sqlite files
+Error: ENOENT: no such file or directory, open '/Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app/.gitignore'
+ ❯ Proxy.readFileSync node:fs:436:20
+ ❯ test/scaffold.test.ts:54:16
+     52| 
+     53|   it('has .gitignore covering node_modules, dist, sqlite files', () =>…
+     54|     const gi = readFileSync(resolve(appRoot, '.gitignore'), 'utf8');
+       |                ^
+     55|     expect(gi).toMatch(/node_modules/);
+     56|     expect(gi).toMatch(/dist/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -2, code: 'ENOENT', syscall: 'open', path: '/Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app/.gitignore' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  test/scaffold.test.ts > workspace scaffold (T-001) > has a README.md documenting npm install/start/test
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/scaffold.test.ts:61:55
+     59| 
+     60|   it('has a README.md documenting npm install/start/test', () => {
+     61|     expect(existsSync(resolve(appRoot, 'README.md'))).toBe(true);
+       |                                                       ^
+     62|     const r = readFileSync(resolve(appRoot, 'README.md'), 'utf8');
+     63|     expect(r).toMatch(/npm install/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+   Start at  13:48:50
+   Duration  141ms (transform 19ms, setup 0ms, collect 17ms, tests 5ms, environment 0ms, prepare 46ms)
+
+
+=== GREEN: T-001 scaffold ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+ RUN  v1.6.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app
+
+ ✓ test/scaffold.test.ts  (5 tests) 2ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  13:50:09
+   Duration  143ms (transform 20ms, setup 0ms, collect 17ms, tests 2ms, environment 0ms, prepare 47ms)
+

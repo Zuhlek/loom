@@ -1,0 +1,56 @@
+=== RED: T-003 api ===
+     → not implemented
+   ❯ test/api.test.ts > API router (T-003) > DELETE /api/bookmarks/:id > 400 validation on non-integer id
+     → not implemented
+   ❯ test/api.test.ts > API router (T-003) > DELETE /api/bookmarks/:id > allows re-saving the same URL after delete
+     → not implemented
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/api.test.ts > API router (T-003) > GET /api/bookmarks > returns [] when empty
+ FAIL  test/api.test.ts > API router (T-003) > GET /api/bookmarks > does not emit Access-Control-* headers (single-origin)
+ FAIL  test/api.test.ts > API router (T-003) > POST /api/bookmarks > creates and returns 201 with the persisted bookmark
+ FAIL  test/api.test.ts > API router (T-003) > POST /api/bookmarks > subsequent GET returns the new row at the top
+ FAIL  test/api.test.ts > API router (T-003) > POST /api/bookmarks > 409 duplicate_url on canonical-equal repeat
+ FAIL  test/api.test.ts > API router (T-003) > POST /api/bookmarks > 400 validation when url is empty string
+ FAIL  test/api.test.ts > API router (T-003) > POST /api/bookmarks > 400 validation when url is unparseable
+ FAIL  test/api.test.ts > API router (T-003) > POST /api/bookmarks > 400 validation when url protocol is not http(s)
+ FAIL  test/api.test.ts > API router (T-003) > POST /api/bookmarks > 400 validation when title is empty/whitespace
+ FAIL  test/api.test.ts > API router (T-003) > POST /api/bookmarks > 400 validation when body is not an object with the right shape
+ FAIL  test/api.test.ts > API router (T-003) > DELETE /api/bookmarks/:id > 204 on existing id and the row is gone afterwards
+ FAIL  test/api.test.ts > API router (T-003) > DELETE /api/bookmarks/:id > 404 not_found when id does not exist
+ FAIL  test/api.test.ts > API router (T-003) > DELETE /api/bookmarks/:id > 400 validation on non-integer id
+ FAIL  test/api.test.ts > API router (T-003) > DELETE /api/bookmarks/:id > allows re-saving the same URL after delete
+Error: not implemented
+ ❯ Module.buildApp src/server.ts:5:9
+      3| 
+      4| export function buildApp(_repo: BookmarkRepo): Express {
+      5|   throw new Error('not implemented');
+       |         ^
+      6| }
+      7| 
+ ❯ makeApp test/api.test.ts:10:10
+ ❯ test/api.test.ts:17:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ Test Files  1 failed (1)
+      Tests  14 failed (14)
+   Start at  13:59:08
+   Duration  257ms (transform 33ms, setup 0ms, collect 111ms, tests 9ms, environment 0ms, prepare 58ms)
+
+
+=== GREEN: T-003 api ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+ RUN  v1.6.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app
+
+ ✓ test/api.test.ts  (14 tests) 46ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  14:00:04
+   Duration  394ms (transform 38ms, setup 0ms, collect 200ms, tests 46ms, environment 0ms, prepare 63ms)
+

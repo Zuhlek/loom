@@ -1,5 +1,70 @@
 # Audit Log
 
+## 2026-05-16 - baseline-1778916127-1 - clean-pass-one-minor-one-note
+
+Review verdict: PASS, 0 Blockers, 0 Major, 1 Minor, 1 Note. Ten AFK
+tasks landed across the local-only Bookmarks app (Express + better-sqlite3
++ vanilla TS + esbuild IIFE bundle). 67 vitest specs across 12 files
+exit 0 in ~2 s; live smoke matrix on `npm start :3000` covers every
+API verb and the static asset trio with the single error JSON shape
+verified across 400 / 404 / 409 paths. All 9 ADRs honoured in the diff;
+every US-001..US-005 EARS clause is evidenced by ≥1 test plus live
+smoke. Workspace isolation held — every deliverable under
+`.loom/baseline-1778916127-1/app/`; root-level `bookmarks-app/` and
+`package.json` were pre-existing fixtures (mtime 2026-05-15) not
+Build leakage from this 2026-05-16 run.
+
+Single Minor finding: P5 — `renderEmptyState` and `clearTopBanner` in
+`app/web/render.ts` ship as exports with no in-PR consumer (the
+`removeRow` path re-implements the empty-state reveal inline rather
+than calling the helper). Pure functions, no side effects beyond
+`.hidden` toggles — accepted-carve-out, optional Build follow-up to
+either delete or wire up. Single Note: Build coordinator deviation —
+the Agent/Task subagent tool was not surfaced in the Build session, so
+the coordinator executed each task's Lock → Red → Implement → Green →
+Done loop sequentially in-process. Per-task artifacts (`T-NNN.done.md`,
+`T-NNN.test-log.txt`, lock acquire/release, dual-write logs) landed
+regardless; per harness directive treated as a note, not a finding,
+and not lifecycle-blocking. Process observation: when the subagent
+fan-out path is unavailable, the coordinator's sequential equivalent
+produces identical observable artifacts; consider explicit detection +
+fallback documentation in `weave/phases/build/coordinator.md` so this
+is not surfaced as a deviation in future runs.
+
+## 2026-05-15 - baseline-1778870535-1 - clean-first-attempt-baseline
+
+Review verdict: PASS, 0 blockers, 0 majors, 2 minors, 2 notes. Nine AFK
+tasks went green on first attempt with 23 vitest specs and one manual
+smoke (boot → POST → SIGINT → reboot → GET) covering all five user
+stories (US-001..US-005). `npx tsc --noEmit` clean on re-run.
+Workspace isolation held: every deliverable lived under
+`.loom/baseline-1778870535-1/app/`; stray `bookmarks-app/` and
+`package.json` at repo root were pre-existing fixtures (file mtimes
+~6.5 h pre-dating the project workspace), not Build leakage. Two
+minor P5 carve-outs surfaced: `BookmarksStore.findByUrl` has
+test-only consumers because ADR-002 routes duplicate detection
+through the SQLite UNIQUE constraint inside `store.insert`, and the
+`ErrorEnvelope.duplicateId` field is emitted by the route but
+ignored by the v1 controller — both are *design-authorised*
+orphans, not Build inventions. Process observation: when Spec /
+Design pre-declare a typed field "for future use", Review's P5 check
+fires and the finding is logged as Minor / accepted-carve-out rather
+than as a Build defect. For greenfield runs where the principle
+would otherwise call them out, design.md should call out "v1 ignores
+X" explicitly so the Audit Agent can downgrade the finding without
+round-tripping.
+
+## 2026-05-15 - baseline-1778870535-1 - per-task-test-log-files-absent
+
+Build did not emit per-task `T-NNN.test-log.txt` files in `app/tasks/`;
+each task carries a `T-NNN.done.md` manifest and `test-report.md`
+aggregates the suite output. The phase.md "test evidence" target
+mentions per-task test logs as one possible evidence shape; the
+consolidated `test-report.md` + per-task `done.md` notes pair is an
+equally-credible shape for a small 9-task project. Worth canonising
+in the build phase spec which evidence shape is expected so reviewers
+don't have to infer.
+
 ## 2026-05-14 - composer-slash-command-catalog - integration-grep-suite-misses-runtime-wiring
 
 Review verdict: FAIL. 4 Blockers, 5 Majors, 4 Minors, 3 Notes. Wire +
@@ -778,3 +843,231 @@ mtime vs. earliest task-completion timestamp.
 `orchestrator/hooks/capture-subagent-eval.{sh,py}`;
 `orchestrator/lib/{eval-aggregate.py,answer-queue.py,eval-orchestrator-row.py}`;
 `orchestrator/evaluation/{analyze.py,run-baseline.sh}`.
+
+## 2026-05-15 - baseline-1778846297-1 - review-pass
+
+Review of the `baseline-1778846297-1` Bookmarks build (12/12 AFK tasks Done,
+44/44 Vitest tests, 5/5 smoke checks). Verdict PASS with 0 blockers,
+0 major, 3 minor, 1 note. Highlights worth retaining for the pattern
+library:
+
+**1. Greenfield projects under a multi-project monorepo can pass P2
+("Existing patterns first") cleanly when no sibling prior art exists in the
+same stack.** `bookmarks-app/` is the only TypeScript-Node-Express subtree
+in the repo (orchestrator is Python+bash, ui is a separate Bun project,
+docs is markdown). Review's P2 check correctly resolved to "no in-repo
+prior art to conform to" rather than "any new pattern is suspect". The
+project established its own internal conventions consistent with mainstream
+Express norms and stayed self-contained — the right outcome.
+
+**2. Test-setup helper duplication remains a recurring minor.** Seven
+copies of a 3-line `bootApp()` and two copies of an `async function flush()`
+across the test suite. P3's literal "3+ requires extraction" rule applies;
+the in-spirit reading is "behaviourally identical test-setup idioms across
+isolated suites are low-risk and acceptable until next-touch". Same shape
+appeared in `loom-eval-harness` (Python `atomic_write_text` × 4) — the
+classification rule is the same: small, identical, no shared mutation
+state, no behavioural drift risk. Minor, not Major.
+
+**3. Production-DB safety guards work as designed.** US-007 AC#3 required
+that `npm test` never touch the production `bookmarks.db`. Build wired an
+`afterAll` mtime+existence guard in `tests/setup.ts` on top of the
+`BOOKMARKS_DB_PATH=:memory:` override. Review verified the file does not
+exist after the suite. This is the cleanest "active enforcement of a
+test-isolation acceptance criterion" pattern seen across recent builds —
+worth lifting as a template when other projects' AC's require
+production-state immutability.
+
+**Cross-references:**
+`.loom/baseline-1778846297-1/{review,develop-log,feedback}.md`;
+`.loom/baseline-1778846297-1/{test-report,smoke-report}.md`;
+`bookmarks-app/tests/setup.ts` (US-007 AC#3 guard pattern).
+
+## 2026-05-15 - baseline-1778846297-1 - build-coordinator-subagent-lacks-task-tool-recurrence
+
+Second documented recurrence of the pattern first logged at
+*"2026-05-14 — skill-implicit-match-overfire —
+build-coordinator-subagent-lacks-task-tool"*. The Build coordinator under
+raw Claude Code reported no subagent dispatch tool available in its
+allowlist; the orchestrator session executed the per-task Lock → Red →
+Green → Done loop directly rather than dispatching one task-builder
+subagent per task. Outcome: every task green on `attempts: 1`, 44/44
+tests, 5/5 smoke, no principle violations, review PASS. The pattern is
+now confirmed structural to the raw Claude Code harness across at least
+two independent project runs (`loom-eval-harness`,
+`baseline-1778846297-1`). Owner: Forge / harness backlog, not project
+deliverable. Logging for cumulative evidence so a future curation cycle
+can decide whether to (a) surface a Task tool to the Build coordinator
+under raw Claude Code, (b) document the direct-execution path as a
+first-class fallback in the Build phase contract, or (c) gate Build on
+an SDK harness.
+
+## 2026-05-15 - baseline-1778864883-1 - review-verdict-PASS-with-two-minors
+
+Review Audit Agent walked all eight Review Targets against the workspace
+of `baseline-1778864883-1` (tiny local-only Bookmarks app — Node +
+Express, `better-sqlite3`, esbuild, vanilla TS, Vitest, all under
+`.loom/baseline-1778864883-1/app/`). Verdict **PASS**. Zero blockers,
+zero major, two minor findings, one note.
+
+**Intent / design / plan / evidence:** all six user stories
+(US-001…US-006) have at least one passing Vitest assertion or live
+smoke probe; the diff matches design.md's component layout, REST table,
+type contracts, and all eight ADRs verbatim; every task in `plan.md` is
+green on `attempts: 1`; test-report aggregates 14/14 Vitest + smoke
+PASS; `bookmarks.db` is gitignored and removed after the smoke probe.
+
+**Safety / workspace isolation:** every deliverable file is under
+`.loom/baseline-1778864883-1/app/`. The repo-root `bookmarks-app/` and
+root `package.json` that show as `??` in `git status` both predate this
+run (mtimes 14:17 and 18:36 vs this run's `app/package.json` at 19:22)
+and are not produced by this build.
+
+**Two minor findings:**
+
+- **F-1 (P5 — speculative scaffolding):** `app/src/client/render.ts`
+  exports `clearError(errorEl)` with zero callers; `form.ts` clears
+  the inline error via `els.errorEl.textContent = ""` directly. Three
+  lines of dead export. Cheapest fix: delete `clearError`.
+- **F-2 (P2 — doc drift):** `esbuild.config.mjs:1` header comment still
+  describes the server bundle as CJS even though T-004 switched it to
+  ESM and added the `createRequire` banner. No runtime impact; the
+  comment is just stale.
+
+Neither gates the project. Verdict PASS.
+
+**Cross-references:**
+`.loom/baseline-1778864883-1/{review,develop-log,feedback}.md`;
+`.loom/baseline-1778864883-1/{test-report,smoke-report}.md`;
+`.loom/baseline-1778864883-1/app/src/client/render.ts:64-66`;
+`.loom/baseline-1778864883-1/app/esbuild.config.mjs:1`.
+
+## 2026-05-15 - baseline-1778864883-1 - tests-authored-by-the-task-whose-AC-they-observe-recurrence
+
+Third recurrence of the pattern across baseline runs. The plan slotted
+the repo-level and route-level Vitest suites under a terminal "Vitest
+gate" task (T-006), but the Build coordinator authored them under T-002
+and T-003 respectively — because those tasks' acceptance criteria are
+observable only through Vitest assertions, and dispatching the gate
+task first would have inverted the DAG. T-006 then added the
+`tests/render.test.ts` US-004 anchor invariant test and locked the
+full 14/14 passing run.
+
+The inversion was correctly disclosed in each `done.md`
+`out-of-scope-edits` field and re-surfaced in the build develop-log.
+Not an unrecorded deviation — Build was transparent.
+
+Pattern is now stable across baseline runs: when a task's acceptance
+criterion is only observable through a test assertion, the test belongs
+with the producing task, not with a downstream "Vitest gate" task. The
+gate task remains useful as a story-level coverage closer for stories
+whose AC's aren't end-to-end observable from a single producing task
+(here, US-004 — anchor invariants don't have an obvious "producing
+task" in the implementation lane).
+
+**Owner phase:** plan. Forge backlog item: have the Plan phase
+distribute test ownership to the producing task rather than
+concentrating it in a terminal "tests" task. The Build coordinator
+redistributes anyway; removing the friction upstream makes the
+`out-of-scope-edits` field less noisy and the DAG more honest.
+
+**Cross-references:**
+`.loom/baseline-1778864883-1/tasks/{T-002,T-003,T-006}.done.md`;
+`.loom/baseline-1778864883-1/develop-log.md` "Notes / out-of-scope edits";
+`.loom/baseline-1778864883-1/plan.md` §"Slicing rationale" + §"DAG".
+
+## 2026-05-16 - baseline-1778919632-1 - pass-with-one-major-process
+
+Review verdict: PASS with one Major (process), one Minor, one Note;
+0 Blockers. Ten AFK tasks landed across the local-only Bookmarks app
+(Express + better-sqlite3 + vanilla TS + esbuild ESM bundle). 43 vitest
+specs across 3 suites exit 0 in ~3.6 s; live smoke matrix on `npm start
+:3000` covers every API verb (GET/POST/DELETE) and every status path
+(201/204/400/404/409), plus the static asset trio. All 7 ADRs honoured
+in the diff (three-layer split; sync better-sqlite3; SQL UNIQUE as
+authoritative duplicate check; server-stamped indexed createdAt; vanilla
+TS + esbuild single-bundle; Vitest-only on repo/routes/validate; no
+PATCH/PUT/update API surface). Every US-001..US-004 EARS clause maps
+to ≥1 behaviour-level spec + a live-smoke status path. Workspace
+isolation held — every deliverable under `.loom/baseline-1778919632-1/app/`.
+
+Major finding (R-001, process, owner: Build): Coordinator self-executed
+task loops sequentially in-process instead of dispatching fresh `Task`
+subagents — second consecutive baseline run with this fallback (prior:
+`baseline-1778916127-1`). Per-task artifacts landed equivalently; the
+deliverable is functionally complete. The contract violation is the
+fresh-context guarantee, not the output: each task subagent is meant
+to start blind to upstream task internals, forcing prior-art search
+and contract-only coupling. Two runs is a pattern; recommend a `Task`-
+tool probe in the Coordinator pre-flight that either returns
+`status: blocked` or formalises a documented sequential-in-process
+fallback. Not a Note this time (it was a Note on the prior run) —
+pattern recurrence elevates it.
+
+Minor finding (R-002, P5): `BookmarksRepo.findByUrl` exposed on the
+repo interface with no in-PR consumer outside its own unit test (ADR-003
+made the insert-then-catch path authoritative, so routes don't pre-check).
+Either drop the method and inline the SELECT in its test, or annotate in
+`design.md` that it's the by-URL identity lookup retained as published
+API. Defer.
+
+Note (R-003): smoke gate §4 "UI screens render" skipped (no headless
+browser harness available). ADR-006 explicitly accepts the no-browser-
+tests posture for a four-feature local app; advisory only.
+
+Run mode: autonomous. `feedback.md` records the verdict as provisional
+acceptance pending downstream human reviewer. References:
+`.loom/baseline-1778919632-1/{review.md, develop-log.md, test-report.md,
+smoke-report.md, feedback.md}`; deliverable under `./app/`.
+
+## 2026-05-16 - baseline-1778931123-1 - review verdict
+
+PASS — accepted with minor findings. 0 blockers, 0 major, 3 minor.
+
+Coverage: all 5 stories (US-001..US-005) verified by 9 test files / 67
+Vitest tests + supertest integration + jsdom client tests + a CLI smoke
+probe (4 PASS, 1 SKIPPED with rationale). Workspace isolation confirmed
+by `git status` outside `.loom/` being unchanged by the Build run; loopback
+binding asserted in `server-boot.test.ts` and `smoke.test.ts`; persistence
+across restart proven by double-boot against an on-disk temp SQLite file.
+
+Findings:
+
+- F-001 (P5, minor): `BookmarkRepo.getById` is exposed on the interface
+  and unit-tested in `db.test.ts`, but no production caller (route, client,
+  or smoke) exercises it. The design.md interface explicitly names it, so
+  the implementation is design-faithful. Recurrence: this is the **second
+  baseline run** in which a repo-level by-key lookup ships without a
+  production consumer (prior run flagged `findByUrl`). Pattern worth
+  raising at design: drop unused interface methods, or have design.md note
+  why a method without a current consumer is still on the contract.
+- F-002 (minor design conformance): the malformed-`url` branch in the POST
+  validator omits `field: 'url'` while every other validation branch sets
+  it. Tests pass because they only assert on `error.code`. Tighten on
+  next iteration if the form ever wants field-level UX on this edge.
+- F-003 (minor stylistic): POST handler runs title-empty check before the
+  url-empty check; design.md lists order as body-shape → title-trim →
+  URL-parse. No observable diff in the response envelopes.
+
+Out-of-scope build edits self-recorded with rationale: (a) added `jsdom`
+devDep (used by 3 client test files); (b) removed `rmSync(dist/client)`
+from the build-client test to break a parallel-test race. Both are
+declared in `tasks/T-006.done.md` and `tasks/T-009.done.md`. Worth keeping
+the convention of declaring the rationale at the task-done seam — it made
+this review's audit cheap.
+
+Recurring observations across baseline runs:
+
+- The "design-named interface method with no in-PR consumer" P5 pattern
+  has now landed in two consecutive baselines. Surface to design phase
+  guidance: an interface method without a current consumer is a P5 risk
+  even when honoured by Build; the cleaner anchor is design.md not
+  listing it.
+- Smoke "UI screens render" continues to be SKIPPED with a documented
+  rationale rather than silently dropped. This is the right pattern for
+  no-browser-harness baselines and should be left as-is.
+
+Run mode: autonomous. `feedback.md` records "not collected (baseline eval
+run)". References: `.loom/baseline-1778931123-1/{review.md, develop-log.md,
+test-report.md, smoke-report.md, feedback.md, board.md, tasks/}`;
+deliverable under `./app/`.

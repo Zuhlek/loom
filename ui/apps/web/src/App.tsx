@@ -5,6 +5,7 @@ import { LiveChatRoute } from "./routes/live-chat";
 import { FabricViewLive } from "./routes/fabric-view-live";
 import { Settings } from "./routes/settings";
 import { SidebarStateProvider } from "./lib/sidebar-state";
+import { UnreadChatsProvider } from "./lib/unread-chats";
 import { SnackbarProvider } from "./components/ui/Snackbar";
 import { BackendOfflineBanner } from "./components/BackendOfflineBanner";
 import { useHealthPoll } from "./lib/useHealthPoll";
@@ -14,6 +15,7 @@ export function App() {
   return (
     <SnackbarProvider>
       <SidebarStateProvider>
+        <UnreadChatsProvider>
         <BackendOfflineBanner
           offline={health.isOffline}
           offlineSince={health.offlineSince}
@@ -45,6 +47,7 @@ export function App() {
           </div>
         </Route>
         </Switch>
+        </UnreadChatsProvider>
       </SidebarStateProvider>
     </SnackbarProvider>
   );

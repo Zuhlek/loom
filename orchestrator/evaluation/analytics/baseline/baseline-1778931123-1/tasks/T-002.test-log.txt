@@ -1,0 +1,76 @@
+=== RED: T-002 db ===
+   ❯ test/db.test.ts > db / repo (T-002) > canonicaliseUrl > lowercases host and adds trailing slash on bare host
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > canonicaliseUrl > preserves a non-default path
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > canonicaliseUrl > throws on non-http(s) protocol
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > canonicaliseUrl > throws on unparseable input
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > create > returns a Bookmark with id and created_at populated
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > create > throws DuplicateUrlError on second insert of canonical-equal URL
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > list > returns rows ordered by created_at DESC, id DESC
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > list > returns [] when empty
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > getById > returns the row when present
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > getById > returns undefined when absent
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > deleteById > removes the row
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > deleteById > throws NotFoundError when the id does not exist
+     → not implemented
+   ❯ test/db.test.ts > db / repo (T-002) > deleteById > frees the URL for re-creation
+     → not implemented
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/db.test.ts > db / repo (T-002) > migrate > is idempotent — running twice does not throw
+ FAIL  test/db.test.ts > db / repo (T-002) > canonicaliseUrl > lowercases host and adds trailing slash on bare host
+ FAIL  test/db.test.ts > db / repo (T-002) > canonicaliseUrl > preserves a non-default path
+ FAIL  test/db.test.ts > db / repo (T-002) > canonicaliseUrl > throws on non-http(s) protocol
+ FAIL  test/db.test.ts > db / repo (T-002) > canonicaliseUrl > throws on unparseable input
+ FAIL  test/db.test.ts > db / repo (T-002) > create > returns a Bookmark with id and created_at populated
+ FAIL  test/db.test.ts > db / repo (T-002) > create > throws DuplicateUrlError on second insert of canonical-equal URL
+ FAIL  test/db.test.ts > db / repo (T-002) > list > returns rows ordered by created_at DESC, id DESC
+ FAIL  test/db.test.ts > db / repo (T-002) > list > returns [] when empty
+ FAIL  test/db.test.ts > db / repo (T-002) > getById > returns the row when present
+ FAIL  test/db.test.ts > db / repo (T-002) > getById > returns undefined when absent
+ FAIL  test/db.test.ts > db / repo (T-002) > deleteById > removes the row
+ FAIL  test/db.test.ts > db / repo (T-002) > deleteById > throws NotFoundError when the id does not exist
+ FAIL  test/db.test.ts > db / repo (T-002) > deleteById > frees the URL for re-creation
+Error: not implemented
+ ❯ Module.openDb src/db.ts:23:9
+     21| 
+     22| export function openDb(_filePath: string): Db {
+     23|   throw new Error('not implemented');
+       |         ^
+     24| }
+     25| 
+ ❯ test/db.test.ts:18:10
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ Test Files  1 failed (1)
+      Tests  14 failed (14)
+   Start at  13:52:59
+   Duration  153ms (transform 29ms, setup 0ms, collect 28ms, tests 4ms, environment 0ms, prepare 46ms)
+
+
+=== GREEN: T-002 db ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+ RUN  v1.6.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1778931123-1/app
+
+ ✓ test/db.test.ts  (14 tests) 16ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  13:53:35
+   Duration  180ms (transform 33ms, setup 0ms, collect 39ms, tests 16ms, environment 0ms, prepare 49ms)
+

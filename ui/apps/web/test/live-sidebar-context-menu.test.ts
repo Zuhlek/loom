@@ -13,7 +13,8 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const sidebarPath = webRoot + "src/components/LiveSidebar.tsx";
 
 function readSrc(): string {

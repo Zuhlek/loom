@@ -13,11 +13,6 @@
         "hooks": [
           { "type": "command", "command": "\"$HOME/.claude/loom-hooks/validate-subagent-output.sh\"" }
         ]
-      },
-      {
-        "hooks": [
-          { "type": "command", "command": "\"$HOME/.claude/loom-hooks/capture-subagent-eval.sh\"" }
-        ]
       }
     ],
     "Stop": [

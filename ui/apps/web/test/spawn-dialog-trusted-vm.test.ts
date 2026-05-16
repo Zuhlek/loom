@@ -12,7 +12,8 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const dialogPath = webRoot + "src/routes/spawn-chat-dialog-live.tsx";
 
 describe("T-005 Trusted-VM preset subtitle (US-006 AC1, AC2)", () => {

@@ -217,6 +217,13 @@ export interface PendingQuestion {
 export interface ChatSnapshot {
   items: ChatItem[];
   turnState: TurnState;
+  /**
+   * Epoch ms when the session most recently entered `turnState === "running"`,
+   * or `null` when not running. Persisted across WS reconnect / page refresh
+   * so the client's "Working for Xs" timer keeps counting from the original
+   * start rather than resetting to 0 on every snapshot.
+   */
+  turnStartedAt?: number | null;
   lastError?: string;
   pendingPermission?: PendingPermission | null;
   pendingQuestion?: PendingQuestion | null;

@@ -428,6 +428,22 @@ export class ClaudeSessionBridge {
     return this.sessions.has(chatId);
   }
 
+  /**
+   * Liveness snapshot for the sidebar's per-chat indicator. Returns the
+   * current `turnState` plus a `needsInput` flag that flips true while a
+   * permission or AskUserQuestion is outstanding. `null` when no live
+   * session is attached (the chat is inert / never been opened).
+   */
+  getLiveState(
+    chatId: string,
+  ): { turnState: TurnState; needsInput: boolean } | null {
+    const session = this.sessions.get(chatId);
+    if (!session) return null;
+    const needsInput =
+      session.pendingPermission != null || session.pendingQuestion != null;
+    return { turnState: session.turnState, needsInput };
+  }
+
   /** Attach a WS client; lazy-spawn the session if needed. Sends a snapshot. */
   async attach(chatId: string, client: WsClient): Promise<void> {
     let session = this.sessions.get(chatId);
@@ -2089,6 +2105,7 @@ function snapshotFrame(session: ChatSession): ServerFrame {
   const snapshot: ChatSnapshot = {
     items: session.items,
     turnState: session.turnState,
+    turnStartedAt: session.turnStartedAtMs,
     lastError: session.lastError,
     pendingPermission: session.pendingPermission?.pending ?? null,
     pendingQuestion: session.pendingQuestion?.pending ?? null,

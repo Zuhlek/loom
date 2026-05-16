@@ -6,6 +6,17 @@ import type { WireModelSettings } from "./chat-types";
 
 const API_BASE = "/api";
 
+/**
+ * Liveness snapshot the sidebar uses to render a per-chat status
+ * indicator. Server-supplied (sourced from the bridge's in-memory
+ * `ChatSession`); `null` when no live session is attached.
+ */
+export interface ChatLiveState {
+  turnState: "idle" | "running" | "interrupted" | "error";
+  /** True while a permission request or AskUserQuestion is outstanding. */
+  needsInput: boolean;
+}
+
 export interface ApiChat {
   id: string;
   project_id: string | null;
@@ -23,6 +34,8 @@ export interface ApiChat {
   custom_name: string | null;
   auto_title: string | null;
   model_settings: WireModelSettings | null;
+  /** Live session state; `null` for inert / unattached chats. */
+  live?: ChatLiveState | null;
 }
 
 export interface ApiProject {

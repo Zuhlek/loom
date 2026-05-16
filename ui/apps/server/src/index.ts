@@ -128,7 +128,7 @@ if (isEntrypoint) {
   const routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>> = {};
   mountHookReceiver(routes, store);
   mountConfigRoute(routes, config);
-  mountSidebarRoute(routes, store);
+  mountSidebarRoute(routes, store, bridge);
   mountCwdRoute(routes, store);
   mountCwdValidateRoute(routes);
   mountProjectsRoute(routes, store, bridge);

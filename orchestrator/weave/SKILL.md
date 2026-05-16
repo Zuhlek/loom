@@ -98,14 +98,10 @@ orchestrator only stages and cleans up; it never reads or peeks
    b. Dispatch the matching phase agent in a fresh Task session. The system prompt is the deterministic concatenation of the body and signature files (see "Dispatch concatenation" below).
    c. Ensure return schema compliance: parse the RETURN block from the Task's reply and check it against the fenced `yaml` schema embedded in `phases/<phase>/phase.signature.md` under `## Returns` › `### Return block` (see "Schema-compliance extraction" below). This check is silent — on mismatch, re-dispatch the same agent with the schema mismatch as the rerun instruction (do not surface to the user). See `methods/recovery.md` for redispatch policy.
    d. Surface the rerun-or-continue decision (see below) via AskUserQuestion.
-   e. On continue: emit one orchestrator-row to `.loom/<project>/usage.jsonl`
-      for the just-completed phase by shelling out to
-      `python3 orchestrator/lib/eval-orchestrator-row.py --project <p> --phase <just-completed>`
-      (per design.md § Orchestrator-row capture + ADR-004 + the helper algorithm
-      in `orchestrator/lib/ORCHESTRATOR_TRANSCRIPT.md`). Then update
-      pipeline.md, advance phase, loop to (a). The helper is idempotent and
-      safe to re-invoke; it appends nothing when no new orchestrator turns
-      have happened since the last emit.
+   e. On continue: update pipeline.md, advance phase, loop to (a). No
+      live evaluation-row emit happens during the run; cost/usage figures
+      are produced post-hoc by `orchestrator/lib/transcript-harvest.py`
+      reading the session transcripts on disk after /weave finishes.
    f. On rerun: re-dispatch the same phase agent with prior artifacts (+ optional Quality Check findings), loop to (c).
 4. On Review continue: set Lifecycle state = complete, report and exit.
 ```

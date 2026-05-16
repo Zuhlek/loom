@@ -37,7 +37,8 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const timelinePath = webRoot + "src/components/chat/MessagesTimeline.tsx";
 const chatTypesPath = webRoot + "src/lib/chat-types.ts";
 

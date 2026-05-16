@@ -34,8 +34,4 @@ Before walking the Review Targets, read `orchestrator/principles.md` into contex
 
 ## On completion
 
-Once `review.md` is written and the agent is about to return `status: complete`, run one final step:
-
-- Shell out to `python3 orchestrator/lib/eval-aggregate.py <project>` to write the per-run cost summary at `.loom/<project>/usage.md`.
-- Do NOT modify, append to, or reference `review.md` from this step. The aggregator writes a sibling artifact (`usage.md`) and `review.md` content stays under this agent's sole ownership.
-- Treat aggregator failures as non-blocking — log to stderr if needed and proceed. The cost summary is observability, not a Review correctness gate.
+When `review.md` is written, return `status: complete`. No live usage capture happens during the run; cost/usage data is produced post-hoc by `orchestrator/lib/transcript-harvest.py` reading the session transcripts on disk after /weave finishes. Review owns only `review.md` (plus the dual-written learning entries below).

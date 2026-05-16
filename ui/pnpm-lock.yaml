@@ -35,9 +35,27 @@ importers:
 
   apps/web:
     dependencies:
+      '@lexical/dragon':
+        specifier: ^0.44.0
+        version: 0.44.0
+      '@lexical/extension':
+        specifier: ^0.44.0
+        version: 0.44.0
+      '@lexical/history':
+        specifier: ^0.44.0
+        version: 0.44.0
+      '@lexical/plain-text':
+        specifier: ^0.44.0
+        version: 0.44.0
       '@lexical/react':
         specifier: ^0.44.0
         version: 0.44.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(yjs@13.6.30)
+      '@lexical/text':
+        specifier: ^0.44.0
+        version: 0.44.0
+      '@lexical/utils':
+        specifier: ^0.44.0
+        version: 0.44.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -59,6 +77,9 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      react-error-boundary:
+        specifier: ^6.0.0
+        version: 6.1.1(react@18.3.1)
       shiki:
         specifier: ^4.0.2
         version: 4.0.2

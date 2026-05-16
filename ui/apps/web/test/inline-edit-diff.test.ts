@@ -32,7 +32,8 @@ import {
   synthesizeWriteDiff,
 } from "../src/lib/diff-synthesize";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const componentPath = webRoot + "src/components/chat/InlineEditDiff.tsx";
 
 describe("T-003 InlineEditDiff — file exists + import surface", () => {

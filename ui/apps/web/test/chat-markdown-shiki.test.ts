@@ -24,7 +24,8 @@
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 
 describe("T-009 shiki-loader contract", () => {
   test("shiki-loader.ts exists at the documented path", () => {

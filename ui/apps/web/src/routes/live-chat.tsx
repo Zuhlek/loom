@@ -169,13 +169,15 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         incoming && incoming !== state.error?.message
           ? { message: incoming, dismissed: false }
           : state.error;
-      // On snapshot (initial attach or reconnect-after-drain) the
-      // wire does not carry the original turn-start timestamp. If
-      // the snapshot reports `running`, seed `activeTurnStartedAt`
-      // to `Date.now()` — the chip restarts from 0s. Otherwise
-      // clear it.
+      // The server now carries the original turn-start timestamp on
+      // the snapshot so reconnect / page-refresh keeps the working
+      // timer counting from the real start. Fall back to `Date.now()`
+      // only when the server omitted the field (older bridges) but
+      // still reports `running`. Non-running → `null`.
       const activeTurnStartedAt =
-        action.payload.body.turnState === "running" ? Date.now() : null;
+        action.payload.body.turnState === "running"
+          ? action.payload.body.turnStartedAt ?? Date.now()
+          : null;
       return {
         items,
         itemsById,

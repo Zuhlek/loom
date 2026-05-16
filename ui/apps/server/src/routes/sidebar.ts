@@ -13,6 +13,7 @@
  * create/delete to call when they may have changed fabric state.
  */
 import type { MetadataStore } from "../metadata-store/index.ts";
+import type { ClaudeSessionBridge } from "../process-manager/claude-session-bridge.ts";
 import { decorateChat } from "./chat-decorator.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -153,14 +154,19 @@ export function fabricId(projectId: string, fabricName: string, cwd: string): st
 export function mountSidebarRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   store: MetadataStore,
+  bridge?: ClaudeSessionBridge,
 ): void {
+  // The bridge holds in-memory `ChatSession`s; the sidebar payload pulls
+  // turn-state + needs-input per chat so the nav can render a liveness
+  // indicator without opening a WS per row.
+  const liveStateFor = bridge ? (id: string) => bridge.getLiveState(id) : undefined;
   routes["/sidebar/state"] = async () => {
     const projects = store.projects.list();
     const chats = store.chats.list();
     const groups = projects.map((p) => {
       const groupChats = chats
         .filter((c: any) => c.project_id === p.id)
-        .map((c) => decorateChat(c, store));
+        .map((c) => decorateChat(c, store, liveStateFor));
       const fabrics: CachedFabrics["entries"] = [];
       for (const cwdPath of p.paths) {
         for (const entry of scanFabrics(p.id, p.name, cwdPath)) {
@@ -172,7 +178,7 @@ export function mountSidebarRoute(
     // Unassigned chats → a synthetic "Unassigned" group at the end.
     const unassigned = chats
       .filter((c: any) => !c.project_id)
-      .map((c) => decorateChat(c, store));
+      .map((c) => decorateChat(c, store, liveStateFor));
     return new Response(
       JSON.stringify({
         groups,

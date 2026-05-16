@@ -25,7 +25,8 @@ import {
   type HealthPollOptions,
 } from "../src/lib/useHealthPoll";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 
 const OPTS: Required<HealthPollOptions> = {
   url: "/api/health",

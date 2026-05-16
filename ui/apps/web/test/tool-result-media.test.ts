@@ -32,7 +32,8 @@
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const mediaPath = webRoot + "src/components/chat/ToolResultMedia.tsx";
 const toolCardPath = webRoot + "src/components/chat/ToolUseCard.tsx";
 const typesPath = webRoot + "src/lib/chat-types.ts";

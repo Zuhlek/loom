@@ -1,5 +1,21 @@
 # Feedback Log
 
+## 2026-05-16 - baseline-1778916127-1 - non-interactive-run-no-live-feedback
+
+Non-interactive baseline run — Review Audit Agent did not call
+`AskUserQuestion` and gathered no live user feedback. Per harness
+directive the `feedback.md` entry in the project workspace records
+"automated acceptance pending downstream review." Review verdict
+(PASS, 0 Blockers, 0 Major, 1 Minor, 1 Note) stands as the provisional
+acceptance signal until a downstream human reviewer overrides.
+
+Process observation: for non-interactive baseline runs, treat the
+Review verdict's `feedback.md` synthesised entry as the source of truth
+for the orchestrator's acceptance gate; subsequent live user feedback
+should append a dated entry below the synthesised line rather than
+overwriting it, so the timeline of "automated → human" acceptance is
+preserved per project.
+
 
 ## 2026-05-12 - chat-ui-parity - heavy-spec-handin-light-plan-handin
 
@@ -187,3 +203,52 @@ Review ran in `AUTONOMOUS MODE` per the dispatch contract — the agent did not 
 
 Post-Design quality review used the standard six structural checks (sections, decisions, constraints, story coverage, duplication, ambiguity) and passed all six. The user nonetheless pushed back at the gate, asking why the on-disk session store had to live in `.loom/.sessions/` rather than `~/.claude/loom-sessions/` or `~/.loom/sessions/` or `/tmp/`. The QC's six checks scrutinise *shape* premises (flat-file vs. JSON manifest vs. inverse-key lock) but not *location* premises — and the three Spec-deferred candidates all pre-assumed `.loom/` as the parent, so the location premise was never independently weighed. Folding a seventh "location/path premise is justified, separate from shape" check into the QC template would have caught this in-phase. Recorded so /craft's QC method can be augmented.
 
+
+## 2026-05-16 - baseline-1778919632-1 - non-interactive-run-verdict-as-provisional-acceptance
+
+Second autonomous baseline run (after `baseline-1778916127-1`) where
+the Review Audit Agent did not call `AskUserQuestion` and gathered no
+live user feedback. `feedback.md` in the project workspace records
+"automated acceptance pending downstream review"; the Review verdict
+(PASS, 0 Blockers, 1 Major process, 1 Minor, 1 Note) stands as the
+provisional acceptance signal for the orchestrator's acceptance gate
+until a downstream human reviewer overrides it.
+
+Convention reinforced (now across two runs): for non-interactive
+baselines, treat the Review verdict's synthesised `feedback.md` line
+as the source of truth for the acceptance gate. Subsequent live user
+feedback should append a dated entry **below** the synthesised line
+rather than overwriting it, so the "automated → human" acceptance
+timeline stays preserved per project.
+
+Worth surfacing to `/tune feedback`: as more baseline runs land
+autonomously, the feedback shard accumulates "no live feedback"
+entries that look like missing data but are actually a stable run
+mode. Consider distinguishing `run-mode: autonomous` entries from
+`run-mode: interactive` entries via a frontmatter tag, so feedback-
+shard analysis can filter on real human signal vs. provisional
+acceptance markers.
+
+Reference: `.loom/baseline-1778919632-1/{feedback.md, review.md}`.
+
+## 2026-05-16 - baseline-1778931123-1 - feedback not collected (autonomous run)
+
+Run mode: autonomous. The Review Audit Agent dispatch context disables
+`AskUserQuestion` and explicitly instructs `feedback.md` to record `not
+collected (baseline eval run)`. The acceptance gate uses the Review
+verdict (PASS, 0 Blockers, 0 Major, 3 Minor) as the provisional
+acceptance signal until a downstream human reviewer overrides it.
+
+Convention now consistent across at least three baseline runs: for
+non-interactive runs, the synthesised `feedback.md` "not collected" line
+plus the Review verdict in `review.md` are the source of truth for the
+acceptance gate. Subsequent live human feedback should append a dated
+entry below the synthesised line rather than overwriting it, preserving
+the "automated → human" timeline per project.
+
+Reinforces the prior shard note: `/tune feedback` should consider a
+`run-mode: autonomous | interactive` frontmatter tag so feedback-shard
+analysis can filter real human signal vs. provisional acceptance markers
+— the autonomous entries are starting to dominate the shard tail.
+
+Reference: `.loom/baseline-1778931123-1/{feedback.md, review.md}`.

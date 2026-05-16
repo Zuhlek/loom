@@ -6,7 +6,8 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 
-const webRoot = new URL("../", import.meta.url).pathname;
+import { fileURLToPath } from "node:url";
+const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const sidebarStatePath = webRoot + "src/lib/sidebar-state.tsx";
 
 describe("T-012 sidebar-state preserves last-good groups on fetch failure", () => {
