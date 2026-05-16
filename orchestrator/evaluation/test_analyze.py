@@ -274,6 +274,91 @@ class OutcomeWriterTests(unittest.TestCase):
         outcome = ANALYZE.derive_outcome(run_dir)
         self.assertIsNone(outcome["final_phase"])
 
+    def test_review_verdict_parsed_from_review_md(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "pipeline.md").write_text(
+            "## Current phase\n```text\nreview\n```\n"
+            "## Lifecycle state\n```text\ncomplete\n```\n"
+        )
+        (run_dir / "review.md").write_text(
+            "# Review\n\n## Verdict\n\n"
+            "**PASS** — 0 Blockers, 0 Major, 2 Minor, 1 Note.\n"
+        )
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertEqual(outcome["review_verdict"], {
+            "status": "PASS", "blockers": 0, "major": 0, "minor": 2, "note": 1,
+        })
+
+    def test_review_verdict_fail_status_parsed(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "review.md").write_text(
+            "**FAIL** — 2 Blockers, 1 Major, 3 Minor, 0 Notes.\n"
+        )
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertEqual(outcome["review_verdict"]["status"], "FAIL")
+        self.assertEqual(outcome["review_verdict"]["blockers"], 2)
+
+    def test_review_verdict_null_when_review_missing(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertIsNone(outcome["review_verdict"])
+
+    def test_review_verdict_null_when_verdict_line_absent(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "review.md").write_text("# Review\n\nNo verdict here.\n")
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertIsNone(outcome["review_verdict"])
+
+    def test_tasks_counted_from_board_sections(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "board.md").write_text(
+            "# Board\n\n"
+            "## Backlog\n- (none)\n\n"
+            "## In Progress\n- T-005 something\n\n"
+            "## Review\n- (none)\n\n"
+            "## Done\n- T-001 a\n- T-002 b\n- T-003 c\n- T-004 d\n"
+        )
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertEqual(outcome["tasks"], {"planned": 5, "done": 4})
+
+    def test_tasks_null_when_board_missing(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertIsNone(outcome["tasks"])
+
+    def test_tasks_null_when_board_has_no_task_bullets(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "board.md").write_text(
+            "# Board\n\n## Backlog\n- (none)\n\n## Done\n- (none)\n"
+        )
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertIsNone(outcome["tasks"])
+
+    def test_write_outcome_includes_new_fields(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "pipeline.md").write_text(
+            "## Current phase\n```text\nreview\n```\n"
+            "## Lifecycle state\n```text\ncomplete\n```\n"
+        )
+        (run_dir / "review.md").write_text(
+            "**PASS** — 0 Blockers, 1 Major, 0 Minor, 0 Notes.\n"
+        )
+        (run_dir / "board.md").write_text(
+            "## Done\n- T-001 done\n- T-002 done\n"
+        )
+        ANALYZE.write_outcome(run_dir)
+        payload = json.loads((run_dir / "outcome.json").read_text())
+        self.assertEqual(payload["review_verdict"]["major"], 1)
+        self.assertEqual(payload["tasks"], {"planned": 2, "done": 2})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

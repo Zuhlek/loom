@@ -137,10 +137,16 @@ def validate_row(row: dict) -> list[str]:
     return violations
 
 
+VALID_REVIEW_STATUSES = {"PASS", "FAIL"}
+REVIEW_VERDICT_KEYS = ("status", "blockers", "major", "minor", "note")
+TASKS_KEYS = ("planned", "done")
+
+
 def validate_outcome(payload: dict) -> list[str]:
     violations: list[str] = []
     expected_keys = {"lifecycle_state", "final_phase",
-                     "review_findings_present", "pipeline_md_present"}
+                     "review_findings_present", "pipeline_md_present",
+                     "review_verdict", "tasks"}
     unexpected = set(payload.keys()) - expected_keys
     if unexpected:
         violations.append(f"outcome has unexpected keys: {sorted(unexpected)}")
@@ -163,6 +169,68 @@ def validate_outcome(payload: dict) -> list[str]:
         value = payload.get(flag)
         if not isinstance(value, bool):
             violations.append(f"{flag} must be a bool; got {value!r}")
+
+    if "review_verdict" not in payload:
+        violations.append("review_verdict field is required")
+    else:
+        verdict = payload["review_verdict"]
+        if verdict is not None:
+            if not isinstance(verdict, dict):
+                violations.append(
+                    f"review_verdict must be an object or null; got {type(verdict).__name__}"
+                )
+            else:
+                status = verdict.get("status")
+                if status not in VALID_REVIEW_STATUSES:
+                    violations.append(
+                        f"review_verdict.status must be one of {sorted(VALID_REVIEW_STATUSES)}; "
+                        f"got {status!r}"
+                    )
+                for count_key in ("blockers", "major", "minor", "note"):
+                    value = verdict.get(count_key)
+                    if not isinstance(value, int) or isinstance(value, bool):
+                        violations.append(
+                            f"review_verdict.{count_key} must be an int; got {value!r}"
+                        )
+                    elif value < 0:
+                        violations.append(
+                            f"review_verdict.{count_key} must be >= 0; got {value}"
+                        )
+                unexpected = set(verdict.keys()) - set(REVIEW_VERDICT_KEYS)
+                if unexpected:
+                    violations.append(
+                        f"review_verdict has unexpected keys: {sorted(unexpected)}"
+                    )
+
+    if "tasks" not in payload:
+        violations.append("tasks field is required")
+    else:
+        tasks = payload["tasks"]
+        if tasks is not None:
+            if not isinstance(tasks, dict):
+                violations.append(
+                    f"tasks must be an object or null; got {type(tasks).__name__}"
+                )
+            else:
+                for count_key in TASKS_KEYS:
+                    value = tasks.get(count_key)
+                    if not isinstance(value, int) or isinstance(value, bool):
+                        violations.append(
+                            f"tasks.{count_key} must be an int; got {value!r}"
+                        )
+                    elif value < 0:
+                        violations.append(f"tasks.{count_key} must be >= 0; got {value}")
+                planned = tasks.get("planned")
+                done = tasks.get("done")
+                if (isinstance(planned, int) and not isinstance(planned, bool)
+                        and isinstance(done, int) and not isinstance(done, bool)
+                        and done > planned):
+                    violations.append(
+                        f"tasks.done ({done}) must not exceed tasks.planned ({planned})"
+                    )
+                unexpected = set(tasks.keys()) - set(TASKS_KEYS)
+                if unexpected:
+                    violations.append(f"tasks has unexpected keys: {sorted(unexpected)}")
 
     return violations
 

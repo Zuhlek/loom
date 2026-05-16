@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -51,6 +52,23 @@ REPO_ROOT = _SCRIPT_DIR.parent.parent
 
 VALID_PHASES_FOR_OUTCOME = {"spec", "design", "plan", "build", "review"}
 VALID_LIFECYCLE_STATES = {"active", "complete"}
+VALID_REVIEW_STATUSES = {"PASS", "FAIL"}
+
+REVIEW_VERDICT_RE = re.compile(
+    r"\*\*(PASS|FAIL)\*\*\s*[—–\-]+\s*"
+    r"(\d+)\s+Blockers?\b[^0-9]*"
+    r"(\d+)\s+Majors?\b[^0-9]*"
+    r"(\d+)\s+Minors?\b[^0-9]*"
+    r"(\d+)\s+Notes?",
+    re.IGNORECASE,
+)
+
+BOARD_SECTION_RE = re.compile(
+    r"^## (Backlog|In Progress|Review|Done)\s*$",
+    re.MULTILINE,
+)
+
+BOARD_TASK_BULLET_RE = re.compile(r"^- T-\d+\b", re.MULTILINE)
 
 
 def _read_pipeline_block(pipeline_text: str, heading: str) -> str | None:
@@ -80,16 +98,53 @@ def _read_pipeline_block(pipeline_text: str, heading: str) -> str | None:
     return None
 
 
+def _parse_review_verdict(review_text: str) -> dict | None:
+    match = REVIEW_VERDICT_RE.search(review_text)
+    if match is None:
+        return None
+    return {
+        "status": match.group(1).upper(),
+        "blockers": int(match.group(2)),
+        "major": int(match.group(3)),
+        "minor": int(match.group(4)),
+        "note": int(match.group(5)),
+    }
+
+
+def _parse_board_tasks(board_text: str) -> dict | None:
+    section_matches = list(BOARD_SECTION_RE.finditer(board_text))
+    if not section_matches:
+        return None
+    counts: dict[str, int] = {}
+    for index, match in enumerate(section_matches):
+        name = match.group(1)
+        section_start = match.end()
+        section_end = (section_matches[index + 1].start()
+                       if index + 1 < len(section_matches) else len(board_text))
+        section_body = board_text[section_start:section_end]
+        counts[name] = len(BOARD_TASK_BULLET_RE.findall(section_body))
+    planned = sum(counts.values())
+    if planned == 0:
+        return None
+    return {"planned": planned, "done": counts.get("Done", 0)}
+
+
+def _read_text_or_empty(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+
+
 def derive_outcome(run_dir: Path) -> dict:
     pipeline_path = run_dir / "pipeline.md"
     pipeline_present = pipeline_path.is_file()
     lifecycle_state = "active"
     final_phase: str | None = None
     if pipeline_present:
-        try:
-            text = pipeline_path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            text = ""
+        text = _read_text_or_empty(pipeline_path)
         raw_lifecycle = _read_pipeline_block(text, "Lifecycle state")
         if isinstance(raw_lifecycle, str):
             candidate = raw_lifecycle.lower()
@@ -100,11 +155,17 @@ def derive_outcome(run_dir: Path) -> dict:
             candidate = raw_phase.lower()
             if candidate in VALID_PHASES_FOR_OUTCOME:
                 final_phase = candidate
+
+    review_text = _read_text_or_empty(run_dir / "review.md")
+    board_text = _read_text_or_empty(run_dir / "board.md")
+
     return {
         "lifecycle_state": lifecycle_state,
         "final_phase": final_phase,
         "review_findings_present": (run_dir / "review.md").is_file(),
         "pipeline_md_present": pipeline_present,
+        "review_verdict": _parse_review_verdict(review_text) if review_text else None,
+        "tasks": _parse_board_tasks(board_text) if board_text else None,
     }
 
 

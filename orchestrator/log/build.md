@@ -2488,3 +2488,56 @@ Reference: `.loom/baseline-1778919632-1/{review.md (R-001), develop-log.md}`.
   not silently dropping the check) is the right default for runs without
   a browser harness. Keep.
 - Persistence across restart asserted; full Vitest suite 67/67 green.
+
+## 2026-05-16 — baseline-1778963742-1
+- Build complete. 5 tasks Done (T-001..T-005). 32/32 vitest tests green across 5 files. Smoke gate PASS (server on PORT=3001, full POST→GET→DELETE→GET round-trip + duplicate 409).
+- Attempt totals: T-001 1, T-002 1, T-003 2, T-004 2, T-005 1.
+- Notes: text/plain POST guard added in routes.ts; happy-dom innerHTML quirk replaced with structural assertion; build-client.ts CLI guard switched to pathToFileURL for paths with spaces. Smoke headless-screenshot substituted with curl-based HTML check (no Puppeteer dep available).
+
+## 2026-05-16 - baseline-1778963742-1 - build-retries-T003-T004
+
+Two of five tasks for the Bookmarks baseline needed a second attempt; both
+fixes were tiny and worth capturing as Build-agent playbook items:
+
+- **Content-Type guard before validation (T-003).** When a contract names
+  an `invalid_body` error for "request body is not JSON", `express.json()`
+  silently leaves `req.body === {}` on non-JSON POSTs, which then trips
+  whatever validator runs next (here: `validateUrl` → `invalid_url`). The
+  documented `invalid_body` path is unreachable without an explicit
+  Content-Type guard at the top of the route handler. Add this guard
+  whenever the contract distinguishes `invalid_body` from `invalid_url`.
+- **happy-dom innerHTML semantics (T-004).** happy-dom's `innerHTML` getter
+  returns the raw stored string, not an HTML-escaped form, so assertions
+  like `expect(el.innerHTML).toBe("&lt;b&gt;...")` fail even when the
+  security property holds. The stronger and framework-agnostic assertion
+  is: query for the would-be-injected element and assert it does not
+  exist (`a.querySelector('b')` is null, `a.children.length === 0`). This
+  tests the actual security property, not the rendering of the test
+  harness.
+- **CLI guard for paths with spaces (T-004).** `import.meta.url === \`file://${process.argv[1]}\``
+  fails when `argv[1]` contains literal spaces (this workspace lives
+  under "My Shared Files"). Use `pathToFileURL(process.argv[1]).href`
+  for guaranteed-correct URL encoding.
+
+## 2026-05-16 - baseline-1778963742-1 - smoke-substitution-curl-for-puppeteer
+
+When the project's stack-pinning constraint forbids adding a smoke-only
+dep (here: Puppeteer for a headless-browser screenshot), the equivalent
+coverage is: (a) `curl` the UI shell at `/` and assert 200 + text/html +
+references-to-bundled-JS + presence-of-form-element, (b) `curl` the bundle
+URL and assert 200 + non-empty body, (c) rely on the unit DOM render
+suite (happy-dom or jsdom) for the actual render behaviour. Document the
+substitution in `smoke-report.md` so the audit doesn't read it as a
+missed check. Stack pinning > screenshot fidelity at the personal-app
+scope; the substitution holds.
+
+## 2026-05-16 - baseline-1778963742-1 - port-collision-avoidance-3001
+
+For smoke gates in a shared eval harness where multiple baselines may
+run concurrently, set `PORT=3001` (or any free non-default) rather than
+binding the spec-pinned 3000. Keep the production default unchanged in
+the boot module (`Number(process.env.PORT ?? 3000)`) so `npm start`
+honours the invariant; the env override is only for the smoke harness.
+The e2e Vitest test should bind an ephemeral port via `app.listen(0)`
+for hermetic suite runs — that is the correct in-process pattern and
+needs no env coordination.

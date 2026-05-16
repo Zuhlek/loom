@@ -108,7 +108,18 @@ Per-run lifecycle and fabric-presence summary, written alongside
   "lifecycle_state":         "active" | "complete",
   "final_phase":             "<phase enum>" | null,
   "review_findings_present": true | false,
-  "pipeline_md_present":     true | false
+  "pipeline_md_present":     true | false,
+  "review_verdict": {
+    "status":   "PASS" | "FAIL",
+    "blockers": <int>,
+    "major":    <int>,
+    "minor":    <int>,
+    "note":     <int>
+  } | null,
+  "tasks": {
+    "planned": <int>,
+    "done":    <int>
+  } | null
 }
 ```
 
@@ -118,6 +129,15 @@ Per-run lifecycle and fabric-presence summary, written alongside
 | `final_phase` | string enum \| `null` | yes | Parsed from `Current phase` block of `pipeline.md`. `null` when missing. |
 | `review_findings_present` | bool | yes | True iff `review.md` exists in the run dir. |
 | `pipeline_md_present` | bool | yes | True iff `pipeline.md` exists in the run dir. |
+| `review_verdict` | object \| `null` | yes | Parsed from the first `**PASS\|FAIL** — N Blockers, N Major, N Minor, N Notes` line in `review.md`. `null` when `review.md` is absent or the verdict line is not matched. |
+| `review_verdict.status` | string enum | yes when `review_verdict` non-null | `PASS` or `FAIL`. |
+| `review_verdict.blockers` | int | yes when `review_verdict` non-null | Non-negative. |
+| `review_verdict.major` | int | yes when `review_verdict` non-null | Non-negative. |
+| `review_verdict.minor` | int | yes when `review_verdict` non-null | Non-negative. |
+| `review_verdict.note` | int | yes when `review_verdict` non-null | Non-negative. |
+| `tasks` | object \| `null` | yes | Parsed from `board.md` section bullets (`## Backlog`, `## In Progress`, `## Review`, `## Done`). `null` when `board.md` is absent or has no `## <Section>` headings or has zero `- T-NNN` bullets total. |
+| `tasks.planned` | int | yes when `tasks` non-null | Total `- T-NNN` bullets across all four sections. Non-negative. |
+| `tasks.done` | int | yes when `tasks` non-null | `- T-NNN` bullets under `## Done`. Non-negative; never exceeds `planned`. |
 
 ## Validation
 

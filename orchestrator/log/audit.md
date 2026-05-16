@@ -1071,3 +1071,42 @@ Run mode: autonomous. `feedback.md` records "not collected (baseline eval
 run)". References: `.loom/baseline-1778931123-1/{review.md, develop-log.md,
 test-report.md, smoke-report.md, feedback.md, board.md, tasks/}`;
 deliverable under `./app/`.
+
+## 2026-05-16 - baseline-1778963742-1 - review-pass-2-minor-2-note
+
+Review verdict: PASS, 0 Blockers, 0 Major, 2 Minor, 2 Notes for the
+local-only Bookmarks baseline (US-001..US-004; T-001..T-005). 32/32
+vitest specs across 5 files; smoke gate 5/5 PASS with curl substitution
+for the headless-browser check (Puppeteer forbidden by stack pinning).
+Workspace isolation honoured — `git status` at repo root shows zero
+leakage from this baseline; all deliverables under
+`.loom/baseline-1778963742-1/app/`.
+
+Two Minor findings, both accepted carve-outs in this Review:
+
+- **P5 / single-implementation interface.** `BookmarksRepo` in
+  `app/src/server/bookmarks.ts:19-23` ships as an interface with one
+  concrete factory and one consumer (`routes.ts`). The DI is real —
+  tests vary the underlying DB, not the repo — and the interface
+  documents the route↔repo contract crisply. Kept; the trade is one
+  small type block in exchange for typed boundary.
+- **P1 / unreachable-in-current-diff error path.** The `GET /` handler
+  in `app/src/server/app.ts:50-59` swallows `res.sendFile` errors and
+  returns 404 inline rather than forwarding to the final error middleware.
+  This is intentional pre-T-004 defensiveness and harmless once
+  `index.html` ships. The final 500-handling middleware still fires on
+  any repo-thrown error that isn't `DuplicateUrlError` (re-throw in
+  `routes.ts:52`), so the `{error:"internal"}` contract is preserved.
+
+Two Notes: (1) smoke check 4 substitution (curl + happy-dom in lieu of
+Puppeteer) — pattern worth canonicalising when stack pinning forbids a
+smoke-only dep; (2) `PORT=3001` for smoke to avoid collisions with
+concurrent baseline workspaces — production default `3000` unchanged.
+
+Process observation worth carrying into the Review-agent playbook: when
+a build correctly substitutes a smoke step under a stack-pinning
+constraint and documents the substitution in `smoke-report.md`, the
+Audit Agent should classify it as a Note (not a Major finding) and
+recommend canonicalising the pattern in the build shard. A failing
+smoke check without substitution rationale would be a Blocker; the
+documented substitution is the difference.

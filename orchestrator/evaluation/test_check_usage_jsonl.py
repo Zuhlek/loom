@@ -98,50 +98,87 @@ class RowQualityValidationTests(unittest.TestCase):
         self.assertEqual(VALIDATOR.validate_row(row), [])
 
 
+def _outcome(**overrides) -> dict:
+    base = {
+        "lifecycle_state": "complete",
+        "final_phase": "review",
+        "review_findings_present": True,
+        "pipeline_md_present": True,
+        "review_verdict": None,
+        "tasks": None,
+    }
+    base.update(overrides)
+    return base
+
+
 class OutcomeValidationTests(unittest.TestCase):
     def test_well_formed_outcome_passes(self) -> None:
-        self.assertEqual(VALIDATOR.validate_outcome({
-            "lifecycle_state": "complete",
-            "final_phase": "review",
-            "review_findings_present": True,
-            "pipeline_md_present": True,
-        }), [])
+        self.assertEqual(VALIDATOR.validate_outcome(_outcome(
+            review_verdict={"status": "PASS", "blockers": 0, "major": 0,
+                            "minor": 2, "note": 1},
+            tasks={"planned": 5, "done": 5},
+        )), [])
 
     def test_active_with_null_final_phase_passes(self) -> None:
-        self.assertEqual(VALIDATOR.validate_outcome({
-            "lifecycle_state": "active",
-            "final_phase": None,
-            "review_findings_present": False,
-            "pipeline_md_present": False,
-        }), [])
+        self.assertEqual(VALIDATOR.validate_outcome(_outcome(
+            lifecycle_state="active", final_phase=None,
+            review_findings_present=False, pipeline_md_present=False,
+        )), [])
 
     def test_invalid_lifecycle_state_rejected(self) -> None:
-        violations = VALIDATOR.validate_outcome({
-            "lifecycle_state": "halfway",
-            "final_phase": "spec",
-            "review_findings_present": False,
-            "pipeline_md_present": True,
-        })
+        violations = VALIDATOR.validate_outcome(_outcome(
+            lifecycle_state="halfway", final_phase="spec",
+            review_findings_present=False,
+        ))
         self.assertTrue(any("lifecycle_state" in violation for violation in violations))
 
     def test_invalid_final_phase_rejected(self) -> None:
-        violations = VALIDATOR.validate_outcome({
-            "lifecycle_state": "active",
-            "final_phase": "bogus",
-            "review_findings_present": False,
-            "pipeline_md_present": True,
-        })
+        violations = VALIDATOR.validate_outcome(_outcome(
+            lifecycle_state="active", final_phase="bogus",
+            review_findings_present=False,
+        ))
         self.assertTrue(any("final_phase" in violation for violation in violations))
 
     def test_non_bool_flags_rejected(self) -> None:
-        violations = VALIDATOR.validate_outcome({
-            "lifecycle_state": "active",
-            "final_phase": "spec",
-            "review_findings_present": "yes",
-            "pipeline_md_present": 1,
-        })
+        violations = VALIDATOR.validate_outcome(_outcome(
+            lifecycle_state="active", final_phase="spec",
+            review_findings_present="yes", pipeline_md_present=1,
+        ))
         self.assertTrue(any("review_findings_present" in violation for violation in violations))
         self.assertTrue(any("pipeline_md_present" in violation for violation in violations))
+
+    def test_review_verdict_invalid_status_rejected(self) -> None:
+        violations = VALIDATOR.validate_outcome(_outcome(
+            review_verdict={"status": "ALMOST", "blockers": 0, "major": 0,
+                            "minor": 0, "note": 0},
+        ))
+        self.assertTrue(any("review_verdict.status" in v for v in violations))
+
+    def test_review_verdict_negative_count_rejected(self) -> None:
+        violations = VALIDATOR.validate_outcome(_outcome(
+            review_verdict={"status": "PASS", "blockers": -1, "major": 0,
+                            "minor": 0, "note": 0},
+        ))
+        self.assertTrue(any("review_verdict.blockers" in v for v in violations))
+
+    def test_review_verdict_unexpected_key_rejected(self) -> None:
+        violations = VALIDATOR.validate_outcome(_outcome(
+            review_verdict={"status": "PASS", "blockers": 0, "major": 0,
+                            "minor": 0, "note": 0, "stray": 1},
+        ))
+        self.assertTrue(any("unexpected keys" in v for v in violations))
+
+    def test_tasks_done_exceeds_planned_rejected(self) -> None:
+        violations = VALIDATOR.validate_outcome(_outcome(
+            tasks={"planned": 3, "done": 5},
+        ))
+        self.assertTrue(any("exceed" in v for v in violations))
+
+    def test_tasks_negative_rejected(self) -> None:
+        violations = VALIDATOR.validate_outcome(_outcome(
+            tasks={"planned": -1, "done": 0},
+        ))
+        self.assertTrue(any("tasks.planned" in v for v in violations))
 
 
 class CliRoundTripTests(unittest.TestCase):
@@ -161,6 +198,9 @@ class CliRoundTripTests(unittest.TestCase):
             "final_phase": "review",
             "review_findings_present": True,
             "pipeline_md_present": True,
+            "review_verdict": {"status": "PASS", "blockers": 0, "major": 0,
+                               "minor": 2, "note": 1},
+            "tasks": {"planned": 5, "done": 5},
         }))
         rc, _, err = _run_cli(str(usage_path), "--outcome", str(outcome_path))
         self.assertEqual(rc, 0, msg=err)
@@ -172,6 +212,8 @@ class CliRoundTripTests(unittest.TestCase):
             "final_phase": "bogus",
             "review_findings_present": True,
             "pipeline_md_present": True,
+            "review_verdict": None,
+            "tasks": None,
         }))
         rc, _, _ = _run_cli("--outcome", str(outcome_path))
         self.assertNotEqual(rc, 0)
