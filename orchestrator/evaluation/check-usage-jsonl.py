@@ -17,7 +17,7 @@ from pathlib import Path
 
 VALID_PHASES = {"spec", "design", "plan", "build", "review"}
 VALID_AGENT_KINDS = {"subagent"}
-VALID_STATUSES = {"ok", "crashed"}
+VALID_STATUSES = {"ok", "crashed", "untagged"}
 TOKEN_KEYS = (
     "input_tokens",
     "output_tokens",
@@ -30,9 +30,22 @@ CANONICAL_LABEL = {phase: f"{phase.capitalize()} phase agent" for phase in VALID
 def validate_row(row: dict) -> list[str]:
     violations: list[str] = []
 
+    status = row.get("status")
+    if status not in VALID_STATUSES:
+        violations.append(
+            f"status must be one of {sorted(VALID_STATUSES)}; got {status!r}"
+        )
+
     phase = row.get("phase")
-    if not isinstance(phase, str) or phase not in VALID_PHASES:
-        violations.append(f"phase must be one of {sorted(VALID_PHASES)}; got {phase!r}")
+    if status == "untagged":
+        if phase is not None:
+            violations.append("phase must be null when status is untagged")
+    else:
+        if not isinstance(phase, str) or phase not in VALID_PHASES:
+            violations.append(
+                f"phase must be one of {sorted(VALID_PHASES)} when status is {status!r}; "
+                f"got {phase!r}"
+            )
 
     agent_kind = row.get("agent_kind")
     if agent_kind not in VALID_AGENT_KINDS:
@@ -48,14 +61,13 @@ def validate_row(row: dict) -> list[str]:
                 f"agent_label must be {expected_label!r} for phase={phase!r}; "
                 f"got {agent_label!r}"
             )
+    elif status == "untagged":
+        if agent_label != "unknown-agent":
+            violations.append(
+                f"agent_label must be 'unknown-agent' when status is untagged; got {agent_label!r}"
+            )
     elif not isinstance(agent_label, str):
         violations.append(f"agent_label must be a string; got {agent_label!r}")
-
-    status = row.get("status")
-    if status not in VALID_STATUSES:
-        violations.append(
-            f"status must be one of {sorted(VALID_STATUSES)}; got {status!r}"
-        )
 
     tokens = row.get("tokens")
     if status == "crashed":
@@ -63,7 +75,9 @@ def validate_row(row: dict) -> list[str]:
             violations.append("tokens must be null when status is crashed")
     else:
         if not isinstance(tokens, dict):
-            violations.append(f"tokens must be an object when status is ok; got {type(tokens).__name__}")
+            violations.append(
+                f"tokens must be an object when status is {status!r}; got {type(tokens).__name__}"
+            )
         else:
             for token_key in TOKEN_KEYS:
                 value = tokens.get(token_key)
@@ -88,7 +102,8 @@ def validate_row(row: dict) -> list[str]:
     else:
         if not isinstance(autonomous, int) or isinstance(autonomous, bool) or autonomous < 0:
             violations.append(
-                f"duration_autonomous_ms must be an int >= 0 when status is ok; got {autonomous!r}"
+                f"duration_autonomous_ms must be an int >= 0 when status is {status!r}; "
+                f"got {autonomous!r}"
             )
 
     return violations

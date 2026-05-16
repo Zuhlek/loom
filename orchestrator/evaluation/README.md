@@ -90,7 +90,10 @@ python3 orchestrator/evaluation/check-usage-jsonl.py <path-to-usage.jsonl>
 Exit zero on conformance; non-zero with offending rows on violation.
 
 `status: "crashed"` rows have `tokens: null` and `duration_autonomous_ms: null`,
-and are excluded from aggregation means.
+and are excluded from aggregation means. `status: "untagged"` rows are
+emitted when the PostToolUse hook (`orchestrator/lib/tag-subagent-phase.py`)
+did not write a `.phase` sidecar for that subagent — they carry usage
+data but no `phase`, and are excluded from per-phase rollups.
 
 Runs filed before the canonical schema landed carry a `PRE_CANONICAL`
 marker file in their run directory. `analyze.py` skips those runs when

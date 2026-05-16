@@ -91,7 +91,7 @@ orchestrator only stages and cleans up; it never reads or peeks
 ## Phase Cycle
 
 ```
-1. Resolve project and read pipeline.md.
+1. Resolve project, read pipeline.md, and write the resolved project name to `.loom/.active` (single line, no trailing newline-only content). The PostToolUse hook (`orchestrator/lib/tag-subagent-phase.py`) reads this to attribute each dispatched subagent's transcript to the active phase.
 2. If pipeline.md.Lifecycle state == complete: report the lifecycle as done and exit.
 3. Loop:
    a. Select the current phase.

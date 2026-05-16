@@ -135,5 +135,99 @@ class HarvestSessionBypassTests(unittest.TestCase):
         self.assertEqual(summary["matched"], 0)
 
 
+def _write_phase_sidecar(transcript_path: Path, *, phase: str | None = "spec",
+                         project: str = "test-project",
+                         agent_type: str = "claude") -> None:
+    sidecar = transcript_path.parent / (transcript_path.stem + ".phase")
+    payload = {
+        "phase": phase,
+        "project": project,
+        "agent_type": agent_type,
+        "dispatched_at": "2026-05-16T10:00:00Z",
+    }
+    sidecar.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+
+class PhaseSidecarTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="phase-sidecar-"))
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_returns_phase_when_sidecar_present(self) -> None:
+        transcript = self.tmp / "agent-x.jsonl"
+        _write_transcript(transcript)
+        _write_phase_sidecar(transcript, phase="design")
+        self.assertEqual(HARVEST.read_phase_sidecar(transcript), "design")
+
+    def test_returns_none_when_sidecar_missing(self) -> None:
+        transcript = self.tmp / "agent-y.jsonl"
+        _write_transcript(transcript)
+        self.assertIsNone(HARVEST.read_phase_sidecar(transcript))
+
+    def test_returns_none_when_phase_not_in_enum(self) -> None:
+        transcript = self.tmp / "agent-z.jsonl"
+        _write_transcript(transcript)
+        _write_phase_sidecar(transcript, phase="bogus")
+        self.assertIsNone(HARVEST.read_phase_sidecar(transcript))
+
+    def test_returns_none_when_sidecar_corrupt(self) -> None:
+        transcript = self.tmp / "agent-w.jsonl"
+        _write_transcript(transcript)
+        sidecar = transcript.parent / (transcript.stem + ".phase")
+        sidecar.write_text("{not valid json", encoding="utf-8")
+        self.assertIsNone(HARVEST.read_phase_sidecar(transcript))
+
+    def test_phase_is_lowercased(self) -> None:
+        transcript = self.tmp / "agent-u.jsonl"
+        _write_transcript(transcript)
+        _write_phase_sidecar(transcript, phase="REVIEW")
+        self.assertEqual(HARVEST.read_phase_sidecar(transcript), "review")
+
+
+class HarvestStatusTaggingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="harvest-status-"))
+        self.projects_root = self.tmp / "projects"
+        self.cwd = Path("/repo/loom")
+        encoded = HARVEST.encode_cwd_for_projects_dir(self.cwd)
+        self.session_id = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+        self.subagents_dir = self.projects_root / encoded / self.session_id / "subagents"
+        self.workspace = self.tmp / "workspace"
+        self.workspace.mkdir()
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_row_untagged_when_sidecar_missing(self) -> None:
+        _write_transcript(self.subagents_dir / "agent-1.jsonl", mentions_project=None)
+        summary = HARVEST.harvest(
+            project="any", workspace=self.workspace,
+            projects_root=self.projects_root, cwd=self.cwd,
+            dry_run=True, session_id=self.session_id,
+        )
+        self.assertEqual(len(summary["rows"]), 1)
+        row = summary["rows"][0]
+        self.assertEqual(row["status"], "untagged")
+        self.assertIsNone(row["phase"])
+        self.assertEqual(row["agent_label"], "unknown-agent")
+
+    def test_row_ok_when_sidecar_present(self) -> None:
+        transcript = self.subagents_dir / "agent-2.jsonl"
+        _write_transcript(transcript, mentions_project=None)
+        _write_phase_sidecar(transcript, phase="build")
+        summary = HARVEST.harvest(
+            project="any", workspace=self.workspace,
+            projects_root=self.projects_root, cwd=self.cwd,
+            dry_run=True, session_id=self.session_id,
+        )
+        self.assertEqual(len(summary["rows"]), 1)
+        row = summary["rows"][0]
+        self.assertEqual(row["status"], "ok")
+        self.assertEqual(row["phase"], "build")
+        self.assertEqual(row["agent_label"], "Build phase agent")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

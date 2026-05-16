@@ -8,7 +8,7 @@ shape below is a deliberate schema bump, not drift.
 
 ```json
 {
-  "phase":                  "<phase enum>",
+  "phase":                  "<phase enum>" | null,
   "agent_kind":             "subagent",
   "agent_label":            "<label convention>",
   "tokens": {
@@ -19,7 +19,7 @@ shape below is a deliberate schema bump, not drift.
   },
   "duration_wall_ms":       <int>,
   "duration_autonomous_ms": <int|null>,
-  "status":                 "ok" | "crashed"
+  "status":                 "ok" | "crashed" | "untagged"
 }
 ```
 
@@ -27,17 +27,32 @@ shape below is a deliberate schema bump, not drift.
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `phase` | string enum | yes | One of: `spec`, `design`, `plan`, `build`, `review`. Never `null`, never empty. |
+| `phase` | string enum \| `null` | yes | One of: `spec`, `design`, `plan`, `build`, `review`. May be `null` only when `status == "untagged"`. |
 | `agent_kind` | string enum | yes | `subagent`. No other values are emitted. |
-| `agent_label` | string | yes | `"{Phase} phase agent"` — `Spec phase agent`, `Design phase agent`, `Plan phase agent`, `Build phase agent`, `Review phase agent`. Human-readable; do not group on it. |
-| `tokens` | object \| `null` | yes | Four-key SDK usage object when `status == "ok"`. `null` when `status == "crashed"`. |
+| `agent_label` | string | yes | `"{Phase} phase agent"` — `Spec phase agent`, `Design phase agent`, `Plan phase agent`, `Build phase agent`, `Review phase agent`. `"unknown-agent"` when `status == "untagged"`. Human-readable; do not group on it. |
+| `tokens` | object \| `null` | yes | Four-key SDK usage object when `status` is `ok` or `untagged`. `null` when `status == "crashed"`. |
 | `tokens.input_tokens` | int | yes when `tokens` non-null | Non-negative. |
 | `tokens.output_tokens` | int | yes when `tokens` non-null | Non-negative. |
 | `tokens.cache_creation_input_tokens` | int | yes when `tokens` non-null | Non-negative. |
 | `tokens.cache_read_input_tokens` | int | yes when `tokens` non-null | Non-negative. |
 | `duration_wall_ms` | int | yes | Non-negative. Wall-clock dispatch-to-return. |
-| `duration_autonomous_ms` | int \| `null` | yes | Non-negative when set. `null` when `status == "crashed"`. |
-| `status` | string enum | yes | `ok` or `crashed`. Crashed rows are excluded from token totals; their wall is shown in the "Crashed invocations" section of `usage.md`. |
+| `duration_autonomous_ms` | int \| `null` | yes | Non-negative when `status` is `ok` or `untagged`. `null` when `status == "crashed"`. |
+| `status` | string enum | yes | `ok`, `crashed`, or `untagged`. `crashed` rows are excluded from token totals; their wall is shown in the "Crashed invocations" section of `usage.md`. `untagged` rows are excluded from per-phase rollups and pooled variance — they indicate the PostToolUse hook did not write a `.phase` sidecar for that transcript. |
+
+## Phase tagging
+
+`phase` is sourced from the `agent-<uuid>.phase` sidecar that the
+PostToolUse hook in `orchestrator/lib/tag-subagent-phase.py` writes next
+to each dispatched subagent's transcript. The hook reads the active
+project from `.loom/.active` and the current phase from
+`.loom/<project>/pipeline.md`'s `Current phase` block, then writes one
+sidecar per Agent/Task dispatch. The harvester reads the sidecar
+directly — no derivation from transcript content or `meta.json`.
+
+A missing sidecar produces `status: "untagged"` with `phase: null`.
+That row is excluded from per-phase rollups; investigate the cause
+(hook not registered, `.loom/.active` missing, pipeline.md malformed)
+before relying on the run's numbers.
 
 ## Grouping
 

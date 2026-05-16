@@ -186,70 +186,33 @@ def sum_usage_and_durations(rows: list[dict]) -> tuple[dict[str, int] | None, in
     return totals, wall, autonomous
 
 
-_PHASE_RE = re.compile(r"\[phase:\s*([a-z][a-z0-9_-]*)\s*\]", re.IGNORECASE)
-_PHASE_KEYWORD_RE = re.compile(r"\b(spec|design|plan|build|review)\b", re.IGNORECASE)
-
 VALID_PHASES = ("spec", "design", "plan", "build", "review")
 
 
 def canonical_agent_label(phase: str | None) -> str:
-    """Deterministic human-readable label keyed off phase.
-
-    The label is derived solely from the phase so cross-run grouping is
-    stable regardless of the dispatch description text the orchestrator
-    LLM chose for its Task call.
-    """
     if phase in VALID_PHASES:
         return f"{phase.capitalize()} phase agent"
     return "unknown-agent"
 
 
-def derive_phase(rows: list[dict],
-                 transcript_path: Path | None = None) -> str | None:
-    """Resolve the phase for a subagent transcript.
+def read_phase_sidecar(transcript_path: Path) -> str | None:
+    """Read the `.phase` sidecar written by the PostToolUse hook.
 
-    Tries (in order):
-      1. Explicit `phase` field in the first 5 rows of the transcript.
-      2. `[phase: …]` markers in early user message text.
-      3. Sibling `<transcript-stem>.meta.json` `description` —
-         /weave dispatch descriptions reliably contain the phase keyword.
+    The hook in `orchestrator/lib/tag-subagent-phase.py` writes one
+    `agent-<uuid>.phase` file per dispatched subagent. Returns the
+    phase string or None if the sidecar is missing or invalid.
     """
-    for row in rows[:5]:
-        candidate = row.get("phase")
-        if isinstance(candidate, str) and candidate.lower() in VALID_PHASES:
-            return candidate.lower()
-
-    for row in rows[:5]:
-        text = _content_text(row)
-        if not text:
-            continue
-        match = _PHASE_RE.search(text)
-        if match and match.group(1).lower() in VALID_PHASES:
-            return match.group(1).lower()
-        match = _PHASE_KEYWORD_RE.search(text)
-        if match:
-            return match.group(1).lower()
-
-    if transcript_path is not None:
-        meta_path = transcript_path.parent / (transcript_path.stem + ".meta.json")
-        if meta_path.exists():
-            try:
-                meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                description = meta.get("description")
-                if isinstance(description, str):
-                    match = _PHASE_KEYWORD_RE.search(description)
-                    if match:
-                        return match.group(1).lower()
-            except (OSError, json.JSONDecodeError):
-                pass
-
+    sidecar = transcript_path.parent / (transcript_path.stem + ".phase")
+    if not sidecar.is_file():
+        return None
+    try:
+        data = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    phase = data.get("phase") if isinstance(data, dict) else None
+    if isinstance(phase, str) and phase.lower() in VALID_PHASES:
+        return phase.lower()
     return None
-
-
-def derive_phase_and_label(rows: list[dict],
-                           transcript_path: Path | None = None) -> tuple[str | None, str]:
-    phase = derive_phase(rows, transcript_path)
-    return phase, canonical_agent_label(phase)
 
 
 def build_row(phase: str | None, agent_label: str,
@@ -368,9 +331,15 @@ def harvest(project: str, workspace: Path, projects_root: Path,
             continue
         matched.append(t)
 
-        phase, agent_label = derive_phase_and_label(raw, t)
+        phase = read_phase_sidecar(t)
+        agent_label = canonical_agent_label(phase)
         tokens, wall_ms, autonomous_ms = sum_usage_and_durations(raw)
-        status = "ok" if tokens is not None else "crashed"
+        if tokens is None:
+            status = "crashed"
+        elif phase is None:
+            status = "untagged"
+        else:
+            status = "ok"
         row = build_row(phase, agent_label, tokens, wall_ms, autonomous_ms, status)
         rows_out.append(row)
 
