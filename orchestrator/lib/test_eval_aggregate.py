@@ -34,7 +34,14 @@ def _row(phase: str, agent_kind: str, label: str, *,
          tokens: dict | None = None,
          wall_ms: int = 1000,
          autonomous_ms: int | None = 500,
-         status: str = "ok") -> dict:
+         status: str = "ok",
+         quality: dict | None = None) -> dict:
+    if status == "crashed":
+        emitted_quality = None
+    elif quality is not None:
+        emitted_quality = quality
+    else:
+        emitted_quality = {"error_results": 0, "read_errors": 0, "bash_failures": 0}
     return {
         "phase": phase,
         "agent_kind": agent_kind,
@@ -47,6 +54,7 @@ def _row(phase: str, agent_kind: str, label: str, *,
         "duration_wall_ms": wall_ms,
         "duration_autonomous_ms": autonomous_ms if status != "crashed" else None,
         "status": status,
+        "quality": emitted_quality,
     }
 
 
@@ -200,6 +208,68 @@ class EvalAggregateTests(unittest.TestCase):
         # "orphan rollup" marker.
         self.assertIn("Crashed invocations", text)
         self.assertTrue(("orphan-sub" in text) or ("orphan" in text.lower()))
+
+
+class EvalAggregateQualityAndOutcomeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="eval-agg-quality-"))
+        self.project = "demo"
+        self.loom = self.tmp / ".loom" / self.project
+        self.loom.mkdir(parents=True)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _write_jsonl(self, rows: list[dict]) -> None:
+        with (self.loom / "usage.jsonl").open("w") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+
+    def test_quality_columns_present_and_summed(self) -> None:
+        rows = [
+            _row("spec", "subagent", "s1",
+                 quality={"error_results": 4, "read_errors": 1, "bash_failures": 2}),
+            _row("spec", "subagent", "s2",
+                 quality={"error_results": 1, "read_errors": 0, "bash_failures": 1}),
+        ]
+        self._write_jsonl(rows)
+        rc, _, err = _run(self.project, self.tmp)
+        self.assertEqual(rc, 0, msg=err)
+        text = (self.loom / "usage.md").read_text()
+        self.assertIn("errors", text)
+        self.assertIn("read-err", text)
+        self.assertIn("bash-fail", text)
+        spec_row = [ln for ln in text.splitlines()
+                    if ln.startswith("|") and "spec" in ln and "Phase" not in ln]
+        self.assertTrue(spec_row, msg="expected a spec phase row in usage.md")
+        cells = [c.strip() for c in spec_row[0].strip("|").split("|")]
+        self.assertEqual(cells[-3:], ["5", "1", "3"])
+
+    def test_run_outcome_block_rendered_when_outcome_json_present(self) -> None:
+        rows = [_row("review", "subagent", "r1")]
+        self._write_jsonl(rows)
+        (self.loom / "outcome.json").write_text(json.dumps({
+            "lifecycle_state": "complete",
+            "final_phase": "review",
+            "review_findings_present": True,
+            "pipeline_md_present": True,
+        }))
+        rc, _, err = _run(self.project, self.tmp)
+        self.assertEqual(rc, 0, msg=err)
+        text = (self.loom / "usage.md").read_text()
+        self.assertIn("## Run outcome", text)
+        self.assertIn("Lifecycle state: complete", text)
+        self.assertIn("Final phase: review", text)
+        self.assertIn("review.md present: True", text)
+
+    def test_run_outcome_block_handles_missing_outcome_json(self) -> None:
+        rows = [_row("spec", "subagent", "s1")]
+        self._write_jsonl(rows)
+        rc, _, err = _run(self.project, self.tmp)
+        self.assertEqual(rc, 0, msg=err)
+        text = (self.loom / "usage.md").read_text()
+        self.assertIn("## Run outcome", text)
+        self.assertIn("(outcome.json not present)", text)
 
 
 if __name__ == "__main__":

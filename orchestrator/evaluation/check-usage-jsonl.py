@@ -18,12 +18,14 @@ from pathlib import Path
 VALID_PHASES = {"spec", "design", "plan", "build", "review"}
 VALID_AGENT_KINDS = {"subagent"}
 VALID_STATUSES = {"ok", "crashed", "untagged"}
+VALID_LIFECYCLE_STATES = {"active", "complete"}
 TOKEN_KEYS = (
     "input_tokens",
     "output_tokens",
     "cache_creation_input_tokens",
     "cache_read_input_tokens",
 )
+QUALITY_KEYS = ("error_results", "read_errors", "bash_failures")
 CANONICAL_LABEL = {phase: f"{phase.capitalize()} phase agent" for phase in VALID_PHASES}
 
 
@@ -106,6 +108,62 @@ def validate_row(row: dict) -> list[str]:
                 f"got {autonomous!r}"
             )
 
+    if "quality" not in row:
+        violations.append("quality field is required")
+    else:
+        quality = row.get("quality")
+        if status == "crashed":
+            if quality is not None:
+                violations.append("quality must be null when status is crashed")
+        else:
+            if not isinstance(quality, dict):
+                violations.append(
+                    f"quality must be an object when status is {status!r}; "
+                    f"got {type(quality).__name__}"
+                )
+            else:
+                for quality_key in QUALITY_KEYS:
+                    value = quality.get(quality_key)
+                    if not isinstance(value, int) or isinstance(value, bool):
+                        violations.append(
+                            f"quality.{quality_key} must be an int; got {value!r}"
+                        )
+                    elif value < 0:
+                        violations.append(f"quality.{quality_key} must be >= 0; got {value}")
+                unexpected = set(quality.keys()) - set(QUALITY_KEYS)
+                if unexpected:
+                    violations.append(f"quality has unexpected keys: {sorted(unexpected)}")
+
+    return violations
+
+
+def validate_outcome(payload: dict) -> list[str]:
+    violations: list[str] = []
+    expected_keys = {"lifecycle_state", "final_phase",
+                     "review_findings_present", "pipeline_md_present"}
+    unexpected = set(payload.keys()) - expected_keys
+    if unexpected:
+        violations.append(f"outcome has unexpected keys: {sorted(unexpected)}")
+
+    lifecycle = payload.get("lifecycle_state")
+    if lifecycle not in VALID_LIFECYCLE_STATES:
+        violations.append(
+            f"lifecycle_state must be one of {sorted(VALID_LIFECYCLE_STATES)}; "
+            f"got {lifecycle!r}"
+        )
+
+    final_phase = payload.get("final_phase")
+    if final_phase is not None and final_phase not in VALID_PHASES:
+        violations.append(
+            f"final_phase must be one of {sorted(VALID_PHASES)} or null; "
+            f"got {final_phase!r}"
+        )
+
+    for flag in ("review_findings_present", "pipeline_md_present"):
+        value = payload.get(flag)
+        if not isinstance(value, bool):
+            violations.append(f"{flag} must be a bool; got {value!r}")
+
     return violations
 
 
@@ -139,12 +197,30 @@ def validate_file(path: Path) -> list[tuple[int, dict | str, list[str]]]:
     return failures
 
 
+def validate_outcome_file(path: Path) -> list[str]:
+    if not path.exists():
+        return [f"file does not exist: {path}"]
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"could not parse JSON: {exc}"]
+    if not isinstance(payload, dict):
+        return ["outcome.json must be a JSON object"]
+    return validate_outcome(payload)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate usage.jsonl against orchestrator/evaluation/SCHEMA.md."
     )
-    parser.add_argument("paths", nargs="+", help="One or more usage.jsonl files.")
+    parser.add_argument("paths", nargs="*", help="One or more usage.jsonl files.")
+    parser.add_argument("--outcome", action="append", default=[],
+                        help="Validate the given outcome.json file. "
+                             "May be repeated.")
     args = parser.parse_args(argv)
+
+    if not args.paths and not args.outcome:
+        parser.error("provide at least one usage.jsonl path or --outcome <path>")
 
     total_failures = 0
     for raw_path in args.paths:
@@ -159,6 +235,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  line {line_number}: {row!r}", file=sys.stderr)
             for violation in violations:
                 print(f"    - {violation}", file=sys.stderr)
+
+    for raw_path in args.outcome:
+        path = Path(raw_path)
+        outcome_violations = validate_outcome_file(path)
+        if not outcome_violations:
+            print(f"OK  {path}")
+            continue
+        total_failures += 1
+        print(f"FAIL {path}", file=sys.stderr)
+        for violation in outcome_violations:
+            print(f"    - {violation}", file=sys.stderr)
 
     return 1 if total_failures else 0
 

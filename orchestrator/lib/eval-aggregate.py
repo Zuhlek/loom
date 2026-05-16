@@ -22,9 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import tempfile
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -103,10 +101,6 @@ def _read_rollup_orphans(rollup_dir: Path) -> list[dict]:
                     sub_labels.append(e["agent_label"])
         except Exception:
             continue
-        # The orphan represents a crashed parent. Per design.md, crash
-        # sentinels carry tokens=null and autonomous=null. But to keep
-        # signal we emit the synthesized totals as the body of the
-        # crashed-invocation listing rather than the token totals.
         synthesized.append({
             "phase": None,
             "agent_kind": "subagent",
@@ -115,6 +109,7 @@ def _read_rollup_orphans(rollup_dir: Path) -> list[dict]:
             "duration_wall_ms": wall_ms,
             "duration_autonomous_ms": None if any_null_autonomous else autonomous_ms,
             "status": "crashed",
+            "quality": None,
         })
     return synthesized
 
@@ -162,18 +157,21 @@ def aggregate(project: str, loom_root: Path) -> str:
     )
 
     # Per-phase totals (excluding crashed rows).
-    per_phase: dict[str, dict] = {}
-    for p in ordered_phases:
-        per_phase[p] = {
+    def _empty_phase_bucket() -> dict:
+        return {
             "tokens": _empty_tokens(),
             "wall_ms": 0,
             "autonomous_ms": 0,
-            # subagent-vs-orchestrator split:
             "orch_wall_ms": 0,
             "orch_autonomous_ms": 0,
             "sub_wall_ms": 0,
             "sub_autonomous_ms": 0,
+            "error_results": 0,
+            "read_errors": 0,
+            "bash_failures": 0,
         }
+
+    per_phase: dict[str, dict] = {p: _empty_phase_bucket() for p in ordered_phases}
     crashed_rows: list[dict] = []
 
     for r in rows:
@@ -181,15 +179,7 @@ def aggregate(project: str, loom_root: Path) -> str:
             crashed_rows.append(r)
             continue
         p = _phase_key(r)
-        bucket = per_phase.setdefault(p, {
-            "tokens": _empty_tokens(),
-            "wall_ms": 0,
-            "autonomous_ms": 0,
-            "orch_wall_ms": 0,
-            "orch_autonomous_ms": 0,
-            "sub_wall_ms": 0,
-            "sub_autonomous_ms": 0,
-        })
+        bucket = per_phase.setdefault(p, _empty_phase_bucket())
         tok = r.get("tokens") or {}
         for k in TOKEN_KEYS:
             v = tok.get(k, 0)
@@ -211,6 +201,12 @@ def aggregate(project: str, loom_root: Path) -> str:
                 bucket["sub_wall_ms"] += int(wm)
             if isinstance(am, (int, float)):
                 bucket["sub_autonomous_ms"] += int(am)
+        quality = r.get("quality")
+        if isinstance(quality, dict):
+            for key in ("error_results", "read_errors", "bash_failures"):
+                value = quality.get(key, 0)
+                if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                    bucket[key] += value
         # Ensure ordered_phases reflects insertion order for unknowns.
         if p not in ordered_phases:
             ordered_phases.append(p)
@@ -234,7 +230,8 @@ def aggregate(project: str, loom_root: Path) -> str:
     lines.append("")
     if ordered_phases:
         headers = ["Phase", "Wall ms", "Autonomous ms",
-                   "input", "output", "cache_create", "cache_read"]
+                   "input", "output", "cache_create", "cache_read",
+                   "errors", "read-err", "bash-fail"]
         body = []
         for p in ordered_phases:
             b = per_phase[p]
@@ -246,6 +243,9 @@ def aggregate(project: str, loom_root: Path) -> str:
                 str(b["tokens"]["output_tokens"]),
                 str(b["tokens"]["cache_creation_input_tokens"]),
                 str(b["tokens"]["cache_read_input_tokens"]),
+                str(b["error_results"]),
+                str(b["read_errors"]),
+                str(b["bash_failures"]),
             ])
         lines.append(_render_table(headers, body))
     else:
@@ -278,6 +278,24 @@ def aggregate(project: str, loom_root: Path) -> str:
         f"cache_create={run['cache_creation_input_tokens']}, "
         f"cache_read={run['cache_read_input_tokens']}"
     )
+    lines.append("")
+    lines.append("## Run outcome")
+    lines.append("")
+    outcome_path = project_dir / "outcome.json"
+    outcome_payload: dict | None = None
+    if outcome_path.is_file():
+        try:
+            outcome_payload = json.loads(outcome_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            outcome_payload = None
+    if isinstance(outcome_payload, dict):
+        final_phase = outcome_payload.get("final_phase") or "—"
+        lines.append(f"- Lifecycle state: {outcome_payload.get('lifecycle_state', '—')}")
+        lines.append(f"- Final phase: {final_phase}")
+        lines.append(f"- review.md present: {bool(outcome_payload.get('review_findings_present'))}")
+        lines.append(f"- pipeline.md present: {bool(outcome_payload.get('pipeline_md_present'))}")
+    else:
+        lines.append("_(outcome.json not present)_")
     lines.append("")
     lines.append("## Crashed invocations")
     lines.append("")

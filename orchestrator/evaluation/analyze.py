@@ -49,6 +49,72 @@ AGGREGATOR = _SCRIPT_DIR.parent / "lib" / "eval-aggregate.py"
 REPO_ROOT = _SCRIPT_DIR.parent.parent
 
 
+VALID_PHASES_FOR_OUTCOME = {"spec", "design", "plan", "build", "review"}
+VALID_LIFECYCLE_STATES = {"active", "complete"}
+
+
+def _read_pipeline_block(pipeline_text: str, heading: str) -> str | None:
+    """Return the first non-blank line inside the fenced block under
+    `## <heading>`, or None if the heading or block is absent."""
+    needle = f"## {heading}"
+    index = pipeline_text.find(needle)
+    if index < 0:
+        return None
+    rest = pipeline_text[index + len(needle):]
+    open_fence = rest.find("```")
+    if open_fence < 0:
+        return None
+    after_open = rest[open_fence + 3:]
+    newline = after_open.find("\n")
+    if newline < 0:
+        return None
+    body_start = newline + 1
+    close_fence = after_open.find("```", body_start)
+    if close_fence < 0:
+        return None
+    body = after_open[body_start:close_fence]
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return None
+
+
+def derive_outcome(run_dir: Path) -> dict:
+    pipeline_path = run_dir / "pipeline.md"
+    pipeline_present = pipeline_path.is_file()
+    lifecycle_state = "active"
+    final_phase: str | None = None
+    if pipeline_present:
+        try:
+            text = pipeline_path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            text = ""
+        raw_lifecycle = _read_pipeline_block(text, "Lifecycle state")
+        if isinstance(raw_lifecycle, str):
+            candidate = raw_lifecycle.lower()
+            if candidate in VALID_LIFECYCLE_STATES:
+                lifecycle_state = candidate
+        raw_phase = _read_pipeline_block(text, "Current phase")
+        if isinstance(raw_phase, str):
+            candidate = raw_phase.lower()
+            if candidate in VALID_PHASES_FOR_OUTCOME:
+                final_phase = candidate
+    return {
+        "lifecycle_state": lifecycle_state,
+        "final_phase": final_phase,
+        "review_findings_present": (run_dir / "review.md").is_file(),
+        "pipeline_md_present": pipeline_present,
+    }
+
+
+def write_outcome(run_dir: Path) -> Path:
+    payload = derive_outcome(run_dir)
+    out_path = run_dir / "outcome.json"
+    atomic_write_text(out_path, json.dumps(payload, indent=2) + "\n")
+    return out_path
+
+
 # Metric registry. Adding a new metric is one tuple.
 # Tuple: (name, dotted-path-into-row, rollup-fn-name).
 METRICS = [
@@ -208,6 +274,7 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
                         continue
                 if not (run_dir / "usage.md").exists():
                     _aggregate(run_dir)
+                write_outcome(run_dir)
                 rows = _read_jsonl(usage)
                 versions_raw.setdefault(version, []).append(rows)
                 all_phases.update(_phases_present(rows))

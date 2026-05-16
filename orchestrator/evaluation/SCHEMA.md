@@ -19,7 +19,12 @@ shape below is a deliberate schema bump, not drift.
   },
   "duration_wall_ms":       <int>,
   "duration_autonomous_ms": <int|null>,
-  "status":                 "ok" | "crashed" | "untagged"
+  "status":                 "ok" | "crashed" | "untagged",
+  "quality": {
+    "error_results":  <int>,
+    "read_errors":    <int>,
+    "bash_failures":  <int>
+  }
 }
 ```
 
@@ -38,6 +43,27 @@ shape below is a deliberate schema bump, not drift.
 | `duration_wall_ms` | int | yes | Non-negative. Wall-clock dispatch-to-return. |
 | `duration_autonomous_ms` | int \| `null` | yes | Non-negative when `status` is `ok` or `untagged`. `null` when `status == "crashed"`. |
 | `status` | string enum | yes | `ok`, `crashed`, or `untagged`. `crashed` rows are excluded from token totals; their wall is shown in the "Crashed invocations" section of `usage.md`. `untagged` rows are excluded from per-phase rollups and pooled variance — they indicate the PostToolUse hook did not write a `.phase` sidecar for that transcript. |
+| `quality` | object \| `null` | yes | Three-key error-count object when `status` is `ok` or `untagged`. `null` when `status == "crashed"`. |
+| `quality.error_results` | int | yes when `quality` non-null | Non-negative. Count of `tool_result` rows with `is_error: true`. |
+| `quality.read_errors` | int | yes when `quality` non-null | Non-negative. Subset of `error_results` whose originating `tool_use` was the Read tool (matched by `tool_use_id`). |
+| `quality.bash_failures` | int | yes when `quality` non-null | Non-negative. Subset of `error_results` whose originating `tool_use` was the Bash tool. |
+
+## Quality signal sources
+
+`quality` is extracted from the same transcript JSONL the harvester
+already walks. The function is pure over the row list and performs no
+I/O.
+
+The bash-failure signal is `is_error: true` on a `tool_result` row whose
+originating `tool_use` (matched by `tool_use_id`) is named `Bash`.
+Claude Code renders such results with `content` beginning `Exit code N\n`
+followed by combined stdout/stderr, but the `is_error` flag is the
+authoritative marker — the `Exit code` prefix is a presentation detail
+of the result body and is not parsed.
+
+Read errors use the same `tool_use_id` correlation against the `Read`
+tool name. Any Read error counts (file missing, permission denied,
+size-limit exceeded, decode error).
 
 ## Phase tagging
 
@@ -72,8 +98,31 @@ forward-compatible schema extension: `agent_kind == "orchestrator"`
 already has reader support in `eval-aggregate.py`'s split column, so
 adding emission later would not break existing consumers.
 
+## `outcome.json`
+
+Per-run lifecycle and fabric-presence summary, written alongside
+`usage.jsonl` at analyze time. Captures what per-phase rows alone do not.
+
+```json
+{
+  "lifecycle_state":         "active" | "complete",
+  "final_phase":             "<phase enum>" | null,
+  "review_findings_present": true | false,
+  "pipeline_md_present":     true | false
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `lifecycle_state` | string enum | yes | Parsed from `Lifecycle state` block of `pipeline.md`. Falls back to `"active"` when `pipeline.md` is missing or the block is empty. |
+| `final_phase` | string enum \| `null` | yes | Parsed from `Current phase` block of `pipeline.md`. `null` when missing. |
+| `review_findings_present` | bool | yes | True iff `review.md` exists in the run dir. |
+| `pipeline_md_present` | bool | yes | True iff `pipeline.md` exists in the run dir. |
+
 ## Validation
 
-`orchestrator/evaluation/check-usage-jsonl.py <path>` validates a file
-against this contract. Exit code zero on conformance, non-zero on any
-violation with offending rows printed to stderr.
+`orchestrator/evaluation/check-usage-jsonl.py <path>` validates a
+`usage.jsonl` file against the row contract. `--outcome <path>` validates
+an `outcome.json` file in place of (or in addition to) usage rows. Exit
+code zero on conformance, non-zero on any violation with offending rows
+printed to stderr.

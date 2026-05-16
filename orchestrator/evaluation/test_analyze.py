@@ -45,6 +45,7 @@ def _ok_row(phase: str, agent_kind: str, *, wall_ms: int = 1000,
         "duration_wall_ms": wall_ms,
         "duration_autonomous_ms": autonomous_ms,
         "status": "ok",
+        "quality": {"error_results": 0, "read_errors": 0, "bash_failures": 0},
     }
 
 
@@ -53,6 +54,7 @@ def _crashed_row(phase: str) -> dict:
         "phase": phase, "agent_kind": "subagent", "agent_label": "crashed",
         "tokens": None, "duration_wall_ms": 999, "duration_autonomous_ms": None,
         "status": "crashed",
+        "quality": None,
     }
 
 
@@ -60,6 +62,17 @@ def _extract_data(html: str) -> dict:
     m = re.search(r"<script id=\"loom-data\"[^>]*>(.*?)</script>", html, re.DOTALL)
     assert m, "expected inline <script id=loom-data> block"
     return json.loads(m.group(1))
+
+
+def _load_analyze_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("analyze_module", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+ANALYZE = _load_analyze_module()
 
 
 class AnalyzeTests(unittest.TestCase):
@@ -205,6 +218,61 @@ class AnalyzeTests(unittest.TestCase):
         self.assertEqual(rc, 0, msg=err)
         self.assertNotIn("harvesting", err)
         self.assertEqual(usage_path.stat().st_mtime, original_mtime)
+
+
+class OutcomeWriterTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="analyze-outcome-"))
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_derive_outcome_reads_pipeline_blocks(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "pipeline.md").write_text(
+            "## Current phase\n```text\nreview\n```\n"
+            "## Lifecycle state\n```text\ncomplete\n```\n"
+        )
+        (run_dir / "review.md").write_text("findings")
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertEqual(outcome["lifecycle_state"], "complete")
+        self.assertEqual(outcome["final_phase"], "review")
+        self.assertTrue(outcome["review_findings_present"])
+        self.assertTrue(outcome["pipeline_md_present"])
+
+    def test_derive_outcome_missing_pipeline(self) -> None:
+        run_dir = self.tmp / "no-pipeline"
+        run_dir.mkdir()
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertEqual(outcome["lifecycle_state"], "active")
+        self.assertIsNone(outcome["final_phase"])
+        self.assertFalse(outcome["review_findings_present"])
+        self.assertFalse(outcome["pipeline_md_present"])
+
+    def test_write_outcome_creates_file(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "pipeline.md").write_text(
+            "## Current phase\n```text\nbuild\n```\n"
+            "## Lifecycle state\n```text\nactive\n```\n"
+        )
+        out_path = ANALYZE.write_outcome(run_dir)
+        self.assertEqual(out_path, run_dir / "outcome.json")
+        self.assertTrue(out_path.is_file())
+        payload = json.loads(out_path.read_text())
+        self.assertEqual(payload["final_phase"], "build")
+        self.assertEqual(payload["lifecycle_state"], "active")
+
+    def test_derive_outcome_unknown_phase_falls_to_null(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "pipeline.md").write_text(
+            "## Current phase\n```text\nnonsense\n```\n"
+            "## Lifecycle state\n```text\nactive\n```\n"
+        )
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertIsNone(outcome["final_phase"])
 
 
 if __name__ == "__main__":

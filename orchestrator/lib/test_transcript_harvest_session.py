@@ -229,5 +229,157 @@ class HarvestStatusTaggingTests(unittest.TestCase):
         self.assertEqual(row["agent_label"], "Build phase agent")
 
 
+class QualityCountsTests(unittest.TestCase):
+    def _tool_use(self, tool_use_id: str, name: str) -> dict:
+        return {
+            "type": "assistant",
+            "timestamp": "2026-05-16T10:00:01Z",
+            "message": {
+                "content": [
+                    {"type": "tool_use", "id": tool_use_id, "name": name, "input": {}}
+                ],
+                "usage": {
+                    "input_tokens": 1, "output_tokens": 1,
+                    "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+                },
+            },
+        }
+
+    def _tool_result(self, tool_use_id: str, *, is_error: bool, text: str) -> dict:
+        return {
+            "type": "user",
+            "timestamp": "2026-05-16T10:00:02Z",
+            "message": {
+                "content": [
+                    {"type": "tool_result", "tool_use_id": tool_use_id,
+                     "is_error": is_error, "content": text}
+                ]
+            },
+        }
+
+    def test_zero_counts_for_empty_rows(self) -> None:
+        self.assertEqual(
+            HARVEST.quality_counts([]),
+            {"error_results": 0, "read_errors": 0, "bash_failures": 0},
+        )
+
+    def test_mixed_tool_errors_counted_per_tool(self) -> None:
+        rows = [
+            self._tool_use("u1", "Read"),
+            self._tool_result("u1", is_error=True, text="File does not exist."),
+            self._tool_use("u2", "Bash"),
+            self._tool_result("u2", is_error=True, text="Exit code 1\nboom"),
+            self._tool_use("u3", "Bash"),
+            self._tool_result("u3", is_error=False, text="ok"),
+            self._tool_use("u4", "Edit"),
+            self._tool_result("u4", is_error=True, text="<tool_use_error>not found</tool_use_error>"),
+            self._tool_use("u5", "Read"),
+            self._tool_result("u5", is_error=True, text="permission denied"),
+        ]
+        self.assertEqual(
+            HARVEST.quality_counts(rows),
+            {"error_results": 4, "read_errors": 2, "bash_failures": 1},
+        )
+
+    def test_is_error_without_known_tool_still_counted_as_error(self) -> None:
+        rows = [
+            self._tool_result("missing-id", is_error=True, text="orphan"),
+        ]
+        self.assertEqual(
+            HARVEST.quality_counts(rows),
+            {"error_results": 1, "read_errors": 0, "bash_failures": 0},
+        )
+
+
+class HarvestQualityIntegrationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="harvest-quality-"))
+        self.projects_root = self.tmp / "projects"
+        self.cwd = Path("/repo/loom")
+        encoded = HARVEST.encode_cwd_for_projects_dir(self.cwd)
+        self.session_id = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+        self.subagents_dir = self.projects_root / encoded / self.session_id / "subagents"
+        self.subagents_dir.mkdir(parents=True)
+        self.workspace = self.tmp / "workspace"
+        self.workspace.mkdir()
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _write_full_transcript(self, transcript: Path) -> None:
+        rows = [
+            {"type": "user", "timestamp": "2026-05-16T10:00:00Z",
+             "message": {"content": [{"type": "text", "text": "dispatch"}]}},
+            {"type": "assistant", "timestamp": "2026-05-16T10:00:01Z",
+             "message": {"content": [
+                 {"type": "tool_use", "id": "u1", "name": "Bash", "input": {}}
+             ], "usage": {
+                 "input_tokens": 10, "output_tokens": 5,
+                 "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+             }}},
+            {"type": "user", "timestamp": "2026-05-16T10:00:02Z",
+             "message": {"content": [
+                 {"type": "tool_result", "tool_use_id": "u1",
+                  "is_error": True, "content": "Exit code 1\nfail"}
+             ]}},
+        ]
+        with transcript.open("w", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+
+    def test_ok_row_carries_quality_block(self) -> None:
+        transcript = self.subagents_dir / "agent-1.jsonl"
+        self._write_full_transcript(transcript)
+        _write_phase_sidecar(transcript, phase="build")
+        summary = HARVEST.harvest(
+            project="any", workspace=self.workspace,
+            projects_root=self.projects_root, cwd=self.cwd,
+            dry_run=False, session_id=self.session_id,
+        )
+        row = summary["rows"][0]
+        self.assertEqual(row["status"], "ok")
+        self.assertEqual(row["quality"],
+                         {"error_results": 1, "read_errors": 0, "bash_failures": 1})
+
+        usage_path = self.workspace / "usage.jsonl"
+        self.assertTrue(usage_path.exists())
+        first_line = usage_path.read_text(encoding="utf-8").splitlines()[0]
+        parsed = json.loads(first_line)
+        self.assertIn("quality", parsed)
+        self.assertEqual(parsed["quality"]["bash_failures"], 1)
+
+    def test_untagged_row_still_carries_quality(self) -> None:
+        transcript = self.subagents_dir / "agent-2.jsonl"
+        self._write_full_transcript(transcript)
+        summary = HARVEST.harvest(
+            project="any", workspace=self.workspace,
+            projects_root=self.projects_root, cwd=self.cwd,
+            dry_run=True, session_id=self.session_id,
+        )
+        row = summary["rows"][0]
+        self.assertEqual(row["status"], "untagged")
+        self.assertEqual(row["quality"],
+                         {"error_results": 1, "read_errors": 0, "bash_failures": 1})
+
+    def test_crashed_row_has_quality_null(self) -> None:
+        transcript = self.subagents_dir / "agent-3.jsonl"
+        rows = [
+            {"type": "user", "timestamp": "2026-05-16T10:00:00Z",
+             "message": {"content": [{"type": "text", "text": "dispatch"}]}},
+        ]
+        with transcript.open("w", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+        _write_phase_sidecar(transcript, phase="build")
+        summary = HARVEST.harvest(
+            project="any", workspace=self.workspace,
+            projects_root=self.projects_root, cwd=self.cwd,
+            dry_run=True, session_id=self.session_id,
+        )
+        row = summary["rows"][0]
+        self.assertEqual(row["status"], "crashed")
+        self.assertIsNone(row["quality"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

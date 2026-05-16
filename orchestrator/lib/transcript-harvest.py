@@ -1,25 +1,13 @@
 #!/usr/bin/env python3
-"""transcript-harvest — reconstruct a workspace's usage.jsonl from Claude
-Code's session transcripts on disk.
+"""transcript-harvest — produce a workspace's usage.jsonl from Claude Code
+session transcripts.
 
-This is the SOLE source of performance figures for the eval harness. There
-is no live SubagentStop hook anymore; everything we need is already in the
-transcripts Claude Code persists under `~/.claude/projects/`.
-
-Each assistant turn in a transcript carries an SDK `usage` block (the four
-token buckets plus per-turn timing). We walk every subagent transcript
-whose dispatch prompt names the project, parse it, and emit one
-`agent_kind: subagent` row per agent into `<workspace>/usage.jsonl`.
-
-Limitation (documented, may be lifted later): we do NOT currently emit
-`agent_kind: orchestrator` rows. The orchestrator's own /weave session
-runs Spec partly inline (answers-queue consumer) — that work would have
-been captured by the live phase-boundary helper we removed. For
-comparison across runs of the same seed using the same `--answers` file,
-the orchestrator-side cost is roughly constant per phase and folding it
-in is an enhancement rather than a correctness need. Subagent rows alone
-cover the bulk of measured cost and the differences that actually move
-across loom versions.
+Walks every `agent-<uuid>.jsonl` under a parent session's `subagents/`
+directory, sums each transcript's per-turn SDK `usage` blocks into one
+`agent_kind: subagent` row, tags the row's phase from the sibling
+`agent-<uuid>.phase` sidecar (written by the PostToolUse hook in
+`tag-subagent-phase.py`), and counts the row's quality signals from its
+tool_result entries.
 
 Usage:
   python3 orchestrator/lib/transcript-harvest.py <project> [--workspace PATH]
@@ -33,6 +21,11 @@ Pass `--workspace` for a filed run (e.g. `analytics/<version>/<run-id>/`).
 Pass `--session UUID` to bypass the dispatch-text project match and pull
 transcripts out of exactly one Claude Code session dir — the reliable
 key once the originating `.loom/<project>/` workspace has been discarded.
+
+Orchestrator-side inference (the `/weave` session itself) is not emitted
+as a row — only dispatched subagents are. Per-phase comparison across
+loom versions of the same seed + answers file remains meaningful because
+the orchestrator-side cost is approximately constant per phase.
 """
 from __future__ import annotations
 
@@ -41,10 +34,8 @@ import datetime as _dt
 import json
 import os
 import re
-import sys
 import tempfile
 from pathlib import Path
-from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -215,9 +206,52 @@ def read_phase_sidecar(transcript_path: Path) -> str | None:
     return None
 
 
+def quality_counts(rows: list[dict]) -> dict[str, int]:
+    """Count error_results, read_errors, bash_failures over a transcript.
+
+    Bash failures are detected as `is_error: true` tool_result rows whose
+    originating tool_use (matched by `tool_use_id`) was the Bash tool.
+    Read errors use the same id-correlation for the Read tool.
+    """
+    tool_name_by_id: dict[str, str] = {}
+    error_results = 0
+    read_errors = 0
+    bash_failures = 0
+    for row in rows:
+        message = row.get("message")
+        if not isinstance(message, dict):
+            continue
+        row_type = row.get("type")
+        content = message.get("content")
+        if row_type == "assistant" and isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "tool_use":
+                    identifier = item.get("id")
+                    name = item.get("name")
+                    if isinstance(identifier, str) and isinstance(name, str):
+                        tool_name_by_id[identifier] = name
+        elif row_type == "user" and isinstance(content, list):
+            for item in content:
+                if not (isinstance(item, dict) and item.get("type") == "tool_result"):
+                    continue
+                if not item.get("is_error"):
+                    continue
+                error_results += 1
+                tool_name = tool_name_by_id.get(item.get("tool_use_id"))
+                if tool_name == "Read":
+                    read_errors += 1
+                elif tool_name == "Bash":
+                    bash_failures += 1
+    return {
+        "error_results": error_results,
+        "read_errors": read_errors,
+        "bash_failures": bash_failures,
+    }
+
+
 def build_row(phase: str | None, agent_label: str,
               tokens: dict | None, wall_ms: int, autonomous_ms: int | None,
-              status: str) -> dict:
+              status: str, quality: dict | None) -> dict:
     return {
         "phase": phase,
         "agent_kind": "subagent",
@@ -226,6 +260,7 @@ def build_row(phase: str | None, agent_label: str,
         "duration_wall_ms": wall_ms,
         "duration_autonomous_ms": autonomous_ms,
         "status": status,
+        "quality": quality,
     }
 
 
@@ -340,7 +375,9 @@ def harvest(project: str, workspace: Path, projects_root: Path,
             status = "untagged"
         else:
             status = "ok"
-        row = build_row(phase, agent_label, tokens, wall_ms, autonomous_ms, status)
+        quality = None if status == "crashed" else quality_counts(raw)
+        row = build_row(phase, agent_label, tokens, wall_ms, autonomous_ms,
+                        status, quality)
         rows_out.append(row)
 
     if not dry_run and rows_out:
