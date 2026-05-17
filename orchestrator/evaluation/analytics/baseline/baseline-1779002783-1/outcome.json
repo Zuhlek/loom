@@ -1,0 +1,17 @@
+{
+  "lifecycle_state": "complete",
+  "final_phase": "review",
+  "review_findings_present": true,
+  "pipeline_md_present": true,
+  "review_verdict": {
+    "status": "PASS",
+    "blockers": 0,
+    "major": 0,
+    "minor": 4,
+    "note": 1
+  },
+  "tasks": {
+    "planned": 12,
+    "done": 12
+  }
+}

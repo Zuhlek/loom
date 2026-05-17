@@ -203,6 +203,55 @@ class AnalyzeTests(unittest.TestCase):
         self.assertIn("baseline-2-orphaned", data["missing"])
         self.assertIn("baseline-2-orphaned", err)
 
+    # ---- cache-hit-rate derived metric ---------------------------------
+
+    def test_cache_hit_rate_per_phase_and_total(self) -> None:
+        # Two phases, known token totals. The derived rate per phase must
+        # equal cache_read / (cache_read + cache_creation + input_tokens),
+        # and the cross-phase "total" must re-derive from component sums
+        # rather than sum the per-phase rates.
+        self._add_run("baseline-1", "baseline", [
+            _ok_row("spec", "subagent", tokens={
+                "input_tokens": 100, "output_tokens": 0,
+                "cache_creation_input_tokens": 0, "cache_read_input_tokens": 100,
+            }),
+            _ok_row("design", "subagent", tokens={
+                "input_tokens": 300, "output_tokens": 0,
+                "cache_creation_input_tokens": 0, "cache_read_input_tokens": 100,
+            }),
+        ])
+        rc, _, err, out = self._render()
+        self.assertEqual(rc, 0, msg=err)
+        text = out.read_text()
+        data = _extract_data(text)
+
+        spec_rate = data["versions"]["baseline"]["spec"]["cache_hit_rate"]
+        design_rate = data["versions"]["baseline"]["design"]["cache_hit_rate"]
+        self.assertAlmostEqual(spec_rate, 100 / 200, places=6)   # 0.5
+        self.assertAlmostEqual(design_rate, 100 / 400, places=6) # 0.25
+
+        # Per-run block carries the same shape.
+        run_block = data["runs"]["baseline"][0]["phases"]
+        self.assertAlmostEqual(run_block["spec"]["cache_hit_rate"], 0.5, places=6)
+        self.assertAlmostEqual(run_block["design"]["cache_hit_rate"], 0.25, places=6)
+
+        # The dashboard must contain the formatted cell.
+        self.assertIn("Cache hit-rate", text)
+        # 200/600 = 33.3% → rate-bad class on the cell.
+        self.assertRegex(text, r"rate-(bad|warn|good)")
+
+    def test_cache_hit_rate_handles_zero_denominator(self) -> None:
+        # Defensive: a crashed-only phase yields 0 cache_read + 0 input,
+        # so the rate must fall to 0.0 (not divide-by-zero).
+        self._add_run("baseline-1", "baseline", [
+            _ok_row("spec", "subagent", tokens={
+                "input_tokens": 0, "output_tokens": 0,
+                "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+            }),
+        ])
+        rc, _, err, _ = self._render()
+        self.assertEqual(rc, 0, msg=err)
+
     # ---- analysed runs are skipped, not re-harvested -------------------
 
     def test_existing_usage_is_not_reharvested(self) -> None:
@@ -340,6 +389,31 @@ class OutcomeWriterTests(unittest.TestCase):
         )
         outcome = ANALYZE.derive_outcome(run_dir)
         self.assertIsNone(outcome["tasks"])
+
+    def test_review_verdict_prefers_sidecar_over_prose(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "review.md").write_text(
+            "**PASS** — 9 Blockers, 9 Major, 9 Minor, 9 Notes.\n"
+        )
+        (run_dir / "review-verdict.json").write_text(json.dumps({
+            "verdict": "FAIL", "blockers": 1, "major": 0, "minor": 0, "note": 0,
+        }))
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertEqual(outcome["review_verdict"], {
+            "status": "FAIL", "blockers": 1, "major": 0, "minor": 0, "note": 0,
+        })
+
+    def test_review_verdict_falls_back_to_prose_when_sidecar_invalid(self) -> None:
+        run_dir = self.tmp / "run"
+        run_dir.mkdir()
+        (run_dir / "review.md").write_text(
+            "**PASS** — 0 Blockers, 0 Major, 1 Minor, 0 Notes.\n"
+        )
+        (run_dir / "review-verdict.json").write_text("{not valid json")
+        outcome = ANALYZE.derive_outcome(run_dir)
+        self.assertEqual(outcome["review_verdict"]["status"], "PASS")
+        self.assertEqual(outcome["review_verdict"]["minor"], 1)
 
     def test_write_outcome_includes_new_fields(self) -> None:
         run_dir = self.tmp / "run"

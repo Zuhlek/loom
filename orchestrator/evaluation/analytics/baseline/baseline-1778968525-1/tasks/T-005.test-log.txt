@@ -1,0 +1,7 @@
+RED RUN — tests/errors.test.ts before implementation
+Error: Failed to load url ../src/server/middleware/error.js — middleware/error.ts does not yet exist.
+Test Files 1 failed (1), Tests no tests.
+
+GREEN RUN — tests/errors.test.ts
+Test Files 1 passed (1); Tests 9 passed (9); 538ms.
+(The expected console.error log appears in stderr for the 500 case — intentional.)

@@ -1,0 +1,20 @@
+=== T-004 RED PHASE (validate + createBookmark stubs throw) ===
+$ npm test
+ FAIL  tests/unit/validate.test.ts > validateUrl > rejects '' (empty)
+Error: validateUrl not implemented
+ FAIL  ... (multiple validateUrl / validateTitle / parseId cases all throw)
+ FAIL  tests/unit/repo.test.ts > repo.createBookmark > returns the inserted row ...
+Error: createBookmark not implemented
+ FAIL  tests/integration/bookmarks.api.test.ts > POST /api/bookmarks > 201 happy path ...
+ Test Files  3 failed | 2 passed (5)
+      Tests  36 failed | 11 passed (47)
+
+=== T-004 GREEN PHASE ===
+$ npm test
+ ✓ tests/unit/db.test.ts (5 tests) 129ms
+ ✓ tests/unit/repo.test.ts (6 tests) 124ms
+ ✓ tests/_init.test.ts (1 test) 1ms
+ ✓ tests/unit/validate.test.ts (27 tests) 3ms
+ ✓ tests/integration/bookmarks.api.test.ts (8 tests) 91ms
+ Test Files  5 passed (5)
+      Tests  47 passed (47)

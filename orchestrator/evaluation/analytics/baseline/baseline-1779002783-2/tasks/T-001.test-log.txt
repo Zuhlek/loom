@@ -1,0 +1,22 @@
+=== T-001 RED PHASE (vitest absent before npm install) ===
+$ npm test
+> baseline-1779002783-2@0.0.0 test
+> vitest run
+sh: vitest: command not found
+
+=== T-001 GREEN PHASE (after npm install) ===
+$ npm test
+> baseline-1779002783-2@0.0.0 test
+> vitest run
+
+ RUN  v2.1.9 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779002783-2/app
+
+ ✓ tests/_init.test.ts (1 test) 1ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+
+=== T-001 BUILD-CLIENT SMOKE (esbuild bundle) ===
+$ node scripts/build-client.mjs
+  public/bundle.js  392b
+build-client: wrote /Volumes/My Shared Files/repo/loom/.loom/baseline-1779002783-2/app/public/bundle.js

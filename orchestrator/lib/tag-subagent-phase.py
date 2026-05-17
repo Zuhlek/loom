@@ -89,6 +89,12 @@ def main() -> int:
             "dispatched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         },
     )
+
+    pointer_path = cwd_path / ".loom" / project / ".eval-orchestrator-pointer"
+    if not pointer_path.exists():
+        pointer_path.parent.mkdir(parents=True, exist_ok=True)
+        pointer_path.write_text(session_id, encoding="utf-8")
+
     return 0
 
 

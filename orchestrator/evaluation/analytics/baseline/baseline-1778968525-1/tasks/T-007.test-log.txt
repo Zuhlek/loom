@@ -1,0 +1,3 @@
+No new tests added for T-007 (bootstrap module — tests.md § T-007 notes that listener-bind coverage lives in T-010 smoke).
+Full suite regression check after adding src/server/index.ts:
+Test Files 5 passed (5); Tests 34 passed (34); 885ms.

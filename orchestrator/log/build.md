@@ -1,5 +1,75 @@
 # Build Log
 
+## 2026-05-17 - baseline-1779002783-1 - per-task-test-log-thinness
+
+Per-task test-logs (`tasks/T-NNN.test-log.txt`) drifted to green-only
+summaries after T-002. T-002 records a module-not-found red substitute;
+T-003 onwards record only the green-phase result list. The Review Audit
+Agent's check for "red+green per task" (`weave/phases/review/phase.md`)
+relies on each log capturing at least one failing assertion or
+substitute red (import error / module-not-found) before the green run.
+Build Coordinator follow-up: when waves are dispatched serially inside a
+single coordinator agent (the eval-harness execution model), keep the red
+fragment in the log even if it is a one-line "tests written but
+implementation missing; vitest run returned X failures". No findings
+blocker, recorded as M-3 in the baseline-1779002783-1 review.
+
+## 2026-05-17 - baseline-1778968525-1 - whitespace-in-workspace-path-hazard
+
+Workspace path was `/Volumes/My Shared Files/repo/loom/.loom/baseline-1778968525-1/app/`
+— note the space in "My Shared Files". The standard esbuild self-run
+guard pattern
+
+```js
+if (import.meta.url === `file://${process.argv[1]}`) { ... }
+```
+
+silently fails because `import.meta.url` percent-encodes the space
+(`%20`) while `process.argv[1]` keeps the literal space. The build
+runs, the bundle never gets emitted, no error surfaces. Build phase
+caught this and rewrote the guard to resolve both sides to filesystem
+paths via `resolve(...)` + `fileURLToPath(import.meta.url)`. Worth
+promoting to build-agent guidance / scaffolding so this isn't
+re-discovered every workspace with a space in its path. The minimal
+robust pattern is:
+
+```js
+const here = fileURLToPath(import.meta.url);
+if (process.argv[1] && resolve(process.argv[1]) === here) { ... }
+```
+
+## 2026-05-17 - baseline-1778968525-1 - express-5-param-typing-guard
+
+Express 5 widens `req.params[name]` from `string` to `string | string[]`
+in its TypeScript definitions. Route handlers that regex/coerce the
+param fail `tsc --noEmit` unless they narrow first:
+
+```ts
+const raw = req.params.id;
+if (typeof raw !== 'string' || !/^[1-9]\d*$/.test(raw)) {
+  throw new ValidationError('INVALID_ID', 'id must be a positive integer');
+}
+```
+
+Worth a pattern note in the task-builder playbook for any future
+Express-5 + strict-TS workspace. Symmetric note: `better-sqlite3`
+unique-violation assertions should compare `err.code ===
+'SQLITE_CONSTRAINT_UNIQUE'`, never the message text — message format
+varies across better-sqlite3 versions.
+
+## 2026-05-17 - baseline-1778968525-1 - per-task-RED-GREEN-artifact-discipline
+
+This baseline run produced canonical Build artifacts: every automated
+task wrote `tasks/T-NNN.test-log.txt` with a RED section (pre-impl
+failure, "Failed to load url" / "no tests collected") and a GREEN
+section (post-impl pass with test counts), plus `tasks/T-NNN.done.md`
+with `status / attempts` frontmatter. The single non-automated task
+(T-008 — static HTML shell) declared its non-coverage explicitly,
+pointing to T-009/T-010 as the cross-task structural validators.
+Zero retries across all 10 tasks. Review's audit walked these artifacts
+cleanly. This is the artifact shape Review consistently expects;
+worth pinning as the contract in the build-agent task-template.
+
 ## 2026-05-16 - baseline-1778916127-1 - coordinator-sequential-fallback-when-subagent-tool-missing
 
 Build for the local-only Bookmarks app completed all 10 AFK tasks
@@ -2541,3 +2611,125 @@ honours the invariant; the env override is only for the smoke harness.
 The e2e Vitest test should bind an ephemeral port via `app.listen(0)`
 for hermetic suite runs — that is the correct in-process pattern and
 needs no env coordination.
+
+## 2026-05-17 - baseline-1778968525-1 - esbuild-self-invocation-on-paths-with-spaces
+
+The common `node build.mjs` idiom for "am I being run directly?":
+
+```js
+if (import.meta.url === `file://${process.argv[1]}`) { ... }
+```
+
+silently fails when the absolute path contains spaces — `import.meta.url`
+URL-encodes (`%20`) while `process.argv[1]` is a raw filesystem path. The
+script then loads but never runs the build, leaving `public/app.js`
+missing without any error. The smoke `npm test` passes because the
+`it.skipIf(!existsSync(...))` guard skips the bundle assertion.
+
+Use a resolved-path comparison instead:
+
+```js
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? '')) { ... }
+```
+
+Sandboxed eval workspaces under `.loom/<project>/` typically live in
+paths with spaces ("My Shared Files"). Worth standardising in the
+template.
+
+## 2026-05-17 - baseline-1778968525-1 - express5-param-typing
+
+Express 5 typings narrow `req.params[name]` to `string | string[]`
+(catching the historical wildcard ambiguity). For routes that previously
+did `if (!/^[1-9]\d*$/.test(req.params.id))` this now fails `tsc
+--noEmit`. The minimal fix is a `typeof === 'string'` guard before the
+regex; it costs one line and keeps the runtime semantics identical.
+Worth knowing for any greenfield express-5 task — the routes spec in
+plan.md needs to acknowledge the type narrowing.
+
+## 2026-05-17 - baseline-1779002783-1 - build-complete
+
+Twelve tasks (T-001..T-012) green in five waves; 48/48 vitest tests
+passing, typecheck clean, `npm start` boots and serves the full
+local-only Bookmarks app on `http://localhost:3000` (port overridable
+via `PORT`, DB path via `BOOKMARKS_DB`). Workspace isolation observed —
+no deliverable writes outside `.loom/baseline-1779002783-1/app/`.
+
+One scope deviation worth flagging: T-008 added `jsdom` to
+`devDependencies` to enable DOM-based unit tests for the frontend
+render/event-binding paths declared by T-009/T-010/T-011's test sketches.
+The principle-P5 self-check is satisfied because concrete consumers
+(`tests/render.test.ts`, `tests/web-api.test.ts`) live in the same wave.
+Recorded in T-008.done.md `out-of-scope-edits:`.
+
+The bundle smoke ("contains literal `target="_blank"` and `rel=...`")
+needed mild interpretation: esbuild preserves the property-assignment
+string literals (`a.target = "_blank"`, `a.rel = "noopener noreferrer"`)
+rather than emitting them as raw HTML attribute syntax. The bundle test
+asserts on the value tokens (`_blank`, `noopener noreferrer`), which is
+the load-bearing invariant (the rendered DOM carries the right attrs);
+the literal `target="_blank"` HTML-attribute form would only appear in a
+JSX/innerHTML pipeline we explicitly avoided for XSS reasons. Worth
+calling out in any future plan's bundle-smoke phrasing.
+
+## 2026-05-17 - baseline-1779002783-2 - T-001 scaffold green
+
+Scaffolded app workspace under `.loom/baseline-1779002783-2/app/`.
+package.json declares express, better-sqlite3, vitest, supertest,
+esbuild, tsx, typescript, happy-dom. `npm install` exits 0 (better-sqlite3
+native compile succeeded). `npm test` green against vitest placeholder.
+`node scripts/build-client.mjs` produces `public/bundle.js` (392b) and
+is idempotent on mtime. One attempt, no out-of-scope edits.
+
+## 2026-05-17 - baseline-1779002783-2 - T-002..T-005 server slices green
+
+T-002 db.ts (openDatabase + migrate, WAL/FK pragmas, idempotent DDL).
+T-003 list slice (repo.listBookmarks + GET /api/bookmarks + createApp
+factory wiring express.json + static + 500 middleware). T-004 create
+slice (validate.ts URL/title/id rules, DuplicateUrlError, POST handler
+with 400/409/415). T-005 delete slice (NotFoundError, DELETE handler
+with 400/404/204). 53 vitest tests passing after T-005.
+
+## 2026-05-17 - baseline-1779002783-2 - T-006..T-009 client slices green
+
+T-006 shell + bootstrap: textContent-only render, ApiError mapping,
+server index with build-client gate + SIGINT/SIGTERM. T-007 form flow.
+T-008 render ordering preservation (red driven by deliberate id-sort).
+T-009 delete via event delegation. 76 vitest tests passing after T-009.
+
+## 2026-05-17 - baseline-1779002783-2 - T-010 smoke + report
+
+scripts/smoke.mjs: temp-dir BOOKMARKS_DB, cold boot + restart cycle
+covers US-005 AC-1/AC-2. `npm run smoke` → PASS. Live endpoint probes
+recorded in smoke-report.md cover 200/201/204/400/404/409/415. UI
+rendering check SKIPPED with reason (node-test capability per plan;
+happy-dom unit tests cover the behaviour). All 10 tasks Done. 76
+vitest tests + 1 smoke pass + 0 mutation (opted out).
+
+## 2026-05-17 - baseline-1779002783-2 - red-green-test-logs-restored
+
+Per-task test-logs (`tasks/T-NNN.test-log.txt`) carry both a red and a
+green phase for all 10 tasks. T-001 captures `vitest: command not
+found` as the red substitute (devDeps not yet installed before
+`npm install`); T-002..T-009 capture assertion-failure or "not
+implemented" stub-throw outputs; T-010 captures the
+`scripts/smoke.mjs` ENOENT before the script was written as the
+runtime substitute red. This addresses the M-3 gap from
+baseline-1779002783-1 where logs drifted to green-only summaries
+after T-002. Cheap pattern: when waves run serially inside one
+coordinator agent, dump the failing vitest output (or the runtime
+substitute — `command not found`, `ENOENT`, `module not found`)
+before the green re-run.
+
+## 2026-05-17 - baseline-1779002783-2 - happy-dom-fetch-chain-microtask-drain
+
+Form-submit tests in `tests/unit/client/form.test.ts` drain the
+awaited-fetch chain with two consecutive `await new Promise((r) =>
+setTimeout(r, 0))` microtask hops rather than reaching for
+`vi.runAllTimersAsync` or fake timers. Clean and minimal for
+happy-dom + native-`fetch` mocks where the awaited chain looks like
+`fetch(POST).then(parse).then(refresh).then(fetch(GET))`. One hop
+isn't enough because the chain spans two microtask turns; three is
+unnecessary. Worth promoting to client-side test guidance for the
+Build Task Builder.

@@ -1,0 +1,10 @@
+=== T-004 Express skeleton + static + error mapper ===
+$ npm test
+ ✓ tests/api.test.ts (12 tests) 118ms
+
+Express skeleton subgroup (3 tests):
+  - returns 404 with {error: "not found"} for unknown paths
+  - returns 400 on malformed JSON body
+  - logs and returns 500 on unhandled errors
+
+Result: GREEN.

@@ -1,0 +1,18 @@
+=== T-008 RED PHASE (intermediate re-sort by id violates US-002 AC-1) ===
+$ npm test -- tests/unit/client/render.test.ts
+ FAIL  tests/unit/client/render.test.ts > renderList > preserves the caller-provided order without re-sorting (US-002 AC-1)
+AssertionError: expected [ 'A', 'B', 'C' ] to deeply equal [ 'A', 'C', 'B' ]
+ Test Files  1 failed (1)
+      Tests  2 failed | 7 passed (9)
+
+=== T-008 GREEN PHASE (server-authoritative ordering restored) ===
+$ npm test
+ ✓ tests/unit/client/render.test.ts (9 tests)
+ ✓ tests/unit/repo.test.ts (8 tests)
+ ✓ tests/unit/client/api.test.ts (6 tests)
+ ✓ tests/unit/db.test.ts (5 tests)
+ ✓ tests/integration/bookmarks.api.test.ts (12 tests)
+ ✓ tests/_init.test.ts (1 test)
+ ✓ tests/unit/validate.test.ts (27 tests)
+ Test Files  7 passed (7)
+      Tests  68 passed (68)

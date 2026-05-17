@@ -129,7 +129,7 @@ Per-run lifecycle and fabric-presence summary, written alongside
 | `final_phase` | string enum \| `null` | yes | Parsed from `Current phase` block of `pipeline.md`. `null` when missing. |
 | `review_findings_present` | bool | yes | True iff `review.md` exists in the run dir. |
 | `pipeline_md_present` | bool | yes | True iff `pipeline.md` exists in the run dir. |
-| `review_verdict` | object \| `null` | yes | Parsed from the first `**PASS\|FAIL** — N Blockers, N Major, N Minor, N Notes` line in `review.md`. `null` when `review.md` is absent or the verdict line is not matched. |
+| `review_verdict` | object \| `null` | yes | Read from `.loom/<project>/review-verdict.json` (canonical, written by the Review phase agent — see `phases/review/phase.signature.md ## Writes`). Falls back to parsing the first `**PASS\|FAIL** — N Blockers, N Major, N Minor, N Notes` line in `review.md` when the sidecar is absent. `null` when neither yields a valid verdict. |
 | `review_verdict.status` | string enum | yes when `review_verdict` non-null | `PASS` or `FAIL`. |
 | `review_verdict.blockers` | int | yes when `review_verdict` non-null | Non-negative. |
 | `review_verdict.major` | int | yes when `review_verdict` non-null | Non-negative. |

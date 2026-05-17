@@ -1,0 +1,15 @@
+=== T-009 RED PHASE (bindDeleteHandlers stub throws) ===
+$ npm test -- tests/unit/client/delete.test.ts
+ FAIL  tests/unit/client/delete.test.ts > 204 success: re-fetches list ...
+Error: bindDeleteHandlers not implemented
+ FAIL  ... > 404 not_found: shows recovery message ...
+ FAIL  ... > network failure ...
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+
+=== T-009 GREEN PHASE ===
+$ npm test
+ ✓ tests/unit/client/delete.test.ts (3 tests)
+ ✓ all others
+ Test Files  9 passed (9)
+      Tests  76 passed (76)

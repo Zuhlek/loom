@@ -1,0 +1,9 @@
+=== T-003 Validation helpers ===
+
+--- Green phase ---
+$ npm test
+ ✓ tests/validate.test.ts (8 tests) 3ms
+ Test Files  2 passed (2)
+      Tests  14 passed (14)
+
+Result: GREEN.

@@ -1,0 +1,27 @@
+=== T-005 ===
+Tests added: tests/e2e.smoke.test.ts (3 cases: GET /, GET /static/main.js, full POST→GET→DELETE→GET round-trip).
+Implementation: src/server/index.ts (side-effectful boot: openDb file path resolved against process.cwd(), createApp, listen on PORT env or 3000).
+
+The e2e suite imports buildClient() programmatically in beforeAll and binds an ephemeral port via app.listen(0).
+
+=== FULL TEST RUN ===
+
+> bookmarks-app@0.0.0 test
+> vitest run
+
+ RUN  v1.6.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1778963742-1/app
+
+ ✓ tests/repo.test.ts  (6 tests) 18ms
+
+  dist/client/main.js      4.6kb
+  dist/client/main.js.map  9.4kb
+
+⚡ Done in 8ms
+ ✓ tests/validation.test.ts  (8 tests) 2ms
+ ✓ tests/e2e.smoke.test.ts  (3 tests) 67ms
+ ✓ tests/api.bookmarks.test.ts  (11 tests) 57ms
+ ✓ tests/client.render.test.ts  (4 tests) 4ms
+
+ Test Files  5 passed (5)
+      Tests  32 passed (32)
+   Duration  772ms

@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loom — Lifecycle Optimizations (trimmed)</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161b22; --panel2:#1c2229; --line:#2a323d;
+    --ink:#e6edf3; --mute:#8b97a5; --accent:#6cc7ff;
+    --tag-I:#4fb6e0; --tag-P:#c08fe6; --tag-C:#e6a960;
+    --tag-F:#5fc878; --tag-D:#e0c46c;
+    --tag-cited:#5fc878; --tag-est:#b39862; --tag-doc:#8aa6c4;
+    --tag-cost-low:#5fc878; --tag-cost-med:#e0c46c; --tag-cost-free:#4fb6e0;
+    --tag-impr-high:#e07b5f; --tag-impr-med:#e0c46c; --tag-impr-low:#8aa6c4;
+    --tag-impr-indirect:#a78ad0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+    font-size:14px;line-height:1.5}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:'SF Mono',Menlo,Consolas,monospace;font-size:.92em;
+    background:#0a0d11;padding:.05em .35em;border-radius:3px;color:#cce5ff}
+
+  header.top{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);
+    padding:14px 24px;z-index:50}
+  header.top h1{margin:0;font-size:18px;font-weight:600}
+  header.top .sub{color:var(--mute);font-size:13px;margin-top:4px}
+  nav.toc{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:13px}
+  nav.toc a{color:var(--mute);padding:3px 0;border-bottom:1px solid transparent}
+  nav.toc a:hover{color:var(--accent);border-bottom-color:var(--accent);text-decoration:none}
+
+  main{padding:24px;max-width:1400px;margin:0 auto}
+  section{margin-bottom:48px}
+  section > h2{margin:0 0 6px 0;font-size:20px;font-weight:600;
+    display:flex;align-items:baseline;gap:12px}
+  section > h2 .count{color:var(--mute);font-size:13px;font-weight:400}
+  section > p.lede{color:var(--mute);margin:0 0 18px 0;max-width:780px}
+
+  /* Filter bar */
+  .filters{display:flex;flex-wrap:wrap;gap:18px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin-bottom:24px}
+  .filter-group{display:flex;align-items:center;gap:8px}
+  .filter-group .label{color:var(--mute);font-size:12px;text-transform:uppercase;
+    letter-spacing:.5px;margin-right:4px}
+  .filter-group button{background:transparent;color:var(--ink);border:1px solid var(--line);
+    border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit}
+  .filter-group button.active{background:var(--accent);color:#0a0d11;border-color:var(--accent);font-weight:600}
+  .filter-group button:hover:not(.active){border-color:var(--accent);color:var(--accent)}
+  .reset{margin-left:auto;color:var(--mute);font-size:12px;cursor:pointer;
+    background:transparent;border:none;font-family:inherit;text-decoration:underline}
+
+  /* Cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:14px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s}
+  .card:hover{border-color:#3f4c5a}
+  .card .head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .card .num{color:var(--mute);font-size:11px;font-family:'SF Mono',Menlo,monospace}
+  .card h3{margin:0;font-size:14px;font-weight:600;line-height:1.35}
+  .card .desc{color:#c2cad3;font-size:13px;flex:1}
+  .card .impr{font-size:12px;color:var(--mute);font-style:italic}
+  .card .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto}
+  .tag{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;
+    text-transform:uppercase;letter-spacing:.4px}
+  .tag.target-I{background:rgba(79,182,224,.18);color:var(--tag-I)}
+  .tag.target-P{background:rgba(192,143,230,.18);color:var(--tag-P)}
+  .tag.target-C{background:rgba(230,169,96,.18);color:var(--tag-C)}
+  .tag.mat-F{background:rgba(95,200,120,.18);color:var(--tag-F)}
+  .tag.mat-D{background:rgba(224,196,108,.18);color:var(--tag-D)}
+  .tag.ev-cited{background:rgba(95,200,120,.18);color:var(--tag-cited)}
+  .tag.ev-estimated{background:rgba(179,152,98,.18);color:var(--tag-est)}
+  .tag.ev-vendor{background:rgba(138,166,196,.18);color:var(--tag-doc)}
+  .tag.cost-low{background:rgba(95,200,120,.18);color:var(--tag-cost-low)}
+  .tag.cost-med{background:rgba(224,196,108,.18);color:var(--tag-cost-med)}
+  .tag.cost-free{background:rgba(79,182,224,.18);color:var(--tag-cost-free)}
+  .tag.impr-high{background:rgba(224,123,95,.18);color:var(--tag-impr-high)}
+  .tag.impr-med{background:rgba(224,196,108,.18);color:var(--tag-impr-med)}
+  .tag.impr-low{background:rgba(138,166,196,.18);color:var(--tag-impr-low)}
+  .tag.impr-indirect{background:rgba(167,138,208,.18);color:var(--tag-impr-indirect)}
+  .card .src{font-size:11px;color:var(--mute);font-family:'SF Mono',Menlo,monospace}
+  .card .src a{color:var(--mute)}
+  .card .src a:hover{color:var(--accent)}
+
+  .card.deep-dive-pickable{cursor:pointer}
+  .card.deep-dive-pickable:hover{border-color:var(--accent)}
+  .card.selected-for-dive{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .card .pick{font-size:11px;color:var(--mute);align-self:flex-end;cursor:pointer;
+    background:transparent;border:1px solid var(--line);border-radius:4px;
+    padding:2px 7px;font-family:inherit;margin-top:6px}
+  .card .pick:hover{color:var(--accent);border-color:var(--accent)}
+  .card.selected-for-dive .pick{color:var(--accent);border-color:var(--accent)}
+
+  /* Hidden state */
+  .card[data-hidden="1"]{display:none}
+
+  /* List layout — collapsed rows, click to expand */
+  body.layout-list .grid{display:flex;flex-direction:column;gap:4px}
+  body.layout-list .card{flex-direction:row;align-items:center;gap:14px;
+    padding:8px 14px;cursor:pointer}
+  body.layout-list .card .head{order:1;min-width:34px}
+  body.layout-list .card h3{order:2;font-size:13px;font-weight:500;flex:1;margin:0}
+  body.layout-list .card .desc,
+  body.layout-list .card .impr,
+  body.layout-list .card .src,
+  body.layout-list .card .pick{display:none}
+  body.layout-list .card .tags{order:3;margin:0;flex-shrink:0}
+  body.layout-list .card::after{content:"▸";order:4;color:var(--mute);
+    font-size:11px;transition:transform .15s;flex-shrink:0}
+  body.layout-list .card.expanded{flex-direction:column;align-items:stretch;
+    padding:14px;cursor:default}
+  body.layout-list .card.expanded::after{transform:rotate(90deg);align-self:flex-end;
+    position:absolute;top:8px;right:14px}
+  body.layout-list .card.expanded{position:relative}
+  body.layout-list .card.expanded .desc,
+  body.layout-list .card.expanded .impr,
+  body.layout-list .card.expanded .src{display:block}
+  body.layout-list .card.expanded .pick{display:inline-block;align-self:flex-end}
+  body.layout-list .card.expanded h3{font-weight:600;font-size:14px}
+
+  /* Deep-dive area */
+  #deep-dives .empty{color:var(--mute);font-style:italic;
+    background:var(--panel);border:1px dashed var(--line);border-radius:8px;
+    padding:24px;text-align:center}
+  .dive{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:18px;margin-bottom:18px}
+  .dive h3{margin:0 0 6px 0;font-size:16px}
+  .dive .dive-meta{color:var(--mute);font-size:12px;margin-bottom:12px}
+  .dive .mermaid{background:var(--panel2);border-radius:6px;padding:14px;margin-top:8px}
+
+  /* Implementation phases (Foundational-only rollout) */
+  .rollout{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;
+    margin-bottom:18px}
+  @media (max-width:1100px){.rollout{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media (max-width:680px){.rollout{grid-template-columns:1fr}}
+  .phase{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:12px;display:flex;flex-direction:column;position:relative;min-width:0}
+  .phase .pnum{font-size:10px;color:var(--mute);text-transform:uppercase;
+    letter-spacing:.6px;font-family:'SF Mono',Menlo,monospace}
+  .phase .pname{font-size:14px;font-weight:600;margin:2px 0 6px 0;line-height:1.3}
+  .phase .pwhy{font-size:11.5px;color:var(--mute);line-height:1.45;
+    padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line);
+    min-height:64px}
+  .phase .pitems{display:flex;flex-direction:column;gap:5px}
+  .pitem{background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+    padding:5px 7px;font-size:11.5px;display:flex;align-items:baseline;gap:6px;
+    line-height:1.3}
+  .pitem .ppid{color:var(--mute);font-family:'SF Mono',Menlo,monospace;
+    font-size:10px;flex-shrink:0;min-width:24px}
+  .pitem .pptitle{flex:1;color:#cdd5dd}
+  .pitem .pptag{font-size:9px;padding:1px 5px;border-radius:6px;flex-shrink:0;
+    font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+  .pitem .pptag.t-I{background:rgba(79,182,224,.18);color:var(--tag-I)}
+  .pitem .pptag.t-P{background:rgba(192,143,230,.18);color:var(--tag-P)}
+  .pitem .pptag.t-C{background:rgba(230,169,96,.18);color:var(--tag-C)}
+  .phase + .phase::before{content:"›";position:absolute;left:-9px;top:50%;
+    transform:translateY(-50%);color:var(--mute);font-size:18px;font-weight:600;
+    pointer-events:none}
+  @media (max-width:1100px){.phase + .phase::before{display:none}}
+  .rollout-note{background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;padding:10px 14px;font-size:12px;color:var(--mute);
+    line-height:1.5}
+  .rollout-note strong{color:var(--ink)}
+
+  /* Phase 0 & 1 inline deep-dives */
+  .p01-subhead{margin:24px 0 12px 0;font-size:15px;font-weight:600;
+    color:var(--ink);display:flex;align-items:baseline;gap:10px}
+  .p01-subhead .sub{color:var(--mute);font-size:12px;font-weight:400}
+  .p01-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));
+    gap:14px;margin-bottom:14px}
+  .p01-card{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:14px;display:flex;flex-direction:column;gap:10px}
+  .p01-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .p01-head .pnum{color:var(--mute);font-family:'SF Mono',Menlo,monospace;font-size:11px}
+  .p01-head h4{margin:0;font-size:14px;font-weight:600;flex:1;line-height:1.3}
+  .status{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;
+    text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
+  .status.done{background:rgba(95,200,120,.18);color:var(--tag-F)}
+  .status.partial{background:rgba(224,196,108,.22);color:var(--tag-D)}
+  .status.todo{background:rgba(224,123,95,.20);color:var(--tag-impr-high)}
+  .p01-idea{font-size:13px;color:#c2cad3;line-height:1.45}
+  .p01-card .mermaid{background:var(--panel2);border-radius:6px;padding:12px;
+    font-size:12px}
+  .p01-win{font-size:12px;color:var(--mute);line-height:1.45;
+    padding-top:8px;border-top:1px solid var(--line)}
+  .p01-win strong{color:var(--ink)}
+  .p01-win .gap{color:var(--tag-impr-high)}
+
+  /* Sources */
+  .sources{columns:2;column-gap:24px;font-size:12px;line-height:1.6}
+  .sources .src-row{break-inside:avoid;padding:2px 0}
+  .sources code{margin-right:6px}
+
+  /* Legend */
+  .legend{display:flex;flex-wrap:wrap;gap:20px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin-bottom:20px;
+    font-size:12px;color:var(--mute)}
+  .legend strong{color:var(--ink);font-weight:600}
+  .legend .item{display:flex;align-items:center;gap:6px}
+</style>
+</head>
+<body class="layout-list">
+
+<header class="top">
+  <h1>Loom — Lifecycle Optimizations</h1>
+  <div class="sub">Loom-implementable catalogue. Only items a Loom skill can ship from inside a Claude Code session. 20 items, grouped by target.</div>
+  <nav class="toc">
+    <a href="#how-to-read">How to read</a>
+    <a href="#infrastructure">Infrastructure (5)</a>
+    <a href="#prompt">Prompt &amp; Documentation (6)</a>
+    <a href="#concepts">Concepts &amp; Phases (9)</a>
+    <a href="#phases">Implementation phases (F-only)</a>
+    <a href="#p01-dives">Phase 0 &amp; 1 deep-dives</a>
+    <a href="#deep-dives">Deep-dives</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<main>
+
+<section id="how-to-read">
+  <h2>How to read this catalogue</h2>
+  <p class="lede">Every concept on this page is something a Loom skill can ship from inside a Claude Code session: prompt wording, dispatch structure, orchestrator logic, eval-harness changes. Anything that requires touching the Anthropic API request body (<code>cache_control</code>, <code>max_tokens</code>, <code>budget_tokens</code>, model selection, Batch API, OTel parallel capture, multi-provider routing) has been removed — that's upstream work and doesn't belong in this planning doc. Experimental research-stage ideas (memory subsystems, speculative tool execution, mixture-of-agents, learned routers) are also out.</p>
+
+  <div class="legend">
+    <div class="item"><span class="tag target-I">I</span><strong>Infrastructure</strong> — plumbing that would apply to any orchestrator</div>
+    <div class="item"><span class="tag target-P">P</span><strong>Prompt &amp; Documentation</strong> — wording inside SKILL prompts, schemas, return shapes</div>
+    <div class="item"><span class="tag target-C">C</span><strong>Concepts &amp; Phases</strong> — how phases, subagents and tools are wired together</div>
+  </div>
+  <div class="legend">
+    <div class="item"><span class="tag mat-F">F</span><strong>Foundational</strong> — accepted truth, vendor-documented, widely deployed</div>
+    <div class="item"><span class="tag mat-D">D</span><strong>Documented</strong> — production write-ups or solid published benchmarks</div>
+    <div class="item"><span class="tag ev-cited">cited</span>Improvement number comes from a paper or production write-up</div>
+    <div class="item"><span class="tag ev-estimated">estimated</span>Improvement is an extrapolation, no public number</div>
+    <div class="item"><span class="tag ev-vendor">vendor-doc</span>Documented feature, no numerical claim</div>
+  </div>
+
+  <div class="filters" id="filters">
+    <div class="filter-group">
+      <span class="label">Target</span>
+      <button data-filter="target" data-value="I">Infra</button>
+      <button data-filter="target" data-value="P">Prompt</button>
+      <button data-filter="target" data-value="C">Concepts</button>
+    </div>
+    <div class="filter-group">
+      <span class="label">Maturity</span>
+      <button data-filter="mat" data-value="F">Foundational</button>
+      <button data-filter="mat" data-value="D">Documented</button>
+    </div>
+    <div class="filter-group">
+      <span class="label">Evidence</span>
+      <button data-filter="ev" data-value="cited">Cited</button>
+      <button data-filter="ev" data-value="estimated">Estimated</button>
+      <button data-filter="ev" data-value="vendor">Vendor-doc</button>
+    </div>
+    <div class="filter-group">
+      <span class="label">Cost</span>
+      <button data-filter="cost" data-value="free">Free</button>
+      <button data-filter="cost" data-value="low">Low</button>
+      <button data-filter="cost" data-value="med">Medium</button>
+    </div>
+    <div class="filter-group" id="layout-toggle">
+      <span class="label">Layout</span>
+      <button class="active" data-layout="list">List</button>
+      <button data-layout="cards">Cards</button>
+    </div>
+    <button class="reset" id="reset-filters">reset</button>
+  </div>
+</section>
+
+<!-- ============================================================
+     INFRASTRUCTURE (I)
+============================================================ -->
+<section id="infrastructure">
+  <h2>Infrastructure <span class="count">— 5 items · plumbing, caching, telemetry, transport</span></h2>
+  <p class="lede">Concept-agnostic. Would apply to any orchestrator. Cache discipline and observability live here; ship-before-anything-else territory.</p>
+
+  <div class="grid" data-section="I">
+
+    <article class="card" data-target="I" data-mat="F" data-ev="cited" data-cost="low" data-impr="high" data-id="1.1">
+      <div class="head"><span class="num">1.1</span></div>
+      <h3>Stable-prefix hierarchy</h3>
+      <div class="desc">Sort tool JSON keys, freeze tool order, never interpolate dates or UUIDs into the cached system prompt. The cache lookup is byte-for-byte — a single capitalised letter destroys the entire cached prefix.</div>
+      <div class="impr">GitHub Copilot 93% cache-hit rate is achievable.</div>
+      <div class="tags"><span class="tag target-I">Infra</span><span class="tag mat-F">F</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-high">High</span></div>
+      <div class="src">PCC · PCM · GHTE</div>
+      <button class="pick" data-pick="1.1">★ deep-dive</button>
+    </article>
+
+<article class="card" data-target="I" data-mat="F" data-ev="cited" data-cost="low" data-impr="indirect" data-id="3.1">
+      <div class="head"><span class="num">3.1</span></div>
+      <h3>Cache-hit-rate dashboard per subagent</h3>
+      <div class="desc">Track <code>cache_read / (cache_read + cache_write + input)</code> per subagent. If a subagent is below 60%, something upstream is mutating. Cannot fix what cannot be seen.</div>
+      <div class="impr">ProjectDiscovery hit -59% cost once they could measure it.</div>
+      <div class="tags"><span class="tag target-I">Infra</span><span class="tag mat-F">F</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-indirect">Indirect (large)</span></div>
+      <div class="src">PD · GHTE · SD</div>
+      <button class="pick" data-pick="3.1">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="I" data-mat="F" data-ev="cited" data-cost="low" data-impr="indirect" data-id="3.2">
+      <div class="head"><span class="num">3.2</span></div>
+      <h3>Per-phase / per-subagent token attribution</h3>
+      <div class="desc">Tag every API call with phase + subagent + task-ID. Anthropic reports 80% of multi-agent performance variance is explained by token usage alone — without attribution this signal is invisible.</div>
+      <div class="impr">Enables 20–50% follow-on wins by exposing where they live.</div>
+      <div class="tags"><span class="tag target-I">Infra</span><span class="tag mat-F">F</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-indirect">Indirect</span></div>
+      <div class="src">AMR · TT · LF</div>
+      <button class="pick" data-pick="3.2">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="I" data-mat="D" data-ev="cited" data-cost="low" data-impr="indirect" data-id="3.3">
+      <div class="head"><span class="num">3.3</span></div>
+      <h3>Cost-distribution healthcheck ratio</h3>
+      <div class="desc">Augment's ratio: planning + coordinator ≈ 9.8% of total tokens, workers ≈ 70.6%. If the coordinator exceeds that, it is accumulating context it should not. Set as an alarm.</div>
+      <div class="impr">Catches coordinator bloat before it compounds.</div>
+      <div class="tags"><span class="tag target-I">Infra</span><span class="tag mat-D">D</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-indirect">Indirect</span></div>
+      <div class="src">ATC</div>
+      <button class="pick" data-pick="3.3">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="I" data-mat="F" data-ev="vendor" data-cost="med" data-impr="indirect" data-id="3.4">
+      <div class="head"><span class="num">3.4</span></div>
+      <h3>OpenTelemetry GenAI semantic conventions</h3>
+      <div class="desc">Standard span attributes (<code>gen_ai.system</code>, <code>gen_ai.usage.input_tokens</code>, …) so Loom traces work with Datadog, Honeycomb, Arize, Langfuse without bespoke adapters.</div>
+      <div class="impr">One-time cost, no vendor lock-in.</div>
+      <div class="tags"><span class="tag target-I">Infra</span><span class="tag mat-F">F</span><span class="tag ev-vendor">vendor-doc</span><span class="tag cost-med">Medium cost</span><span class="tag impr-indirect">Indirect</span></div>
+      <div class="src">NXS · GC</div>
+      <button class="pick" data-pick="3.4">★ deep-dive</button>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============================================================
+     PROMPT & DOCUMENTATION (P)
+============================================================ -->
+<section id="prompt">
+  <h2>Prompt &amp; Documentation <span class="count">— 7 items · wording inside SKILL prompts, schemas, return shapes</span></h2>
+  <p class="lede">The change lives in <em>wording</em>, not in code or architecture. Cheapest to ship, safest to roll back. No new agent, no new pipe, no new tool.</p>
+
+  <div class="grid" data-section="P">
+
+    <article class="card" data-target="P" data-mat="F" data-ev="cited" data-cost="low" data-impr="med" data-id="1.7">
+      <div class="head"><span class="num">1.7</span></div>
+      <h3>"System-reminder" tail for dynamic data</h3>
+      <div class="desc">Dates, IDs, timestamps go into a non-cached <em>tail</em> block of the user turn — never into the cached system prompt. Exactly the pattern Claude Code uses internally.</div>
+      <div class="impr">Prevents silent cache invalidation by date interpolation.</div>
+      <div class="tags"><span class="tag target-P">Prompt</span><span class="tag mat-F">F</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-med">Medium</span></div>
+      <div class="src">PCM · CCC</div>
+      <button class="pick" data-pick="1.7">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="P" data-mat="F" data-ev="estimated" data-cost="low" data-impr="med" data-id="2.2">
+      <div class="head"><span class="num">2.2</span></div>
+      <h3>Return-by-reference (cite IDs, not content)</h3>
+      <div class="desc">Subagents return <code>{decision:"approve", evidence:["US-014","T-031"]}</code>, not pasted artifact text. The coordinator dereferences only if needed. Natural extension of Loom's typed RETURN schemas — Loom is already half-way there.</div>
+      <div class="impr">Already partly in place; tighten the wording.</div>
+      <div class="tags"><span class="tag target-P">Prompt</span><span class="tag mat-F">F</span><span class="tag ev-estimated">estimated</span><span class="tag cost-low">Low cost</span><span class="tag impr-med">Medium</span></div>
+      <div class="src">Loom-native</div>
+      <button class="pick" data-pick="2.2">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="P" data-mat="F" data-ev="cited" data-cost="low" data-impr="low" data-id="2.3">
+      <div class="head"><span class="num">2.3</span></div>
+      <h3>"Be concise" prompt tax</h3>
+      <div class="desc">Explicit "no preamble, no filler, ≤N words, data only" in every SKILL prompt. Pairs with the <code>max_tokens</code> cap. Typical 10–30% saving per output.</div>
+      <div class="impr">10–30% per output, cumulative across phases.</div>
+      <div class="tags"><span class="tag target-P">Prompt</span><span class="tag mat-F">F</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-low">Low-Med</span></div>
+      <div class="src">RDS</div>
+      <button class="pick" data-pick="2.3">★ deep-dive</button>
+    </article>
+
+<article class="card" data-target="P" data-mat="D" data-ev="cited" data-cost="med" data-impr="med" data-id="6.3">
+      <div class="head"><span class="num">6.3</span></div>
+      <h3>Structured handoff schema</h3>
+      <div class="desc">Replace blob-summary compaction with a typed schema: <code>{intent, changes_made, decisions, next_steps, open_questions}</code>. Sourcegraph Amp killed compaction entirely for this. Factory's eval shows it beats built-in compaction.</div>
+      <div class="impr">Better continuity at lower token cost than free-text summaries.</div>
+      <div class="tags"><span class="tag target-P">Prompt</span><span class="tag mat-D">D</span><span class="tag ev-cited">cited</span><span class="tag cost-med">Medium cost</span><span class="tag impr-med">Medium + continuity</span></div>
+      <div class="src">FAC · AMP</div>
+      <button class="pick" data-pick="6.3">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="P" data-mat="D" data-ev="cited" data-cost="low" data-impr="high" data-id="7.1">
+      <div class="head"><span class="num">7.1</span></div>
+      <h3>Reflexion before retry, not after</h3>
+      <div class="desc">Carry forward a <code>previous_attempt_failure_summary</code> block into attempt N+1, not the raw transcript. The model sees what went wrong without the noise of how.</div>
+      <div class="impr">10–20 percentage points on coding benchmarks vs naive retry.</div>
+      <div class="tags"><span class="tag target-P">Prompt</span><span class="tag mat-D">D</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low-Med cost</span><span class="tag impr-high">High success rate</span></div>
+      <div class="src">RX · PGR</div>
+      <button class="pick" data-pick="7.1">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="P" data-mat="D" data-ev="estimated" data-cost="low" data-impr="med" data-id="7.3">
+      <div class="head"><span class="num">7.3</span></div>
+      <h3>Different prompt per retry attempt</h3>
+      <div class="desc">Do not retry with identical input. Retry-2 adds reflection; retry-3 escalates model tier (Sonnet → Opus). Same loop shape, different prompts.</div>
+      <div class="impr">Reduces "retry with same input, same failure" cycles.</div>
+      <div class="tags"><span class="tag target-P">Prompt</span><span class="tag mat-D">D</span><span class="tag ev-estimated">estimated</span><span class="tag cost-low">Low cost</span><span class="tag impr-med">Medium</span></div>
+      <div class="src">Reflexion · FrugalGPT</div>
+      <button class="pick" data-pick="7.3">★ deep-dive</button>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============================================================
+     CONCEPTS & PHASES (C)
+============================================================ -->
+<section id="concepts">
+  <h2>Concepts &amp; Phases <span class="count">— 9 items · how phases, subagents and tools are wired together</span></h2>
+  <p class="lede">Loom-shape changes. Affects the orchestrator and dispatcher, not the model. Includes the discipline items — concepts whose value is in <em>not</em> doing something.</p>
+
+  <div class="grid" data-section="C">
+
+<article class="card" data-target="C" data-mat="D" data-ev="cited" data-cost="low" data-impr="high" data-id="4.2">
+      <div class="head"><span class="num">4.2</span></div>
+      <h3>Deterministic pre-agent shell prefetch</h3>
+      <div class="desc">Run <code>gh</code>, <code>git diff</code>, <code>ls</code>, lint <em>before</em> the agent loop starts. The agent reads the result as static context instead of issuing tool calls itself.</div>
+      <div class="impr">8–12 KB context shaved per run, 19–62% overall efficiency.</div>
+      <div class="tags"><span class="tag target-C">Concept</span><span class="tag mat-D">D</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-high">High</span></div>
+      <div class="src">GHTE</div>
+      <button class="pick" data-pick="4.2">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="C" data-mat="D" data-ev="cited" data-cost="low" data-impr="high" data-id="4.3">
+      <div class="head"><span class="num">4.3</span></div>
+      <h3>Deterministic skip-LLM relevance gate</h3>
+      <div class="desc">A cheap rule-based filter that skips the LLM entirely when the input cannot possibly need it. GitHub's "Security Guard" skips on PRs that do not touch security-sensitive paths. Loom analogue: rule-based gates on Review tasks.</div>
+      <div class="impr">-43% on the gated workload.</div>
+      <div class="tags"><span class="tag target-C">Concept</span><span class="tag mat-D">D</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-high">High</span></div>
+      <div class="src">GHTE</div>
+      <button class="pick" data-pick="4.3">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="C" data-mat="F" data-ev="cited" data-cost="low" data-impr="high" data-id="5.2">
+      <div class="head"><span class="num">5.2</span></div>
+      <h3>Parallel subagent fan-out</h3>
+      <div class="desc">Independent subtasks fan out concurrently. Loom's DAG is already the parallelisation plan — the work is verifying the dispatcher actually concurrent-fires on <code>blocked_by ⊆ done ∧ file_scope disjoint</code>, not serial-fires.</div>
+      <div class="impr">Anthropic's research system cites up to 90% time reduction.</div>
+      <div class="tags"><span class="tag target-C">Concept</span><span class="tag mat-F">F</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-high">High latency</span></div>
+      <div class="src">AMR</div>
+      <button class="pick" data-pick="5.2">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="C" data-mat="D" data-ev="cited" data-cost="low" data-impr="high" data-id="6.1">
+      <div class="head"><span class="num">6.1</span></div>
+      <h3>Progressive disclosure / pass-by-ID</h3>
+      <div class="desc">Do not dump full <code>spec.md</code> into a subagent. Pass IDs (US-007, Q-014) plus a <code>read_artifact(id)</code> tool. Loom's stable cross-phase IDs make this trivial.</div>
+      <div class="impr">150K → 2K tokens cited by Anthropic (-98.7%).</div>
+      <div class="tags"><span class="tag target-C">Concept</span><span class="tag mat-D">D</span><span class="tag ev-cited">cited</span><span class="tag cost-low">Low cost</span><span class="tag impr-high">High</span></div>
+      <div class="src">ACE</div>
+      <button class="pick" data-pick="6.1">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="C" data-mat="D" data-ev="cited" data-cost="med" data-impr="med" data-id="6.5">
+      <div class="head"><span class="num">6.5</span></div>
+      <h3>Active context trimming</h3>
+      <div class="desc">Chroma's 18-model study: every frontier model degrades well before its context limit; quality follows a U-curve, the middle drops 30%+. Schedule active trims rather than wait for the limit.</div>
+      <div class="impr">22.7% token saving (scheduled) vs 6% (passive).</div>
+      <div class="tags"><span class="tag target-C">Concept</span><span class="tag mat-D">D</span><span class="tag ev-cited">cited</span><span class="tag cost-med">Medium cost</span><span class="tag impr-med">Medium + accuracy</span></div>
+      <div class="src">CR · ML · ATC</div>
+      <button class="pick" data-pick="6.5">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="C" data-mat="D" data-ev="cited" data-cost="med" data-impr="high" data-id="6.6">
+      <div class="head"><span class="num">6.6</span></div>
+      <h3>Code-execution-as-tool (MCP "skill")</h3>
+      <div class="desc">Instead of N tool calls each producing model-visible JSON, generate one script that calls N tools and only emits the final slice. Anthropic example: 10K-row spreadsheet collapses to 5 rows in the model's context.</div>
+      <div class="impr">98.7% extreme case cited.</div>
+      <div class="tags"><span class="tag target-C">Concept</span><span class="tag mat-D">D</span><span class="tag ev-cited">cited</span><span class="tag cost-med">Medium cost</span><span class="tag impr-high">High</span></div>
+      <div class="src">ACE</div>
+      <button class="pick" data-pick="6.6">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="C" data-mat="D" data-ev="estimated" data-cost="med" data-impr="med" data-id="7.2">
+      <div class="head"><span class="num">7.2</span></div>
+      <h3>Partial-state preservation across retries</h3>
+      <div class="desc">On retry, keep the parts of the kanban / artifacts that succeeded — only re-run the failed step. Full re-planning re-pays the planner cost.</div>
+      <div class="impr">Avoids paying the planner cost N times.</div>
+      <div class="tags"><span class="tag target-C">Concept</span><span class="tag mat-D">D</span><span class="tag ev-estimated">estimated</span><span class="tag cost-med">Medium cost</span><span class="tag impr-med">Medium</span></div>
+      <div class="src">ATC</div>
+      <button class="pick" data-pick="7.2">★ deep-dive</button>
+    </article>
+
+<article class="card" data-target="C" data-mat="D" data-ev="cited" data-cost="free" data-impr="indirect" data-id="16.1">
+      <div class="head"><span class="num">16.1</span></div>
+      <h3>Don't grow the multi-agent count</h3>
+      <div class="desc">Cognition's public argument: fewer agents, better context engineering inside one — handoff is lossy. Loom's 5 phases are right-sized. Resist growing to 7 to enforce one new rule.</div>
+      <div class="impr">Preventive — avoids future handoff-tax bloat.</div>
+      <div class="tags"><span class="tag target-C">Concept</span><span class="tag mat-D">D</span><span class="tag ev-cited">cited</span><span class="tag cost-free">Free</span><span class="tag impr-indirect">Preventive</span></div>
+      <div class="src">CGN-MA · JX</div>
+      <button class="pick" data-pick="16.1">★ deep-dive</button>
+    </article>
+
+    <article class="card" data-target="C" data-mat="F" data-ev="cited" data-cost="free" data-impr="high" data-id="16.2">
+      <div class="head"><span class="num">16.2</span></div>
+      <h3>Coordinator never reads worker transcripts</h3>
+      <div class="desc">Augment's 53.7% reduction came from preventing a coordinator from accumulating workflow history. The coordinator sees <em>only</em> the typed RETURN values from its workers. Loom already removes Edit / Write from the coordinator; the remaining discipline is to remove Read on worker transcript files too.</div>
+      <div class="impr">53.7% cited token reduction.</div>
+      <div class="tags"><span class="tag target-C">Concept</span><span class="tag mat-F">F</span><span class="tag ev-cited">cited</span><span class="tag cost-free">Free</span><span class="tag impr-high">High</span></div>
+      <div class="src">ATC</div>
+      <button class="pick" data-pick="16.2">★ deep-dive</button>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============================================================
+     IMPLEMENTATION PHASES — Foundational only
+============================================================ -->
+<section id="phases">
+  <h2>Implementation phases <span class="count">— 9 across 5 phases</span></h2>
+  <p class="lede">If you ship the Foundational concepts in this order, each phase's wins survive into the next. The sequence is not arbitrary — phase N depends on phase N−1 either for evidence (you cannot see N's win without N−1's dashboard) or for invariance (phase N's savings get voided if phase N−1's cache prefix mutates).</p>
+
+  <div class="rollout">
+
+    <div class="phase">
+      <div class="pnum">Phase 0</div>
+      <div class="pname">Measure</div>
+      <div class="pwhy">No optimization until you can see it. Every later phase needs this dashboard to prove it worked.</div>
+      <div class="pitems">
+        <div class="pitem"><span class="ppid">3.1</span><span class="pptitle">Cache-hit-rate dashboard</span><span class="pptag t-I">I</span></div>
+        <div class="pitem"><span class="ppid">3.2</span><span class="pptitle">Per-phase token attribution</span><span class="pptag t-I">I</span></div>
+        <div class="pitem"><span class="ppid">3.4</span><span class="pptitle">OpenTelemetry GenAI conventions</span><span class="pptag t-I">I</span></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="pnum">Phase 1</div>
+      <div class="pname">Lock the cache prefix</div>
+      <div class="pwhy">One KPI — <code>cache_hit_rate</code>. Both items target the same number so the A/B vs baseline isolates the effect.</div>
+      <div class="pitems">
+        <div class="pitem"><span class="ppid">1.1</span><span class="pptitle">Stable-prefix hierarchy</span><span class="pptag t-I">I</span></div>
+        <div class="pitem"><span class="ppid">1.7</span><span class="pptitle">System-reminder tail for dynamic data</span><span class="pptag t-P">P</span></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="pnum">Phase 2</div>
+      <div class="pname">Shape returns</div>
+      <div class="pwhy">Output tokens cost 3–10× input. The skill-level lever is the wording: instruct subagents to cite IDs instead of pasting content, and to drop preamble / filler.</div>
+      <div class="pitems">
+        <div class="pitem"><span class="ppid">2.2</span><span class="pptitle">Return-by-reference (cite IDs)</span><span class="pptag t-P">P</span></div>
+        <div class="pitem"><span class="ppid">2.3</span><span class="pptitle">"Be concise" prompt tax</span><span class="pptag t-P">P</span></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="pnum">Phase 3</div>
+      <div class="pname">Coordinator hygiene</div>
+      <div class="pwhy">The 53.7% rule. A coordinator that absorbs worker transcripts voids every saving from phases 1–2. Discipline + capability minimization, not new code.</div>
+      <div class="pitems">
+        <div class="pitem"><span class="ppid">16.2</span><span class="pptitle">Coordinator never reads worker transcripts</span><span class="pptag t-C">C</span></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="pnum">Phase 4</div>
+      <div class="pname">Dispatch shape</div>
+      <div class="pwhy">Orchestrator-level wins that don't require model selection or batching. The DAG already encodes parallelism — verify the dispatcher actually fans out concurrently.</div>
+      <div class="pitems">
+        <div class="pitem"><span class="ppid">5.2</span><span class="pptitle">Parallel subagent fan-out (verify dispatcher)</span><span class="pptag t-C">C</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="rollout-note">
+    <strong>Reading the rollout.</strong> Phase 0 is the entry gate — without the dashboard, no later phase is verifiable. Phases 1–3 are the compounding stack: cache prefix → return shape → coordinator hygiene. Phase 4 is structural, ships once the stack underneath holds. Every item is Loom-implementable from inside a skill — no API-level work, no upstream dependencies.
+  </div>
+</section>
+
+<!-- ============================================================
+     PHASE 0 & 1 — INLINE DEEP-DIVES
+============================================================ -->
+<section id="p01-dives">
+  <h2>Phase 0 &amp; 1 deep-dives <span class="count">— what's already in Loom, what's the gap</span></h2>
+  <p class="lede">The two phases on the critical path. Phase 0 is largely covered by the evaluation harness already. Phase 1 is recommendations for how Loom itself should run — none of these are wired in yet.</p>
+
+  <div class="p01-subhead">Phase 0 — Measure <span class="sub">3 items · 1 done · 1 partial · 1 todo</span></div>
+  <div class="p01-grid">
+
+    <div class="p01-card">
+      <div class="p01-head">
+        <span class="pnum">3.2</span>
+        <h4>Per-phase / per-subagent token attribution</h4>
+        <span class="status done">done</span>
+      </div>
+      <div class="p01-idea">Every subagent dispatch is tagged with its phase via the <code>.phase</code> sidecar; <code>analyze.py</code> sums <code>input · output · cache_creation · cache_read</code> per phase. The dashboard already renders one chart per metric per phase.</div>
+      <div class="mermaid">flowchart LR
+  A[Subagent dispatch] --> B[PostToolUse hook<br/>writes agent-uuid.phase]
+  B --> C[Transcript harvest]
+  C --> D[usage.jsonl row<br/>phase + tokens + status]
+  D --> E[analyze.py METRICS<br/>sum per phase]
+  E --> F[analysis.html<br/>per-phase charts]</div>
+      <div class="p01-win"><strong>Win delivered.</strong> Every later phase can be measured against this baseline. The harness has 3 baseline runs filed; phase deltas are visible.</div>
+    </div>
+
+    <div class="p01-card">
+      <div class="p01-head">
+        <span class="pnum">3.1</span>
+        <h4>Cache-hit-rate KPI</h4>
+        <span class="status done">done</span>
+      </div>
+      <div class="p01-idea">Derived metric in <code>analyze.py</code>: <code>cache_read / (cache_read + cache_creation + input_tokens)</code>, computed per phase and re-derived from component sums for the Total view (ratios don't add). Surfaced as a column in the per-phase tables and the summary table with three thresholds.</div>
+      <div class="mermaid">flowchart LR
+  A[usage.jsonl row] --> B[cache_read · cache_creation · input_tokens]
+  B --> C[Per-phase sums]
+  C --> D[hit_rate = cache_read /<br/>cache_read+cache_creation+input]
+  D --> E{Threshold}
+  E -->|&lt; 60%| F[Red · prefix drift]
+  E -->|60–80%| G[Amber · investigate]
+  E -->|≥ 80%| H[Green · healthy]
+  style F stroke:#b91c1c
+  style G stroke:#b45309
+  style H stroke:#047857</div>
+      <div class="p01-win"><strong>Win delivered.</strong> Baseline runs render between 69% and 99% per phase; outlier phases land in the amber band so prefix-drift work has a single number to chase. The Phase 1 seed uses this metric as its definition-of-done signal.</div>
+    </div>
+
+    <div class="p01-card">
+      <div class="p01-head">
+        <span class="pnum">3.4</span>
+        <h4>OpenTelemetry GenAI conventions</h4>
+        <span class="status todo">todo</span>
+      </div>
+      <div class="p01-idea">The schema is bespoke (<code>usage.jsonl</code>). Adopting OpenTelemetry's <code>gen_ai.*</code> semantic conventions lets Loom traces drop into Datadog, Honeycomb, Arize, Langfuse without a custom adapter per vendor.</div>
+      <div class="mermaid">flowchart LR
+  subgraph now [Today]
+    A[usage.jsonl bespoke] --> B[Custom dashboard only]
+  end
+  subgraph next [With OTel]
+    C[gen_ai.usage.input_tokens<br/>gen_ai.system<br/>gen_ai.operation.name] --> D[Datadog]
+    C --> E[Honeycomb]
+    C --> F[Arize]
+    C --> G[Langfuse]
+  end</div>
+      <div class="p01-win"><strong>Win when shipped.</strong> Zero vendor lock-in on observability. Low priority — only matters once you want a second pair of eyes on the traces from outside the eval harness.</div>
+    </div>
+
+  </div>
+
+  <div class="p01-subhead">Phase 1 — Lock the cache prefix <span class="sub">2 items target <code>cache_hit_rate</code></span></div>
+  <div class="p01-grid">
+
+    <div class="p01-card">
+      <div class="p01-head">
+        <span class="pnum">1.1</span>
+        <h4>Stable-prefix hierarchy</h4>
+        <span class="status todo">todo</span>
+      </div>
+      <div class="p01-idea">The cache lookup is byte-for-byte. A single mutated byte — date, UUID, unsorted JSON key — invalidates everything below it. Sort tool JSON keys, freeze tool order, keep dates out.</div>
+      <div class="mermaid">flowchart LR
+  A[Request] --> B{Prefix<br/>byte-stable?}
+  B -- yes --> C[Cache HIT · 0.1× input cost]
+  B -- no --> D[Cache MISS · full 1.0× re-write]
+  D --> E[Common culprits:<br/>date in system prompt<br/>UUIDs · unsorted JSON keys]
+  E -.fix.-> F[Move dynamic data<br/>to user-turn tail · 1.7]
+  F --> B</div>
+      <div class="p01-win"><strong>Win.</strong> GitHub Copilot achieves 93% cache-hit rate with this discipline. On Loom, each 1 percentage point of hit-rate gain is a direct cut to per-phase input cost.</div>
+    </div>
+
+    <div class="p01-card">
+      <div class="p01-head">
+        <span class="pnum">1.7</span>
+        <h4>System-reminder tail for dynamic data</h4>
+        <span class="status todo">todo</span>
+      </div>
+      <div class="p01-idea">Dates, IDs and timestamps go into a non-cached <em>tail</em> block of the user turn — never into the cached system prompt. This is exactly the pattern Claude Code uses internally.</div>
+      <div class="mermaid">flowchart LR
+  subgraph cached ["Cached system prompt · stable bytes"]
+    S[SKILL · tools · principles]
+  end
+  subgraph dynamic ["User-turn tail · NOT cached"]
+    D["Date: 2026-05-17<br/>Current task: T-031<br/>(system-reminder block)"]
+  end
+  S --> Req[Request]
+  D --> Req
+  Req --> M[Model]
+  style S fill:#1a3a1a,stroke:#5fc878
+  style D fill:#3a1a1a,stroke:#e07b5f</div>
+      <div class="p01-win"><strong>Win.</strong> Prevents the single most common cache killer: a date string interpolated into a "cached" prompt that silently invalidates on every new turn.</div>
+    </div>
+
+  </div>
+
+  <div class="rollout-note">
+    <strong>Reading the gap.</strong> Phase 0 is nearly done — 3.1 has shipped (the <code>cache_hit_rate</code> column is live in <code>analysis.html</code> with a 60% / 80% threshold); only the OpenTelemetry adapter (low priority) remains. Phase 1 is two items (1.1 + 1.7), captured as the seed <code>docs/seeds/phase-1-cache-discipline.md</code>. The seed implements both against the same KPI so the A/B vs baseline isolates one effect.
+  </div>
+</section>
+
+<!-- ============================================================
+     DEEP-DIVES (Mermaid)
+============================================================ -->
+<section id="deep-dives">
+  <h2>Deep-dives <span class="count">— flow diagrams for selected concepts</span></h2>
+  <p class="lede">Pick a concept above by clicking <strong>★ deep-dive</strong>. Selected concepts appear here as Mermaid flow diagrams that show where the concept inserts into Loom's pipeline. Empty until you pick.</p>
+
+  <div id="dive-container">
+    <div class="empty" id="dive-empty">No concepts selected for deep-dive yet. Click ★ on any card above to add one here.</div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SOURCES
+============================================================ -->
+<section id="sources">
+  <h2>Sources <span class="count">— short code → URL</span></h2>
+  <div class="sources" id="sources-list"></div>
+</section>
+
+</main>
+
+<!-- ============================================================
+     DEEP-DIVE DEFINITIONS
+     One entry per concept that has a flow diagram. The diagram
+     shows where in Loom the concept inserts. The "idea" line
+     explains the mechanism in one sentence.
+============================================================ -->
+<script>
+const SOURCES = {
+  A7T: ["Augment — 7 AI Agent Tactics for Multimodal, RAG-Driven Codebases","https://www.augmentcode.com/guides/7-ai-agent-tactics-for-multimodal-rag-driven-codebases"],
+  AC: ["Aidan Cooper — Guide to Structured Outputs Using Constrained Decoding","https://www.aidancooper.co.uk/constrained-decoding/"],
+  ACE: ["Anthropic — Code execution with MCP","https://www.anthropic.com/engineering/code-execution-with-mcp"],
+  AET: ["Anthropic — Extended thinking docs","https://platform.claude.com/docs/en/build-with-claude/extended-thinking"],
+  AIC: ["aicheckerhub — Anthropic Prompt Caching: Cost, TTL, Latency Planning","https://aicheckerhub.com/anthropic-prompt-caching-2026-cost-latency-guide"],
+  AMP: ["tessl.io — Amp drops compaction for 'handoff'","https://tessl.io/blog/amp-retires-compaction-for-a-cleaner-handoff-in-the-coding-agent-context-race/"],
+  AMR: ["Anthropic — How we built our multi-agent research system","https://www.anthropic.com/engineering/multi-agent-research-system"],
+  "AMR-Guide": ["Augment — Best AI Model for Coding Agents: A Routing Guide","https://www.augmentcode.com/guides/ai-model-routing-guide"],
+  APC: ["Anthropic — Prompt caching docs","https://platform.claude.com/docs/en/build-with-claude/prompt-caching"],
+  APR: ["Anthropic — Pricing","https://platform.claude.com/docs/en/about-claude/pricing"],
+  ATC: ["Augment — AI Agent Loop Token Costs","https://www.augmentcode.com/guides/ai-agent-loop-token-cost-context-constraints"],
+  CB: ["cachebro — content-addressed file cache for agents","https://github.com/glommer/cachebro"],
+  CCC: ["Claude Code Camp — How Prompt Caching Actually Works in Claude Code","https://www.claudecodecamp.com/p/how-prompt-caching-actually-works-in-claude-code"],
+  "CGN-MA": ["Cognition — Multi-Agents: What's Actually Working","https://cognition.ai/blog/multi-agents-working"],
+  CR: ["Chroma Research — Context Rot","https://www.trychroma.com/research/context-rot"],
+  DD: ["Developers Digest — Extended thinking guide","https://developersdigest.tech/"],
+  FAC: ["Factory.ai — Evaluating Context Compression for AI Agents","https://factory.ai/news/evaluating-compression"],
+  FRG: ["FrugalGPT — arXiv 2305.05176","https://arxiv.org/abs/2305.05176"],
+  GC: ["groundcover — Agent observability","https://www.groundcover.com/"],
+  GDG: ["Google Developers — Gemini 2.5 implicit caching","https://developers.googleblog.com/gemini-2-5-models-now-support-implicit-caching/"],
+  GEM: ["Google — Gemini context caching docs","https://ai.google.dev/gemini-api/docs/caching"],
+  "GH-29966": ["GitHub — Agent SDK subagents have enablePromptCaching:false (#29966)","https://github.com/anthropics/claude-code/issues/29966"],
+  "GH-44724": ["GitHub — Subagent cache miss on first SendMessage resume (#44724)","https://github.com/anthropics/claude-code/issues/44724"],
+  "GH-50213": ["GitHub — Subagent requests don't place cache_control (#50213)","https://github.com/anthropics/claude-code/issues/50213"],
+  GHTE: ["GitHub Blog — Improving token efficiency in GitHub Agentic Workflows","https://github.blog/ai-and-ml/github-copilot/improving-token-efficiency-in-github-agentic-workflows/"],
+  GSC: ["GPT Semantic Cache — arXiv 2411.05276","https://arxiv.org/html/2411.05276v3"],
+  HD: ["GitHub — bhope/hedge (adaptive hedged requests)","https://github.com/bhope/hedge"],
+  JAB: ["jangwook.net — Anthropic Message Batches API production guide","https://jangwook.net/en/blog/en/anthropic-message-batches-api-production-guide/"],
+  JX: ["Jason Liu — Why Cognition does not use multi-agent systems","https://jxnl.co/writing/2025/09/11/why-cognition-does-not-use-multi-agent-systems/"],
+  LF: ["Langfuse — Token & Cost Tracking docs","https://langfuse.com/docs/observability/features/token-and-cost-tracking"],
+  LL: ["microsoft/LLMLingua — GitHub","https://github.com/microsoft/LLMLingua"],
+  LLL: ["LongLLMLingua — arXiv 2310.06839","https://arxiv.org/html/2310.06839v2"],
+  MIS: ["MindStudio — Why Cursor, Claude Code, and Devin Use grep, Not Vectors","https://www.mindstudio.ai/blog/is-rag-dead-what-ai-agents-use-instead"],
+  ML: ["Morph — Context Rot: Why LLMs Degrade as Context Grows","https://www.morphllm.com/context-rot"],
+  MLM: ["Morph — Sonnet vs Haiku","https://www.morphllm.com/"],
+  MS: ["Microsoft Research — LLMLingua blog","https://www.microsoft.com/en-us/research/blog/llmlingua-innovating-llm-efficiency-with-prompt-compression/"],
+  NXS: ["NexaStack — Open Telemetry & AI Agents","https://www.nexastack.ai/blog/open-telemetry-ai-agents"],
+  OAI: ["OpenAI — Introducing GPT-5 for developers","https://openai.com/index/introducing-gpt-5-for-developers/"],
+  OSO: ["OpenAI — Structured model outputs","https://developers.openai.com/api/docs/guides/structured-outputs"],
+  PCC: ["Anthropic — Lessons from building Claude Code: Prompt caching is everything","https://claude.com/blog/lessons-from-building-claude-code-prompt-caching-is-everything"],
+  PCM: ["mager.co — Claude: How prompt caching actually works","https://www.mager.co/blog/2026-04-29-claude-prompt-caching/"],
+  PD: ["ProjectDiscovery — How We Cut LLM Costs by 59% With Prompt Caching","https://projectdiscovery.io/blog/how-we-cut-llm-cost-with-prompt-caching"],
+  PFG: ["Portkey — Implementing FrugalGPT","https://portkey.ai/blog/implementing-frugalgpt-smarter-llm-usage-for-lower-costs/"],
+  PGR: ["PromptingGuide — Reflexion technique","https://www.promptingguide.ai/techniques/reflexion"],
+  PH: ["PromptHub — Prompt Caching with OpenAI, Anthropic, and Google","https://www.prompthub.us/blog/prompt-caching-with-openai-anthropic-and-google-models"],
+  PIS: ["PyImageSearch — Semantic Caching for LLMs","https://pyimagesearch.com/2026/04/27/semantic-caching-for-llms-fastapi-redis-and-embeddings/"],
+  QC: ["QuarkAndCode — LLM Streaming Latency","https://medium.com/@QuarkAndCode/llm-streaming-latency-cut-ttft-smooth-tokens-fix-cold-starts-f2be60d26b89"],
+  RDS: ["Redis — LLM Token Optimization","https://redis.io/blog/llm-token-optimization-speed-up-apps/"],
+  RX: ["Reflexion — arXiv 2303.11366","https://arxiv.org/abs/2303.11366"],
+  SD: ["Start Debugging — How to Add Prompt Caching to an Anthropic SDK App","https://startdebugging.net/2026/04/how-to-add-prompt-caching-to-an-anthropic-sdk-app-and-measure-the-hit-rate/"],
+  SMT: ["Statsig — Max tokens: Output length optimization","https://www.statsig.com/perspectives/sure-please-provide-the-title-or-main-topic-of-the-blog"],
+  TF: ["TrueFoundry — Semantic Caching","https://www.truefoundry.com/blog/semantic-caching"],
+  TP: ["TianPan — TTFT Is the Only Latency Metric Users Actually Feel","https://tianpan.co/blog/2026-04-16-streaming-ttft-latency-perception"],
+  TS: ["Anthropic — Tool search tool docs","https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool"],
+  TT: ["TokenTelemetry — open-source local dashboard","https://tokentelemetry.com/"],
+};
+
+// One deep-dive definition per concept ID. The flow diagram is the
+// idea, rendered in Mermaid. Kept terse on purpose — the card carries
+// the prose; the diagram carries the shape.
+const DIVES = {
+  "1.1": {
+    title: "Stable-prefix hierarchy",
+    idea: "Sort tool JSON keys, freeze tool order, keep dynamic data out of the cached system prompt. The cache lookup is a byte-for-byte hash; a single mutated byte cascades.",
+    diagram: `flowchart LR
+  A[Request] --> B{System prompt<br/>byte-stable?}
+  B -- yes --> C[Cache HIT<br/>0.1× input cost]
+  B -- no --> D[Cache MISS<br/>full re-write at 1.0×]
+  D --> E[Mutating byte:<br/>date · UUID · unsorted JSON key]
+  E -.fix.-> F[Move dynamic data<br/>to user-turn tail]
+  F --> B`
+  },
+  "3.1": {
+    title: "Cache-hit-rate dashboard",
+    idea: "Track cache_read / (cache_read + cache_write + input) per subagent. <60% means something upstream is mutating the cache prefix.",
+    diagram: `flowchart LR
+  A[API call] --> B[usage object:<br/>input · cache_read · cache_write]
+  B --> C[Telemetry: tag<br/>phase + subagent + task]
+  C --> D{Hit-rate<br/>by subagent}
+  D -->|≥ 60%| E[OK]
+  D -->|< 60%| F[Alert: trace prefix mutation]`
+  },
+  "4.2": {
+    title: "Deterministic pre-agent shell prefetch",
+    idea: "Run cheap deterministic commands (gh, git diff, ls, lint) BEFORE the agent loop starts. The agent reads the result as static context instead of issuing tool calls.",
+    diagram: `flowchart LR
+  subgraph before [Without prefetch]
+    A1[Agent loop start] --> A2[tool: ls]
+    A2 --> A3[tool: git diff]
+    A3 --> A4[tool: lint]
+    A4 --> A5[Real work]
+  end
+  subgraph after [With prefetch]
+    B1[Shell prefetch: ls + git diff + lint] --> B2[Static context block]
+    B2 --> B3[Agent loop start]
+    B3 --> B4[Real work directly]
+  end`
+  },
+  "4.3": {
+    title: "Skip-LLM relevance gate",
+    idea: "A rule-based filter decides whether the LLM is needed at all. PRs that don't touch security paths skip the security reviewer entirely.",
+    diagram: `flowchart LR
+  In[Review task] --> G{Rule gate:<br/>does input match<br/>concern paths?}
+  G -- no --> Skip[Return PASS · zero LLM cost]
+  G -- yes --> LLM[Dispatch Review subagent]
+  LLM --> Out[Verdict]
+  Skip --> Out`
+  },
+  "5.2": {
+    title: "Parallel subagent fan-out",
+    idea: "Independent subtasks run concurrently, not serially. The DAG already encodes which tasks can fan out; the dispatcher just has to honour it.",
+    diagram: `flowchart TB
+  C[Coordinator] -->|blocked_by ⊆ done<br/>file_scope disjoint| F{Fan-out}
+  F --> T1[T-031]
+  F --> T2[T-032]
+  F --> T3[T-033]
+  T1 & T2 & T3 --> J[Join · all returns]
+  J --> C2[Coordinator continues]`
+  },
+  "6.1": {
+    title: "Progressive disclosure / pass-by-ID",
+    idea: "Hand subagents IDs (US-007, T-031) plus a read_artifact(id) tool. They pull only what they need. Anthropic's MCP example: 150K → 2K tokens.",
+    diagram: `flowchart LR
+  subgraph before [Without pass-by-ID]
+    A1[Coordinator] -->|paste full spec.md<br/>150K tokens| A2[Subagent]
+  end
+  subgraph after [With pass-by-ID]
+    B1[Coordinator] -->|IDs only: US-007, T-031<br/>2K tokens| B2[Subagent]
+    B2 -->|read_artifact US-007| B3[Artifact store]
+  end`
+  },
+  "6.6": {
+    title: "Code-execution-as-tool (MCP skill)",
+    idea: "Instead of N tool calls each producing model-visible JSON, generate one script that calls N tools and emits only the final slice. Massive intermediate-data savings.",
+    diagram: `flowchart LR
+  subgraph before [N tool calls]
+    A1[Model] -->|read 10K rows| A2[Tool]
+    A2 -->|10K rows back to model| A1
+    A1 -->|filter top 5| A3[Model context: 10K rows]
+  end
+  subgraph after [One execution]
+    B1[Model] -->|skill: filter_top_5| B2[Code executor]
+    B2 -->|runs read+filter locally| B3[Final 5 rows]
+    B3 -->|5 rows back to model| B1
+  end`
+  },
+  "7.1": {
+    title: "Reflexion before retry",
+    idea: "Don't carry the raw failed transcript into the retry. Carry a structured failure summary: what went wrong, why, what to try differently.",
+    diagram: `flowchart LR
+  A[Attempt 1] -->|fail| B[Reflexion step:<br/>summarise failure mode]
+  B --> C{Failure summary:<br/>what · why · try-next}
+  C --> D[Attempt 2 with summary,<br/>NOT raw transcript]
+  D -->|fail| E[Reflexion step]
+  E --> F[Attempt 3: escalate tier]`
+  },
+  "16.2": {
+    title: "Coordinator never reads worker transcripts",
+    idea: "Coordinator sees only typed RETURN values from workers, never their working transcript. Augment's 53.7% reduction came from this single rule.",
+    diagram: `flowchart TB
+  C[Coordinator] -->|dispatch| W1[Worker 1]
+  C -->|dispatch| W2[Worker 2]
+  W1 -.transcript: NOT visible.-> C
+  W2 -.transcript: NOT visible.-> C
+  W1 -->|typed RETURN| C
+  W2 -->|typed RETURN| C
+  C -->|next phase| Next[Next dispatch]
+  style C fill:#1a2a3a,stroke:#6cc7ff`
+  },
+};
+
+// ---- Rendering -------------------------------------------------------
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Wire UI first so filters/picks work even if Mermaid CDN fails.
+  renderSources();
+  renderPhases();
+  wireFilters();
+  wireLayoutToggle();
+  wireCardClicks();
+  wireDivePicks();
+  initMermaid();
+});
+
+function wireLayoutToggle(){
+  document.querySelectorAll('#layout-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#layout-toggle button')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const list = btn.dataset.layout === 'list';
+      document.body.classList.toggle('layout-list', list);
+      if (!list) {
+        // Leaving list mode: drop any expanded states so cards render cleanly.
+        document.querySelectorAll('.card.expanded')
+          .forEach(c => c.classList.remove('expanded'));
+      }
+    });
+  });
+}
+
+function wireCardClicks(){
+  document.querySelectorAll('.card[data-id]').forEach(card => {
+    card.addEventListener('click', e => {
+      if (!document.body.classList.contains('layout-list')) return;
+      if (e.target.closest('.pick')) return; // pick button handled separately
+      card.classList.toggle('expanded');
+    });
+  });
+}
+
+async function initMermaid(){
+  if (typeof mermaid === 'undefined') {
+    console.warn('Mermaid not loaded — diagrams will be text-only.');
+    return;
+  }
+  try {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#1c2229',
+        primaryColor: '#2a323d',
+        primaryTextColor: '#e6edf3',
+        primaryBorderColor: '#6cc7ff',
+        lineColor: '#8b97a5',
+        secondaryColor: '#161b22',
+        tertiaryColor: '#0f1419',
+      },
+      flowchart: { curve: 'basis', padding: 10 }
+    });
+    // Render static diagrams already in the DOM (Phase 0 & 1 section).
+    await mermaid.run({ querySelector: '#p01-dives .mermaid' });
+  } catch (e) {
+    console.warn('Mermaid init failed:', e);
+  }
+}
+
+function renderPhases(){
+  // The phases section is statically rendered in HTML. This hook stays
+  // here as a seam in case we later want to drive it from a JS table.
+}
+
+function renderSources(){
+  const host = document.getElementById('sources-list');
+  const codes = Object.keys(SOURCES).sort();
+  host.innerHTML = codes.map(c => {
+    const [t, u] = SOURCES[c];
+    return `<div class="src-row"><code>${c}</code><a href="${u}" target="_blank" rel="noopener">${t}</a></div>`;
+  }).join('');
+}
+
+// Filters: each filter group is OR within the group, AND across groups.
+const activeFilters = { target: new Set(), mat: new Set(), ev: new Set(), cost: new Set() };
+
+function wireFilters(){
+  document.querySelectorAll('#filters button[data-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const f = btn.dataset.filter, v = btn.dataset.value;
+      btn.classList.toggle('active');
+      if (activeFilters[f].has(v)) activeFilters[f].delete(v);
+      else activeFilters[f].add(v);
+      applyFilters();
+    });
+  });
+  document.getElementById('reset-filters').addEventListener('click', () => {
+    Object.values(activeFilters).forEach(s => s.clear());
+    document.querySelectorAll('#filters button[data-filter].active').forEach(b => b.classList.remove('active'));
+    applyFilters();
+  });
+}
+
+function applyFilters(){
+  document.querySelectorAll('.card[data-id]').forEach(card => {
+    let show = true;
+    for (const [f, set] of Object.entries(activeFilters)){
+      if (set.size === 0) continue;
+      const v = card.dataset[f === 'target' ? 'target' : f];
+      if (!set.has(v)) { show = false; break; }
+    }
+    card.dataset.hidden = show ? '0' : '1';
+  });
+}
+
+// Deep-dive picking
+const picked = new Set();
+function wireDivePicks(){
+  document.querySelectorAll('.pick[data-pick]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.pick;
+      const card = btn.closest('.card');
+      if (picked.has(id)) {
+        picked.delete(id);
+        card.classList.remove('selected-for-dive');
+      } else {
+        picked.add(id);
+        card.classList.add('selected-for-dive');
+      }
+      renderDives();
+    });
+  });
+}
+
+async function renderDives(){
+  const host = document.getElementById('dive-container');
+  if (picked.size === 0){
+    host.innerHTML = `<div class="empty" id="dive-empty">No concepts selected for deep-dive yet. Click ★ on any card above to add one here.</div>`;
+    return;
+  }
+  const order = Array.from(picked).sort((a,b)=>a.localeCompare(b, undefined, {numeric:true}));
+  host.innerHTML = order.map(id => {
+    const d = DIVES[id];
+    if (!d) {
+      return `<div class="dive">
+        <h3>${id} — (no diagram defined yet)</h3>
+        <div class="dive-meta">This concept doesn't have a Mermaid deep-dive yet. Tell Claude to add one and it will appear here.</div>
+      </div>`;
+    }
+    return `<div class="dive">
+      <h3>${id} — ${d.title}</h3>
+      <div class="dive-meta">${d.idea}</div>
+      <div class="mermaid">${d.diagram}</div>
+    </div>`;
+  }).join('');
+  if (typeof mermaid !== 'undefined' && mermaid.run) {
+    try { await mermaid.run({ querySelector: '#dive-container .mermaid' }); }
+    catch (e) { console.warn('Mermaid render failed:', e); }
+  }
+}
+</script>
+
+</body>
+</html>

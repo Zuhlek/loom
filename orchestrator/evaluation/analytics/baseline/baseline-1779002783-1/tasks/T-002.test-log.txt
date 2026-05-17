@@ -1,0 +1,14 @@
+=== T-002 SQLite persistence layer ===
+
+--- Red phase ---
+Tests written referencing openDb, DuplicateUrlError, NotFoundError. Before
+db.ts existed these failed with module-not-found (acceptable substitute red).
+
+--- Green phase ---
+$ npm test
+ ✓ tests/db.test.ts (6 tests) 214ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+
+Result: GREEN.

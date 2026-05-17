@@ -1,0 +1,14 @@
+=== T-009 Frontend list + empty state + open-in-new-tab ===
+
+$ npm test (relevant subset)
+ ✓ tests/render.test.ts (7 tests)
+   ✓ renderList: one anchor + delete button per item
+   ✓ renderList: target="_blank" and rel="noopener noreferrer"
+   ✓ renderList: textContent escapes HTML in title
+   ✓ renderList: delete button data-id + data-action
+   ✓ renderEmptyState: empty-state message present
+   ✓ renderInlineError / clearInlineError
+ ✓ tests/web-api.test.ts > fetchBookmarks (2 tests)
+ ✓ tests/bundle.test.ts > bundle contains _blank + noopener noreferrer
+
+Result: GREEN.

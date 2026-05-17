@@ -1,0 +1,8 @@
+=== T-007 DELETE /api/bookmarks/:id ===
+
+DELETE /api/bookmarks/:id subgroup (3 tests):
+  - 204 on success and removes the row
+  - 404 when id does not exist (idempotent failure)
+  - 404 for non-positive-integer ids (abc, -1, 1.5, 0)
+
+Result: GREEN.

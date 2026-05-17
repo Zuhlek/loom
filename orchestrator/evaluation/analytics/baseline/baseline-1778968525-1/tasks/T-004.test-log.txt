@@ -1,0 +1,6 @@
+RED RUN — tests/validation.test.ts before implementation
+Error: Failed to load url ../src/server/validation.js — validation.ts does not yet exist.
+Test Files 1 failed (1), Tests no tests.
+
+GREEN RUN — tests/validation.test.ts
+Test Files 1 passed (1); Tests 6 passed (6); 302ms.

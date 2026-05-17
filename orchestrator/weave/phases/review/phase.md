@@ -34,4 +34,4 @@ Before walking the Review Targets, read `orchestrator/principles.md` into contex
 
 ## On completion
 
-When `review.md` is written, return `status: complete`. No live usage capture happens during the run; cost/usage data is produced post-hoc by `orchestrator/lib/transcript-harvest.py` reading the session transcripts on disk after /weave finishes. Review owns only `review.md` (plus the dual-written learning entries below).
+Write three artifacts before returning: `review.md` (human-facing finding-by-finding narrative), `review-verdict.json` (machine-readable verdict — single-object schema in `phase.signature.md ## Writes`), and the dual-written learning entries below. `verdict` is `FAIL` iff `blockers > 0`. Counts in `review-verdict.json` must equal `blockers`/`major`/`minor` in the RETURN block and the count of `## Note` findings in `review.md`. Then return `status: complete`. No live usage capture happens during the run; cost/usage data is produced post-hoc by `orchestrator/lib/transcript-harvest.py` reading the session transcripts on disk after /weave finishes.

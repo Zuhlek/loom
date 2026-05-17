@@ -1,0 +1,23 @@
+=== T-007 RED PHASE (bindFormHandlers stub throws) ===
+$ npm test -- tests/unit/client/form.test.ts
+ FAIL  tests/unit/client/form.test.ts > client create-form flow > on 201 success ...
+Error: bindFormHandlers not implemented
+ FAIL  ... > on 409 duplicate_url ...
+ FAIL  ... > on 400 invalid_input field=url ...
+ FAIL  ... > on 400 invalid_input field=title ...
+ FAIL  ... > on network failure ...
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+
+=== T-007 GREEN PHASE ===
+$ npm test
+ ✓ tests/unit/client/render.test.ts (9 tests)
+ ✓ tests/unit/client/form.test.ts (5 tests)
+ ✓ tests/integration/bookmarks.api.test.ts (12 tests)
+ ✓ tests/unit/client/api.test.ts (6 tests)
+ ✓ tests/unit/repo.test.ts (8 tests)
+ ✓ tests/_init.test.ts (1 test)
+ ✓ tests/unit/validate.test.ts (27 tests)
+ ✓ tests/unit/db.test.ts (5 tests)
+ Test Files  8 passed (8)
+      Tests  73 passed (73)

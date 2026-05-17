@@ -1,0 +1,18 @@
+=== T-010 RED PHASE (smoke.mjs absent — `npm run smoke` had no entry) ===
+Before scripts/smoke.mjs was written, `npm run smoke` exited with
+ENOENT for the script path (the npm script already pointed at
+scripts/smoke.mjs from T-001). This is the runtime substitute for a
+red assertion: the smoke harness cannot execute without the script
+that asserts the boot/restart/delete cycle.
+
+=== T-010 GREEN PHASE ===
+$ npm run smoke
+> baseline-1779002783-2@0.0.0 smoke
+> node scripts/smoke.mjs
+
+build-client: wrote public/bundle.js
+bookmarks listening on http://localhost:3000
+received SIGINT, shutting down
+bookmarks listening on http://localhost:3000
+received SIGINT, shutting down
+smoke: PASS

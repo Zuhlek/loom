@@ -1,0 +1,7 @@
+=== T-005 GET /api/bookmarks — list newest-first ===
+
+GET /api/bookmarks subgroup (2 tests):
+  - returns 200 [] on an empty table
+  - returns all bookmarks newest-first
+
+Result: GREEN. Content-Type assertion verifies application/json.

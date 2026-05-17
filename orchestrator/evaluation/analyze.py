@@ -40,7 +40,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from statistics import fmean
+from statistics import fmean, stdev
 from typing import Any
 
 
@@ -54,7 +54,7 @@ VALID_PHASES_FOR_OUTCOME = {"spec", "design", "plan", "build", "review"}
 VALID_LIFECYCLE_STATES = {"active", "complete"}
 VALID_REVIEW_STATUSES = {"PASS", "FAIL"}
 
-REVIEW_VERDICT_RE = re.compile(
+REVIEW_VERDICT_INLINE_RE = re.compile(
     r"\*\*(PASS|FAIL)\*\*\s*[—–\-]+\s*"
     r"(\d+)\s+Blockers?\b[^0-9]*"
     r"(\d+)\s+Majors?\b[^0-9]*"
@@ -62,6 +62,15 @@ REVIEW_VERDICT_RE = re.compile(
     r"(\d+)\s+Notes?",
     re.IGNORECASE,
 )
+
+REVIEW_STATUS_RE = re.compile(r"\*\*(PASS|FAIL)\*\*", re.IGNORECASE)
+
+REVIEW_COUNT_RES = {
+    "blockers": re.compile(r"\*\*Blockers?:?\*\*:?\s*[—–\-]?\s*(\d+)", re.IGNORECASE),
+    "major":    re.compile(r"\*\*Majors?:?\*\*:?\s*[—–\-]?\s*(\d+)",   re.IGNORECASE),
+    "minor":    re.compile(r"\*\*Minors?:?\*\*:?\s*[—–\-]?\s*(\d+)",   re.IGNORECASE),
+    "note":     re.compile(r"\*\*Notes?:?\*\*:?\s*[—–\-]?\s*(\d+)",    re.IGNORECASE),
+}
 
 BOARD_SECTION_RE = re.compile(
     r"^## (Backlog|In Progress|Review|Done)\s*$",
@@ -99,16 +108,25 @@ def _read_pipeline_block(pipeline_text: str, heading: str) -> str | None:
 
 
 def _parse_review_verdict(review_text: str) -> dict | None:
-    match = REVIEW_VERDICT_RE.search(review_text)
-    if match is None:
+    inline = REVIEW_VERDICT_INLINE_RE.search(review_text)
+    if inline is not None:
+        return {
+            "status": inline.group(1).upper(),
+            "blockers": int(inline.group(2)),
+            "major": int(inline.group(3)),
+            "minor": int(inline.group(4)),
+            "note": int(inline.group(5)),
+        }
+    status_match = REVIEW_STATUS_RE.search(review_text)
+    if status_match is None:
         return None
-    return {
-        "status": match.group(1).upper(),
-        "blockers": int(match.group(2)),
-        "major": int(match.group(3)),
-        "minor": int(match.group(4)),
-        "note": int(match.group(5)),
-    }
+    counts: dict[str, int] = {}
+    for name, pattern in REVIEW_COUNT_RES.items():
+        match = pattern.search(review_text)
+        if match is None:
+            return None
+        counts[name] = int(match.group(1))
+    return {"status": status_match.group(1).upper(), **counts}
 
 
 def _parse_board_tasks(board_text: str) -> dict | None:
@@ -156,7 +174,6 @@ def derive_outcome(run_dir: Path) -> dict:
             if candidate in VALID_PHASES_FOR_OUTCOME:
                 final_phase = candidate
 
-    review_text = _read_text_or_empty(run_dir / "review.md")
     board_text = _read_text_or_empty(run_dir / "board.md")
 
     return {
@@ -164,9 +181,40 @@ def derive_outcome(run_dir: Path) -> dict:
         "final_phase": final_phase,
         "review_findings_present": (run_dir / "review.md").is_file(),
         "pipeline_md_present": pipeline_present,
-        "review_verdict": _parse_review_verdict(review_text) if review_text else None,
+        "review_verdict": _read_review_verdict(run_dir),
         "tasks": _parse_board_tasks(board_text) if board_text else None,
     }
+
+
+def _read_review_verdict(run_dir: Path) -> dict | None:
+    sidecar = run_dir / "review-verdict.json"
+    if sidecar.is_file():
+        try:
+            data = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = None
+        if isinstance(data, dict):
+            verdict = _normalise_review_verdict(data)
+            if verdict is not None:
+                return verdict
+    review_text = _read_text_or_empty(run_dir / "review.md")
+    return _parse_review_verdict(review_text) if review_text else None
+
+
+def _normalise_review_verdict(data: dict) -> dict | None:
+    status = data.get("verdict") or data.get("status")
+    if not isinstance(status, str):
+        return None
+    status_upper = status.upper()
+    if status_upper not in {"PASS", "FAIL"}:
+        return None
+    out = {"status": status_upper}
+    for key in ("blockers", "major", "minor", "note"):
+        value = data.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            return None
+        out[key] = value
+    return out
 
 
 def write_outcome(run_dir: Path) -> Path:
@@ -186,6 +234,57 @@ METRICS = [
     ("cache_creation", "tokens.cache_creation_input_tokens","sum"),
     ("cache_read",     "tokens.cache_read_input_tokens",    "sum"),
 ]
+
+# Derived rate metrics. Computed from already-summed METRICS components;
+# not summable themselves (ratios don't add). Each entry:
+#   (name, numerator-keys, denominator-keys) — both keys reference METRICS names.
+# For the "total" rollup the rate is re-derived from component totals.
+RATE_METRICS = [
+    ("cache_hit_rate", ("cache_read",), ("cache_read", "cache_creation", "input_tokens")),
+]
+
+# Rate thresholds for dashboard cell colouring. >= GOOD is green,
+# >= WARN is amber, below is red. 60% matches the "prefix drift" alarm
+# threshold cited in lifecycle-optimizations-research.md item 3.1.
+RATE_THRESHOLD_GOOD = 0.80
+RATE_THRESHOLD_WARN = 0.60
+
+
+def _derive_rate(block: dict, num_keys: tuple, den_keys: tuple) -> float:
+    num = sum(block.get(k, 0) or 0 for k in num_keys)
+    den = sum(block.get(k, 0) or 0 for k in den_keys)
+    return (num / den) if den else 0.0
+
+
+def _value_total_from_phases(per_phase: dict, metric: str,
+                             all_phases: list[str]) -> float:
+    """Aggregate a metric across phases. Sums for plain metrics;
+    re-derives from component totals for RATE_METRICS (ratios don't add)."""
+    for rname, num_keys, den_keys in RATE_METRICS:
+        if metric == rname:
+            num = sum((per_phase.get(ph, {}) or {}).get(k, 0) or 0
+                      for ph in all_phases for k in num_keys)
+            den = sum((per_phase.get(ph, {}) or {}).get(k, 0) or 0
+                      for ph in all_phases for k in den_keys)
+            return (num / den) if den else 0.0
+    return sum((per_phase.get(ph, {}) or {}).get(metric, 0) or 0
+               for ph in all_phases)
+
+
+def _rate_cell_class(metric: str, val: float | None) -> str:
+    """Threshold class for a rate-metric cell. Empty string for non-rates."""
+    is_rate = any(metric == rn for rn, _, _ in RATE_METRICS)
+    if not is_rate or val is None:
+        return ""
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return ""
+    if v >= RATE_THRESHOLD_GOOD:
+        return "rate-good"
+    if v >= RATE_THRESHOLD_WARN:
+        return "rate-warn"
+    return "rate-bad"
 
 
 def _get_dotted(row: dict, path: str) -> Any:
@@ -312,7 +411,8 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
       "metrics":    [...]
     }
     """
-    versions_raw: dict[str, list[list[dict]]] = {}
+    versions_raw: dict[str, list[tuple[str, list[dict]]]] = {}
+    outcomes_per_version: dict[str, list[dict]] = {}
     missing: list[str] = []
     all_phases: set[str] = set()
 
@@ -337,8 +437,19 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
                     _aggregate(run_dir)
                 write_outcome(run_dir)
                 rows = _read_jsonl(usage)
-                versions_raw.setdefault(version, []).append(rows)
+                versions_raw.setdefault(version, []).append((run_dir.name, rows))
                 all_phases.update(_phases_present(rows))
+                outcome_path = run_dir / "outcome.json"
+                if outcome_path.is_file():
+                    try:
+                        outcome_payload = json.loads(outcome_path.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        outcome_payload = None
+                    if isinstance(outcome_payload, dict):
+                        outcomes_per_version.setdefault(version, []).append({
+                            "run_id": run_dir.name,
+                            **outcome_payload,
+                        })
 
     ordered_versions = _version_order(list(versions_raw.keys()))
     KNOWN_PHASE_ORDER = ("spec", "design", "plan", "build", "review")
@@ -346,24 +457,44 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
         sorted(p for p in all_phases if p not in KNOWN_PHASE_ORDER)
 
     out_versions: dict[str, dict] = {}
+    out_runs: dict[str, list[dict]] = {}
     run_counts: dict[str, int] = {}
     for v in ordered_versions:
-        rows_per_run = versions_raw[v]
-        run_counts[v] = len(rows_per_run)
+        per_run_pairs = versions_raw[v]
+        run_counts[v] = len(per_run_pairs)
         per_phase: dict[str, dict] = {}
         for phase in ordered_phases:
             metric_block: dict[str, float] = {}
             for name, dotted, _rollup in METRICS:
                 per_run_values: list[int] = []
-                for run_rows in rows_per_run:
-                    s = _per_run_metric_sum(run_rows, dotted, phase)
-                    if s is not None:
-                        per_run_values.append(s)
+                for _run_id, run_rows in per_run_pairs:
+                    summed = _per_run_metric_sum(run_rows, dotted, phase)
+                    if summed is not None:
+                        per_run_values.append(summed)
                 metric_block[name] = float(fmean(per_run_values)) if per_run_values else 0.0
                 if metric_block[name] == int(metric_block[name]):
                     metric_block[name] = int(metric_block[name])
+            # Derive rate metrics from the summed components for this phase.
+            for rname, num_keys, den_keys in RATE_METRICS:
+                metric_block[rname] = _derive_rate(metric_block, num_keys, den_keys)
             per_phase[phase] = metric_block
         out_versions[v] = per_phase
+
+        run_blocks: list[dict] = []
+        for run_id, run_rows in per_run_pairs:
+            phase_map: dict[str, dict[str, int]] = {}
+            for phase in ordered_phases:
+                phase_metrics: dict[str, int] = {}
+                for name, dotted, _rollup in METRICS:
+                    summed = _per_run_metric_sum(run_rows, dotted, phase)
+                    if summed is not None:
+                        phase_metrics[name] = summed
+                if phase_metrics:
+                    for rname, num_keys, den_keys in RATE_METRICS:
+                        phase_metrics[rname] = _derive_rate(phase_metrics, num_keys, den_keys)
+                    phase_map[phase] = phase_metrics
+            run_blocks.append({"run_id": run_id, "phases": phase_map})
+        out_runs[v] = run_blocks
 
     return {
         "versions": out_versions,
@@ -371,7 +502,10 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
         "run_counts": run_counts,
         "missing": missing,
         "phases": ordered_phases,
-        "metrics": [name for name, _, _ in METRICS],
+        "metrics": [name for name, _, _ in METRICS]
+                   + [name for name, _, _ in RATE_METRICS],
+        "runs": out_runs,
+        "outcomes": outcomes_per_version,
     }
 
 
@@ -419,9 +553,15 @@ METRICS_DISPLAY: dict[str, dict[str, str]] = {
         "color": "#06b6d4",
         "desc":  "Bytes read from the prefix cache. Billed at ~0.1× input rate; dominates input cost on long-context multi-turn runs.",
     },
+    "cache_hit_rate": {
+        "label": "Cache hit-rate",
+        "group": "Cache",
+        "color": "#10b981",
+        "desc":  "cache_read / (cache_read + cache_creation + input_tokens). Healthy ≥ 80%; warn ≥ 60%; below 60% means prefix drift — something upstream is mutating the cached bytes.",
+    },
 }
 
-GROUP_ORDER = ("Time", "Tokens")
+GROUP_ORDER = ("Time", "Tokens", "Cache")
 PHASE_DISPLAY: dict[str, str] = {
     "spec":   "Spec",
     "design": "Design",
@@ -432,7 +572,11 @@ PHASE_DISPLAY: dict[str, str] = {
 
 
 def _metric_kind(name: str) -> str:
-    return "duration" if name.endswith("_ms") else "tokens"
+    if name.endswith("_ms"):
+        return "duration"
+    if any(name == rn for rn, _, _ in RATE_METRICS):
+        return "rate"
+    return "tokens"
 
 
 def _metric_meta(name: str) -> dict[str, str]:
@@ -470,8 +614,19 @@ def _fmt_tokens(n: float) -> str:
     return f"{int(n):,}"
 
 
+def _fmt_rate(v: float) -> str:
+    if v is None:
+        return "—"
+    return f"{float(v) * 100:.1f}%"
+
+
 def _fmt_value(name: str, val: float) -> str:
-    return _fmt_duration_ms(val) if _metric_kind(name) == "duration" else _fmt_tokens(val)
+    kind = _metric_kind(name)
+    if kind == "duration":
+        return _fmt_duration_ms(val)
+    if kind == "rate":
+        return _fmt_rate(val)
+    return _fmt_tokens(val)
 
 
 def _html(s: str) -> str:
@@ -482,8 +637,8 @@ def _html(s: str) -> str:
 def _value_for(data: dict, version: str, phase_or_total: str, metric: str,
                all_phases: list[str]) -> float:
     if phase_or_total == "total":
-        return sum((data["versions"].get(version, {}).get(p, {}) or {}).get(metric, 0) or 0
-                   for p in all_phases)
+        return _value_total_from_phases(
+            data["versions"].get(version, {}) or {}, metric, all_phases)
     return (data["versions"].get(version, {}).get(phase_or_total, {}) or {}).get(metric, 0)
 
 
@@ -506,36 +661,71 @@ def _phase_summary_chip(data: dict, phase_or_total: str, versions: list[str],
     return " ".join(chips)
 
 
-def _grouped_table(versions: list[str], metric_names: list[str], values_at: callable) -> str:
+def _grouped_table(versions: list[str], metric_names: list[str], values_at: callable,
+                   runs_per_version: dict | None = None,
+                   run_value_at: callable | None = None) -> str:
     """Render one table with column headers grouped by metric group.
-    `values_at(version, metric)` returns the raw number."""
-    grouped_metrics: list[tuple[str, list[str]]] = []
-    for g in GROUP_ORDER:
-        gm = _metrics_in_group(g, metric_names)
-        if gm:
-            grouped_metrics.append((g, gm))
 
-    # Two-row header: group spans + metric names underneath.
+    `values_at(version, metric)` returns the pooled mean.
+    When `runs_per_version` and `run_value_at` are both provided AND a version
+    has more than one run, the version row becomes clickable and per-run rows
+    appear collapsed beneath it. `run_value_at(version, run_id, metric)`
+    returns that run's value for the metric.
+    """
+    grouped_metrics: list[tuple[str, list[str]]] = []
+    for group in GROUP_ORDER:
+        members = _metrics_in_group(group, metric_names)
+        if members:
+            grouped_metrics.append((group, members))
+
     group_row = "".join(
-        f"<th class=\"group-h\" colspan=\"{len(gm)}\">{_html(g)}</th>"
-        for g, gm in grouped_metrics
+        f"<th class=\"group-h\" colspan=\"{len(members)}\">{_html(group)}</th>"
+        for group, members in grouped_metrics
     )
     metric_row = "".join(
         f"<th class=\"num\" title=\"{_html(_metric_meta(m)['desc'])}\">"
         f"<span class=\"sw\" style=\"background:{_metric_meta(m)['color']}\"></span>"
         f"{_html(_metric_meta(m)['label'])}"
         f"</th>"
-        for _, gm in grouped_metrics for m in gm
+        for _, members in grouped_metrics for m in members
     )
-    flat_metrics = [m for _, gm in grouped_metrics for m in gm]
+    flat_metrics = [m for _, members in grouped_metrics for m in members]
+
+    def _num_cell(metric: str, val) -> str:
+        cls = _rate_cell_class(metric, val)
+        cls_attr = f" {cls}" if cls else ""
+        return f"<td class=\"num{cls_attr}\">{_html(_fmt_value(metric, val))}</td>"
 
     body_rows = []
-    for v in versions:
-        cells = "".join(
-            f"<td class=\"num\">{_html(_fmt_value(m, values_at(v, m)))}</td>"
-            for m in flat_metrics
-        )
-        body_rows.append(f"<tr><th class=\"v\">{_html(v)}</th>{cells}</tr>")
+    for version in versions:
+        cells = "".join(_num_cell(m, values_at(version, m)) for m in flat_metrics)
+        runs = (runs_per_version or {}).get(version, [])
+        has_runs = run_value_at is not None and len(runs) > 1
+        version_label = _html(version)
+        if has_runs:
+            label_cell = (
+                f"<th class=\"v v-toggle-cell\">"
+                f"<span class=\"v-toggle\" aria-hidden=\"true\">▸</span> {version_label}"
+                f"</th>"
+            )
+            body_rows.append(
+                f"<tr class=\"v-row has-runs\" data-version=\"{version_label}\">"
+                f"{label_cell}{cells}</tr>"
+            )
+            for run in runs:
+                run_id = run["run_id"]
+                run_cells = "".join(
+                    _num_cell(m, run_value_at(version, run_id, m)) for m in flat_metrics
+                )
+                body_rows.append(
+                    f"<tr class=\"run-row\" data-version=\"{version_label}\">"
+                    f"<th class=\"v run-label\">{_html(run_id)}</th>"
+                    f"{run_cells}</tr>"
+                )
+        else:
+            body_rows.append(
+                f"<tr class=\"v-row\"><th class=\"v\">{version_label}</th>{cells}</tr>"
+            )
 
     return (
         f"<table class=\"phase-table\">"
@@ -575,13 +765,29 @@ def _phase_section(phase: str, anchor: str, versions: list[str],
             f"</div>"
         )
 
-    def values_at(v: str, m: str) -> float:
-        return _value_for(data, v, anchor if not total else "total", m, all_phases)
+    target_phase = anchor if not total else "total"
 
-    table = _grouped_table(versions, metric_names, values_at)
+    def values_at(v: str, m: str) -> float:
+        return _value_for(data, v, target_phase, m, all_phases)
+
+    runs_per_version = data.get("runs", {})
+
+    def run_value_at(v: str, run_id: str, m: str) -> float:
+        for run in runs_per_version.get(v, []):
+            if run["run_id"] != run_id:
+                continue
+            if total:
+                return _value_total_from_phases(run["phases"], m, all_phases)
+            return (run["phases"].get(anchor, {}) or {}).get(m, 0)
+        return 0
+
+    table = _grouped_table(versions, metric_names, values_at,
+                           runs_per_version=runs_per_version,
+                           run_value_at=run_value_at)
 
     return (
-        f"<section id=\"phase-{anchor}\" class=\"phase-block\">"
+        f"<section id=\"phase-{anchor}\" class=\"phase-block phase-pane\" "
+        f"data-phase=\"{anchor}\">"
         f"<header class=\"phase-head\">"
         f"<h2>{_html(label)}</h2>"
         f"<div class=\"phase-chips\">{summary_chips}</div>"
@@ -590,6 +796,125 @@ def _phase_section(phase: str, anchor: str, versions: list[str],
         f"{table}"
         f"</section>"
     )
+
+
+def _render_outcomes(data: dict) -> str:
+    """Render per-version outcome summary + collapsible per-run table."""
+    outcomes = data.get("outcomes") or {}
+    if not any(outcomes.values()):
+        return ""
+    version_order = data.get("version_order") or list(outcomes.keys())
+
+    def fmt_number(value: float) -> str:
+        return f"{int(value)}" if value == int(value) else f"{value:.1f}"
+
+    def stat_chip(label: str, values: list[int]) -> str:
+        if not values:
+            return f"<span class=\"chip chip-outcome\"><b>{_html(label)}:</b> —</span>"
+        mean_text = f"μ {fmt_number(fmean(values))}"
+        suffix = ""
+        if len(values) >= 2:
+            sigma = stdev(values)
+            if sigma > 0:
+                suffix = f" <span class=\"sigma\">σ {fmt_number(sigma)}</span>"
+        return (f"<span class=\"chip chip-outcome\">"
+                f"<b>{_html(label)}:</b> {mean_text}{suffix}</span>")
+
+    blocks: list[str] = []
+    for version in version_order:
+        run_outcomes = outcomes.get(version) or []
+        if not run_outcomes:
+            continue
+        total_runs = len(run_outcomes)
+        complete = sum(1 for r in run_outcomes if r.get("lifecycle_state") == "complete")
+        verdicts = [r.get("review_verdict") for r in run_outcomes]
+        non_null = [v for v in verdicts if isinstance(v, dict)]
+        pass_count = sum(1 for v in non_null if v.get("status") == "PASS")
+
+        blockers_vals = [v.get("blockers", 0) for v in non_null]
+        major_vals = [v.get("major", 0) for v in non_null]
+        minor_vals = [v.get("minor", 0) for v in non_null]
+        note_vals = [v.get("note", 0) for v in non_null]
+        task_dicts = [r.get("tasks") for r in run_outcomes if isinstance(r.get("tasks"), dict)]
+        planned_vals = [t.get("planned", 0) for t in task_dicts]
+        done_vals = [t.get("done", 0) for t in task_dicts]
+
+        chips = (
+            f"<span class=\"chip chip-outcome\"><b>Lifecycle:</b> "
+            f"{complete}/{total_runs} complete</span>"
+            f"<span class=\"chip chip-outcome\"><b>Verdict:</b> "
+            f"{pass_count}/{len(non_null)} PASS</span>"
+            + stat_chip("Blockers", blockers_vals)
+            + stat_chip("Major", major_vals)
+            + stat_chip("Minor", minor_vals)
+            + stat_chip("Note", note_vals)
+            + stat_chip("Tasks planned", planned_vals)
+            + stat_chip("Tasks done", done_vals)
+        )
+
+        rows: list[str] = []
+        for run in run_outcomes:
+            verdict = run.get("review_verdict") if isinstance(run.get("review_verdict"), dict) else None
+            tasks = run.get("tasks") if isinstance(run.get("tasks"), dict) else None
+            verdict_status = (verdict or {}).get("status", "—")
+            status_cls = ("ok" if verdict_status == "PASS"
+                          else ("fail" if verdict_status == "FAIL" else "muted"))
+            rows.append(
+                "<tr>"
+                f"<th class=\"v run-label\">{_html(run.get('run_id', ''))}</th>"
+                f"<td>{_html(run.get('lifecycle_state', '—'))}</td>"
+                f"<td class=\"verdict-{status_cls}\">{_html(verdict_status)}</td>"
+                f"<td class=\"num\">{(verdict or {}).get('blockers', '—')}</td>"
+                f"<td class=\"num\">{(verdict or {}).get('major', '—')}</td>"
+                f"<td class=\"num\">{(verdict or {}).get('minor', '—')}</td>"
+                f"<td class=\"num\">{(verdict or {}).get('note', '—')}</td>"
+                f"<td class=\"num\">"
+                f"{(tasks or {}).get('done', '—')}/{(tasks or {}).get('planned', '—')}"
+                f"</td>"
+                "</tr>"
+            )
+        table = (
+            "<table class=\"outcomes-table\">"
+            "<thead><tr>"
+            "<th class=\"v-h\">Run</th>"
+            "<th>Lifecycle</th><th>Verdict</th>"
+            "<th class=\"num\">Blockers</th><th class=\"num\">Major</th>"
+            "<th class=\"num\">Minor</th><th class=\"num\">Note</th>"
+            "<th class=\"num\">Tasks</th>"
+            "</tr></thead>"
+            f"<tbody>{''.join(rows)}</tbody></table>"
+        )
+        blocks.append(
+            f"<div class=\"outcome-version\">"
+            f"<div class=\"outcome-version-head\">"
+            f"<h3>{_html(version)}</h3>"
+            f"<div class=\"phase-chips\">{chips}</div>"
+            f"</div>"
+            f"{table}"
+            f"</div>"
+        )
+
+    if not blocks:
+        return ""
+    return (
+        "<section id=\"outcomes\" class=\"outcomes-section\">"
+        "<header class=\"phase-head\"><h2>Outcomes</h2></header>"
+        f"{''.join(blocks)}"
+        "</section>"
+    )
+
+
+def _render_phase_tabs(phases: list[str]) -> str:
+    """Tab bar that controls which phase-pane is visible. Total is default."""
+    tab_specs = [("total", "Total")] + [
+        (ph, PHASE_DISPLAY.get(ph, ph.title())) for ph in phases
+    ]
+    buttons = "".join(
+        f"<button class=\"phase-tab{' active' if anchor == 'total' else ''}\" "
+        f"data-phase=\"{anchor}\">{_html(label)}</button>"
+        for anchor, label in tab_specs
+    )
+    return f"<nav class=\"phase-tabs\" aria-label=\"phase view\">{buttons}</nav>"
 
 
 def render_html(data: dict) -> str:
@@ -607,7 +932,8 @@ def render_html(data: dict) -> str:
     phases = data.get("phases", [])
     versions = list(data.get("versions", {}).keys())
     counts = data.get("run_counts", {})
-    metric_names = [name for name, _, _ in METRICS]
+    metric_names = ([name for name, _, _ in METRICS]
+                    + [name for name, _, _ in RATE_METRICS])
 
     # ----- Top-of-page hero -----
     if counts:
@@ -671,11 +997,16 @@ def render_html(data: dict) -> str:
     )
     flat_metrics = [m for _, gm in grouped_metrics for m in gm]
 
+    def _summary_cell(metric: str, val) -> str:
+        cls = _rate_cell_class(metric, val)
+        cls_attr = f" {cls}" if cls else ""
+        return f"<td class=\"num{cls_attr}\">{_html(_fmt_value(metric, val))}</td>"
+
     sum_rows = []
     for ph in phases + ["total"]:
         for i, v in enumerate(versions):
             cells = "".join(
-                f"<td class=\"num\">{_html(_fmt_value(m, value_for_summary(ph, v, m)))}</td>"
+                _summary_cell(m, value_for_summary(ph, v, m))
                 for m in flat_metrics
             )
             phase_label = "Total" if ph == "total" else PHASE_DISPLAY.get(ph, ph.title())
@@ -698,17 +1029,18 @@ def render_html(data: dict) -> str:
         f"</section>"
     )
 
-    # ----- Nav -----
-    nav_items = " · ".join(
-        [f"<a href=\"#glossary\">Glossary</a>"]
-        + [f"<a href=\"#phase-{ph}\">{_html(PHASE_DISPLAY.get(ph, ph.title()))}</a>" for ph in phases]
-        + ["<a href=\"#phase-total\">Total</a>", "<a href=\"#summary\">Summary</a>"]
-    )
+    phase_tabs = _render_phase_tabs(phases)
+    outcomes_section = _render_outcomes(data)
 
     # Push the display registry into the page so the chart JS can use it.
     metrics_display_json = json.dumps({
         m: _metric_meta(m) for m in metric_names
     }, separators=(",", ":"))
+    # Rate-metric specs so the chart JS can re-derive totals from components.
+    rate_metrics_json = json.dumps([
+        {"name": n, "num": list(num), "den": list(den)}
+        for n, num, den in RATE_METRICS
+    ], separators=(",", ":"))
 
     return f"""<!doctype html>
 <html lang="en">
@@ -768,6 +1100,9 @@ thead th {{ font-weight: 600; font-size: 0.75rem; color: var(--muted);
 .group-h {{ text-align: center; text-transform: uppercase; letter-spacing: 0.06em;
             border-bottom: 1px solid var(--hairline); }}
 th.num, td.num {{ text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }}
+td.num.rate-good {{ color: #047857; font-weight: 600; }}
+td.num.rate-warn {{ color: #b45309; font-weight: 600; }}
+td.num.rate-bad  {{ color: #b91c1c; font-weight: 600; }}
 th.num .sw, .glossary .sw, .phase-table .sw {{ display: inline-block; width: 8px; height: 8px;
             border-radius: 2px; vertical-align: middle; margin-right: 6px; }}
 th.v, th.v-h {{ font-weight: 600; color: var(--fg); white-space: nowrap; }}
@@ -784,6 +1119,41 @@ tr.total-row td, tr.total-row th {{ background: var(--total-bg); font-weight: 60
 .glossary-group dt {{ font-weight: 500; margin: 8px 0 2px; font-size: 0.88rem; }}
 .glossary-group dt:first-child {{ margin-top: 0; }}
 .glossary-group dd {{ margin: 0 0 0 14px; font-size: 0.82rem; color: var(--muted); line-height: 1.4; }}
+.phase-tabs {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;
+                padding: 6px; background: var(--card); border: 1px solid var(--border);
+                border-radius: 8px; }}
+.phase-tab {{ font: inherit; font-size: 0.85rem; padding: 6px 14px; border-radius: 999px;
+              border: 1px solid transparent; background: transparent; color: var(--muted);
+              cursor: pointer; }}
+.phase-tab:hover {{ background: var(--bg); color: var(--fg); }}
+.phase-tab.active {{ background: var(--accent); border-color: var(--accent);
+                      color: #fff; font-weight: 600; }}
+.phase-pane {{ display: none; }}
+.phase-pane.active {{ display: block; }}
+.outcomes-section .outcome-version {{ padding: 10px 0; border-top: 1px solid var(--border); }}
+.outcomes-section .outcome-version:first-of-type {{ border-top: 0; padding-top: 4px; }}
+.outcomes-section .outcome-version-head {{ display: flex; align-items: center;
+                gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }}
+.outcomes-section h3 {{ font-size: 0.95rem; font-weight: 600; margin: 0; }}
+.chip-outcome b {{ font-weight: 500; }}
+.chip-outcome .sigma {{ color: var(--muted); font-size: 0.78rem; margin-left: 2px; }}
+.outcomes-table th, .outcomes-table td {{ padding: 5px 10px; }}
+.outcomes-table th.v-h {{ font-size: 0.7rem; color: var(--muted); text-transform: uppercase;
+                           letter-spacing: 0.05em; }}
+.outcomes-table th.run-label {{ font-weight: 400; font-size: 0.78rem; color: var(--muted); }}
+.verdict-ok {{ color: #15803d; font-weight: 600; }}
+.verdict-fail {{ color: #b91c1c; font-weight: 600; }}
+.verdict-muted {{ color: var(--muted); }}
+tr.v-row.has-runs {{ cursor: pointer; user-select: none; }}
+tr.v-row.has-runs:hover td, tr.v-row.has-runs:hover th {{ background: var(--bg); }}
+tr.run-row {{ display: none; }}
+tr.v-row.expanded + tr.run-row, tr.run-row.expanded {{ display: table-row; }}
+tr.run-row th.run-label {{ font-weight: 400; font-size: 0.72rem;
+                            color: var(--muted); padding-left: 22px; }}
+tr.run-row td {{ color: var(--muted); }}
+.v-toggle {{ display: inline-block; width: 0.9em; color: var(--muted);
+              font-size: 0.7rem; transition: transform 0.1s; }}
+tr.v-row.expanded .v-toggle {{ transform: rotate(90deg); color: var(--fg); }}
 </style>
 </head>
 <body>
@@ -792,24 +1162,45 @@ tr.total-row td, tr.total-row th {{ background: var(--total-bg); font-weight: 60
   <div class="subtitle">Run counts: {counts_text}</div>
   <div class="hero-chips" id="loom-total-chips">{total_chips}</div>
 </header>
-<nav class="toc">{nav_items}</nav>
 <script id="loom-data" type="application/json">{data_json}</script>
 <script id="loom-display" type="application/json">{metrics_display_json}</script>
-{glossary}
+<script id="loom-rates" type="application/json">{rate_metrics_json}</script>
+{outcomes_section}
+{phase_tabs}
 {''.join(sections)}
+{glossary}
 {summary_table}
 <script>
 (function() {{
   var data = JSON.parse(document.getElementById('loom-data').textContent);
   var meta = JSON.parse(document.getElementById('loom-display').textContent);
+  var rateSpecs = JSON.parse(document.getElementById('loom-rates').textContent);
   var versionList = (data.version_order && data.version_order.length)
     ? data.version_order
     : Object.keys(data.versions);
   var phases = data.phases || [];
 
+  function rateSpec(metric) {{
+    for (var i = 0; i < rateSpecs.length; i++) {{
+      if (rateSpecs[i].name === metric) return rateSpecs[i];
+    }}
+    return null;
+  }}
+  function isRate(metric) {{ return rateSpec(metric) !== null; }}
+
   function valuesFor(phase, metric) {{
+    var rspec = rateSpec(metric);
     return versionList.map(function(v) {{
       if (phase === 'total') {{
+        if (rspec) {{
+          var num = 0, den = 0;
+          phases.forEach(function(p) {{
+            var block = (data.versions[v] || {{}})[p] || {{}};
+            rspec.num.forEach(function(k) {{ num += block[k] || 0; }});
+            rspec.den.forEach(function(k) {{ den += block[k] || 0; }});
+          }});
+          return den ? num / den : 0;
+        }}
         var sum = 0;
         phases.forEach(function(p) {{
           sum += ((data.versions[v] || {{}})[p] || {{}})[metric] || 0;
@@ -832,7 +1223,18 @@ tr.total-row td, tr.total-row th {{ background: var(--total-bg); font-weight: 60
     if (n == null) return '—';
     return Math.round(n).toLocaleString();
   }}
+  function fmtRate(v) {{
+    if (v == null) return '—';
+    return (Number(v) * 100).toFixed(1) + '%';
+  }}
   function fmtAxis(metric) {{
+    if (isRate(metric)) {{
+      return function(v) {{
+        var n = Number(v);
+        if (!isFinite(n)) return v;
+        return (n * 100).toFixed(0) + '%';
+      }};
+    }}
     return function(v) {{
       var n = Number(v);
       if (!isFinite(n)) return v;
@@ -847,6 +1249,7 @@ tr.total-row td, tr.total-row th {{ background: var(--total-bg); font-weight: 60
     }};
   }}
   function fmtValue(metric, v) {{
+    if (isRate(metric)) return fmtRate(v);
     return isDuration(metric) ? fmtDuration(v) : fmtTokens(v);
   }}
   if (typeof Chart === 'undefined') return;
@@ -919,6 +1322,43 @@ tr.total-row td, tr.total-row th {{ background: var(--total-bg); font-weight: 60
           }}
         }}
       }}
+    }});
+  }});
+}})();
+</script>
+<script>
+(function() {{
+  document.querySelectorAll('tr.v-row.has-runs').forEach(function(row) {{
+    row.addEventListener('click', function() {{
+      var version = row.getAttribute('data-version');
+      var expanded = row.classList.toggle('expanded');
+      var tbody = row.closest('tbody');
+      tbody.querySelectorAll('tr.run-row[data-version="' + CSS.escape(version) + '"]')
+        .forEach(function(detail) {{ detail.classList.toggle('expanded', expanded); }});
+    }});
+  }});
+
+  var tabs = document.querySelectorAll('.phase-tab');
+  function selectPhase(target) {{
+    tabs.forEach(function(tab) {{
+      tab.classList.toggle('active', tab.getAttribute('data-phase') === target);
+    }});
+    document.querySelectorAll('.phase-pane').forEach(function(pane) {{
+      var match = pane.getAttribute('data-phase') === target;
+      pane.classList.toggle('active', match);
+      if (match) {{
+        pane.querySelectorAll('canvas[data-phase]').forEach(function(canvas) {{
+          var chart = window.Chart && window.Chart.getChart && window.Chart.getChart(canvas);
+          if (chart) chart.resize();
+        }});
+      }}
+    }});
+  }}
+  var initial = document.querySelector('.phase-tab.active');
+  selectPhase(initial ? initial.getAttribute('data-phase') : 'total');
+  tabs.forEach(function(tab) {{
+    tab.addEventListener('click', function() {{
+      selectPhase(tab.getAttribute('data-phase'));
     }});
   }});
 }})();

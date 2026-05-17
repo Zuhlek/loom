@@ -1,0 +1,11 @@
+$ npm install
+... 228 packages added in 39s
+$ npm test
+> bookmarks-app@0.0.0 test
+> vitest run
+RUN v1.6.1
+include: tests/**/*.test.ts
+No test files found, exiting with code 0
+
+T-001 is tooling-only. Per task spec, "no tests + passWithNoTests" counts as green.
+exit code: 0

@@ -81,6 +81,23 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 - Must record process observations worth later curation.
 - Learning entries must use the heading `## YYYY-MM-DD - <project> - <topic>`.
 
+#### `review-verdict.json`
+
+- Path: `.loom/<project>/review-verdict.json`.
+- Single-object JSON written atomically. Read by the evaluation harness as the canonical machine-readable verdict — `review.md` prose is for humans and is not parsed.
+
+```json
+{
+  "verdict":  "PASS" | "FAIL",
+  "blockers": <int>,
+  "major":    <int>,
+  "minor":    <int>,
+  "note":     <int>
+}
+```
+
+Counts are non-negative integers. `verdict` is `FAIL` whenever `blockers > 0`; otherwise `PASS`. Values must equal the counts in the RETURN block (`blockers`, `major`, `minor`) and the count of `## Note` findings in `review.md` (`note`).
+
 #### Global learning-shard appends (dual-write)
 
 Review writes learning observations to two surfaces. Both are required.

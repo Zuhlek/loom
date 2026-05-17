@@ -1,0 +1,19 @@
+=== T-003 RED PHASE (listBookmarks stub throws) ===
+$ npm test
+ FAIL  tests/unit/repo.test.ts > repo.listBookmarks > returns [] on empty DB
+Error: listBookmarks not implemented
+ FAIL  ... > returns rows in created_at DESC, id DESC order
+ FAIL  ... > uses id as tiebreaker when timestamps are identical
+ FAIL  tests/integration/bookmarks.api.test.ts > GET /api/bookmarks > returns 200 with empty array on a fresh DB
+ FAIL  ... > returns seeded rows newest-first
+ Test Files  2 failed | 2 passed (4)
+      Tests  5 failed | 6 passed (11)
+
+=== T-003 GREEN PHASE ===
+$ npm test
+ ✓ tests/unit/repo.test.ts (3 tests) 21ms
+ ✓ tests/unit/db.test.ts (5 tests) 26ms
+ ✓ tests/integration/bookmarks.api.test.ts (2 tests) 18ms
+ ✓ tests/_init.test.ts (1 test) 1ms
+ Test Files  4 passed (4)
+      Tests  11 passed (11)

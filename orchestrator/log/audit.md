@@ -1,5 +1,91 @@
 # Audit Log
 
+## 2026-05-17 - baseline-1779002783-1 - review-pass-with-minor-findings
+
+Review verdict: PASS, 0 Blockers, 0 Major, 4 Minor, 1 Note. Local-only
+Bookmarks app shape; 12 AFK tasks landed on attempt 1; 48 vitest tests
+across 7 files green (`validate`, `db`, `api`, `render`, `web-api`,
+`bundle`, `smoke`); `tsc --noEmit` clean; `npm start` boots and serves
+`/` + `/api/bookmarks` on loopback; `git status` confirms zero deliverable
+writes outside `.loom/baseline-1779002783-1/app/`. All 7 ADRs honored, all
+5 seed decisions (Q01–Q05) observable, all 4 user stories satisfied with
+HTTP + DOM + smoke evidence. Stack matches the seed pin exactly (express,
+better-sqlite3, tsx, esbuild, vitest, supertest, typescript, jsdom — the
+single addition beyond the design list is jsdom for render tests, recorded
+in T-008.done.md). No commits, pushes, or destructive ops.
+
+Four Minor findings, none touching behaviour:
+
+- M-1 (P3): `src/web/main.ts` delete-click `catch` has an if/else where
+  both branches call `renderInlineError(errorSlot, 'network error')`
+  identically — collapse to a single unconditional call.
+- M-2 (P3): `Bookmark` / `BookmarkInput` are redeclared in `src/web/api.ts`
+  instead of imported from `src/server/db.ts`. design.md ADR-003
+  anticipated shared types; tsconfig permits the cross-import. Drift risk.
+- M-3 (process): per-task test-logs T-004..T-011 are summary-only;
+  red-phase evidence drops away after T-002. Spec asks for red+green per
+  task.
+- M-4 (P1): `src/server/index.ts` wraps listen in a synchronous try/catch
+  that cannot catch `app.listen`'s async `'error'` event (EADDRINUSE is
+  the practical failure). Add `.on('error', ...)` or drop the wrap.
+
+Note N-1: `db.ts` enables `journal_mode = WAL` (not in design.md).
+Harmless; worth recording since the WAL/SHM files appear on disk.
+
+## 2026-05-17 - baseline-1778968525-1 - review-pass-with-minor-findings
+
+Review verdict: PASS, 0 Blockers, 0 Major, 4 Minor. Same local-only
+Bookmarks app shape as the 2026-05-16 baseline; 10 AFK tasks landed
+on attempt 1; 48 vitest specs across 8 files green; `tsc --noEmit`
+clean; live smoke matrix on `npm start :3000` covers every API verb
+and the static asset trio with the `{ error: { code, message } }`
+envelope verified across 400 / 404 / 409 paths. All workspace
+constraints held — every deliverable under
+`.loom/baseline-1778968525-1/app/`; no commits, no pushes, no writes
+outside the workspace.
+
+Four Minor findings, all duplication/scaffolding-shaped, none touching
+behaviour:
+
+- F-1 (P3): `src/web/main.ts` re-implements server-side validation
+  (`locallyValidate`: title trim+empty, `new URL(...)` try/catch) for
+  a UX win not called out by any AC. Server already returns 400 with
+  a `code`-keyed body that the UI's `messageForCode` handles. Two
+  sources of truth.
+- F-2 (P5): `ValidationCode` union includes `'INVALID_BODY'` but no
+  `ValidationError` is ever constructed with it — the middleware
+  emits that code directly without the type. Speculative member.
+- F-3 (P7-adjacent / stylistic): `build.mjs` self-run guard reads
+  oddly; the ternary on `process.argv[1]` doesn't influence the
+  value, and the resolved-path equality already handles the absent
+  case. Documented in build's own develop-log; worth a cleanup
+  follow-up.
+- F-4 (P5, low confidence): `httpStatusFor` is exported but its
+  only load-bearing consumer is the test suite — the middleware
+  already branches on `instanceof` and returns the literal status.
+  Two parallel mappings for the same invariant.
+
+None blocks pipeline advance. All four are deferrable to a
+post-baseline cleanup task. The implementation is otherwise tight:
+ADR-001..ADR-008 all honoured, P1/P2/P4/P6/P7 all clean. Notable
+positive signals: behaviour-shaped test names, no internal-mock usage
+in `tests/api.test.ts` (only the `fetch` boundary is mocked),
+parameterised SQL throughout, anchors emit
+`rel="noopener noreferrer"` per US-003 AC2.
+
+## 2026-05-17 - baseline-1778968525-1 - design-flex-points-handoff-clean
+
+Useful audit-side observation: design called out two flex points
+explicitly ("Open ambiguity" — SQLite file location and server
+execution choice). Plan pinned one option for each; build executed
+without re-asking; review confirmed both choices satisfy every
+acceptance criterion. Worth promoting as the canonical shape for
+"flex flagged at design, not deferred to build." When a flex point is
+recorded explicitly *and* the plan pins one branch, the build phase
+gets a clean signal and no downstream task re-litigates. This is the
+opposite failure mode of "ambiguity ignored at design, surfaces as
+HITL during build" — and the present run is the positive case.
+
 ## 2026-05-16 - baseline-1778916127-1 - clean-pass-one-minor-one-note
 
 Review verdict: PASS, 0 Blockers, 0 Major, 1 Minor, 1 Note. Ten AFK
@@ -1110,3 +1196,49 @@ Audit Agent should classify it as a Note (not a Major finding) and
 recommend canonicalising the pattern in the build shard. A failing
 smoke check without substitution rationale would be a Blocker; the
 documented substitution is the difference.
+
+## 2026-05-17 - baseline-1779002783-2 - review-pass-with-three-minors
+
+Review verdict: PASS, 0 Blockers, 0 Major, 3 Minor, 1 Note. Same
+local-only Bookmarks app shape as baseline-1779002783-1; 10 AFK tasks
+landed on attempt 1; 76 vitest assertions across 9 files green
+(`_init`, `validate`, `db`, `repo`, `api` (client), `render`,
+`form`, `delete`, integration `bookmarks.api`); `npm run smoke` PASS
+on the two-spawn restart cycle. Stack matches the seed pin exactly
+(express 4.21, better-sqlite3 11.3, vitest 2.1, esbuild 0.23, tsx,
+typescript, supertest, happy-dom). All deliverables confined to
+`.loom/baseline-1779002783-2/app/`. All 10 ADRs honored, all 5
+seed-decision resolutions observable, all 5 user stories satisfied.
+No commits, pushes, or destructive ops.
+
+Three Minor findings, none behavioural:
+
+- M-1 (P1/P2): `client/main.ts` monkey-patches `url` onto an
+  `ApiError` instance via an intersection-type cast (`(err as ApiError
+  & { url?: string }).url = url`) to thread the duplicate URL through
+  the message formatter. `ApiError` class declares `status`, `code`,
+  `field?` but not `url`. Either extend the class so `toApiError`
+  parses `error.url` from the 409 body (server already sends it), or
+  use the form's `url` variable directly at the call site (it's in
+  scope).
+- M-2 (P5): `db.ts` runs `pragma('foreign_keys = ON')` on open, but
+  the schema has zero `REFERENCES` clauses anywhere in the project
+  now or in `design.md`. Speculative config with no current consumer.
+  Drop the line or move it inside the migration with a comment that
+  explains when it would matter.
+- M-3 (P5/P1): `tests/_init.test.ts` placeholder (`expect(true).
+  toBe(true)`) remains in the suite after T-002 added real db tests
+  that prove the harness works. Redundant; delete.
+
+Note N-1: `db.ts` enables `journal_mode = WAL` for non-`:memory:`
+opens. Not in `design.md`. Same Note recorded in
+baseline-1779002783-1's review. Sensible default; worth promoting
+to design next baseline so `.sqlite-wal` / `.sqlite-shm` sidecars
+on disk are expected.
+
+Process win: per-task `test-log.txt` files carry **both** red and
+green phases for all 10 tasks, addressing the M-3 gap flagged in
+baseline-1779002783-1. T-001 captures `vitest: command not found` as
+the red substitute (no devDeps yet); T-010 captures the
+`scripts/smoke.mjs` ENOENT before the script was written. Pattern
+worth keeping.
