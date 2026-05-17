@@ -1,12 +1,12 @@
 # Build Task-Builder Agent — Signature
 
-I/O signature between the Build Coordinator and a Task Builder subagent.
+I/O signature between `/weave` and a Task Builder subagent.
 
 ## Trigger
 
-**Caller:** Build Coordinator (the `phase.md` body of `phases/build/`).
+**Caller:** `/weave` orchestrator, on behalf of the Build phase.
 
-**Invocation condition:** Coordinator picks a ready task from `board.md` (Backlog → In Progress transition) and dispatches a fresh `Task` subagent. The system prompt is the concatenation of `task.md` and this signature (body first, then `\n\n---\n\n`, then signature).
+**Invocation condition:** the Build Coordinator returns having promoted a task in `board.md` (Backlog → In Progress) and named it ready; the orchestrator then dispatches a fresh `Task` subagent against `methods/task.md`. The Coordinator does NOT dispatch directly — every subagent in the Loom tree spawns from `/weave` so the dispatch shape stays under one contract (see `weave/SKILL.md` § Dispatch concatenation). The user-turn prompt is the two-band concatenation defined there; resolve `<project>` / `<phase>` / `<task>` placeholders by reading the `<system-reminder>` tail block.
 
 ## Params
 

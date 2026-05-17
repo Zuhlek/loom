@@ -20,6 +20,10 @@ State file: `.loom/<project>/pipeline.md`
 
 After every phase the orchestrator surfaces a rerun-or-continue decision to the user. Reruns are never automatic. Four of the five phases (Spec, Design, Plan, Build) additionally offer an opt-in Quality Check subagent that analyses artifacts for holes, blind spots, and contradictions to help the user decide whether a rerun is worth the token burn. Review is itself the project-level quality check and has no separate Quality Check subagent.
 
+## Dispatch hierarchy
+
+Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatches phase agents, quality-check agents, and Build's per-task `methods/task.md` subagents directly — phase agents never dispatch their own children. The Build Coordinator promotes ready cards on `board.md`, returns, and `/weave` dispatches a fresh task subagent for each promoted card before re-dispatching the Coordinator for board reconciliation. The single-injection-site property is what makes the cached-prefix contract in `weave/SKILL.md` § Dispatch concatenation enforceable: one place dispatches, one place owns the dispatch shape.
+
 ## Layout
 
 | Path | Purpose |

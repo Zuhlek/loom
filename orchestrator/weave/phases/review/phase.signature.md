@@ -6,7 +6,7 @@ I/O signature between `/weave` and the Review Audit Agent.
 
 **Caller:** `/weave` orchestrator.
 
-**Invocation condition:** `pipeline.md.Current phase == review` AND `Phase status ∈ {Pending, blocked, failed}`. Dispatched in a fresh `Task` session whose system prompt is the concatenation of `phase.md` and this signature (body first, then `\n\n---\n\n`, then signature). Review has no quality-check agent — Review IS the project-level quality check.
+**Invocation condition:** `pipeline.md.Current phase == review` AND `Phase status ∈ {Pending, blocked, failed}`. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`; resolve `<project>` / `<phase>` / `<task>` placeholders by reading the `<system-reminder>` tail block. Review has no quality-check agent — Review IS the project-level quality check.
 
 ## Params
 

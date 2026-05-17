@@ -6,7 +6,7 @@ I/O signature between the Build Coordinator and the Mutation-Test subagent.
 
 **Caller:** Build Coordinator (the `phase.md` body of `phases/build/`).
 
-**Invocation condition:** `tests.md` declares `**Mutation Testing:** yes` at the top of the file AND a task has completed its green phase. Dispatched in a fresh `Task` session whose system prompt is the concatenation of `mutation.md` and this signature. One task per session.
+**Invocation condition:** `tests.md` declares `**Mutation Testing:** yes` at the top of the file AND a task has completed its green phase. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`; resolve `<project>` / `<phase>` / `<task>` placeholders by reading the `<system-reminder>` tail block. One task per session.
 
 ## Params
 

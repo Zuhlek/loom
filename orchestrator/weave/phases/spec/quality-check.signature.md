@@ -6,7 +6,7 @@ I/O signature between `/weave` and the Spec Quality Check Agent.
 
 **Caller:** `/weave` orchestrator.
 
-**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Spec rerun-or-continue surface. Not part of the mandatory phase cycle. Dispatched in a fresh `Task` session whose system prompt is the concatenation of `quality-check.md` and this signature.
+**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Spec rerun-or-continue surface. Not part of the mandatory phase cycle. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`.
 
 ## Params
 

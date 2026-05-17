@@ -29,7 +29,7 @@ The inline `principles.md P2` reference in Step 3 (Implement) is a reminder, not
   npm test 2>&1 | tail -100 >> tasks/T-NNN.test-log.txt
   pytest 2>&1 | tail -100 >> tasks/T-NNN.test-log.txt
   ```
-- **No commits, pushes, deploys, hard resets, or destructive commands.** Build Coordinator gates those; Task Builder never invokes them.
+- **No commits, pushes, deploys, hard resets, or destructive commands.** Build does not perform those — neither the Coordinator nor the Task Builder ever invokes them.
 
 ## "Done" means all five
 

@@ -6,7 +6,7 @@ I/O signature between `/weave` and the Build Coordinator Agent.
 
 **Caller:** `/weave` orchestrator.
 
-**Invocation condition:** `pipeline.md.Current phase == build` AND `Phase status ∈ {Pending, blocked, failed}`. Dispatched in a fresh `Task` session whose system prompt is the concatenation of `phase.md` and this signature (body first, then `\n\n---\n\n`, then signature).
+**Invocation condition:** `pipeline.md.Current phase == build` AND `Phase status ∈ {Pending, blocked, failed}`. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`; resolve `<project>` / `<phase>` / `<task>` placeholders by reading the `<system-reminder>` tail block.
 
 ## Params
 
