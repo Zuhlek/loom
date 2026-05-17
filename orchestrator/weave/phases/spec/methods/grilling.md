@@ -99,8 +99,8 @@ The Spec Grilling Agent surfaces every question via `AskUserQuestion` and runs t
 ### Non-interactive answer queue
 
 Before calling `AskUserQuestion` for any question Q<n>, the agent MUST first
-consult `.loom/<project>/.answers.yaml` (staged by `/weave --answers <path>`
-per ADR-001). The flow:
+consult `.loom/<project>/.answers.yaml` (staged by `/weave --answers <path>`).
+The flow:
 
 1. Generate Q<n> exactly as in the interactive path (briefing block,
    triage, etc.). Question generation is unchanged.
@@ -127,9 +127,7 @@ per ADR-001). The flow:
    - `{}` → queue exhausted OR no entry matches Q<n>. Write `[stop]` to
      the slot and exit the loop with `STATUS: stop-requested` (same
      terminal state as the user clicking Stop in interactive mode). The
-     orchestrator's gate surfaces this naturally; in `run-baseline.sh`
-     mode the failure is logged and the next iteration proceeds (US-003
-     AC-4).
+     orchestrator's gate surfaces this naturally.
 
 4. The agent does NOT invent answers, does NOT silently fall back to its
    own recommendation, and does NOT block indefinitely. Queue exhaustion
@@ -144,8 +142,9 @@ per ADR-001). The flow:
    non-interactively).
 
 The question-generation loop (§3 triage) runs structurally unchanged —
-only the ASK step (§4) gains the pre-check above. This matches US-003
-AC-3 ("Spec runs structurally unchanged").
+only the ASK step (§4) gains the pre-check above. Non-interactive mode
+is purely a substitution at the ASK boundary; the agent's reasoning loop
+behaves identically to the interactive path.
 
 ### AskUserQuestion field mapping
 

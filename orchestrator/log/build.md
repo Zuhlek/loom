@@ -1,5 +1,71 @@
 # Build Log
 
+## 2026-05-17 — baseline-1779026768-1 — Coordinator turn: T-003 → Done; T-004 dispatched
+
+Pre-flight `node-test` matched `plan.md § Verification environment`
+(`node v25.8.2`, `npm 11.11.1`, `app/node_modules/` populated).
+T-003 returned `status: green` from the Task Builder with the
+red→green narrative captured in `tasks/T-003.test-log.txt` and the
+done report at `tasks/T-003.done.md`. Re-ran smoke + full suite
+from `.loom/baseline-1779026768-1/app/`: 4/4 canaries + 30/30
+behavioural cases across 7 files; no regressions. Board mutation
+under the project build lock: T-003 `In Progress → Review → Done`;
+T-004 `Backlog → In Progress`. Mutation testing stays OFF per
+`tests.md`. No commits / pushes / destructive commands.
+
+## 2026-05-17 - baseline-1779025019-1 - T-002 db module green on first attempt
+
+Task Builder implemented `app/src/db.ts` per `design.md ## Interfaces` and
+`## Data model`: `openDb(filePath)` opens `better-sqlite3`, sets
+`journal_mode = WAL`, then `db.exec` of `CREATE TABLE IF NOT EXISTS
+bookmarks (...)` (with `CHECK (length(trim(title)) > 0)` and
+`UNIQUE(url)`) and `CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at`.
+The schema string lives at module top to keep the implementation a
+4-line function (principles.md P1). Re-exports `Database` from
+`better-sqlite3` so T-003 / T-004 import the handle type from
+`./db.ts` rather than directly from the dependency.
+
+Tests in `tests/db.test.ts` exercise the contract through the returned
+handle's SQL surface — schema visible in `sqlite_master`, idempotent
+re-open on a temp file, WAL pragma reflected, CHECK rejects empty /
+whitespace title, UNIQUE rejects with `SQLITE_CONSTRAINT_UNIQUE`,
+`created_at` auto-stamps as ISO-8601 second-precision text. No
+internal mocks (P6). Red phase captured 7 runtime `Error: openDb: not
+implemented` failures from the stub. Green phase: 7/7 in the focused
+file, 21/21 across the full suite. One implementation attempt, no
+out-of-scope edits, no new deps.
+
+## 2026-05-17 - baseline-1779026768-1 - Coordinator promoted T-001 to Done, dispatched T-002
+
+Pre-flight: `node v25.8.2`, `npm 11.11.1` — `node-test` harness matches
+the plan. Smoke canary re-run on landed code, 4/4 pass (see
+`smoke-report.md`). T-001 transitioned `In Progress → Review → Done` in
+a single Coordinator cycle (red+green log present, done.md status
+`green`, attempts 1). Mutation gate skipped — `tests.md` declares
+mutation OFF. T-002 unblocked and promoted to `In Progress`; T-003 and
+T-004 stay in `Backlog` blocked on T-002. Aggregated evidence in
+`test-report.md`. RETURN status: `Pending` (more tasks to go).
+
+## 2026-05-17 - baseline-1779026768-1 - T-001 save-slice + scaffold green on first attempt
+
+Task Builder landed the scaffold (`package.json` / `tsconfig.json` /
+`esbuild.config.mjs` / `vitest.config.ts` / `.gitignore`) and the save
+path end-to-end in one task, per the plan's slicing principle. Four
+Vitest files (`smoke`, `db.bookmarks.create`, `api.bookmarks.create`,
+`web.save-form`), 18/18 green on the first implementation attempt.
+Red-phase log captured 18 runtime `Error: ... not implemented` failures
+from stubs before implementation, so the test-log preserves the
+red→green narrative the Review Audit Agent looks for.
+
+One callout for downstream tasks: server bundle is emitted as
+`dist/server/index.cjs`, not `index.js`, because `package.json`
+declares `"type": "module"` and Node refuses to load CJS `.js` under
+that. `npm start` and `esbuild.config.mjs` reference `.cjs`; the
+prose in `design.md ## System shape` still reads `index.js` but the
+behavioural contract (single CJS bundle with externalised
+`express` + `better-sqlite3`) is met. Future tasks should not "fix
+back" to `.js`.
+
 ## 2026-05-17 - baseline-1779002783-1 - per-task-test-log-thinness
 
 Per-task test-logs (`tasks/T-NNN.test-log.txt`) drifted to green-only
@@ -2733,3 +2799,304 @@ happy-dom + native-`fetch` mocks where the awaited chain looks like
 isn't enough because the chain spans two microtask turns; three is
 unnecessary. Worth promoting to client-side test guidance for the
 Build Task Builder.
+
+## 2026-05-17 - baseline-1779025019-1 - T-001 scaffold green
+
+Scaffolded `./app/` workspace under `.loom/baseline-1779025019-1/app/`.
+package.json declares `"type": "module"`, the four required scripts
+(`start`, `test`, `build:client`, `pretest`), and the design.md
+dependency pin set (express@^4, better-sqlite3@^11, esbuild@^0.24,
+typescript@^5, vitest@^2, supertest@^7, happy-dom, @types/node|
+express|better-sqlite3|supertest). Two-tsconfig profile split per
+ADR-006: server `tsconfig.json` uses `lib: ES2022`, `types: [node]`,
+`module: ESNext`, `moduleResolution: Bundler`, strict; client
+`src/client/tsconfig.json` uses `lib: [ES2022, DOM]`, `types: []`,
+strict. `vitest.config.ts` defaults environment to `happy-dom` and
+aliases `@/` → `src`. `.gitignore` covers `node_modules`, `dist`,
+`public/main.js`, `bookmarks.db`, `*.db-wal`, `*.db-shm`. One
+out-of-scope edit: `scripts/build-client.mjs` ships as a no-op stub
+because `pretest` invokes it and T-001's acceptance includes
+`npm test` exit 0 — T-006 owns the real esbuild bundle. Red phase
+captured 14 assertion failures from `tests/scaffold.test.ts`
+(content checks on package.json/tsconfig + `npx tsc --noEmit` shell-
+outs for both profiles). Green phase: 14/14 pass. One implementation
+attempt. Note: src placeholder files renamed off the dot-prefix
+because tsc's include glob (`./**/*.ts`) skips dotfiles, which left
+the client profile with no inputs (TS18003).
+
+## 2026-05-17 - baseline-1779025019-1 - Coordinator: T-001 → Done, T-002 promoted
+
+Build Coordinator turn. Verification-environment pre-flight: `node-test`
+declared in plan.md and confirmed executable (T-001's green phase already
+ran `npm install`, `npx tsc --noEmit` for both profiles, and `npm test`
+end-to-end). Proceeding.
+
+Transitioned T-001 from `In Progress` to `Done`. T-001 returned
+`status: green` with one attempt; its test-log shows the required
+red phase (14 assertion failures) and green phase (14 passing).
+Smoke gate not applicable — project not yet runnable until T-005 +
+T-006 land the server entrypoint and client build. Mutation gate
+disabled per plan.md / tests.md (`Mutation Testing: no`). T-001 →
+Done is therefore legal under the "no smoke-report.md required when
+project is not runnable" carve-out.
+
+Promoted T-002 (Open SQLite DB and apply schema idempotently) from
+`Backlog` to `In Progress`. T-002's only blocker was T-001, now Done.
+No other Backlog card is unblocked: T-003 still waits on T-002, and
+the rest of the chain is linear. No parallel batch this turn.
+
+Returning control to /weave for task subagent dispatch.
+
+## 2026-05-17 - baseline-1779026768-1 - T-002 list bookmarks newest-first + refresh
+
+Build Task Builder turn for T-002. Layered the list view + post-mutation
+refresh slice on top of T-001's save path. Added `render(state)` and
+`refresh()` to `app/src/web/main.ts`; HTML now carries
+`<p id="empty-state">No bookmarks yet.</p>` and
+`<ul id="bookmarks">` (renamed from `bookmark-list` per task spec).
+Module-level boot listens for `bookmarks-changed` and runs `refresh()`
+on page load; both calls guard on `document.getElementById("bookmarks")`
+to avoid stray fetches in DOMs that omit the list root (existing
+`web.save-form.test.ts` only builds the form-shaped DOM).
+
+Two new test files: `tests/api.bookmarks.list.test.ts` (4 cases) and
+`tests/web.render-list.test.ts` (5 cases). Red phase recorded 5 runtime
+assertion failures (`Error: render not implemented`, `Error: refresh
+not implemented`) from the stubs; the API list tests passed already in
+the red phase because T-001 implemented `list()` and the GET endpoint
+end-to-end — the task's layer notes explicitly frame the API list
+tests as confirming the ordering + tiebreaker contract on the
+existing surface. Green phase: 9/9 task-scope cases pass; full
+`npm test` suite 27/27 across 6 files; no regressions. One
+implementation attempt. No out-of-scope edits.
+
+## 2026-05-17 - baseline-1779025019-1 - Coordinator: T-002 → Done, T-003 promoted
+
+Build Coordinator turn. Pre-flight: `node-test` env executable on this
+Coordinator. Transitioned T-002 from `In Progress` to `Done` (status:
+green, attempts: 1; test-log shows 7 red runtime failures from the stub
+and 7 green in `tests/db.test.ts`, 21/21 full suite). Smoke
+not-applicable (project not runnable pre-T-005/T-006); mutation
+disabled. Promoted T-003 (Bookmarks repository with typed errors,
+blocked-by: [T-002]) from `Backlog` to `In Progress`. Chain remains
+linear after T-003 — no parallel batch. Returning control for task
+dispatch.
+
+## 2026-05-17 — baseline-1779026768-1 — Coordinator turn: T-002 → Done; T-003 dispatched
+
+`node-test` environment confirmed. Board entered with T-002 in
+`In Progress` (Task Builder had returned `status: green` previously but
+the card had not been transitioned). Smoke (`tests/smoke.test.ts`) and
+full suite re-ran from `.loom/baseline-1779026768-1/app/`: 4/4 + 27/27
+green. T-002 transitioned `In Progress → Review → Done`. T-003 promoted
+to `In Progress`; T-004 remains in `Backlog` (shares `app/src/web/main.ts`
+with T-003; not disjoint, so dispatched sequentially, not as a parallel
+batch). Aggregate now 2 complete / 0 failed / 0 hitl. Mutation testing
+remains off per `tests.md`.
+
+## 2026-05-17 - baseline-1779026768-1 - T-003 anchor new-tab attributes green on first attempt
+
+Task Builder pinned the new-tab link contract for US-003 with a
+two-line change inside `render()` in `app/src/web/main.ts`:
+`a.target = "_blank"` and `a.rel = "noopener noreferrer"` on each
+per-row anchor. `href = bm.url` and `textContent = bm.title` were
+already in place from T-002, so the entire diff is exactly two
+property assignments inserted between them — the smallest possible
+change consistent with the acceptance criteria (principles.md P1).
+No new helpers, no signature changes, no HTML or server changes,
+no new dependencies.
+
+Tests in `app/tests/web.bookmark-link.test.ts` (jsdom) cover three
+cases: single-bookmark anchor attributes (href / target=_blank /
+rel containing both `noopener` and `noreferrer` / textContent =
+title), distinct attributes across two bookmarks, and a title with
+HTML-special characters (`<script>...</script> & friends`) rendered
+as raw `textContent` with zero injected children. Red phase
+captured 2 runtime `expected null to be '_blank'` assertion
+failures from the missing attributes; the third (HTML escape)
+passed against the existing `textContent` path and remains as a
+regression guard against any future shift to `innerHTML`. Green
+phase: 3/3 task-scope cases pass; full suite 30/30 green across 7
+files; no regressions. One implementation attempt, no out-of-scope
+edits.
+
+## 2026-05-17 - baseline-1779025019-1 - T-003 bookmarks repository green on first attempt
+
+Task Builder implemented the pure data-access layer for the local
+Bookmarks app at `app/src/bookmarks.ts` against the `Database` handle
+returned by `openDb`. Eight Vitest behaviour cases in
+`app/tests/bookmarks.repo.test.ts` cover the design contract: empty list
+on a fresh DB; `createBookmark` returns a row with numeric id, trimmed
+title, and ISO-8601 `created_at`; a duplicate `url` rethrows as a typed
+`DuplicateUrlError` with `code = "DUPLICATE_URL"` and the list stays at
+length 1; whitespace-only title and syntactically invalid url each raise
+`ValidationError` with the correct `field` discriminator; `listBookmarks`
+orders by `created_at DESC, id DESC` (verified by back-dating two of
+three rows to a shared timestamp so the `id DESC` tiebreak is the only
+thing that can order them); `deleteBookmark` returns true for an
+existing id and false for a missing one.
+
+Red phase produced 8 runtime "not implemented" failures (genuine runtime
+assertion errors, not compile / import errors) from the stub. The
+implementation catches `SQLITE_CONSTRAINT_UNIQUE` and rethrows
+`DuplicateUrlError`; validation precedes the INSERT so a bad title never
+reaches the DB; URL validation uses the standard `new URL(value)`
+constructor as design.md prescribes. No new dependencies, no HTTP
+concerns leaked into the repository, no exports beyond the four named
+symbols required by `design.md ## Interfaces` (principles.md P5). Full
+suite 29/29 across three files; `tsc --noEmit` on the server tsconfig
+clean. One implementation attempt; no out-of-scope edits.
+
+## 2026-05-17 - baseline-1779025019-1 - Coordinator: T-003 → Done, T-004 promoted
+
+Build Coordinator turn (project `baseline-1779025019-1`). Verification-environment
+pre-flight: `node-test` declared in plan.md, confirmed executable (node v25,
+npm 11 available locally; prior tasks ran `npm install`, `tsc --noEmit`, and
+`npm test` end-to-end). Proceeding.
+
+Transitioned T-003 from `In Progress` to `Done`. T-003 returned `status: green`
+with one attempt; test-log shows red (8 "not implemented" assertion failures) →
+green (29/29 suite). Smoke gate not applicable — server entrypoint and client
+bundle still pending (T-005, T-006). Mutation gate off (`tests.md`).
+
+Promoted T-004 (HTTP routes and buildApp factory) from `Backlog` to `In Progress`;
+its only blocker was T-003. No other Backlog card is unblocked — T-005/T-006
+both wait on T-004, the rest of the chain is linear, so no parallel batch.
+
+Returning control to /weave for task subagent dispatch of T-004.
+
+## 2026-05-17 - baseline-1779026768-1 - T-004 delete a bookmark, idempotent DELETE, URL freed for re-save
+
+Task Builder implemented US-004 across the API and web layers in the
+project `baseline-1779026768-1`. The repo-level `remove(id)` had
+already been written under T-001; T-004 stands a verification suite
+`app/tests/db.bookmarks.remove.test.ts` (3 cases — true on hit with
+list empty after, false on miss without throw, and selective removal
+leaving the rest intact). The verification cases passed in the red
+phase as the task layer notes explicitly frame them. The API layer
+gains `DELETE /api/bookmarks/:id` in
+`app/src/server/api/bookmarks.ts`: `:id` is regex-validated against
+`^\d+$`, otherwise returns `400 invalid_json` with
+`message: "id must be an integer"` (reuses the closed
+`ApiErrorCode` enum per ADR-06 — no new error codes); on a valid id,
+calls `repo.remove(id)` and responds `204 No Content` regardless of
+whether a row matched, logging `no-op delete: id=<id>` to stderr on
+the false branch. The web bundle in `app/src/web/main.ts` now
+renders a `<button class="delete" data-id aria-label>` per row
+inside `render()`; a delegated `click` handler on
+`<ul#bookmarks>` (idempotently attached, guarded by a module-level
+sentinel so repeated `render()` calls do not stack listeners) reads
+`data-id`, disables the button, issues `fetch DELETE`, fires the
+existing `bookmarks-changed` event on a 2xx response so the T-002
+refresh path repopulates the list, and on 4xx/5xx surfaces the
+existing `#form-error` banner and re-enables the button.
+
+New tests: `app/tests/api.bookmarks.delete.test.ts` (5 Supertest cases
+— 204 on hit, idempotent second delete, idempotent miss on empty repo,
+400 invalid_json with `/integer/` message on a non-numeric `:id`, and
+the POST → DELETE → POST same-URL path returning 201 for US-004 AC2);
+`app/tests/web.delete-control.test.ts` (5 jsdom cases — per-row button
+with matching `data-id`, click dispatches a fetch with `method:
+"DELETE"`, 204 fires `bookmarks-changed`, 500 surfaces the error
+banner and re-enables the button, button is disabled between click
+and response). Red phase recorded 10 runtime assertion failures (404
+vs 204, missing `button.delete` selectors). Green phase: 13/13
+task-scope cases pass; full suite 43/43 across 10 files; no
+regressions. One implementation attempt, no out-of-scope edits, no
+new dependencies, no HTML or CSS changes (the `#form-error` banner
+from T-001 is reused — `principles.md` P1 / P3).
+
+## 2026-05-17 - baseline-1779025019-1 - Task Builder T-004 HTTP routes and buildApp factory green on first attempt
+
+Implemented `bookmarksRouter(db)` in `app/src/routes.ts` and `buildApp(db)`
+in `app/src/app.ts` per `design.md ## Interfaces` + ADR-001 / ADR-003 and
+the T-004 scope. Eleven behaviour tests in `app/tests/routes.test.ts` were
+authored first against `supertest(buildApp(openDb(':memory:')))`; the stubs
+(`buildApp: not implemented`, `bookmarksRouter: not implemented`) raised
+runtime errors on the first `request(app).get(...)` so the red phase
+produced 11 assertion failures (not compile / import errors).
+
+`bookmarksRouter` mounts the three endpoints on `/api/bookmarks`. GET
+returns `200 listBookmarks(db)`. POST validates that `title` and `url`
+are strings (missing field → `400 { error: "validation", field, message }`),
+delegates to `createBookmark`, maps `ValidationError` → `400` with the
+typed `field`, `DuplicateUrlError` → `409 { error: "duplicate_url",
+message: "URL is already saved" }`, and returns `201 bookmark` on success.
+DELETE `/api/bookmarks/:id` coerces the id via `/^\d+$/.test` (non-integer
+→ `400` with `field: "id"`), returns `404 { error: "not_found" }` when
+`deleteBookmark` returns `false`, and `204` on success.
+
+`buildApp(db)` wires `express.json()`, mounts the router at `/`, and
+installs the error-mapping middleware that emits `500 { error: "internal" }`
+for any unexpected throw — matching the design's per-request error map.
+Static serving is reserved for T-006 per the task scope and not added
+speculatively (`principles.md` P5). The factory is the testability seam:
+routes share the production code path; only `app.listen` is reserved for
+`server.ts` (T-005).
+
+Tests assert on status codes, response bodies, and observable list state
+across requests — no internal mocking, no method-call assertions
+(`principles.md` P6). Smallest diff that satisfies the acceptance sketch
+(P1); existing patterns followed (P2): `Router` factory taking a `Database`
+mirrors the repository functions; error-mapping is centralised in the
+route handler instead of a wrapper around the framework (P7).
+
+Green phase: 11/11 in `routes.test.ts`; full suite 40/40 across four files
+(`routes.test.ts`, `bookmarks.repo.test.ts`, `db.test.ts`, `scaffold.test.ts`);
+`tsc --noEmit` on the server tsconfig clean. One implementation attempt.
+No out-of-scope edits.
+
+## 2026-05-17 - baseline-1779025019-1 Coordinator turn (post-T-004)
+
+T-004 returned green; Coordinator transitioned it In Progress → Done
+(smoke carve-out: project not runnable yet). Promoted T-005 (server
+entrypoint) and T-006 (client build + static serving) from Backlog to
+In Progress as a parallel batch — disjoint `files-likely-touched`
+(`src/server.ts` + `package.json` vs `scripts/build-client.mjs` +
+`src/client/**` + `src/app.ts` static line + `public/.gitkeep`).
+Returning so /weave dispatches the two `methods/task.md` subagents.
+Mutation off (tests.md). No commits, no destructive commands.
+
+## 2026-05-17 - baseline-1779025019-1 - Task Builder T-006 client build and static serving green on first attempt
+
+Implemented the esbuild bundle pipeline + same-origin static serving in
+project `baseline-1779025019-1` per `design.md` ADR-001 / ADR-004 and the
+T-006 scope. `scripts/build-client.mjs` now invokes esbuild
+programmatically (entry `src/client/main.ts`, outfile `public/main.js`,
+`bundle:true`, `format:"esm"`, `platform:"browser"`, `target:"es2022"`,
+`minify:false`, `logLevel:"info"`) and copies `index.html` + `styles.css`
+from `src/client/` into `public/`. The build script resolves paths from
+`import.meta.url`, not cwd, so it works regardless of invocation
+directory.
+
+`src/client/index.html` is the minimal HTML5 shell with
+`<link rel="stylesheet" href="/styles.css">`, an empty
+`<ul id="bookmarks">` slot that T-007 fills,
+`<section id="form-slot">` for T-008, and
+`<script type="module" src="/main.js">`. `main.ts` is the empty
+bootstrap (`addEventListener("DOMContentLoaded", () => {})`).
+`styles.css` is the minimum legible layout (system font, capped width,
+`color-scheme: light dark`) — no nice-to-haves beyond a row separator.
+
+`src/app.ts` gains one line:
+`app.use(express.static(path.resolve("public")))` — wired before the
+API router. Same-origin serving (US-005 AC-2) now holds: `GET /`
+returns the shell, `GET /main.js` the bundle, `GET /styles.css` the
+stylesheet, all from `http://localhost:3000` (`principles.md` P7 — use
+the framework's built-in).
+
+Six behaviour tests in `tests/static.test.ts` cover build-artefact
+existence + content (HTML carries the module script tag and the
+`<ul id="bookmarks">` slot) and HTTP surface (status + Content-Type
+prefix for each asset via supertest against
+`buildApp(openDb(':memory:'))`). Asserts are on observable
+bodies/headers only — no internal mocking (`principles.md` P6).
+
+Red phase: 6 runtime assertion failures in `static.test.ts` (existsSync
+false → expected true; 404 → expected 200) — runtime errors, not
+compile / import errors. Green phase: 6/6 in `static.test.ts`, 49/49
+across the full suite (T-005's `server.test.ts` also landed green in
+the same run via the parallel batch). `tsc --noEmit` clean on both
+tsconfig profiles. One implementation attempt. One out-of-scope edit
+recorded: deleted `src/client/placeholder.ts` (T-001 scaffolding now
+unreachable, `principles.md` P4).

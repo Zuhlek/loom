@@ -34,7 +34,7 @@ At workspace-resolution time (before the Phase Cycle starts), parse
 `$ARGUMENTS` for a `--answers <path>` flag. Treat it as optional, position-
 independent, and case-sensitive (exactly `--answers`). The flag's value is a
 filesystem path to a `.answers.yaml` file (strict-subset YAML per
-`orchestrator/lib/answer-queue.py` / ADR-006).
+`orchestrator/lib/answer-queue.py`).
 
 Lifecycle:
 
@@ -64,9 +64,9 @@ Lifecycle:
    interactively.
 
 Consumption of the staged file lives entirely inside the Spec grilling
-agent body (`phases/spec/methods/grilling.md` — see ADR-001). The `/weave`
-orchestrator only stages and cleans up; it never reads or peeks
-`.answers.yaml` itself.
+agent body (`phases/spec/methods/grilling.md`). The `/weave` orchestrator
+only stages and cleans up; it never reads or peeks `.answers.yaml`
+itself.
 
 ## State Contract
 

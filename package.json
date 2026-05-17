@@ -1,11 +1,19 @@
 {
-  "name": "loom-eval-harness",
+  "name": "loom",
   "private": true,
-  "description": "Wrapper scripts for the loom evaluation harness. See orchestrator/evaluation/README.md.",
+  "description": "Loom — phase-based development framework. Orchestrator (skills under orchestrator/), UI dev stack (server + web under ui/), evaluation harness (orchestrator/evaluation/).",
   "scripts": {
-    "eval:setup":  "bash orchestrator/evaluation/setup.sh",
-    "eval:run":    "bash orchestrator/evaluation/run-baseline.sh --n 1",
-    "eval:pool":   "bash orchestrator/evaluation/run-baseline.sh --n 5",
-    "eval:analyse": "python3 orchestrator/evaluation/analyze.py && open orchestrator/evaluation/analysis.html"
+    "dev":           "pnpm --dir ui dev",
+    "dev:server":    "pnpm --dir ui dev:server",
+    "dev:web":       "pnpm --dir ui dev:web",
+    "start":         "pnpm --dir ui start",
+    "test":          "pnpm --dir ui test",
+    "build:web":     "pnpm --dir ui build:web",
+    "install-hooks": "pnpm --dir ui install-hooks",
+    "reset-state":   "pnpm --dir ui reset-state",
+    "eval:setup":    "bash orchestrator/evaluation/setup.sh",
+    "eval:run":      "bash orchestrator/evaluation/run-baseline.sh --n 1",
+    "eval:pool":     "bash orchestrator/evaluation/run-baseline.sh --n 5",
+    "eval:analyse":  "python3 orchestrator/evaluation/analyze.py && open orchestrator/evaluation/analysis.html"
   }
 }

@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # run-baseline — drive N /weave runs against a fixed seed + canned answer
-# queue. Each iteration creates `.loom/<project>/`, /weave fills it (and
-# writes `.eval-orchestrator-pointer` linking to its Claude session).
+# queue. Each iteration creates `.loom/<project>/`, then invokes /weave
+# under `claude --print` until `pipeline.md.Lifecycle state == complete`.
+# Each /weave invocation runs one phase, pauses at the rerun-or-continue
+# gate (AskUserQuestion cancels with no interactive UI), and exits; the
+# next invocation resumes from the paused phase. The orchestrator records
+# its session pointer via `.eval-orchestrator-pointer` for later harvest.
 # Harvest and aggregation happen later, in `analyze.py` (npm: eval:analyse),
 # when you point it at the filed run under `analytics/<version>/<run>/`.
 #
@@ -63,16 +67,51 @@ fi
 cd "$REPO_ROOT"
 mkdir -p .loom
 
+PARSER="$REPO_ROOT/orchestrator/lib/pipeline-parser.py"
+# Per-iteration cap on /weave re-invocations. The orchestrator pauses on
+# every rerun-or-continue gate under `claude --print`; each pause needs
+# one resume invocation. Five phases × occasional schema-recovery dispatch
+# tolerated → ten resumes is the safety ceiling.
+MAX_RESUMES=10
+
 failures=0
 ts="$(date -u +%s)"
 for i in $(seq 1 "$N"); do
     project="baseline-${ts}-${i}"
     workspace=".loom/$project"
+    pipeline="$workspace/pipeline.md"
     mkdir -p "$workspace"
     cp "$SEED" "$workspace/seed.md"
     echo "[run-baseline] iteration $i / $N — project $project" >&2
-    if ! claude --print "/weave $project --answers $ANSWERS"; then
-        echo "[run-baseline] iteration $i failed; continuing" >&2
+
+    resume=0
+    iteration_failed=0
+    while : ; do
+        resume=$((resume + 1))
+        if [ "$resume" -gt "$MAX_RESUMES" ]; then
+            echo "[run-baseline] iteration $i exceeded $MAX_RESUMES resumes; aborting" >&2
+            iteration_failed=1
+            break
+        fi
+        echo "[run-baseline]   resume $resume — /weave $project" >&2
+        if ! claude --print "/weave $project --answers $ANSWERS"; then
+            echo "[run-baseline] iteration $i resume $resume returned non-zero; aborting iteration" >&2
+            iteration_failed=1
+            break
+        fi
+        if [ ! -f "$pipeline" ]; then
+            echo "[run-baseline] iteration $i: pipeline.md missing after resume $resume; aborting iteration" >&2
+            iteration_failed=1
+            break
+        fi
+        lifecycle="$(python3 "$PARSER" field "$pipeline" "Lifecycle state" 2>/dev/null || echo "")"
+        if [ "$lifecycle" = "complete" ]; then
+            echo "[run-baseline] iteration $i complete after $resume resume(s)" >&2
+            break
+        fi
+        echo "[run-baseline]   lifecycle still '$lifecycle' — re-invoking" >&2
+    done
+    if [ "$iteration_failed" -eq 1 ]; then
         failures=$((failures + 1))
     fi
 done
