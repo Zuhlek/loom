@@ -1,3 +1,51 @@
+## 2026-05-18 — baseline-1779088265-1 — T-003 Express app factory with JSON middleware and error handler — green on first attempt
+
+Landed `createApp({ repo, staticDir }): Express` in `src/server/app.ts` per
+Design § App factory / § HTTP API / § State and error handling. Five
+middleware in fixed order:
+
+1. `express.json({ limit: '10kb' })` (Spec § Constraints § Security)
+2. `express.static(staticDir)` (serves `/` and `/public/*`)
+3. `app.use('/api', createRoutes(repo))` — T-004 / T-005 / T-007 plug in here
+4. 404 fallthrough → `{ error: { code:'NOT_FOUND', message } }`
+5. Error middleware: `DuplicateUrlError` → 409 `{ code:'DUPLICATE_URL', message }`;
+   any other thrown error → 500 `{ code:'INTERNAL', message:'Internal error' }`
+   with `console.error(err)`.
+
+No `.listen` (T-008 owns process boot). `src/server/routes.ts` is the empty
+`express.Router()` shell the slice tasks will mount handlers onto.
+`src/server/bookmarks-repo.ts` lands the minimum needed by T-003: the
+`BookmarksRepo` interface plus `DuplicateUrlError extends Error` (with
+`code = 'DUPLICATE_URL'`) for the error-middleware `instanceof` check. The
+real SQL-backed repo lands in T-004.
+
+`test/app-factory.test.ts` (Vitest + supertest, 7 tests): app callable
+without `.listen`; `GET /api/unknown` → 404 envelope; `DuplicateUrlError`
+thrown by a route → 409; arbitrary `Error` → 500 + `console.error` called
+once with the original; `next()` with no error → 404; `GET /probe.txt`
+against temp `staticDir` → 200; missing static → 404. Repo stub throws
+from every method (T-003 must not exercise them).
+
+Test-only routes are spliced ahead of the final two middleware via a
+`mountBeforeFallthroughs` helper inside the test file — required because
+Express's catch-all 404 short-circuits anything `app.get`'d after
+`createApp` returns. Test-file-only; no production hook.
+
+Red phase: 5 runtime assertion failures (env missing, dup 500 vs 409, boom
+envelope missing, falls-through envelope missing, static 404 vs 200);
+2 passes against the empty-Express stub (app callable + missing-static
+404). No compile errors. Green phase: `tsc --noEmit` exit 0;
+`vitest run test/app-factory.test.ts` → 7/7. No new deps, no
+out-of-scope edits.
+
+## 2026-05-18 — baseline-1779088265-1 — Build Coordinator: pre-flight pass, T-001 promoted
+
+Verification-environment pre-flight against `plan.md.Verification environment`: declared `node-test` (Vitest + supertest + jsdom, plus a `cli-shell` smoke gate). Coordinator harness can execute both — no `manual-browser-desktop` or GUI `headless-browser` dependency. Pre-flight passes; proceeding with the work loop.
+
+Initial board state: 8 backlog tasks (T-001..T-008), nothing in `In Progress` / `Review` / `Done`. Only **T-001** has an empty `blocked-by` set — the other seven all transitively wait on it. No parallel batch is dispatchable in this dispatch cycle; the orchestrator will fan out T-002 + T-003 (and later T-004 + T-005) once their predecessors land.
+
+Action this turn: acquired the project build lock, atomically rewrote `board.md` to move `T-001 Bootstrap workspace, tsconfigs, scripts, shared types` from `Backlog` to `In Progress`, released the lock. Returning control so `/weave` dispatches the Task Builder for T-001 — the Coordinator does not implement task scope itself.
+
 ## 2026-05-17 — baseline-1779050621-1 — T-004 Bookmark store (list / create / delete) green on first attempt
 
 Landed `createBookmarkStore(db)` in `src/server/store/bookmarks.ts`
@@ -3942,3 +3990,70 @@ is full PASS.
 
 Final aggregate: 14/14 Done, 0 failed, 0 hitl-pending. Suite 86/86
 across 10 files. Returning to /weave with status: complete.
+
+## 2026-05-18 — baseline-1779088265-1 — T-001 Bootstrap workspace, tsconfigs, scripts, shared types — green on first attempt
+
+Landed the foundation slice under `.loom/baseline-1779088265-1/app/`:
+
+- `package.json` — `type: module`, `engines.node >=20`, pinned prod deps (`express` 4.21.0, `better-sqlite3` 11.3.0), pinned dev deps (`typescript` 5.6.2, `esbuild` 0.24.0, `vitest` 2.1.1, `supertest` 7.0.0, `jsdom` 25.0.1, `@types/express`, `@types/node`, `@types/supertest`, `@types/better-sqlite3`). Four scripts verbatim from Design § Constraints § Build.
+- `tsconfig.json` — NodeNext / ES2022 / strict, `outDir: dist`, includes `src/server/**` + `src/shared/**`.
+- `tsconfig.client.json` — extends root, switches to ESNext / ES2020 + DOM libs, `noEmit: true` (esbuild emits), includes `src/client/**` + `src/shared/**`.
+- `.gitignore` — `node_modules/`, `dist/`, `dist-client/`, `data/`, `public/bundle.js`.
+- `src/shared/types.ts` — `Bookmark`/`CreateBookmarkInput`/`ApiErrorBody` per Design verbatim (camelCase `createdAt`), plus a `SHARED_TYPES_READY` sentinel for the runtime witness.
+- `test/shared-types.test.ts` — single Vitest test that `satisfies`-checks each type and asserts the sentinel.
+
+Red: stubbed types module exported `SHARED_TYPES_READY = false` → `AssertionError: expected false to be true`. Green after replacing the `unknown` aliases with the Design-pinned interfaces and flipping the sentinel. All four acceptance gates pass (`npm install`, both `tsc --noEmit` invocations, `npm test`). Log: `tasks/T-001.test-log.txt`. T-002 and T-003 now unblocked.
+
+## 2026-05-18 — baseline-1779088265-1 — T-002 Open SQLite and run schema migration — green (1 attempt)
+
+`openDb({ filename }): Database` landed in `src/server/db.ts`. Synchronous; wraps `new BetterSqlite3(filename)` so the rethrown Error embeds the failing path (AC4). Inline migration via `db.exec(SCHEMA_SQL)` creates `bookmarks(id PK AI, url TEXT UNIQUE NOT NULL, title TEXT NOT NULL, created_at INTEGER NOT NULL)` + compound index `idx_bookmarks_created_at(created_at DESC, id DESC)`, both `IF NOT EXISTS` so reopens are idempotent. `journal_mode = WAL` set only for file paths; `foreign_keys = ON` always. No logging.
+
+`test/db.test.ts` — 6 behaviour cases via PRAGMA introspection + UNIQUE-insert probe + a tmpdir round-trip for WAL/idempotency. Red: 6/6 fail against throwing stub. Green: 6/6 pass. Out-of-scope `test/app-factory.test.ts` (other in-flight task) left red and untouched.
+
+Artifacts: `tasks/T-002.done.md`, `tasks/T-002.test-log.txt`.
+
+## 2026-05-18 — baseline-1779088265-1 — T-004 Save a bookmark end-to-end — green (1 attempt)
+
+Vertical slice for US-001. `createBookmarksRepo(db)` in `src/server/bookmarks-repo.ts` ships `insert` (stamps `Date.now()`, prepared INSERT + SELECT, `SQLITE_CONSTRAINT_UNIQUE` → `DuplicateUrlError`), `list` (`ORDER BY created_at DESC, id DESC`), `deleteById` (`changes > 0`). Snake → camel boundary via private `rowToBookmark`. `src/server/routes.ts` mounts `POST /bookmarks` on the T-003 router: inline `validateCreateInput` (object body + non-empty url/title + `new URL(url)` succeeds) → 400 VALIDATION, otherwise `repo.insert` → 201 `{bookmark}`; `DuplicateUrlError` → `next(err)` → T-003's 409 branch. `src/server/app.ts` — single new 413 branch in the error middleware so `express.json` `entity.too.large` becomes 413 `PAYLOAD_TOO_LARGE` instead of 500; recorded as `out-of-scope-edits` since `app.ts` was not in `files-likely-touched` (the body-parser throws pre-route, so the fix can only live there).
+
+Client side: `src/client/api.ts` `createBookmark` POSTs JSON, parses `{bookmark}` on 201, throws `ApiError(message, code, status)` from the documented envelope on non-201. `src/client/render.ts` `renderFormError(root, message|null)` is one `textContent =` line. `src/client/form.ts` `mountForm({form, errorRoot, onSaved})` runs a tiny idle/submitting/error machine exposed on the returned controller; imports api as `import * as api` so `vi.spyOn` intercepts on the public seam. Client-side validation: empty url + `new URL(url)` throwing short-circuit before fetch; empty title falls through to the server.
+
+Tests: `test/repo.test.ts` (7) + `test/routes-create.test.ts` (6) + `test/client-form.test.ts` (4, jsdom via `// @vitest-environment jsdom`). Red: 14/14 runtime asserts. Green: 17/17 pass; `tsc -p tsconfig.json --noEmit` and `tsc -p tsconfig.client.json --noEmit` both exit 0. The two T-005-scoped test files left red (not touched). No new deps. Artifacts: `tasks/T-004.done.md`, `tasks/T-004.test-log.txt`.
+
+## 2026-05-18 — baseline-1779088265-1 — T-005 List bookmarks newest-first end-to-end — green (1 attempt)
+
+Vertical slice for US-002 across repo → routes → client-api → client-render. `src/server/routes.ts` mounts `GET /bookmarks` ahead of T-004's `POST` → `200 {bookmarks: repo.list()}` (sync, ADR-007, errors fall to the T-003 middleware). `src/client/api.ts` adds `listBookmarks()` mirroring `createBookmark`'s fetch/throwApiError pattern. `src/client/render.ts` adds `renderList`, `renderEmptyState`, and `loadAndRender` — pure DOM via `createElement` + `textContent` + `setAttribute`, no `innerHTML` (ADR-006 + tests.md no-innerHTML gate). A shared private `clear(root)` keeps the container in exactly one state (AC3 + the two state-swap tests). `loadAndRender` uses `import * as api` so `vi.spyOn` intercepts on the public seam, matches the T-004 pattern from `client-form.test.ts`; on rejection it renders an inline `[data-retry]` message and does not throw (Design § Client-side state).
+
+Each list entry is `<li data-bookmark="<id>"><span.bookmark-title><span.bookmark-url></li>`. The US-003 anchor (`target="_blank" rel="noopener noreferrer"`) is T-006 and slots into `buildEntry`; the T-005 assertions are on `.bookmark-title` / `.bookmark-url` textContent, which are stable across that change.
+
+Tests: appended a `bookmarks-repo.list` describe to `test/repo.test.ts` (3 tests: newest-first across distinct created_at, same-ms higher-id tiebreak, empty DB → []). Added `test/routes-list.test.ts` (supertest, empty + seeded). Added `test/client-render.test.ts` (`// @vitest-environment jsdom`, 9 tests including the XSS textContent witness). Red: 11 runtime assertion failures (8 stub throws, 2 route 404→200, 1 covered branch); no compile errors. Green: 42/42 full suite; both `tsc --noEmit` invocations exit 0.
+
+No new deps, no out-of-scope edits. Artifacts: `tasks/T-005.done.md`, `tasks/T-005.test-log.txt`. T-006 and T-007 are now unblocked on the rendering / GET surface.
+
+## 2026-05-18 — baseline-1779088265-1 — T-006 Open a bookmark in a new tab — green (1 attempt)
+
+Vertical slice for US-003. `src/client/render.ts` — `buildEntry` now wraps the existing `.bookmark-title` + `.bookmark-url` spans in an `<a>` with `href=bookmark.url` (via `setAttribute`, AC4), `target="_blank"` and `rel="noopener noreferrer"` (AC2 / Spec § Security invariant). No `onclick` (AC3); the anchor's native semantics carry the new-tab open (AC1). User text still goes through `textContent` only, so ADR-006 / T-005's XSS test stays green. `public/styles.css` (NEW, static layer per `files-likely-touched`) adds `display:block` on `[data-bookmark] > a`, `:hover` background, and a `:focus-visible` outline so keyboard activation is visible.
+
+Tests: extended `test/client-render.test.ts` with `describe('anchor attributes (T-006 / US-003)')` — 3 behaviour cases: anchor exists with correct `href` / `target` / `rel` token set; `javascript:alert(1)` passes through `href` verbatim (documents T-006/T-004 boundary); no element has an `onclick`. Red: 2 runtime assertion failures (`querySelector('a')` was null); the no-`onclick` test passed at red as a regression gate. Compile clean at red. Green: 45/45 full suite; both `tsc --noEmit` invocations exit 0.
+
+No new deps, no out-of-scope edits. Artifacts: `tasks/T-006.done.md`, `tasks/T-006.test-log.txt`. T-007 (delete) unblocked on the render surface.
+
+## 2026-05-18 — baseline-1779088265-1 — T-007 Delete a bookmark end-to-end — green (1 attempt)
+
+Vertical slice for US-004 across repo → routes → client-api → client-render. `src/server/routes.ts` mounts `DELETE /bookmarks/:id` on the same Router as `POST` / `GET`. Path-param validation uses `/^-?\d+$/.test` + `Number.isInteger` so `not-an-int`, `1.5`, and `1e2` all return `400 {error: {code: 'BAD_ID', message}}`; any integer id calls `repo.deleteById(id)` and returns `204` regardless of whether a row existed (ADR-005 idempotency). No try/catch around the repo call — `deleteById` is synchronous and never throws on a missing row. `src/client/api.ts` adds `deleteBookmark(id): Promise<void>` mirroring the `listBookmarks` / `createBookmark` fetch + `throwApiError` pattern (P2). `src/client/render.ts` extends `buildEntry` with a sibling `<button type="button" data-delete-for="<id>" aria-label="Delete bookmark <title>">` after the anchor; click handler chains `api.deleteBookmark(id)` then `loadAndRender(root)`, via `import * as api` so `vi.spyOn` intercepts both calls in jsdom. `buildEntry` now takes `root` to re-render after a successful delete; private to the module.
+
+Tests: added a `bookmarks-repo.deleteById` describe to `test/repo.test.ts` (3 tests covering AC1, AC2 re-add, AC3 missing-id). Added `test/routes-delete.test.ts` (5 supertest cases: 204 + GET excludes the row, idempotent repeat, 204 for never-existed id with no `console.error`, delete-then-POST same URL → 201, `/not-an-int` → 400 `BAD_ID`). Extended `test/client-render.test.ts` with `delete control (T-007 / US-004)` (2 cases: shape — one `button[data-delete-for]` per row with `type=button` and an aria-label containing the title; behaviour — click triggers `deleteBookmark(b1.id)` then `listBookmarks` then b1's row is gone). Red: 7 runtime assertion failures (5 status 404 vs 204/400 in routes-delete, 1 length-0 and 1 null `dispatchEvent` in client-render); no TypeScript compile errors. Green: 55/55 full suite; both `tsc --noEmit` invocations exit 0.
+
+No new deps, no out-of-scope edits. Repo `deleteById` overlap with T-004 is intentional per `files-likely-touched` on both tasks — same footnote as T-005 for `list()`. Artifacts: `tasks/T-007.done.md`, `tasks/T-007.test-log.txt`. Only T-008 (runtime entrypoint) remains.
+
+## 2026-05-18 — baseline-1779088265-1 — T-008 Boot process, static shell, smoke gate — green (1 attempt)
+
+Final task. `src/server/index.ts` (NEW) is the runtime entrypoint: resolves `appRoot` from `fileURLToPath(import.meta.url)` (`dist/server/index.js` → `appRoot = ../..`), reads `DATA_DIR` and `PORT` from env (defaults `./data`, `3000`), `mkdirSync(dataDir, {recursive: true})`, opens SQLite at `<dataDir>/bookmarks.db` via `openDb`, wires `createBookmarksRepo`, hands the repo + `<appRoot>/public` to `createApp`, and calls `.listen(port)`. On `mkdir` / `openDb` throw, writes the failing path to stderr and `process.exit(1)` (AC5). Single steady-state log from the `.listen` callback. `src/client/main.ts` (NEW) on `DOMContentLoaded` grabs `#save-form` / `#form-error` / `#list-root`, mounts the form with an `onSaved` re-render callback, and calls `loadAndRender` once for the initial paint. `public/index.html` (NEW) is the hand-written ~25-line shell: doctype + charset + viewport, `<title>Bookmarks</title>`, `<link rel="stylesheet" href="/styles.css">`, the save form with named `url` / `title` inputs and submit button, `<div id="form-error" role="alert" aria-live="polite">`, `<div id="list-root">`, `<script type="module" src="/bundle.js">`. `public/styles.css` extended with `:root` light tokens + `@media (prefers-color-scheme: dark)` overriding them + form / error / delete-button rules consuming the tokens — Spec's "dark mode if it falls out of CSS for free" clause satisfied without a toggle (AC6); T-006's anchor rules preserved verbatim with the `:hover` background switched to `var(--row-hover)` for dark-mode parity.
+
+Tests: `test/smoke.test.ts` (6 cases) builds client+server once in `beforeAll`, then spawns `node dist/server/index.js` with `DATA_DIR=<tmp>/<case>` per test, polls 127.0.0.1:3000, SIGTERMs (escalating SIGKILL after 2s) and waits for port release between cases. (1) Shell + bundle + stylesheet served on :3000; (2) create → list → delete → list end-to-end via `fetch`; (3) persistence across restarts — spawn/POST/kill, assert `bookmarks.db` exists, respawn, GET sees the row (Spec § Runtime invariants); (4) `DATA_DIR` rooted under a regular file → exit ≠ 0, stderr contains the path (AC5); (5) `public/` shape assertions including the `prefers-color-scheme: dark` media query (AC6); (6) cross-cutting no-`innerHTML` grep over `src/client/**`.
+
+Red: 5 runtime assertion failures (3 `port :3000 not accepting` because the stub `index.ts` threw at module-load; 1 stderr did not contain `badDataDir` because the stub error said "not implemented"; 1 `<meta charset` not present in the 3-line stub HTML). One regression-gate case (no-innerHTML) passed at red because it was already true. No compile errors. Green: full suite 61/61 pass; smoke alone ~5s after the one-shot build; both `tsc --noEmit` invocations exit 0. No new deps, no out-of-scope edits, no writes outside the app workspace. All eight tasks green. Artifacts: `tasks/T-008.done.md`, `tasks/T-008.test-log.txt`.
+
+## 2026-05-18 — baseline-1779088265-1 — Build Coordinator — phase complete
+
+All eight tasks reached `Done`. 61/61 Vitest cases pass; both `tsc --noEmit` invocations exit 0; cross-cutting no-`innerHTML` grep clean; explicit `tests.md § Smoke gate` 8/8 PASS (`npm start` binds :3000, `GET /` → 200, `GET /api/bookmarks` → `{"bookmarks":[]}` on fresh `data/`, `POST` → 201 with id=1 body, server killed cleanly, no writes outside `app/` beyond declared `data/bookmarks.db*` and `public/bundle.js`). Mutation gate skipped per `tests.md` (Mutation Testing: no). Verification env `node-test` + `cli-shell` (no `headless-browser` required — UI covered via jsdom). Pre-condition cleanup: killed one orphaned `node dist/server/index.js` left bound to :3000 from a prior T-008 dispatch, and reaped one stale `.locks/T-002.lock` whose holder PID was dead. Coordinator artifacts: `smoke-report.md`, `test-report.md`, `board.md` (Review → Done for T-001..T-008).

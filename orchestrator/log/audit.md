@@ -1430,3 +1430,19 @@ Three cross-phase audit observations worth carrying forward:
   the exit code and treats the `127.0.0.1:3000` not-accepting probe as
   the gate. Worth codifying as the default smoke shape for any
   single-binary node tool reachable via a TS-loader wrapper.
+
+## 2026-05-18 — baseline-1779088265-1 — Review Audit Agent — phase complete (PASS)
+
+Greenfield baseline run with an unusually tight Spec / Design / Plan triangle produced **8/8 tasks green on attempt 1, 61/61 Vitest cases (10 files), 8/8 smoke-gate steps**. Re-ran `npm test` from inside `app/` during review to verify build-phase numbers: 61 passed / 0 failed in 7.48s.
+
+Principle walk (P1..P7) raised **zero Blocker- and zero Major-severity findings**. Five Notes:
+
+1. **Template alignment as a clean-signal data point** — every `T-NNN.satisfies-stories` mapped to a Spec acceptance criterion with no orphans, every ADR honoured in the layout. Useful as a baseline reference run for `/tune` calibration deltas.
+2. **Forge-artifact refs in code comments** — 13 hits across 7 source files reference `T-NNN`, `ADR-NNN`, `US-NNN`, `Spec §`, `Design §`. Violates user-memory rule `feedback_comment_style.md` but not pinned in the project's `spec.md ## Constraints`, so the severity-mapping rule keeps it as a Note. Pattern worth surfacing in `/tune build` curation: agents lean on these refs as scaffolding cues and forget to strip them at done time.
+3. **`_`-prefix unused params** — Express's four-arg error middleware partially forces `_req`, `_next`; user-memory naming rule `feedback_naming_and_formatting.md` forbids `_`-prefix. Framework-vs-preference tension worth noting for future curation.
+4. **Test-only sentinel** — `SHARED_TYPES_READY = true` exported from a shared types module solely to give the foundation Vitest case a runtime witness. Borderline P5; defensible because the smoke-test gate wants a workspace-loads check, but a `satisfies Bookmark` type-only assertion would be tighter.
+5. **Smoke-test host-state assumption** — smoke test cleans within-run state via `killServer` (SIGTERM→SIGKILL + port-free wait) but does not handle a pre-existing orphan on `:3000` from a prior run. Pattern: smoke gates that bind a fixed port should either opportunistically free that port in `beforeAll` or randomise.
+
+Dual-write contract: build-phase entries (T-001..T-008 done + Build Coordinator pre-flight + phase complete) are present in both `develop-log.md` and `orchestrator/log/build.md`. This Review-phase observation lives here (audit) and in `develop-log.md`.
+
+Verdict: PASS. `review-verdict.json` = `{verdict: "PASS", blockers: 0, major: 0, minor: 0, note: 5}`.

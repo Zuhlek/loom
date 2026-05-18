@@ -1,0 +1,116 @@
+=== RED PHASE ===
+     → openDb not implemented
+   × openDb > creates idx_bookmarks_created_at on (created_at DESC, id DESC)
+     → openDb not implemented
+   × openDb > is idempotent: a second openDb on the same file path does not throw
+     → openDb not implemented
+   × openDb > throws a clear Error when the parent directory does not exist
+     → expected 'openDb not implemented' to contain '/definitely/does/not/exist/x.db'
+   × openDb > returns a Database synchronously (not a Promise)
+     → openDb not implemented
+   × openDb > sets journal_mode = WAL for file paths but not for :memory:
+     → openDb not implemented
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/db.test.ts > openDb > creates the bookmarks table with the documented schema on :memory:
+Error: openDb not implemented
+ ❯ Module.openDb src/server/db.ts:9:9
+      7| 
+      8| export function openDb(_opts: OpenDbOptions): Database {
+      9|   throw new Error('openDb not implemented');
+       |         ^
+     10| }
+     11| 
+ ❯ test/db.test.ts:6:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  test/db.test.ts > openDb > creates idx_bookmarks_created_at on (created_at DESC, id DESC)
+Error: openDb not implemented
+ ❯ Module.openDb src/server/db.ts:9:9
+      7| 
+      8| export function openDb(_opts: OpenDbOptions): Database {
+      9|   throw new Error('openDb not implemented');
+       |         ^
+     10| }
+     11| 
+ ❯ test/db.test.ts:42:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  test/db.test.ts > openDb > is idempotent: a second openDb on the same file path does not throw
+Error: openDb not implemented
+ ❯ Module.openDb src/server/db.ts:9:9
+      7| 
+      8| export function openDb(_opts: OpenDbOptions): Database {
+      9|   throw new Error('openDb not implemented');
+       |         ^
+     10| }
+     11| 
+ ❯ test/db.test.ts:67:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  test/db.test.ts > openDb > throws a clear Error when the parent directory does not exist
+AssertionError: expected 'openDb not implemented' to contain '/definitely/does/not/exist/x.db'
+
+Expected: "/definitely/does/not/exist/x.db"
+Received: "openDb not implemented"
+
+ ❯ test/db.test.ts:90:39
+     88|     }
+     89|     expect(caught).toBeInstanceOf(Error);
+     90|     expect((caught as Error).message).toContain(badPath);
+       |                                       ^
+     91|   });
+     92| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  test/db.test.ts > openDb > returns a Database synchronously (not a Promise)
+Error: openDb not implemented
+ ❯ Module.openDb src/server/db.ts:9:9
+      7| 
+      8| export function openDb(_opts: OpenDbOptions): Database {
+      9|   throw new Error('openDb not implemented');
+       |         ^
+     10| }
+     11| 
+ ❯ test/db.test.ts:94:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  test/db.test.ts > openDb > sets journal_mode = WAL for file paths but not for :memory:
+Error: openDb not implemented
+ ❯ Module.openDb src/server/db.ts:9:9
+      7| 
+      8| export function openDb(_opts: OpenDbOptions): Database {
+      9|   throw new Error('openDb not implemented');
+       |         ^
+     10| }
+     11| 
+ ❯ test/db.test.ts:105:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  09:37:41
+   Duration  342ms (transform 34ms, setup 0ms, collect 34ms, tests 7ms, environment 0ms, prepare 57ms)
+
+
+=== GREEN PHASE ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+ RUN  v2.1.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779088265-1/app
+
+ ✓ test/db.test.ts  (6 tests) 12ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  09:38:24
+   Duration  280ms (transform 31ms, setup 0ms, collect 38ms, tests 12ms, environment 0ms, prepare 51ms)
+

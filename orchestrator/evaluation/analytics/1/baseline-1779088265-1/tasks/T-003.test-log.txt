@@ -1,0 +1,143 @@
+=== RED PHASE ===
+--- npx vitest run test/app-factory.test.ts (expected FAIL: stub createApp returns empty Express — no JSON parser, no static, no /api router, no 404 envelope, no error envelope) ---
+   × createApp factory > serves static files from staticDir at /
+     → expected 404 to be 200 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/app-factory.test.ts > createApp factory > returns 404 with the error envelope for an unknown API path
+AssertionError: expected {} to deeply equal { error: { code: Any<String>, …(1) } }
+
+- Expected
++ Received
+
+- Object {
+-   "error": Object {
+-     "code": Any<String>,
+-     "message": Any<String>,
+-   },
+- }
++ Object {}
+
+ ❯ test/app-factory.test.ts:77:22
+     75|     const res = await request(app).get('/api/unknown');
+     76|     expect(res.status).toBe(404);
+     77|     expect(res.body).toEqual({
+       |                      ^
+     78|       error: { code: expect.any(String), message: expect.any(String) },
+     79|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  test/app-factory.test.ts > createApp factory > maps a thrown DuplicateUrlError to 409 with code DUPLICATE_URL
+AssertionError: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ test/app-factory.test.ts:91:24
+     89|     });
+     90|     const res = await request(app).get('/api/__test/dup');
+     91|     expect(res.status).toBe(409);
+       |                        ^
+     92|     expect(res.body).toEqual({
+     93|       error: { code: 'DUPLICATE_URL', message: 'dup' },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  test/app-factory.test.ts > createApp factory > maps an unknown thrown error to 500 with code INTERNAL and logs to stderr
+AssertionError: expected {} to deeply equal { error: { code: 'INTERNAL', …(1) } }
+
+- Expected
++ Received
+
+- Object {
+-   "error": Object {
+-     "code": "INTERNAL",
+-     "message": "Internal error",
+-   },
+- }
++ Object {}
+
+ ❯ test/app-factory.test.ts:106:22
+    104|     const res = await request(app).get('/api/__test/boom');
+    105|     expect(res.status).toBe(500);
+    106|     expect(res.body).toEqual({
+       |                      ^
+    107|       error: { code: 'INTERNAL', message: 'Internal error' },
+    108|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  test/app-factory.test.ts > createApp factory > falls through to the 404 envelope when a route calls next() with no error
+AssertionError: expected {} to deeply equal { error: { code: Any<String>, …(1) } }
+
+- Expected
++ Received
+
+- Object {
+-   "error": Object {
+-     "code": Any<String>,
+-     "message": Any<String>,
+-   },
+- }
++ Object {}
+
+ ❯ test/app-factory.test.ts:120:22
+    118|     const res = await request(app).get('/api/__test/falls-through');
+    119|     expect(res.status).toBe(404);
+    120|     expect(res.body).toEqual({
+       |                      ^
+    121|       error: { code: expect.any(String), message: expect.any(String) },
+    122|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  test/app-factory.test.ts > createApp factory > serves static files from staticDir at /
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ test/app-factory.test.ts:128:24
+    126|     const app = createApp({ repo: stubRepo, staticDir });
+    127|     const res = await request(app).get('/probe.txt');
+    128|     expect(res.status).toBe(200);
+       |                        ^
+    129|     expect(res.text).toBe('probe-contents');
+    130|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 2 passed (7)
+   Start at  09:40:39
+   Duration  453ms (transform 41ms, setup 0ms, collect 204ms, tests 24ms, environment 0ms, prepare 51ms)
+
+
+=== GREEN PHASE ===
+--- npx tsc -p tsconfig.json --noEmit ---
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+exit: 0
+--- npx vitest run test/app-factory.test.ts ---
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+ RUN  v2.1.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779088265-1/app
+
+ ✓ test/app-factory.test.ts  (7 tests) 20ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  09:40:48
+   Duration  418ms (transform 35ms, setup 0ms, collect 191ms, tests 20ms, environment 0ms, prepare 53ms)
+

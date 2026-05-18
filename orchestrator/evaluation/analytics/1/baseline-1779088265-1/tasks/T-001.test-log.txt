@@ -1,0 +1,71 @@
+=== RED PHASE ===
+--- npm test (expected FAIL: SHARED_TYPES_READY is false) ---
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> bookmarks-app@0.1.0 test
+> vitest run
+
+
+ RUN  v2.1.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779088265-1/app
+
+ ❯ test/shared-types.test.ts  (1 test | 1 failed) 3ms
+   × shared types > exports the three contract types with the documented shape
+     → expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/shared-types.test.ts > shared types > exports the three contract types with the documented shape
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/shared-types.test.ts:29:32
+     27|     // Runtime sanity: the module's ready flag must be true. While the
+     28|     // module is stubbed (Red phase), this is false and the test fails.
+     29|     expect(SHARED_TYPES_READY).toBe(true);
+       |                                ^
+     30| 
+     31|     // Touch each value so the type imports are unambiguously used at …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  09:31:34
+   Duration  429ms (transform 225ms, setup 0ms, collect 221ms, tests 3ms, environment 0ms, prepare 50ms)
+
+=== GREEN PHASE ===
+--- tsc -p tsconfig.json --noEmit ---
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+exit: 0
+--- tsc -p tsconfig.client.json --noEmit ---
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+exit: 0
+--- npm test ---
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> bookmarks-app@0.1.0 test
+> vitest run
+
+
+ RUN  v2.1.1 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779088265-1/app
+
+ ✓ test/shared-types.test.ts  (1 test) 1ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:31:54
+   Duration  219ms (transform 27ms, setup 0ms, collect 25ms, tests 1ms, environment 0ms, prepare 46ms)
+
