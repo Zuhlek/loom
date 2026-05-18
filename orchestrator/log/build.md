@@ -3942,3 +3942,513 @@ is full PASS.
 
 Final aggregate: 14/14 Done, 0 failed, 0 hitl-pending. Suite 86/86
 across 10 files. Returning to /weave with status: complete.
+
+## 2026-05-18 — baseline-1779088275-1 — Build coordinator: T-001 promoted to In Progress
+
+Verification-environment pre-flight: `plan.md` declares `node-test`
+(`npm test` from `.loom/baseline-1779088275-1/app/`, runs `tsc
+--noEmit` + `vitest run` in-process, supertest for HTTP, happy-dom
+opt-in per-file). Coordinator capability matches — no GUI / manual-
+browser harness required. Pre-flight passes.
+
+Board scan: 5 cards total, all in `Backlog`. Only `T-001`
+(Workspace scaffold and run contracts) has an empty `blocked-by`
+set. `T-002` is blocked by `T-001`; `T-003`, `T-004`, `T-005` are
+blocked by `T-001` + `T-002`. No parallel batch is available this
+round — `T-001` is a single-card dispatch.
+
+Promotion: acquired project lock
+(`orchestrator/lib/locks.sh acquire baseline-1779088275-1 build`),
+moved `T-001` from `Backlog` to `In Progress` via
+`orchestrator/lib/atomic-write.sh`, released the lock. No task
+subagent dispatched by the Coordinator — per phase contract, the
+orchestrator fans out `methods/task.md` from `/weave` against the
+updated board.
+
+`tests.md` opts out of mutation testing (`**Mutation Testing:**
+no`). `methods/smoke.md` will run once a task transitions to
+`Review`; nothing in `Review` yet.
+
+Returning `status: Pending` with `completed: 0`, `failed: 0`,
+`hitl-pending: 0` so the orchestrator dispatches the T-001 Task
+Builder subagent and re-dispatches the Coordinator after it
+returns.
+
+## 2026-05-18 — baseline-1779088275-1 — T-001 Workspace scaffold and run contracts green on first attempt
+
+Stood up the `app/` workspace under `.loom/baseline-1779088275-1/app/`:
+`package.json` with `start` (`node --import tsx src/server/index.ts`),
+`prestart` (esbuild IIFE bundle of `src/client/main.ts` → `dist/main.js`),
+and `test` (`tsc --noEmit && vitest run`); `tsconfig.json` pinned to
+ES2022 / `moduleResolution: Bundler` / `strict: true` / `noEmit: true`
+with `src/` and `tests/` in `include`; `vitest.config.ts` with default
+Node environment and globals on (happy-dom opted in per-file via the
+`// @vitest-environment` pragma per design.md). Deps pinned per task:
+`express`, `better-sqlite3`; dev `typescript`, `tsx`, `esbuild`,
+`vitest`, `supertest`, `happy-dom`, plus the matching `@types/*`.
+
+Source tree: `public/index.html` with `#add-form` + `#bookmarks` mount
+nodes wired to `/dist/main.js` + `/style.css`; `public/style.css` with
+minimal layout and a `@media (prefers-color-scheme: dark)` block (no
+toggle); `src/server/index.ts` boots Express on `process.env.PORT ?? 3000`,
+mounts a placeholder `/api` 501 router (replaced wholesale in T-002),
+`express.static('public')`, `express.static('dist')`, and SIGINT/SIGTERM
+graceful shutdown; `src/client/main.ts` is a no-op `DOMContentLoaded`
+handler. `.gitignore` lists `node_modules/`, `dist/`, `data/`, `*.db`,
+`*.db-journal`.
+
+Test layout: `tests/placeholder.test.ts` carries the `1+1` placeholder
+(per task scope, kept until T-002 lands real specs);
+`tests/smoke/run.test.ts` is gated behind `SMOKE=1` (so `npm test` stays
+in-process and fast) and spawns `npm start` in a child process with
+`PORT=3456`, polls `GET /` until 200, asserts the body contains
+`id="bookmarks"`, then SIGTERMs the child. A second assertion in the
+same spec checks workspace isolation — `data/` and `*.db` MUST NOT
+appear in the parent `.loom/baseline-1779088275-1/` directory after
+the smoke run.
+
+Red phase: `SMOKE=1 vitest run` produced runtime assertion failure
+`Error: status 404` from `waitForServer` — the initial server stub
+listened on the port but did not wire any static middleware, so `GET /`
+returned 404. Compile + type-check passed throughout (no missing-import
+errors). Green phase after wiring `createApp()` with the placeholder
+API router and the two `express.static` mounts: 3/3 specs pass
+(smoke ×2 + placeholder ×1); `npm test` exits 0 with the smoke spec
+skipped by default.
+
+No out-of-scope edits. No commits. Single attempt to green.
+
+## 2026-05-18 — baseline-1779088275-1 — Build coordinator: T-001 → Done, T-002 promoted to In Progress
+
+Pre-flight `node-test` matches Coordinator capability (`node` v22.18.0,
+`npm` 10.9.3). Project lock acquired via
+`orchestrator/lib/locks.sh acquire baseline-1779088275-1 build`.
+
+`T-001` returned `status: green` last cycle. Transitioned card
+`Backlog → In Progress` was already complete; this pass moves it
+`In Progress → Review` and then `Review → Done` after smoke passes.
+Smoke run (project is runnable):
+
+- Build artifacts: `app/dist/main.js` (115 B IIFE), `app/public/index.html`
+  (`#bookmarks` mount), `app/public/style.css` (775 B) — all present.
+- Boot: `PORT=3458 npm start` listening in ~1 s; clean `SIGTERM` shutdown.
+- Endpoints: `GET /` 200 (body contains `id="bookmarks"`); `GET /style.css`
+  200 / 775 B; `GET /dist/main.js` 200 / `application/javascript` / 115 B;
+  `GET /api/bookmarks` 501 with documented `NOT_IMPLEMENTED` JSON.
+- UI render SKIPPED — `T-001` carries no `satisfies-stories` payload.
+- Shared-state PASS — no `data/` / `*.db` in project root or `app/`.
+
+`smoke-report.md` and `test-report.md` written via
+`orchestrator/lib/atomic-write.sh`. `methods/mutation.md` skipped per
+`tests.md` (`**Mutation Testing:** no`).
+
+`T-002` (`US-002` list endpoint + render) is the only card with an
+empty `blocked-by` set in `Backlog`; promoted to `In Progress`. The
+`T-001` blocker on `T-003`/`T-004`/`T-005` was struck from their card
+lines because `T-001` is now `Done`. They remain blocked by `T-002`.
+No parallel batch this round.
+
+Lock released. Returning `status: Pending` with `completed: 1`,
+`failed: 0`, `hitl-pending: 0` so the orchestrator dispatches the
+`T-002` Task Builder subagent and re-dispatches the Coordinator.
+
+## 2026-05-18 — baseline-1779088275-1 — T-002 List bookmarks end-to-end green on first attempt
+
+Landed the full vertical slice for `US-002`:
+
+- `src/server/db.ts` — `createDb(filePath?)` factory; `:memory:` for tests,
+  `./app/data/bookmarks.db` (recursive-mkdir) for prod. Schema bootstrap
+  runs `CREATE TABLE IF NOT EXISTS bookmarks (...)` + index on every open.
+- `src/server/repo.ts` — `listAll()` ordered `created_at DESC, id DESC`;
+  `insert()` + `deleteById()` implemented (behavior tests for those live
+  in T-003 / T-005). `DuplicateUrlError` exported and wired to the
+  `SQLITE_CONSTRAINT_UNIQUE` catch path per design.md ADR-003.
+- `src/server/routes.ts` — `createRouter(repo)` with `GET /bookmarks`
+  returning 200 `{ bookmarks }`.
+- `src/server/index.ts` — replaced the placeholder 501 router with the
+  real `createRouter(createRepo(createDb()))` mount; static middleware
+  and graceful shutdown unchanged.
+- `src/client/api.ts` — `fetchBookmarks()` with `ApiError(0, "NETWORK")`
+  on fetch rejection.
+- `src/client/render.ts` — pure DOM helpers; populated branch produces
+  one `<li class="bookmark">` per row with `<a class="bookmark-title"
+  href={url}>` + `<span class="bookmark-url">`; empty branch produces a
+  `<p class="empty-state">`. `target="_blank"` / `rel` left for T-004.
+- `src/client/main.ts` — `DOMContentLoaded` → module-scoped `refresh()`
+  → fetch + render against the `#bookmarks` mount.
+- `public/style.css` — list-row layout + empty-state styling.
+- `tests/unit/repo.test.ts`, `tests/unit/render.test.ts`,
+  `tests/http/bookmarks.test.ts` — Vitest specs covering the EARS
+  acceptance criteria for `US-002`. Removed `tests/placeholder.test.ts`
+  (T-001 explicitly scoped it as a stand-in until this task landed).
+
+Red: 7 runtime assertion failures (`Error: createDb: not implemented`,
+`Error: renderList: not implemented`); no compile or missing-import
+errors. Green: 7/7 new specs pass under `npm test`; smoke stays gated
+behind `SMOKE=1`. Single implementation iteration (flipped empty-state
+element from `<li>` to `<p>` to satisfy the render test's "zero `<li>`
+rows in the empty branch" contract).
+
+`status: green`, `attempts: 1`. No commits. Lock released.
+
+## 2026-05-18 — baseline-1779088275-1 — Build coordinator: T-002 → Done, T-003 promoted to In Progress
+
+Pre-flight: `plan.md` `## Verification environment` still declares
+`node-test`. Coordinator capability matches (`node` v22.18.0,
+`npm` 10.9.3, `tsc`, `vitest` all on PATH). No env mismatch — no
+blocker.
+
+Re-dispatch state: `board.md` showed `T-002` still in `In Progress`
+despite `tasks/T-002.done.md` already carrying `status: green`,
+`attempts: 1` from the prior subagent. Per the transition table the
+green return promotes the card `In Progress` → `Review`; the smoke +
+mutation gates then decide `Review` → `Done`.
+
+Project lock acquired
+(`orchestrator/lib/locks.sh acquire baseline-1779088275-1 build`).
+`methods/smoke.md` ran against the live workspace before the `Done`
+transition:
+
+- `npm test` from `app/`: tsc OK; `vitest run` 7 passed / 2 skipped
+  (smoke specs gated by `SMOKE=1`).
+- `SMOKE=1 PORT=3458 npm test`: 9 passed / 0 skipped — the boot-the-
+  server spec proves the `npm start` run contract, and the in-process
+  smoke spec asserts the "no `data/` in project root" isolation
+  invariant.
+- Coordinator-driven live probe against `PORT=3459 npm start`:
+  `GET /` 200 (421 B HTML, `id="bookmarks"` present), `GET /style.css`
+  200 (1259 B — grew from T-001's 775 B because T-002 added
+  `.bookmark`, `.bookmark-title`, `.bookmark-url`, `.empty-state`
+  rules), `GET /dist/main.js` 200 (2136 B — grew from T-001's 115 B
+  because the IIFE bundle now ships `refresh`, `fetchBookmarks`, and
+  the render branch), `GET /api/bookmarks` 200 with `{"bookmarks":[]}`
+  — the real `createRouter(createRepo(createDb()))` mount has
+  replaced the T-001 501 placeholder.
+- UI render check passes via the happy-dom unit specs (the
+  `node-test` harness intentionally does not boot a real browser):
+  `renderEmptyState` produces one `<p class="empty-state">` and zero
+  `<li>` rows; `renderList([b1, b2])` produces one `<li>` per
+  bookmark with the anchor `href` set to the URL.
+- Shared-state check: in-process tests leave no `data/` directory.
+  The live `npm start` probe naturally produced `app/data/bookmarks.db`
+  because `createDb()` now resolves to the production on-disk default
+  (design § Storage). Coordinator removed `app/data/` after the
+  probe so subsequent runs start clean. This is expected production
+  behavior — not a regression from T-001 (where `createDb` was a
+  throwing stub, so the server never opened a connection).
+
+`smoke-report.md` rewritten via the atomic-write helper to fold in
+the T-002 evidence alongside the prior T-001 pass. `T-002` promoted
+from `Review` to `Done`.
+
+Next ready cards: per the plan DAG `T-003`, `T-004`, `T-005` are all
+independent of each other and only depended on `T-002`. The
+`(blocked by T-002)` annotation was struck from their lines because
+`T-002` is now `Done`. They form a DAG-level parallel batch, but
+their `files-likely-touched` sets overlap on `client-render`,
+`client-main`, and the shared test files (`tests/unit/render.test.ts`,
+`tests/http/bookmarks.test.ts`, `tests/client/api.test.ts`) — so a
+disjoint-files concurrent batch is NOT available. The Coordinator
+promotes `T-003` (the largest scope, lands the validation surface
+and the form-error render seam that T-004 and T-005 do not need to
+modify) to `In Progress`; `T-004` and `T-005` stay in `Backlog` for
+sequential promotion on subsequent passes.
+
+Board write went through `orchestrator/lib/atomic-write.sh`. The
+four `## ` headers (`Backlog`, `In Progress`, `Review`, `Done`) are
+preserved in order; every prior card is in exactly one column; no
+cards lost. `test-report.md` updated with the T-002 row, the
+phase-wide smoke summary, and the story-coverage table (US-002
+covered, gates green).
+
+`tests.md` still declares `**Mutation Testing:** no` —
+`methods/mutation.md` skipped per contract.
+
+Lock released. Returning `status: Pending` with `completed: 2`
+(`T-001`, `T-002`), `failed: 0`, `hitl-pending: 0`. The orchestrator
+should dispatch the `T-003` Task Builder subagent against the
+updated board and re-dispatch the Coordinator on its return.
+
+## 2026-05-18 — baseline-1779088275-1 — T-003 Save a bookmark end-to-end green on first attempt
+
+Landed the full vertical slice for `US-001` (save end-to-end with
+inline validation and dedupe).
+
+Server: new `src/server/validation.ts` exporting `parseTitle`
+(trims, rejects non-string + empty-after-trim) and `parseUrl`
+(requires `http:`/`https:` via the platform `URL` constructor;
+returns the raw input verbatim per the "no normalization" dedupe
+contract in `spec.md ## Constraints`). `routes.ts` gains
+`POST /bookmarks`: validates title → 400 `INVALID_TITLE`, then url
+→ 400 `INVALID_URL`, then calls `repo.insert` (whose
+`DuplicateUrlError` rethrow path was already wired in T-002) and
+returns 201 `{ bookmark }`. `DuplicateUrlError` is caught at the
+route layer and mapped to 409 `DUPLICATE_URL`. `index.ts` now
+mounts the single Express error middleware that responds 500
+`{ error: { code: "INTERNAL", message } }` — design.md `### Server-
+side error pipeline` step 4 placed this here, deferred by T-002
+because no handler had a `throw` path until T-003 introduced the
+`DuplicateUrlError` bubble.
+
+Frontend: `api.ts` gains `createBookmark(input)` — POSTs JSON,
+maps fetch rejection to `ApiError(0, "NETWORK")`, maps non-2xx to
+`ApiError(response.status, code, message, field)` from the server
+envelope, returns `body.bookmark` on 2xx. `render.ts` gains
+`showFormError(form, field, message)` and `clearFormErrors(form)`
+— error nodes carry `data-error-for=<field>` and are inserted
+immediately after the `[name=<field>]` input. `main.ts` wires the
+`#add-form` submit handler: prevent default, disable submit
+button, `clearFormErrors`, call `createBookmark`; on success
+`form.reset()` then `refresh()` (T-002's module-scoped helper);
+on `ApiError` `showFormError(form, err.field ?? "form",
+err.message)`. The `input` event clears any inline error for the
+field that just received input. `index.html` fills the previously-
+empty `<form id="add-form">` with title + url inputs + submit
+button. `style.css` adds a small `.form-error` rule, dark variant
+inside the existing `prefers-color-scheme: dark` block (no
+toggle).
+
+Tests: new `tests/unit/validation.test.ts` (10 specs covering
+every row of the task's validation table); `tests/unit/repo.test.ts`
+extended with `repo.insert` happy-path + `DuplicateUrlError`
+specs; `tests/unit/render.test.ts` extended with
+`showFormError`/`clearFormErrors` specs against the happy-dom
+environment; `tests/http/bookmarks.test.ts` extended with four
+`POST /api/bookmarks` specs (201 + round-trip, 400 INVALID_TITLE,
+400 INVALID_URL, 409 DUPLICATE_URL with single-row check) using
+the same supertest-against-in-process-app pattern T-002
+established; new `tests/client/api.test.ts` with two specs
+covering `createBookmark`'s ApiError mapping under
+`vi.stubGlobal("fetch", …)`.
+
+Red phase: 18 runtime assertion failures (`Error: parseTitle: not
+implemented`, `Error: parseUrl: not implemented`, `Error:
+createBookmark: not implemented`, `Error: showFormError: not
+implemented`, `Error: clearFormErrors: not implemented`) — no
+compile errors, no missing-import errors. Stubs let the test
+imports resolve so failures were behavioral.
+
+Green phase: `npm test` (`tsc --noEmit` + `vitest run`) → 27
+passed / 2 skipped (smoke spec gated by `SMOKE=1`). Single
+implementation iteration; no test edits required.
+
+No commits. No out-of-scope edits.
+
+## 2026-05-18 — baseline-1779088275-1 — Build coordinator: T-003 smoke-gated to Done; T-004 promoted to In Progress
+
+Verification-environment pre-flight: `plan.md` still declares
+`node-test`. Coordinator capability matches (node 22.18.0, npm 10.9.3
+on this host; `app/node_modules` is in place from T-001). No GUI /
+manual-browser harness required. Pre-flight passes.
+
+T-003 Task Builder returned `status: green` on attempt 1 (see
+`tasks/T-003.done.md` + `tasks/T-003.test-log.txt`). Per the board
+transition rules, the Coordinator moved `T-003` from `In Progress`
+through `Review` and then to `Done` once the phase-wide smoke gates
+were re-run with `T-003`'s new surface (POST /api/bookmarks,
+DuplicateUrlError → 409, INTERNAL error middleware) in place.
+
+Smoke gates this pass (verified live, not just by replay of the
+T-003 task-builder log):
+
+- `npm test` (`tsc --noEmit` + `vitest run`) → 27 passed / 2 skipped.
+  No type errors. Smoke specs gated by `SMOKE=1` (the 2 skipped).
+- `SMOKE=1 vitest run` → 29 passed / 0 skipped. The in-process boot-
+  the-server spec (`tests/smoke/run.test.ts`) passes, proving the
+  `npm start` run contract and the "no `data/` in project root"
+  workspace-isolation invariant continue to hold after T-003.
+- Live `PORT=3460 npm start` probe: `GET /` 200 (HTML contains
+  `id="bookmarks"`, 738 B); `GET /style.css` 200 (1422 B; grew from
+  1259 B because T-003 added the `.form-error` rule + dark variant);
+  `GET /dist/main.js` 200 (5109 B; grew from 2136 B because the
+  bundle now includes the form-submit wiring and `createBookmark`);
+  `GET /api/bookmarks` 200 `{"bookmarks":[]}`; `POST /api/bookmarks`
+  with `{"title":"Hello","url":"http://example.com/"}` → 201 with
+  the persisted `{id, title, url, created_at}` envelope; second POST
+  with the same URL → 409 `DUPLICATE_URL` (field "url"); POST with
+  whitespace-only title → 400 `INVALID_TITLE` (field "title"); POST
+  with `javascript:alert(1)` URL → 400 `INVALID_URL` (field "url").
+  All four documented error shapes match `decisions.md` exactly.
+- The live boot probe naturally created `app/data/bookmarks.db` (the
+  production on-disk path, same as the T-002 probe). The Coordinator
+  removed `app/data/` after the probe so subsequent test runs start
+  clean.
+- SIGTERM shutdown was clean (exit status 143 = 128 + 15 = SIGTERM;
+  the graceful-shutdown path landed in T-001 logs no errors).
+
+Board mutation: T-003 → `Done`. Backlog re-scan after promotion —
+T-004 (`US-003` open in new tab) and T-005 (`US-004` delete) are
+both DAG-unblocked (their `blocked-by` is `[T-001, T-002]` and both
+are now `Done`). They share `client-render`, `client-main`, and
+`tests/unit/render.test.ts` in their `files-likely-touched` sets,
+so no disjoint parallel batch is available. T-004 is promoted to
+`In Progress` first because its scope is the smaller of the two
+(no server-side surface, only the anchor wiring + render-spec
+extensions); T-005 stays in `Backlog` for the next coordinator
+pass.
+
+Board write went through `orchestrator/lib/atomic-write.sh`. Four
+`## ` headers preserved in order; every prior card is in exactly
+one column; no cards lost. Project lock acquired via
+`orchestrator/lib/locks.sh acquire baseline-1779088275-1 build`
+before any board mutation; released after.
+
+`tests.md` still declares `**Mutation Testing:** no` —
+`methods/mutation.md` skipped per contract.
+
+`test-report.md` and `smoke-report.md` updated with the T-003 row
+and the live-probe details above. Returning `status: Pending` with
+`completed: 3` (T-001, T-002, T-003), `failed: 0`,
+`hitl-pending: 0`. The orchestrator should dispatch the T-004 Task
+Builder subagent against the updated board and re-dispatch the
+Coordinator on its return.
+
+## 2026-05-18 — baseline-1779088275-1 — T-004 Open a bookmark in a new tab green on first attempt
+
+Landed the new-tab affordance for `US-003`. Production-code diff is two
+lines inside `renderList` (`src/client/render.ts`): the anchor that
+T-002 already wired with `href = bookmark.url` now also carries
+`target = "_blank"` and `rel = "noopener noreferrer"`. No `click`
+listener — the browser's native handling of `target="_blank"` delivers
+both AC-1 (open in new tab) and AC-2 (originating tab does not
+navigate). `rel="noopener noreferrer"` is the security baseline the
+task scope explicitly flags. `src/client/main.ts` deliberately
+untouched.
+
+Tests (`tests/unit/render.test.ts`): new `describe("renderList
+(new-tab affordance — US-003)")` block with four specs matching the
+task's EARS coverage map — `href` equals the bookmark URL,
+`target === "_blank"`, `rel === "noopener noreferrer"`, and
+`tabindex !== "-1"` (keyboard reachability via the default `<a href>`
+behavior). The pre-existing populated-list spec already asserted the
+`href` and the empty-state spec is unchanged.
+
+Red phase: 2 runtime assertion failures —
+`expected null to be '_blank'` and `expected null to be 'noopener
+noreferrer'`. Both are real runtime assertions inside the new test
+bodies, not compile or missing-import errors. The `href` and
+`tabindex` assertions were already green from T-002's anchor wiring
+(default tabindex on `<a href>` returns `null` from `getAttribute`,
+which is correctly `!== "-1"`).
+
+Green phase: `npm test` (`tsc --noEmit` + `vitest run`) → 31 passed
+/ 2 skipped (smoke specs gated by `SMOKE=1`). Single attempt to
+green; no test edits required.
+
+No commits. No out-of-scope edits.
+
+## 2026-05-18 — baseline-1779088275-1 — Build coordinator: T-004 → Done, T-005 promoted to In Progress
+
+Verification-environment pre-flight unchanged: `node-test`, executable
+by Coordinator. T-004 Task Builder returned `status: green` on first
+attempt with `tasks/T-004.done.md` and `tasks/T-004.test-log.txt`
+recording 2 runtime assertion failures in red (anchor `target` and
+`rel`) and 31 passed / 2 skipped in green.
+
+Coordinator pass:
+
+1. Re-ran `npm test` from `app/`: tsc clean, vitest 31 passed / 2
+   skipped (the 2 skipped are `SMOKE=1` boot specs). Green state
+   reproduced.
+2. Ran `SMOKE=1 npx vitest run`: 33 passed / 0 skipped — the
+   boot-the-server spec confirms `npm start` still honors the run
+   contract, and the in-process invariant spec confirms no `data/`
+   appears under the project root during the in-process suite. The
+   `SMOKE=1` boot probe did create `app/data/bookmarks.db` (production
+   on-disk path); the Coordinator removed `app/data/` after the run
+   so subsequent runs start clean.
+3. Acquired the project lock (`locks.sh acquire baseline-1779088275-1
+   build`), atomically rewrote `board.md` to:
+   - Move `T-004` from `In Progress` through `Review` to `Done`
+     (single atomic transition: green return + smoke pass).
+   - Move `T-005` from `Backlog` to `In Progress` (DAG: blocked-by
+     `T-001` + `T-002`, both `Done`; `files-likely-touched` no longer
+     overlap with any other `In Progress` card).
+   Released the lock.
+4. Updated `test-report.md` (T-004 row → Done with red/green evidence
+   cited; T-005 row → In Progress; story-coverage row updated;
+   open-items rewritten to reflect the single remaining card) and
+   `smoke-report.md` (added the T-004 pass section; extended the
+   phase-wide gate matrix with a T-004 column).
+5. `tests.md` still declares `Mutation Testing: no` → `methods/
+   mutation.md` skipped this pass.
+
+No commits. No out-of-scope edits. Returning `status: Pending` with
+`completed: 4`, `failed: 0`, `hitl-pending: 0` so the orchestrator
+dispatches the T-005 Task Builder subagent and re-dispatches the
+Coordinator after it returns. Once T-005 lands and clears smoke, this
+phase reports `status: complete`.
+
+## 2026-05-18 — baseline-1779088275-1 — T-005 Delete a bookmark end-to-end green on first attempt
+
+Landed the full vertical slice for `US-004` (delete a bookmark
+end-to-end with idempotent no-op).
+
+Server: `routes.ts` gains `DELETE /bookmarks/:id`. The `:id`
+parameter is validated with a strict `/^\d+$/` regex plus
+`Number.isInteger` and `> 0` — non-numeric, negative, and zero
+are rejected with 400 `INVALID_ID`. On valid input, the handler
+calls `repo.deleteById(id)` and unconditionally responds 204;
+both the "row existed" and "row did not exist" branches return
+204 per the design / decisions pinning of US-004 AC-3.
+`repo.deleteById` was already implemented in T-002 with the
+correct true/false semantics — T-005 lands the behavior tests
+for both branches.
+
+Frontend: `api.ts` `deleteBookmark(id)` — DELETE, resolves on
+204, maps fetch rejection to `ApiError(0, "NETWORK")` and
+non-204 to `ApiError(status, code, message, field)` from the
+server envelope. `render.ts` extends `renderList` so each `<li>`
+carries a `<button data-bookmark-id="<id>" aria-label="Delete
+bookmark">Delete</button>` after the URL span. `main.ts` adds
+event-delegated click handling on `#bookmarks`: on a delete
+click, disable the button, clear any prior list notice, call
+`deleteBookmark(id)`, then `refresh()`. On `ApiError`: re-enable
+the button and surface a non-blocking `#list-notice` `<p>`
+inserted just before the list mount with "Couldn't delete —
+try again".
+
+Tests: extended `repo.test.ts`, `render.test.ts`,
+`bookmarks.test.ts`, and `api.test.ts` with 14 new specs across
+the EARS coverage map (`deleteById` true / false paths, delete
+button DOM + accessibility + disabled-flag round-trip, 204
+seeded delete + GET round-trip, 204 idempotent on non-existent
+id, 204 idempotent on second delete, 400 INVALID_ID on `abc`,
+400 INVALID_ID on `-1`, `deleteBookmark` resolves on 204,
+rejects on 400 envelope, rejects on fetch rejection).
+
+Red phase: 12 runtime assertion failures (5 in
+`bookmarks.test.ts`, 4 in `render.test.ts`, 3 in `api.test.ts`,
+0 in `repo.test.ts`). No compile errors, no missing-import
+errors.
+
+Green phase: `npm test` → 45 passed / 2 skipped. Single
+implementation iteration; no test edits required.
+
+No commits. No out-of-scope edits.
+
+## 2026-05-18 — baseline-1779088275-1 — Build coordinator: T-005 promoted to Done; Build phase complete
+
+Coordinator re-dispatch after Task Builder returned `status: green`
+for T-005 (delete a bookmark end-to-end with idempotent no-op,
+US-004). Pre-flight `plan.md` § Verification environment re-read:
+still `node-test`.
+
+Board mutation: T-005 `In Progress → Done` after smoke gate passed.
+Final board: Backlog 0, In Progress 0, Review 0, Done 5.
+
+Smoke gate:
+- `npm test`: 45 passed / 2 skipped.
+- `SMOKE=1 vitest run`: 47 passed.
+- Live `PORT=3461 npm start` probe: 11 endpoints; DELETE branches
+  cover 204 on existing-row, 204 idempotent on re-delete, 204
+  idempotent on never-existed id, 400 INVALID_ID on non-numeric
+  and negative ids; post-delete GET excludes the row.
+- esbuild bundle 7.5 KB (was 5.1 KB at T-003; T-005 adds event-
+  delegated delete handler + `deleteBookmark` API + list-notice).
+- `app/data/` cleaned after live probe.
+
+Mutation gate skipped (`tests.md` declares `Mutation Testing: no`).
+
+Build phase status: complete. All four user stories satisfied end-
+to-end. No HITL pending, no failed cards, no out-of-scope edits.

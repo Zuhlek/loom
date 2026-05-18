@@ -1430,3 +1430,42 @@ Three cross-phase audit observations worth carrying forward:
   the exit code and treats the `127.0.0.1:3000` not-accepting probe as
   the gate. Worth codifying as the default smoke shape for any
   single-binary node tool reachable via a TS-loader wrapper.
+
+## 2026-05-18 — baseline-1779088275-1 — Review: P3 enforcement gap across consecutive Build tasks
+
+T-005's Task Builder added the third `ApiError(0, "NETWORK", …)` throw in
+`src/client/api.ts` (alongside the ones T-002 and T-003 had each added,
+one per function). No occurrence is by itself a P3 violation, but the
+third crossed the "3+ instances require extraction" threshold from
+`principles.md` P3 — and Review flagged it as a Blocker per the
+review-checklist severity mapping. The Build Task Builder for T-005 had
+`principles.md` in its `Reads first` set but did not run a scan across
+the file before appending. Curating P3 enforcement into a structural
+review by Build (or a deterministic pre-flight scan inside
+`methods/task.md`) would catch this class of multi-task-cumulative
+duplication before it reaches Review.
+
+## 2026-05-18 — baseline-1779088275-1 — Review: deferred-concern comments are a design-conformance trap
+
+`src/client/main.ts:refresh()` carried a T-002-era comment marking the
+list-fetch error path as "lands with the mutation tasks that need it".
+T-005 (a mutation task) added the matching `showListNotice` /
+`clearListNotice` helpers but wired them only to the delete-error path,
+leaving the list-fetch path still console-only. `design.md`
+`## State and error handling > List` explicitly required the notice on
+fetch failure — the deferred-concern comment was the only reminder, and
+the Build Task Builder didn't sweep for it. Either drop the "deferred"
+pattern entirely (resolve at the first task that touches the seam) or
+treat `// T-NNN …` comments as a structured TODO surface that Build's
+pre-flight scans against `board.md` to ensure they're cleared by the
+time the referenced task is Done.
+
+## 2026-05-18 — baseline-1779088275-1 — Review: speculative `eslint-disable-next-line` markers without a linter
+
+Four `// eslint-disable-next-line no-console` markers in
+`src/server/index.ts` and `src/client/main.ts` reference an ESLint
+config that this project does not have (`spec.md`'s minimum-surface
+constraint forbids installing one). The agent reached for a familiar
+big-codebase idiom inside an explicitly small-surface project — a P5
+"speculative scaffolding" smell. Worth a curated reminder that disable
+directives belong only where the corresponding linter actually runs.
