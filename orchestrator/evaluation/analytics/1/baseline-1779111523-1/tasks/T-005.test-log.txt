@@ -1,0 +1,27 @@
+=== T-005 RED attempt 1 ===
+The assertion `expect(stage2Bookmarks).toHaveLength(2)` was inverted to
+`(3)` to demonstrate the gate fails when its post-restart shape is
+wrong. This proves the test is load-bearing rather than vacuous.
+
+ FAIL tests/persistence.restart.test.ts > US-005 — restart persistence
+   AssertionError: expected [...] to have a length of 3 but got 2
+   - Expected: 3
+   + Received: 2
+
+=== T-005 GREEN ===
+> vitest run
+ ✓ tests/routes.list.test.ts (3 tests)
+ ✓ tests/routes.create.test.ts (6 tests)
+ ✓ tests/persistence.restart.test.ts (2 tests)
+ ✓ tests/validation.test.ts (6 tests)
+ ✓ tests/repository.create.test.ts (3 tests)
+ ✓ tests/routes.delete.test.ts (3 tests)
+ ✓ tests/client.open.test.ts (4 tests)
+ ✓ tests/repository.list.test.ts (2 tests)
+ ✓ tests/client.render.test.ts (5 tests)
+ ✓ tests/repository.delete.test.ts (2 tests)
+ ✓ tests/client.delete.test.ts (4 tests)
+
+ Test Files  11 passed (11)
+      Tests  40 passed (40)
+   Duration  1.55s

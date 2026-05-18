@@ -56,7 +56,7 @@ If the declared environment requires a harness Build cannot run (e.g. `manual-br
 
 ## `board.md` Shape
 
-`board.md` is a Markdown kanban that the Build Coordinator reads to pick ready work and the UI renders as columns.
+`board.md` is a Markdown kanban that the Build phase agent reads to pick ready work and the UI renders as columns.
 
 ### Canonical layout
 

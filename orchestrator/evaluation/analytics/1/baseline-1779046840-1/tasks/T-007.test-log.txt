@@ -1,9 +1,0 @@
-red:
-  12 FAIL — all client tests hit runtime stubs:
-    "Error: listBookmarks not implemented" etc.
-    "Error: renderList not implemented" etc.
-
-green:
-  ✓ test/client/dom.test.ts (6 tests) 17ms
-  ✓ test/client/api.test.ts (6 tests) 4ms
-  12 passed

@@ -4057,3 +4057,78 @@ Red: 5 runtime assertion failures (3 `port :3000 not accepting` because the stub
 ## 2026-05-18 — baseline-1779088265-1 — Build Coordinator — phase complete
 
 All eight tasks reached `Done`. 61/61 Vitest cases pass; both `tsc --noEmit` invocations exit 0; cross-cutting no-`innerHTML` grep clean; explicit `tests.md § Smoke gate` 8/8 PASS (`npm start` binds :3000, `GET /` → 200, `GET /api/bookmarks` → `{"bookmarks":[]}` on fresh `data/`, `POST` → 201 with id=1 body, server killed cleanly, no writes outside `app/` beyond declared `data/bookmarks.db*` and `public/bundle.js`). Mutation gate skipped per `tests.md` (Mutation Testing: no). Verification env `node-test` + `cli-shell` (no `headless-browser` required — UI covered via jsdom). Pre-condition cleanup: killed one orphaned `node dist/server/index.js` left bound to :3000 from a prior T-008 dispatch, and reaped one stale `.locks/T-002.lock` whose holder PID was dead. Coordinator artifacts: `smoke-report.md`, `test-report.md`, `board.md` (Review → Done for T-001..T-008).
+
+## 2026-05-18 — baseline-1779111523-1 — full Build run T-001..T-005 — all green
+
+Local-only Bookmarks app scaffolded under `.loom/baseline-1779111523-1/app/`
+across the five planned vertical slices. All 40 Vitest assertions green
+on first attempt; smoke gate (`npm test` + boot/curl/SIGTERM) PASS.
+
+- **T-001 spine.** `createApp(repo)` + `openDatabase(BOOKMARKS_DB_PATH)`
+  + repository module with `list()` working and `create()`/`delete()`
+  as throwing stubs. Static `index.html` + `app.js` bundled by esbuild
+  via `scripts/build-client.mjs`. Tests: repository.list, routes.list,
+  client.render (10 assertions).
+- **T-002 save.** `normaliseInput` (WHATWG URL per ADR-006), repository
+  `create` catching `SQLITE_CONSTRAINT_UNIQUE` (ADR-003) →
+  `DuplicateUrlError`. POST route maps Validation/Duplicate errors to
+  400/409 with the canonical error envelope. Client gains save form,
+  field-error placeholders, `saveBookmark()`. Tests: validation,
+  repository.create, routes.create (15 assertions added).
+- **T-003 open-in-new-tab.** Row renderer rewritten as two anchors
+  (title + URL) both `target="_blank" rel="noopener noreferrer"`,
+  passing href and visible text through `escapeHtml`. No inline
+  `onclick`/`javascript:`. Tests: client.open (4 assertions).
+- **T-004 delete.** Repository `delete(id)` wired, DELETE route guards
+  non-integer ids (400), missing rows (404), success (204). Client adds
+  per-row Delete button outside the open-in-new-tab anchors with a
+  delegated click handler that walks up via `resolveDeleteTarget`.
+  `happy-dom` devDep added to drive the delegation tests (out-of-scope
+  edit recorded in `T-004.done.md`). Tests: repository.delete,
+  routes.delete, client.delete (9 assertions).
+- **T-005 restart-persistence gate.** Two-stage Vitest spec against an
+  on-disk temp SQLite path: stage 1 POSTs three rows + deletes the
+  middle one; explicit `.close()`; stage 2 reopens the same file and
+  asserts the two survivors are present with identical ids and
+  `createdAt`. Negative control checks a fresh path returns `[]`.
+
+Smoke probe: `PORT=3737 npm start` built `public/app.js 4.9kb` and
+booted cleanly; `GET /` returned 200 HTML referencing the bundle;
+`GET /api/bookmarks` returned `{"bookmarks":[]}`; SIGTERM exited clean.
+
+No mutation testing (`tests.md` declares `no`).
+
+## 2026-05-18 — baseline-1779117992-1 — build phase complete
+
+Seven tasks for the Bookmarks app. Implementation under
+`.loom/baseline-1779117992-1/app/`. Stack: Express ^4, better-sqlite3 ^11,
+esbuild ^0.24, Vitest ^2, vanilla TS web bundle. All four EARS stories
+satisfied; 44 tests green (+ 1 skipped placeholder).
+
+Per-task summary:
+- T-001 scaffold — green (npm install + tsc --noEmit + npm test
+  passWithNoTests all clean).
+- T-002 repo + db — green (10 tests; list/create/delete with
+  DuplicateUrlError / NotFoundError + ordering + ties).
+- T-003 app shell + static + error envelope — green (5 boot tests).
+- T-004 save end-to-end — green (attempt 2; reasons in develop-log).
+  Consolidated web/main.ts here; recorded as out-of-scope edit.
+- T-005 list end-to-end — green (9 new tests).
+- T-006 open in new tab — green (anchor target=_blank
+  rel="noopener noreferrer"; 3 new tests).
+- T-007 delete end-to-end — green (DELETE route + 404 refetch path; 6
+  new tests).
+
+Smoke (separate entry below).
+
+## 2026-05-18 — baseline-1779117992-1 — smoke
+
+All five smoke checks PASS. Build artifacts complete (dist/ + public/),
+app starts on configurable port, every changed endpoint matches the
+design contract, headless Chrome exercised the four-story loop with
+screenshots, and tests use :memory: throughout so the on-disk DB is
+untouched. Smoke caught and fixed a real bug: the IIFE bundle's
+`typeof process?.env?.VITEST` threw ReferenceError in the browser
+because optional chaining does not make the leading identifier
+optional; guarded with `typeof process === 'undefined'`. All 44 tests
+still pass after the fix.

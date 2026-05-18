@@ -1,0 +1,25 @@
+=== T-003 RED attempt 1 ===
+Row rendered with <span> wrappers (pre-T-003 markup) to force failures
+in the anchor-shape assertions.
+
+ FAIL tests/client.open.test.ts > produces an anchor with target=_blank... for the title
+   AssertionError: expected '<li ...><span class="title">...' to contain 'href="https://example.com/"'
+ FAIL tests/client.open.test.ts > also wraps the URL text in an anchor with the same hardening
+   AssertionError: expected '...span class="url"...' to match /<a[^>]*class="url"[^>]*target="_blank"...
+
+ Test Files  1 failed | 6 passed (7)
+      Tests  2 failed | 27 passed (29)
+
+=== T-003 GREEN ===
+> vitest run
+ ✓ tests/repository.create.test.ts (3 tests)
+ ✓ tests/routes.list.test.ts (3 tests)
+ ✓ tests/routes.create.test.ts (6 tests)
+ ✓ tests/validation.test.ts (6 tests)
+ ✓ tests/client.open.test.ts (4 tests)
+ ✓ tests/repository.list.test.ts (2 tests)
+ ✓ tests/client.render.test.ts (5 tests)
+
+ Test Files  7 passed (7)
+      Tests  29 passed (29)
+   Duration  702ms

@@ -1,0 +1,99 @@
+=== T-002 RED ===
+ ❯ Module.createBookmark src/repo/bookmarks-repo.ts:32:9
+     30| export function createBookmark(_db: Database, _input: NewBookmark): Bo…
+     31|   // RED STUB — replaced in green phase.
+     32|   throw new Error('createBookmark not implemented');
+       |         ^
+     33| }
+     34| 
+ ❯ tests/repo.test.ts:72:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  tests/repo.test.ts > bookmarks-repo > duplicate URL handling (US-001 AC2) > does not insert the duplicate row
+Error: createBookmark not implemented
+ ❯ Module.createBookmark src/repo/bookmarks-repo.ts:32:9
+     30| export function createBookmark(_db: Database, _input: NewBookmark): Bo…
+     31|   // RED STUB — replaced in green phase.
+     32|   throw new Error('createBookmark not implemented');
+       |         ^
+     33| }
+     34| 
+ ❯ tests/repo.test.ts:79:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  tests/repo.test.ts > bookmarks-repo > deleteBookmark (US-004 AC1, AC2) > removes the row by id; listBookmarks no longer contains it
+Error: createBookmark not implemented
+ ❯ Module.createBookmark src/repo/bookmarks-repo.ts:32:9
+     30| export function createBookmark(_db: Database, _input: NewBookmark): Bo…
+     31|   // RED STUB — replaced in green phase.
+     32|   throw new Error('createBookmark not implemented');
+       |         ^
+     33| }
+     34| 
+ ❯ tests/repo.test.ts:91:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  tests/repo.test.ts > bookmarks-repo > deleteBookmark (US-004 AC1, AC2) > throws NotFoundError when the id does not exist
+AssertionError: expected error to be instance of NotFoundError
+
+- Expected: 
+[Function NotFoundError]
+
++ Received: 
+[Error: deleteBookmark not implemented]
+
+ ❯ tests/repo.test.ts:97:47
+     95| 
+     96|     it('throws NotFoundError when the id does not exist', () => {
+     97|       expect(() => deleteBookmark(db, 99999)).toThrow(NotFoundError);
+       |                                               ^
+     98|     });
+     99| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  tests/repo.test.ts > bookmarks-repo > deleteBookmark (US-004 AC1, AC2) > throws NotFoundError on an empty DB
+AssertionError: expected error to be instance of NotFoundError
+
+- Expected: 
+[Function NotFoundError]
+
++ Received: 
+[Error: deleteBookmark not implemented]
+
+ ❯ tests/repo.test.ts:101:43
+     99| 
+    100|     it('throws NotFoundError on an empty DB', () => {
+    101|       expect(() => deleteBookmark(db, 1)).toThrow(NotFoundError);
+       |                                           ^
+    102|     });
+    103|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+ Test Files  1 failed (1)
+      Tests  10 failed (10)
+   Start at  17:52:08
+   Duration  853ms (transform 51ms, setup 0ms, collect 107ms, tests 251ms, environment 0ms, prepare 268ms)
+
+=== T-002 GREEN ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> bookmarks-app@0.1.0 test
+> vitest run --passWithNoTests
+
+
+ RUN  v2.1.9 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app
+
+ ✓ tests/repo.test.ts (10 tests) 7ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  17:52:32
+   Duration  228ms (transform 23ms, setup 0ms, collect 28ms, tests 7ms, environment 0ms, prepare 40ms)
+

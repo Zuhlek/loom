@@ -1,10 +1,10 @@
 # Engineering Principles
 
-> **What this is:** the default engineering principles every code-touching Loom subagent (Build's Task Builder, Review's Audit Agent) operates under. These are *enforceable rules*, not vibes.
+> **What this is:** the default engineering principles every code-touching Loom subagent (Build phase agent, Review Audit Agent) operates under. These are *enforceable rules*, not vibes.
 >
-> **Where it lives:** `orchestrator/principles.md` — team-shared. Per-project invariants and overrides live in the project's `spec.md ## Constraints` section, which the Build Task Builder and Review Audit Agent both read as part of their input context. A Constraint wins over a principle on conflict.
+> **Where it lives:** `orchestrator/principles.md` — team-shared. Per-project invariants and overrides live in the project's `spec.md ## Constraints` section, which the Build phase agent and Review Audit Agent both read as part of their input context. A Constraint wins over a principle on conflict.
 >
-> **How agents pick this up:** subagent-pull, not orchestrator-push. The Task Builder's [`weave/phases/build/methods/task.md`](weave/phases/build/methods/task.md) and the Review Audit Agent's [`weave/phases/review/phase.md`](weave/phases/review/phase.md) each open with a "Reads first" instruction pointing here. They read this file before any work-loop step. The orchestrator never injects this file into dispatch prompts.
+> **How agents pick this up:** subagent-pull, not orchestrator-push. The Build phase agent (via [`weave/phases/build/methods/task.md`](weave/phases/build/methods/task.md)) and the Review Audit Agent (via [`weave/phases/review/phase.md`](weave/phases/review/phase.md)) each open with a "Reads first" instruction pointing here. They read this file before any work-loop step. The orchestrator never injects this file into dispatch prompts.
 >
 > **Why it exists:** without explicit, enforceable principles, the agent will introduce duplication, leave dead code, add backwards-compat shims, and drift from the codebase's existing conventions. These failures aren't taste — they're predictable consequences of an agent generating code without anchored constraints.
 
@@ -133,7 +133,7 @@ Subagent-pull. The orchestrator never injects this file into dispatch prompts.
 
 | Agent | Operating spec | Pickup mechanism |
 | --- | --- | --- |
-| Build Task Builder | [`weave/phases/build/methods/task.md`](weave/phases/build/methods/task.md) | Opens with a `## Reads first` section instructing the agent to read this file before any Contract step. |
+| Build phase agent | [`weave/phases/build/methods/task.md`](weave/phases/build/methods/task.md) | Opens with a `## Reads first` section instructing the agent to read this file before the first task, and keep it loaded across every task in the session. |
 | Review Audit Agent | [`weave/phases/review/phase.md`](weave/phases/review/phase.md) | Same — opens with `## Reads first` + a dedicated `Principle compliance` Review Target that applies the per-principle Review checks below. |
 
 Spec / Design / Plan don't touch code and don't read this file.
@@ -146,7 +146,7 @@ The Review Audit Agent uses these as a structured checklist. Each principle has 
 - **Major:** P2 mismatch with existing conventions; P5 unused abstraction with no consumer; P6 internal mocking.
 - **Minor:** stylistic deviations within a principle's spirit.
 
-Project-level `spec.md ## Constraints` entries take precedence over the matching principle when both apply for a given project. The Spec / Design phases are responsible for surfacing those Constraints; the Task Builder and Review Audit Agent both read `spec.md` as part of their input context.
+Project-level `spec.md ## Constraints` entries take precedence over the matching principle when both apply for a given project. The Spec / Design phases are responsible for surfacing those Constraints; the Build phase agent and Review Audit Agent both read `spec.md` as part of their input context.
 
 ---
 
@@ -162,4 +162,4 @@ Seven enforceable principles, all with concrete rules and review checks:
 6. **Tests verify behaviour** — public interfaces, no internal mocking.
 7. **Don't fight the framework** — use built-ins, no wrappers.
 
-Read by the Task Builder and Review Audit Agent on dispatch (their operating specs instruct them to). Used as a structured checklist by Review. Per-project overrides live in `spec.md ## Constraints` — a Constraint wins over a principle on conflict.
+Read by the Build phase agent and Review Audit Agent on dispatch (their operating specs instruct them to). Used as a structured checklist by Review. Per-project overrides live in `spec.md ## Constraints` — a Constraint wins over a principle on conflict.

@@ -1,6 +1,0 @@
-red:
-  3 FAIL with runtime "Error: createApp not implemented" thrown by stub
-
-green:
-  ✓ test/api.test.ts  (3 tests) 22ms
-  3 passed

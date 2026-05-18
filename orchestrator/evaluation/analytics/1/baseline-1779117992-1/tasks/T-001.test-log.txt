@@ -1,0 +1,22 @@
+=== T-001 red phase ===
+(T-001 is a bootstrap-only task; no behavioural tests by design per
+task.md § Test sketch. The acceptance gate is "the harness boots".
+First tsc attempt failed with TS18003 (no inputs) — that constitutes
+the red signal, since the scaffold initially had no source files.)
+
+=== T-001 green phase: tsc --noEmit (after src/placeholder.ts added) ===
+$ npx tsc --noEmit
+(exit 0)
+
+=== T-001 green phase: npm test (passWithNoTests) ===
+$ npm test
+> bookmarks-app@0.1.0 test
+> vitest run --passWithNoTests
+
+ RUN  v2.1.9 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app
+include: tests/**/*.test.ts
+No test files found, exiting with code 0
+
+=== T-001 green phase: npm install ===
+$ npm install
+added 232 packages in 36s

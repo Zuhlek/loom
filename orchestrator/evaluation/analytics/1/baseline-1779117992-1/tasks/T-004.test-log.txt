@@ -1,0 +1,110 @@
+=== T-004 RED ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> bookmarks-app@0.1.0 test
+> vitest run --passWithNoTests
+
+
+ RUN  v2.1.9 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app
+
+ ✓ tests/repo.test.ts (10 tests) 10ms
+stderr | tests/api.test.ts > T-003 — app shell + static + error envelope > forced-throw handler → 500 + internal_error envelope
+[error-handler] Error: forced test throw
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/src/app.ts:49:10
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:284:15
+    at router.process_params (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:346:12)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:280:10)
+    at SendStream.error (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/serve-static/index.js:121:7)
+    at SendStream.emit (node:events:508:20)
+
+ ❯ tests/api.test.ts (13 tests | 1 failed) 49ms
+   × T-004 — POST /api/bookmarks (US-001) > POST then GET — POSTed row is first in subsequent GET 5ms
+     → expected [] to have a length of 2 but got +0
+ ❯ tests/web.test.ts (4 tests | 1 failed) 53ms
+   × T-004 — form submit (US-001) > submitting valid input fires POST and prepends the new row 31ms
+     → expected [ …(2) ] to have a length of 1 but got 2
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/api.test.ts > T-004 — POST /api/bookmarks (US-001) > POST then GET — POSTed row is first in subsequent GET
+AssertionError: expected [] to have a length of 2 but got +0
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ tests/api.test.ts:147:22
+    145|     const get = await request(app).get('/api/bookmarks');
+    146|     expect(get.status).toBe(200);
+    147|     expect(get.body).toHaveLength(2);
+       |                      ^
+    148|     expect(get.body[0].url).toBe('https://newer.test');
+    149|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/web.test.ts > T-004 — form submit (US-001) > submitting valid input fires POST and prepends the new row
+AssertionError: expected [ …(2) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ tests/web.test.ts:105:23
+    103| 
+    104|     const postCalls = fetchCalls.filter(c => c.init?.method === 'POST'…
+    105|     expect(postCalls).toHaveLength(1);
+       |                       ^
+    106|     expect(postCalls[0].url).toBe('/api/bookmarks');
+    107|     expect(JSON.parse(postCalls[0].init!.body as string)).toEqual({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  2 failed | 25 passed (27)
+   Start at  17:56:59
+   Duration  849ms (transform 84ms, setup 0ms, collect 284ms, tests 111ms, environment 502ms, prepare 168ms)
+
+=== T-004 GREEN ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> bookmarks-app@0.1.0 test
+> vitest run --passWithNoTests
+
+
+ RUN  v2.1.9 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app
+
+ ✓ tests/repo.test.ts (10 tests) 9ms
+stderr | tests/api.test.ts > T-003 — app shell + static + error envelope > forced-throw handler → 500 + internal_error envelope
+[error-handler] Error: forced test throw
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/src/app.ts:49:10
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:284:15
+    at router.process_params (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:346:12)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:280:10)
+    at SendStream.error (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/serve-static/index.js:121:7)
+    at SendStream.emit (node:events:508:20)
+
+ ✓ tests/api.test.ts (13 tests) 49ms
+ ✓ tests/web.test.ts (4 tests) 73ms
+
+ Test Files  3 passed (3)
+      Tests  27 passed (27)
+   Start at  17:57:45
+   Duration  789ms (transform 97ms, setup 0ms, collect 290ms, tests 130ms, environment 482ms, prepare 191ms)
+

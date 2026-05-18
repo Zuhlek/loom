@@ -62,7 +62,7 @@ properties:
     type: integer
 ```
 
-Success criteria: `status: complete` in RETURN AND Build coordinator can pick ready tasks from `board.md` without ambiguity.
+Success criteria: `status: complete` in RETURN AND the Build phase agent can pick ready tasks from `board.md` without ambiguity.
 
 ### Writes
 

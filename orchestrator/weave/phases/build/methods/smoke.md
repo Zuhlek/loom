@@ -1,6 +1,6 @@
-# Build Smoke-Test Agent
+# Smoke procedure — runnable verification
 
-Verify runnable application behavior after Build tasks are green.
+Inline procedure the Build phase agent applies once near the end of its session, when the project is runnable. Not dispatched as a subagent.
 
 ## Checks
 
@@ -16,3 +16,31 @@ Verify runnable application behavior after Build tasks are green.
 - No destructive commands.
 - Save screenshots under `.loom/<project>/smoke-screenshots/`.
 - Record PASS, FAIL, or SKIPPED with reason for each check.
+
+## Report schema
+
+`.loom/<project>/smoke-report.md` — one entry per check above, in order. Each entry:
+
+```markdown
+### <check name>
+**Result:** PASS | FAIL | SKIPPED
+**Reason:** <one-line explanation>
+**Evidence:** <command output excerpt | screenshot path | log line>
+```
+
+## Outcome
+
+| All checks | Board action |
+| --- | --- |
+| PASS or SKIPPED (no FAIL) | Promote tasks from `Review` to `Done` |
+| One or more FAIL | Keep affected tasks in `Review`; record the failure in the smoke report and in `test-report.md` |
+| Project not runnable (no deliverable to smoke) | Document the skip reason; no task promotion required |
+
+## Writes
+
+| Path | Notes |
+| --- | --- |
+| `.loom/<project>/smoke-report.md` | One entry per check (PASS / FAIL / SKIPPED with reason). |
+| `.loom/<project>/smoke-screenshots/<feature>.png` | One PNG per UI-visible feature exercised, when UI changed. |
+| `.loom/<project>/develop-log.md` | Smoke observations, dual-written. |
+| `orchestrator/log/build.md` | Matching smoke entry for the global log shard. |

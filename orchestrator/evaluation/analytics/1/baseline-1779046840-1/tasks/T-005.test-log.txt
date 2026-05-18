@@ -1,7 +1,0 @@
-red:
-  4 FAIL DELETE tests: route absent, supertest got 404 from express
-  for /:id where expected 204/404-not_found/400/204 — runtime assertion
-  failures on status codes.
-
-green:
-  ✓ test/api.test.ts (12 tests) 45ms — 12 passed

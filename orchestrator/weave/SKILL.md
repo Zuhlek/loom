@@ -96,7 +96,7 @@ Every Task dispatch is a stable head + dynamic tail (see `### Dispatch concatena
 
 Rules the orchestrator enforces on every dispatch:
 
-- The body and signature files (`phase.md`, `phase.signature.md`, `quality-check.md`, `quality-check.signature.md`, `methods/<method>.md`, `methods/<method>.signature.md`) carry literal placeholder tokens — `<project>`, `<phase>`, `<task>` — and the orchestrator does NOT substitute real values into the head when constructing the dispatch.
+- The body and signature files (`phase.md`, `phase.signature.md`, `quality-check.md`, `quality-check.signature.md`) carry literal placeholder tokens — `<project>`, `<phase>`, `<task>` — and the orchestrator does NOT substitute real values into the head when constructing the dispatch.
 - The head is the *only* stable region. Everything the agent needs to know about its job — method file paths to read from disk, the RETURN-block schema, what to write, what to skip — already lives in `phase.md` / `phase.signature.md`. The orchestrator never paraphrases, summarises, restates, or extends that content into a wrapper around the body.
 - The dynamic tail carries the substituted identifiers in the fixed `<system-reminder>` shape and nothing else. Two dispatches of the same callable differ only in the contents of this block (project name, current task, date).
 - The agent resolves placeholder tokens it encounters in the head by reading the tail block. The agent's own work loop never expects the orchestrator to have pre-substituted the placeholders.
@@ -119,7 +119,7 @@ The policy lives here so future authors keep both kinds of list deterministic ac
 2. If pipeline.md.Lifecycle state == complete: report the lifecycle as done and exit.
 3. Loop:
    a. Select the current phase.
-   b. Dispatch the matching phase agent in a fresh Task session. The user-turn prompt is the two-band concatenation (stable head + dynamic tail) defined in `### Dispatch concatenation` below; the cached-prefix boundary contract in `## Conventions` is binding on every dispatch including Build and the per-task Build dispatches.
+   b. Dispatch the matching phase agent in a fresh Task session. The user-turn prompt is the two-band concatenation (stable head + dynamic tail) defined in `### Dispatch concatenation` below; the cached-prefix boundary contract in `## Conventions` is binding on every dispatch. Every phase, Build included, is one dispatch per phase entry; the Build agent runs its per-task work loop inline within that single session (see `phases/build/phase.md` and `lifecycle-architecture.md` §3).
    c. Ensure return schema compliance: parse the RETURN block from the Task's reply and check it against the fenced `yaml` schema embedded in `phases/<phase>/phase.signature.md` under `## Returns` › `### Return block` (see "Schema-compliance extraction" below). This check is silent — on mismatch, re-dispatch the same agent with the schema mismatch as the rerun instruction (do not surface to the user). See `methods/recovery.md` for redispatch policy.
    d. Surface the rerun-or-continue decision (see below) via AskUserQuestion.
    e. On continue: update pipeline.md, advance phase, loop to (a). No
@@ -147,7 +147,7 @@ Every Task dispatch — phase agent, quality-check agent, or any callable that f
 Operationalised:
 
 1. **Stable head — body + signature, verbatim, nothing else.**
-   1. Read the body file (`phases/<phase>/phase.md`, or `phases/<phase>/quality-check.md`, or a Build method's `phases/build/methods/<method>.md`).
+   1. Read the body file (`phases/<phase>/phase.md` or `phases/<phase>/quality-check.md`).
    2. Append exactly two newlines, then `---` on its own line (a markdown thematic break), then two more newlines.
    3. Append the signature file's contents (`phases/<phase>/phase.signature.md`, etc.).
    4. The body and signature carry their `<project>`, `<phase>`, `<task>` placeholder tokens **literally** — do NOT substitute real values into the head. The body is what makes the prefix cacheable across projects.

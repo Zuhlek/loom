@@ -1,0 +1,92 @@
+=== T-003 RED ===
++ 404
+
+ ❯ tests/api.test.ts:34:24
+     32|     const app = createApp(db);
+     33|     const res = await request(app).get('/');
+     34|     expect(res.status).toBe(200);
+       |                        ^
+     35|     expect(res.headers['content-type']).toMatch(/text\/html/);
+     36|     expect(res.text).toMatch(/<form[^>]*id="bookmark-form"/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/api.test.ts > T-003 — app shell + static + error envelope > GET /does-not-exist → 404 + error envelope
+AssertionError: expected {} to match object { error: { code: 'not_found', …(1) } }
+
+- Expected
++ Received
+
+- Object {
+-   "error": Object {
+-     "code": "not_found",
+-     "message": Any<String>,
+-   },
+- }
++ Object {}
+
+ ❯ tests/api.test.ts:43:22
+     41|     const res = await request(app).get('/does-not-exist');
+     42|     expect(res.status).toBe(404);
+     43|     expect(res.body).toMatchObject({
+       |                      ^
+     44|       error: { code: 'not_found', message: expect.any(String) }
+     45|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/api.test.ts > T-003 — app shell + static + error envelope > forced-throw handler → 500 + internal_error envelope
+AssertionError: expected 404 to be 500 // Object.is equality
+
+- Expected
++ Received
+
+- 500
++ 404
+
+ ❯ tests/api.test.ts:52:24
+     50|     const app = createApp(db);
+     51|     const res = await request(app).get('/api/__throw');
+     52|     expect(res.status).toBe(500);
+       |                        ^
+     53|     expect(res.body).toMatchObject({
+     54|       error: { code: 'internal_error', message: expect.any(String) }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 1 passed (5)
+   Start at  17:53:15
+   Duration  1.94s (transform 50ms, setup 0ms, collect 1.68s, tests 57ms, environment 0ms, prepare 49ms)
+
+=== T-003 GREEN ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> bookmarks-app@0.1.0 test
+> vitest run --passWithNoTests tests/api.test.ts
+
+
+ RUN  v2.1.9 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app
+
+stderr | tests/api.test.ts > T-003 — app shell + static + error envelope > forced-throw handler → 500 + internal_error envelope
+[error-handler] Error: forced test throw
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/src/app.ts:49:10
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:284:15
+    at router.process_params (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:346:12)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:280:10)
+    at SendStream.error (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/serve-static/index.js:121:7)
+    at SendStream.emit (node:events:508:20)
+
+ ✓ tests/api.test.ts (5 tests) 25ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  17:54:25
+   Duration  419ms (transform 28ms, setup 0ms, collect 197ms, tests 25ms, environment 0ms, prepare 48ms)
+

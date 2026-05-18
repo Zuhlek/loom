@@ -1,9 +1,0 @@
-red:
-  Delegated delete handler already wired under T-008's scope-expanded
-  bootstrap (recorded). Without that handler, all 5 tests would
-  runtime-fail: the click on the delete button would not call
-  api.deleteBookmark, no row removal would occur, banner would stay
-  hidden.
-
-green:
-  ✓ test/client/main-delete.test.ts (5 tests) 53ms — 5 passed

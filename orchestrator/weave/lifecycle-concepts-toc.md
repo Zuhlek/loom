@@ -2,7 +2,7 @@
 
 **Why this document exists.** Loom is a five-phase agent-orchestration lifecycle — **Spec → Design → Plan → Build → Review** — with explicit human-in-the-loop gates between phases and a set of cross-cutting mechanisms (stable cross-phase identifiers, append-only state, typed phase signatures, capability-minimised coordination, a curated learning loop). This document defends each architectural choice with evidence from the 2023–2026 agent-orchestration literature.
 
-**Framing.** The discussion is **framework-agnostic**: every concept is examined as *"with this concept versus without it"*, not as *"this framework versus that framework"*. The four big concept sections (a dedicated Plan phase, the Spec/Design split, a dedicated Review phase, vertical task slicing with per-task fresh-context sub-agents) each elaborate on the failure modes a system runs into when the concept is absent — independent of which specific framework happens to be missing it.
+**Framing.** The discussion is **framework-agnostic**: every concept is examined as *"with this concept versus without it"*, not as *"this framework versus that framework"*. The four big concept sections (a dedicated Plan phase, the Spec/Design split, a dedicated Review phase, vertical task slicing executed in a single Build phase session) each elaborate on the failure modes a system runs into when the concept is absent — independent of which specific framework happens to be missing it.
 
 ---
 
@@ -17,7 +17,7 @@ The four rows below summarise, in plain English, what the literature reports abo
 | **A dedicated planning phase that produces an explicit dependency graph of tasks** | Recursive plan-decomposition adds between 27 and 33 score points (out of 100) on three different agent-task benchmarks. Replacing sequential reasoning with a parallel dependency graph cuts wall-clock latency by roughly 3.7-fold and dollar cost by roughly 6.7-fold on tool-calling tasks. Adding a verification step over the generated plan lifts scores another 4 to 8 points. | [10] [11] [12] |
 | **Splitting "what we are building" (Spec) from "how we are building it" (Design), and writing user stories in a controlled grammar** | Industrial requirements teams at NASA, Airbus and Rolls-Royce report a substantial reduction across eight categories of ambiguity when stories follow a fixed grammar instead of free-form text. A defect caught while writing the specification costs roughly one one-hundredth of the same defect caught after release. | [58] [59] [75] [81] |
 | **A dedicated Review phase, run by a fresh agent that did not see the build happen** | A reviewer in a fresh context lifts coding-benchmark first-attempt accuracy by about 11 score points. A three-role split (one agent writes code, another writes tests, a third executes) reaches 96.3 % on the HumanEval coding benchmark — about 6 points higher than the previous best — while using less than half the tokens. **The critical counter-finding**: when an agent is asked to self-correct in the same context, accuracy goes *down*, not up. | [6] [9] [16] |
-| **Vertical task slicing with a fresh sub-agent context per task and a kanban-style shared state between them** | On the same task, three published multi-agent frameworks consume between fourteen thousand and 1.35 million tokens — a roughly one-hundred-fold spread — depending on how the agents coordinate (chat-broadcast at the expensive end, shared-state at the cheap end). Every frontier model tested at long context degrades steadily with length: a leading model falls from 99 % accuracy on short inputs to 70 % accuracy at 32 thousand tokens, on the same task. | [31] [32] [51] |
+| **Vertical task slicing in the Plan phase, executed by a single Build phase session that walks the dependency graph with kanban-style state on disk** | On the same task, three published multi-agent frameworks consume between fourteen thousand and 1.35 million tokens — a roughly one-hundred-fold spread — depending on how the agents coordinate (chat-broadcast at the expensive end, shared-state at the cheap end). Every frontier model tested at long context degrades steadily with length: a leading model falls from 99 % accuracy on short inputs to 70 % accuracy at 32 thousand tokens, on the same task. Loom keeps each phase session well to the left of that curve by giving each phase its own fresh session and bounding what each one reads. | [31] [32] [51] |
 
 > **How to read this section.** Each row names a Loom concept on the left and summarises in plain English what *independent* research reports about that concept. The references on the right point to the full citation list. **None of the numbers above is a direct measurement of one framework against another** — they are measurements of the concept against the baseline used in the cited study. See section 13 for the full reading guide, section 14 for per-concept evidence in more detail, section 15 for the diminishing-returns curves these concepts are calibrated against, and section 16 for an explicit thought experiment projecting per-project cost.
 
@@ -30,7 +30,7 @@ flowchart LR
   L1[Spec<br/>WHAT / WHY<br/>user stories + acceptance criteria]
   L2[Design<br/>HOW<br/>components + decision records]
   L3[Plan<br/>executable dependency graph<br/>task slices with stable IDs]
-  L4[Build<br/>coordinator dispatches<br/>per-task fresh sub-agents]
+  L4[Build<br/>single session walks<br/>the task graph]
   L5[Review<br/>fresh-context audit<br/>severity-graded findings]
   L1 -- human-in-the-loop gate --> L2
   L2 -- human-in-the-loop gate --> L3
@@ -53,9 +53,9 @@ LLM-driven software engineering at non-trivial scale collides with three coupled
 
 | Failure mode | Evidence | Surface symptom when the failure mode is unaddressed |
 | --- | --- | --- |
-| **Context degradation** | NoLiMa (ICML 2025): 11 of 13 long-context models drop below 50 % of their short-context baseline at 32 k tokens. *Lost in the Middle* (TACL 2024): >30 % accuracy drop on mid-context info. Chroma's "Context Rot" (2025): **every** frontier model degrades with length — GPT-4.1, Claude 4, Gemini 2.5, Qwen 3 alike, even far below stated window limits. | A long-running build agent gets worse at remembering its own spec the further it goes; "stop summarising what we already decided" loops appear. |
+| **Context degradation** | NoLiMa (ICML 2025): 11 of 13 long-context models drop below 50 % of their short-context baseline at 32 k tokens. *Lost in the Middle* (TACL 2024): >30 % accuracy drop on mid-context info. Chroma's "Context Rot" (2025): **every** frontier model degrades with length — GPT-4.1, Claude 4, Gemini 2.5, Qwen 3 alike, even far below stated window limits. | A long-running build agent gets worse at remembering its own spec the further it goes; "stop summarising what we already decided" loops appear. Loom mitigates per phase: phases hand off through typed artifacts, not transcripts, and tasks declare file scope so the Build session reads only what each task needs rather than the whole repository. |
 | **Specification drift** | Boehm cost-of-defect ratio **1 : 6.5 : 15 : 60–100** across design → impl → test → post-release. NIST RTI 2002: **$22 – 60 B/yr** US macro cost of late-stage defects. Maes et al. (2025): OpenHands failed trajectories are **31 – 82 % longer** than successful ones — *wrong order* is the dominant failure mode in production coding agents. | The artifact at hour 6 quietly answers a different question than the one posed at hour 0. The user notices only after release. |
-| **Coordination collapse** | AImultiple multi-agent benchmark: same task — CrewAI **1.35 M tokens**, AutoGen **56.7 k**, LangGraph **13.6 k**. **~24× variance** from coordination overhead alone. Anthropic's multi-agent research system used **~15× the tokens** of single-agent chat — economic only when the task value is high. | Subagents broadcast irrelevant context to each other; the coordinator becomes a sink for every worker's debugger output; replanning costs more than the original plan. |
+| **Coordination collapse** | AImultiple multi-agent benchmark: same task — CrewAI **1.35 M tokens**, AutoGen **56.7 k**, LangGraph **13.6 k**. **~24× variance** from coordination overhead alone. Anthropic's multi-agent research system used **~15× the tokens** of single-agent chat — economic only when the task value is high. | Phase agents broadcast irrelevant context across the lifecycle; the next phase becomes a sink for the previous phase's debugger output; replanning costs more than the original plan. Loom's phases coordinate through artifacts on disk, not through inter-agent chat. |
 
 The literature is consistent: throwing more context at the problem makes it worse, not better. Throwing more agents at the problem makes it more expensive, not necessarily smarter. The mechanism that wins is **discipline about what each pass sees and what each pass produces.**
 
@@ -69,8 +69,8 @@ Each cognitive pass should see the **minimum sufficient context**: not the proje
 
 | Loom mechanism | What it bounds |
 | --- | --- |
-| Phase splits (Spec / Design / Plan) | Decision scope per pass — each phase sees only the slice it operates on |
-| Fresh subagent per task | Task-local context, not project-cumulative — O(task), not O(project) |
+| Phase splits (Spec / Design / Plan / Build / Review) | Decision scope per pass — each phase runs in its own fresh session and sees only the artifacts its signature names |
+| Vertical task slicing with declared file scope | Per-task file budget bounded at plan time — the Build session reads only the files each task names, not the whole repository |
 | Read-only upstream artifacts | No re-derivation cost; prior decisions are cheap to cite |
 | Stable cross-phase IDs (`Q-NNN`, `US-NNN`, `T-NNN`) | Reference compression — name once, cite forever |
 | Severity-graded findings | Cap on rework triggered per finding |
@@ -88,13 +88,13 @@ Loom treats LLM execution like a **build graph** (Make, Bazel, Nix), not like a 
 | Dependency graph | `blocked-by` DAG over `T-NNN` |
 | Caching / no-rebuild | Phase HITL gate ("rerun worth the burn?") |
 | Incremental rebuild | Supersede-not-delete; downstream artifacts retired with forward-pointers, not destroyed |
-| Build script | Coordinator — schedules, never authors |
-| Hermetic builds | Per-task fresh subagent context |
+| Build script | Orchestrator (`/weave`) — schedules phase sessions, never authors artifacts itself |
+| Hermetic builds | Each phase runs in its own fresh session; downstream phases never inherit upstream tool history |
 | Lockfile | `locks.sh` on shared state; atomic writes on every board mutation |
 
 ### The two principles compose
 
-The build-system contracts are what make context economy **enforceable**. You cannot run a fresh context for Task `T-007` unless `T-007`'s inputs and outputs are typed and frozen. You cannot keep `spec.md` read-only during Design unless there is a typed contract for what Design can ask of Spec. Loom's phases are not just *named*; they are *typed*, and the typing is what unlocks bounded context.
+The build-system contracts are what make context economy **enforceable**. You cannot bound what the Build session reads for one task unless each task's input file scope is typed and frozen. You cannot keep `spec.md` read-only during Design unless there is a typed contract for what Design can ask of Spec. Loom's phases are not just *named*; they are *typed*, and the typing is what unlocks bounded context.
 
 ```mermaid
 flowchart LR
@@ -112,11 +112,11 @@ flowchart LR
   subgraph Mechanisms["Loom mechanisms"]
     direction TB
     M1[Phase splits + HITL gates]
-    M2[Fresh-context subagents]
+    M2[Fresh-session phase boundary]
     M3[Stable cross-phase IDs]
     M4[Append-only state + supersede]
     M5[Typed phase signatures]
-    M6[Capability-minimised Coordinator]
+    M6[Capability-minimised phase agents]
     M7["/tune learning loop"]
   end
   P1 --> A
@@ -135,7 +135,7 @@ flowchart LR
 
 ### How to read the rest of this document
 
-- **Part I** explores the four phase-level decisions: dedicated Plan, Spec/Design split, dedicated Review, vertical slicing + per-task subagents. Each section closes with a *Theory linkage* paragraph showing which principle is at work.
+- **Part I** explores the four phase-level decisions: dedicated Plan, Spec/Design split, dedicated Review, vertical slicing executed in a single Build phase session. Each section closes with a *Theory linkage* paragraph showing which principle is at work.
 - **Part II** covers the cross-cutting mechanisms that make the principles operational across all phases: the traceability spine, append-only state, typed phase signatures, capability minimization, and the `/tune` learning loop.
 - **Part III** quantifies the expected impact: a unit-and-baseline reading guide, per-concept evidence in plain English, the diminishing-returns curves these concepts are calibrated against, and a directional cost projection for a representative project.
 
@@ -178,7 +178,7 @@ flowchart TB
 
 - **Pre-flight failure detection.** Cycles, missing story coverage, dangling `blocked-by` edges, and harness mismatches are caught before any code is written. Build refuses to start when the declared environment isn't runnable instead of silently substituting (the dominant failure mode on SWE-bench — see SWE-bench Harness docs and Maes et al. on "environment rot").
 - **Autonomy budget made explicit.** Tasks tagged `AFK` / `HITL` make the autonomy contract visible at plan-time, not discovered mid-build when an agent stalls. Devin's 2025 review identifies the **Planning Checkpoint** as one of two non-negotiable HITL gates in production.
-- **Coordinator stays dumb.** Because the graph is declared up front, Build's coordinator only picks ready cards, dispatches, and transitions columns. It doesn't decide *what* to build next — the DAG does. Magentic-One (Microsoft Research, Nov 2024) uses the same Task-Ledger / Progress-Ledger split.
+- **Build does not replan.** Because the graph is declared up front, the Build phase agent only picks ready cards, implements them, and transitions columns. It doesn't decide *what* to build next — the dependency graph does. Magentic-One (Microsoft Research, Nov 2024) uses the same Task-Ledger / Progress-Ledger split.
 - **Traceability spine.** Every `T-NNN` references the `US-NNN` it satisfies; Review walks story → tasks → diff structurally.
 
 > **Theory linkage.** Plan is where the build-system contract is *constructed* (Principle B): it produces the typed DAG that every downstream phase depends on. It is simultaneously a context-economy gate (Principle A) — one up-front planning pass amortises across every subsequent Build pass, which then runs on **bounded per-task context** instead of project-cumulative. Without Plan, Build has to *infer* the work graph from prose at every step, paying the cost of inference every time.
@@ -234,10 +234,11 @@ T-004: { satisfies: [US-003], blocked-by: [T-002], file-scope: [mail/*],        
 ```
 
 ```text
-# Coordinator loop — no prose decisions, just graph traversal
+# Build session loop — no prose decisions, just graph traversal
 while board.has_pending():
-    ready = tasks.filter(blocked_by ⊆ done, file_scope ∩ in_flight = ∅)
-    for task in ready: dispatch_fresh_subagent(task)
+    next = pick_one(tasks where blocked_by ⊆ done)
+    implement(next)          # methods/task.md procedure, inline in this session
+    transition_board(next)
 ```
 
 The graph itself answers *"what's next?"* and *"can these run in parallel?"*. The schema-migration-mid-build failure is impossible: `T-001` owns `orders/schema.ts` and `T-002` is blocked on it, so the endpoint cannot start before the schema is final. The Stripe-key surprise is surfaced at plan-time as an HITL gate, not discovered mid-build.
@@ -499,72 +500,82 @@ The reviewer cannot say "looks great" — its output is *structured* by construc
 
 ---
 
-## 4. Why vertical slicing + per-task fresh-context subagents in Build
+## 4. Why vertical slicing in Plan, executed as a single-session Build phase
 
 ### The concept
 
-Plan slices work **vertically** — each task is a thin end-to-end slice of one or more stories' acceptance criteria, not a horizontal layer ("all migrations" then "all API" then "all UI"). Build dispatches each task to a **fresh subagent context**; the Coordinator only mutates the kanban board and aggregates.
+Plan slices work **vertically** — each task is a thin end-to-end slice of one or more stories' acceptance criteria, not a horizontal layer ("all migrations" then "all API" then "all UI"). Each task is a *typed card* with declared file scope, a `blocked-by` set, and test sketches.
+
+Build is dispatched once per phase entry by the orchestrator and runs in **a single fresh session**. That session walks the dependency graph in order, applies an inline procedure to each ready task (lock the card, write a failing test, implement, get the test green, transition the card to done), and applies inline smoke and mutation procedures within the same session. There are no sub-subagents — the Claude Code platform forbids them, so the cheapest legal Build is one session that does the whole graph itself. Capability minimization still operates at *phase boundaries*: each phase agent has only the tool grant its work requires (see § 9).
 
 ```mermaid
 flowchart TB
-  subgraph CoordCtx["Coordinator context (long-lived)"]
+  subgraph Weave["Orchestrator (`/weave`, main session)"]
     direction LR
-    K1[Backlog<br/>T-001 T-002 T-003 T-004]
-    K2[In Progress]
-    K3[Review]
-    K4[Done]
-    K1 --> K2 --> K3 --> K4
+    G1[Plan gate<br/>HITL]
+    G2[Build gate<br/>HITL]
+    G3[Review gate<br/>HITL]
+    G1 --> G2 --> G3
   end
 
-  CoordCtx -- dispatch T-001 --> W1["Worker subagent #1<br/>fresh context<br/>file scope: orders/*"]
-  CoordCtx -- dispatch T-002 --> W2["Worker subagent #2<br/>fresh context<br/>file scope: payments/*"]
-  CoordCtx -- dispatch T-003 --> W3["Worker subagent #3<br/>fresh context<br/>file scope: mail/*"]
+  subgraph BuildSession["Build phase agent — one fresh session per phase entry"]
+    direction TB
+    Read[Read board.md + tasks/<br/>resolve dependency order]
+    Pick[Pick next ready task]
+    Method[Apply methods/task.md inline<br/>lock → red → implement → green → done]
+    Mut[Apply methods/mutation.md inline<br/>when tests opt in]
+    Trans[Transition card on board.md]
+    Smoke[Apply methods/smoke.md inline<br/>once, when project is runnable]
+    Return[Return aggregate evidence to orchestrator]
+    Read --> Pick --> Method --> Mut --> Trans --> Pick
+    Pick -.no ready cards.-> Smoke --> Return
+  end
 
-  W1 -.green/failed/hitl-block.-> CoordCtx
-  W2 -.green/failed/hitl-block.-> CoordCtx
-  W3 -.green/failed/hitl-block.-> CoordCtx
+  Weave -- one dispatch per Build phase entry --> BuildSession
+  BuildSession -- single RETURN block --> Weave
 
-  classDef ctx fill:#f0f0ff,stroke:#3333aa
-  classDef worker fill:#f0fff0,stroke:#33aa33
-  class CoordCtx ctx
-  class W1,W2,W3 worker
+  classDef weave fill:#f0f0ff,stroke:#3333aa
+  classDef build fill:#f0fff0,stroke:#33aa33
+  class G1,G2,G3 weave
+  class Read,Pick,Method,Mut,Trans,Smoke,Return build
 ```
 
 ### What it buys
 
-- **Linear context budget.** Fresh context per task means each subagent sees only its own scope, not the cumulative debris of every prior task. Token cost grows with **task count**, not with task-count squared. A 30-task build stays tractable.
-- **Failure isolation.** A subagent that exhausts its three-attempt cap marks one card `[failed]` and exits. The Coordinator's context is never polluted with debugger output, stack traces, or red herrings from the failed attempt. The next task starts clean. (Bulkhead pattern — Nygard's *Release It!*; Netflix Hystrix.)
-- **Implementation / dispatch separation kills scope drift.** The Coordinator *cannot* implement — it has Bash + atomic-write tools for board mutation only. This structurally rules out "the agent did extra stuff while routing." Every implementation edit is owned by a subagent whose declared scope is in `tasks/T-NNN.md`.
-- **Parallelism is a property of the graph, not a prose plan.** Any subset of `Backlog` cards with empty `blocked-by` and disjoint file scope is dispatchable concurrently. The DAG *is* the parallelization plan.
+- **Bounded per-task read budget.** Each task declares its file scope at plan time. The Build session reads only those files for each task — not the cumulative repository, and not arbitrary prose from prior tasks. Token growth across a session is dominated by the task scopes the session actually touches, not by re-reading shared state from scratch.
+- **Within-session amortization.** A single Build session pays the prompt-cache creation cost on its head bytes once and reads its growing prefix at cache-read rates on every internal turn. Splitting the same tasks across many fresh dispatches would pay the head creation cost many times.
+- **Failure isolation at the phase boundary.** Review runs in a separate fresh session and never sees Build's transcript. A task that exhausts its retry cap marks one card failed; the lifecycle continues to the next ready card without dragging the failure context into the audit pass.
+- **Implementation tools are scoped per phase, not per dispatch.** Spec, Design, and Plan have no `Edit` on the repository — they write only to their own artifacts. Review has no `Edit` or `Write` on the repository at all. No phase has commit, push, or deploy tools. The blast radius of any phase agent is bounded by its tool grant, not by prompt instruction (see § 9).
+- **Parallelism is a property of the graph, not a prose plan.** Independent slices with disjoint file scope are dispatchable concurrently when parallel build is needed; the current lifecycle is sequential per phase entry, but the graph already encodes which cards *could* run in parallel.
 - **Each green slice is demoable.** Vertical = working end-to-end behaviour at each green. Horizontal slicing (all DB, then all API, then all UI) means nothing is valuable until the last layer lands.
 - **Review can audit mid-flow.** Each completed slice satisfies named stories, so partial-build audits are meaningful.
-- **Structurally detectable bad slicing.** Plan's quality check flags horizontal tasks ("all DB migrations") — a task that doesn't satisfy a story has no reason to exist.
+- **Structurally detectable bad slicing.** A task that doesn't satisfy a story has no reason to exist — the artifact contract enforces vertical discipline, not reviewer judgement.
 
-> **Theory linkage.** This is the section where both principles operate most visibly together. Vertical slicing creates **rule-shaped tasks** — typed input file scope, typed output (passing tests), declared `blocked-by` dependencies (Principle B). Fresh per-task subagent context bounds the per-pass token bill **linearly** instead of quadratically (Principle A) — Anthropic's own multi-agent research system reports that token-budget separation explains **~80 % of the variance** in multi-agent outcomes. The Coordinator's lack of edit tools enforces the scheduler/rule distinction *structurally*, not by prompt: the only way for Build to violate its contract is to fail loudly, because the structural failure mode (a Coordinator writing code) has been *removed from the set of possible actions*. This is the architectural answer to Cognition's "Don't Build Multi-Agents" warning — context fragmentation only fails when there is no typed contract; with vertical slicing + declared file scope + read-only artifacts, the contract is the contract.
+> **Theory linkage.** This is the section where both principles operate most visibly together. Vertical slicing in Plan creates **rule-shaped tasks** — typed input file scope, typed output (passing tests), declared `blocked-by` dependencies (Principle B). Single-session Build execution amortises within-session prefix cost across every internal turn (Principle A) — splitting the same work across many fresh dispatches would pay the cache-creation freight on the head bytes per dispatch instead of per phase. The fresh-context property the long-context literature supports is preserved at the *phase boundary*: Spec, Design, Plan, Build, and Review each run in their own fresh session, so the auditor never inherits the implementer's accumulated state. This is the architectural answer to Cognition's "Don't Build Multi-Agents" warning — context fragmentation only fails when there is no typed contract; with vertical slicing, declared file scope, and read-only upstream artifacts, the contract is the contract.
 
 ### Evidence
 
 | # | Source | Claim |
 |---|--------|-------|
-| V1 | **Lost in the Middle** (Liu et al., TACL 2024) — [arxiv](https://aclanthology.org/2024.tacl-1.9/) | U-shaped context curve; mid-context info under-performs a *closed-book* baseline. Long shared coordinator context buries criteria. |
+| V1 | **Lost in the Middle** (Liu et al., TACL 2024) — [arxiv](https://aclanthology.org/2024.tacl-1.9/) | U-shaped context curve; mid-context info under-performs a *closed-book* baseline. A phase that inherited an entire prior session's transcript would bury its own evaluation criteria — Loom keeps each phase in its own fresh session. |
 | V2 | **NoLiMa** (Hong et al., ICML 2025) — [arxiv](https://arxiv.org/html/2502.05167v1) | **11 of 13** 128k-token models drop below 50 % of short-ctx baseline at 32k tokens. GPT-4o falls 99.3 % → 69.7 %. |
 | V3 | **Chroma Research — "Context Rot"** (July 2025) — [link](https://research.trychroma.com/context-rot) | **Every** frontier model degrades with input length — even below stated limit. |
 | V4 | **Anthropic — Effective Context Engineering** (Sept 2025) — [link](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) | Context = "finite resource with diminishing marginal returns." Direct vendor acknowledgement. |
-| V5 | **Anthropic — Multi-agent research system** (June 2025) — [link](https://www.anthropic.com/engineering/multi-agent-research-system) | Lead + parallel subagents beat single-agent Opus by **+90.2 %** on internal eval. Token usage explains ~80 % of variance. |
-| V6 | **Anthropic — Create custom subagents** — [docs](https://code.claude.com/docs/en/sub-agents) | "Intermediate noise — file reads, search results, exploratory tool calls — stays inside the subagent's context and never touches the main conversation." |
-| V7 | **Anthropic — Building Effective Agents** (Dec 2024) — [link](https://www.anthropic.com/research/building-effective-agents) | Defines orchestrator-worker; recommended for coding "where files and changes depend on the task." |
-| V8 | **Cognition — Don't Build Multi-Agents** (June 2025) — [link](https://cognition.ai/blog/dont-build-multi-agents) + Managed Devins pivot (2026) | The cautionary case — read tasks parallelise well; write tasks need declared file scope. Loom's vertical slicing + scope-bound writes answers this directly. Cognition's later Managed Devins **adopts** fresh-context subagents per task. |
+| V5 | **Anthropic — Multi-agent research system** (June 2025) — [link](https://www.anthropic.com/engineering/multi-agent-research-system) | Token usage explains ~80 % of variance in multi-agent outcomes — the strongest single signal that bounding what each pass reads matters more than how many agents collaborate. |
+| V6 | **Anthropic — Create custom subagents** — [docs](https://code.claude.com/docs/en/sub-agents) | "Intermediate noise — file reads, search results, exploratory tool calls — stays inside the subagent's context and never touches the main conversation." Loom relies on this at every phase boundary: the orchestrator only sees each phase's RETURN block. |
+| V7 | **Anthropic — Building Effective Agents** (Dec 2024) — [link](https://www.anthropic.com/research/building-effective-agents) | Names the orchestrator-worker pattern where the orchestrator does not author. Loom maps the orchestrator role to `/weave` (a skill running in the user's main session) and gives each phase its own depth-1 subagent. |
+| V8 | **Cognition — Don't Build Multi-Agents** (June 2025) — [link](https://cognition.ai/blog/dont-build-multi-agents) + Managed Devins pivot (2026) | The cautionary case — write tasks need declared file scope and a typed contract. Loom's vertical slicing + declared per-task file scope + read-only upstream artifacts answers this: a single Build session executes the typed plan, so there is no inter-agent chat surface to fragment context across. |
 | V9 | **MetaGPT** (ICLR 2024 Oral) — [arxiv](https://arxiv.org/abs/2308.00352) | Role isolation + SOPs + structured intermediate outputs lift code-gen success vs chat-style multi-agents. |
 | V10 | **AImultiple — Multi-Agent Framework benchmarks** — [link](https://aimultiple.com/multi-agent-frameworks) | Task 3: CrewAI **1.35 M tokens** vs AutoGen **56.7 k** vs LangGraph **13.6 k**. Indirect-coordination via shared state ≈ **80 % token reduction** vs chat-broadcast. |
 | V11 | **Elephant Carpaccio** (Cockburn / Kniberg) — [link](https://blog.crisp.se/2013/07/25/henrikkniberg/elephant-carpaccio-facilitation-guide) | Canonical vertical-slice definition. Exercise drives teams 2–3 → 15–20 slices in 40 minutes. |
 | V12 | **DORA / Forsgren-Humble-Kim — Accelerate** — [link](https://dora.dev/guides/dora-metrics/) | Smaller batch size → higher deployment frequency → shorter lead time → lower change-failure rate. |
 | V13 | **Reinertsen — Principles of Product Development Flow** | Queuing-theory case: small batches reduce cycle time + variability; queues are invisible root-cause of poor performance. |
-| V14 | **Nygard — *Release It!* (Bulkhead pattern)** | "Bulkheads contain the blast radius of a problem." Per-task fresh contexts *are* bulkheads. |
-| V15 | **Netflix Hystrix Wiki** — [link](https://github.com/Netflix/Hystrix/wiki/How-it-Works) | Thread-pool isolation analogue: runaway subagent burns its own context budget, not the Coordinator's. |
+| V14 | **Nygard — *Release It!* (Bulkhead pattern)** | "Bulkheads contain the blast radius of a problem." Each Loom phase is a bulkhead: a confused Review agent cannot patch the code it audits because its tool grant has no `Edit` on the repository. |
+| V15 | **Netflix Hystrix Wiki** — [link](https://github.com/Netflix/Hystrix/wiki/How-it-Works) | Thread-pool isolation analogue: a runaway phase agent exhausts only its own session, never the orchestrator's, because the orchestrator sees only the RETURN block. |
 | V16 | **LLM Compiler** (Kim et al., ICML 2024) — [arxiv](https://arxiv.org/abs/2312.04511) | DAG-parallel dispatch: **3.7× latency, 6.7× cost, +9 pp accuracy** vs ReAct. |
 | V17 | **Hassid et al. 2025 — Self-Consistency Diminishing Returns** — [arxiv](https://arxiv.org/html/2511.00751) | At 3, 5, 10, 15, 20 retries: gains plateau early; from a 98 % baseline, only **1.6 pp** gain across 15 paths. **3-attempt cap sits near the elbow.** |
 | V18 | **Kimi-Dev / Agentless-Training-as-Skill-Prior** (Sept 2025) — [arxiv](https://arxiv.org/abs/2509.23045) | Treats **pass@1** and **pass@3** as the two canonical operating points on SWE-bench Verified. Industry consensus: 3 is the right retry budget. |
-| V19 | **Magentic-One** (MSR Nov 2024) — [arxiv](https://arxiv.org/abs/2411.04468) | Orchestrator maintains explicit ledgers + dispatches; workers do the work. Structurally identical to Loom's Coord+kanban split. |
+| V19 | **Magentic-One** (MSR Nov 2024) — [arxiv](https://arxiv.org/abs/2411.04468) | Orchestrator maintains explicit ledgers + dispatches phase agents; phase agents do the work. Structurally analogous to `/weave` dispatching the typed phase agents Loom defines. |
 | V20 | **LangGraph Supervisor library** — [docs](https://docs.langchain.com/oss/python/langgraph/workflows-agents) | Productionised supervisor pattern; LangChain's *current* recommendation is to implement directly via tools "for more control over context engineering" — matches Loom's choice. |
 | V21 | **Fountain City — Anthropic's Multi-Agent Blueprint** — [link](https://fountaincity.tech/resources/blog/anthropic-multi-agent-blueprint-production/) | Production lesson: early iterations failed without explicit scaling rules + status taxonomy embedded in orchestrator prompt — validates the `green/failed/hitl-block` taxonomy. |
 
@@ -787,7 +798,7 @@ flowchart TB
 
 ### What it buys
 
-- **Same callable, different invocation: the head is byte-identical, so the prompt cache hits.** On a 30-task build with the Build coordinator re-dispatched many times and per-task Builders dispatched ~30 times, the dispatch-side input bill collapses to the dynamic tail plus first-call freight.
+- **Same callable, different invocation: the head is byte-identical, so the prompt cache hits.** Across a typical lifecycle each phase agent is dispatched only once per phase entry, but rerunning a phase, going back through gates, and running quality-check siblings all re-dispatch the same body+signature head — every one of those dispatches after the first reads the head at cache-read rates instead of paying creation freight again.
 - **Schema enforcement and caching share one file convention.** The body/signature split — already required for §7's silent schema check — is *also* what makes the cached region a coherent, prose-free contract. One convention, two payoffs.
 - **Cache misses are localised.** A new placeholder, a paraphrase, or wrapper boilerplate around the body breaks the cache for *this* callable only — the rest of the lifecycle stays warm.
 - **Wrapper-text drift becomes structurally impossible.** Because the orchestrator commits to "body + `\n\n---\n\n` + signature + tail, nothing else", there is no place for "context patches" that silently mutate the head between calls — and therefore no failure mode where caching quietly stops working.
@@ -805,47 +816,47 @@ Direct **Principle A**. The §5 spine compresses cross-references *inside* artif
 
 ---
 
-## 9. Coordinator-cannot-author — capability minimization
+## 9. Review-cannot-author — capability minimization at the audit boundary
 
 ### What it does
 
-The Build Coordinator has *only* `Bash` and `atomic-write` tools for board mutation. It is **structurally incapable** of editing source files. Implementation tools (`Edit`, `Write`) are granted only to **worker subagents**, scoped to the declared file scope in their `tasks/T-NNN.md`.
+The Review phase agent has *only* `Read` and `Bash` against the implementation repository, plus `Write` scoped to its own audit artifacts (`review.md`, `review-verdict.json`). It is **structurally incapable** of editing source files. The agent that decides whether the build meets intent is the same agent that cannot silently "fix" the build during its audit.
+
+Across the full lifecycle, every phase agent's tool grant is the upper bound on what it can do:
 
 ```mermaid
 flowchart LR
-  Coord["Coordinator<br/>tools: Bash, atomic-write<br/>(no Edit, no Write)"]
-  W1["Worker T-001<br/>tools: Edit, Write, Bash<br/>scope: orders/*"]
-  W2["Worker T-002<br/>tools: Edit, Write, Bash<br/>scope: payments/*"]
-  W3["Worker T-003<br/>tools: Edit, Write, Bash<br/>scope: mail/*"]
-  Coord -- dispatch --> W1
-  Coord -- dispatch --> W2
-  Coord -- dispatch --> W3
-  W1 -- status only --> Coord
-  W2 -- status only --> Coord
-  W3 -- status only --> Coord
-  classDef coord fill:#f0f0ff,stroke:#3333aa
-  classDef worker fill:#f0fff0,stroke:#33aa33
-  class Coord coord
-  class W1,W2,W3 worker
+  Spec["Spec<br/>tools: Read, Write, AskUserQuestion<br/>writes: spec.md, decisions.md"]
+  Design["Design<br/>tools: Read, Write<br/>writes: design.md, mockup/"]
+  Plan["Plan<br/>tools: Read, Write<br/>writes: plan.md, board.md, tasks/"]
+  Build["Build<br/>tools: Read, Edit, Write, Bash<br/>writes: repo files + board transitions<br/>(no git, no deploy)"]
+  Review["Review<br/>tools: Read, Bash<br/>writes: review.md only<br/>(no Edit, no Write on repo)"]
+  Spec --> Design --> Plan --> Build --> Review
+  classDef noedit fill:#f0f0ff,stroke:#3333aa
+  classDef canedit fill:#f0fff0,stroke:#33aa33
+  class Spec,Design,Plan,Review noedit
+  class Build canedit
 ```
+
+Build is the only phase whose tool grant includes implementation tools, and even Build cannot commit, push, deploy, or run destructive commands — those are absent from every Loom agent's grant.
 
 ### What it buys
 
-- **Scope drift becomes physically impossible** — not policed by prompt. The Coordinator can't "fix a small thing while routing" because *it has no edit tool*.
-- **Bounded failure mode per agent.** A confused Coordinator can mis-schedule, but cannot write bad code. The blast radius of *each* agent's failure mode is bounded by its tool grant — every agent is a bulkhead, not just a process.
+- **Audit drift becomes physically impossible** — not policed by prompt. Review cannot "fix a small thing while auditing" because *it has no edit tool on the repo*. The fresh-context audit property (a different agent looks at the result with no access to the build's session) is preserved structurally, not by convention.
+- **Bounded failure mode per phase.** A confused Spec agent can write a bad spec, but cannot write bad code. A confused Review agent can miss a finding, but cannot silently patch the code it is supposed to evaluate. The blast radius of each agent's failure mode is bounded by its tool grant — every phase is a bulkhead, not just a process.
 - **Aligns with the principle of least authority** (Saltzer & Schroeder 1975): a 50-year-old security tradition applied to LLM-agent architecture.
 - **Auditable in one glance.** "What can this agent possibly do?" is answered by listing its tool grant — no need to read its system prompt.
 
 ### Anchors
 
-- **Anthropic — Building Effective Agents** (Dec 2024) — [link](https://www.anthropic.com/research/building-effective-agents): defines the orchestrator-worker pattern explicitly.
-- **LangGraph Supervisor docs** — [link](https://docs.langchain.com/oss/python/langgraph/workflows-agents): production library implementing exactly this split.
-- **Magentic-One** (MSR 2024): orchestrator owns ledgers + dispatch only; workers own implementation.
+- **Anthropic — Building Effective Agents** (Dec 2024) — [link](https://www.anthropic.com/research/building-effective-agents): defines the orchestrator-worker pattern and the audit/build separation.
+- **LangGraph Supervisor docs** — [link](https://docs.langchain.com/oss/python/langgraph/workflows-agents): production library implementing exactly this kind of phase split.
+- **Magentic-One** (MSR 2024): per-role tool grants as bulkheads.
 - **Netflix Hystrix bulkhead pattern** (Nygard, *Release It!*): the canonical "contain the blast radius" architectural pattern.
 
 ### Theory linkage
 
-**Principle B** — a scheduler has fundamentally different capabilities from a build rule; collapsing them makes both worse. **Principle A** — the Coordinator never sees an implementation context, so its context stays small even on a 30-task project. Capability minimization is the structural enforcement of *both* principles in one move.
+**Principle B** — an auditor has fundamentally different capabilities from a builder; collapsing them makes both worse. **Principle A** — Review never sees Build's session, so its context stays small and its judgment stays independent of Build's accumulated noise. Capability minimization is the structural enforcement of *both* principles at the lifecycle's most consequential boundary.
 
 ---
 
@@ -1010,8 +1021,8 @@ Where this document does estimate an aggregate per-project effect (section 16), 
 | **First-attempt accuracy** (often shortened to "pass at one" in research papers) | The probability that a language model gets a task right the first time. The "at three" variant means: at least one of three attempts is right. Most coding-benchmark numbers in the literature are reported in one of these two units. |
 | **Long context** | An input to a language model that is unusually large — typically tens of thousands of tokens, where a token is about three-quarters of an English word. A 32-thousand-token input is roughly a 50-page document. |
 | **Dependency graph** | A representation of work where each item names what it depends on, drawn as nodes connected by arrows. Loom's task plan is one of these. The graph has no loops (an item cannot indirectly depend on itself). |
-| **Fresh context** | A new conversation with the language model, started without any of the previous conversation's history. Every Loom worker starts a task this way. |
-| **Coordinator / worker split** | An architectural choice in multi-agent systems where one agent decides what to do next and dispatches tasks, while other agents do the work. The dispatching agent has no implementation tools. |
+| **Fresh context** | A new conversation with the language model, started without any of the previous conversation's history. Every Loom phase begins this way: Spec, Design, Plan, Build, and Review each run in their own fresh session. |
+| **Orchestrator / phase-agent split** | An architectural choice in multi-agent systems where a top-level orchestrator runs in the user's main session, decides which phase runs next, and dispatches that phase as a subagent. The orchestrator itself does not author phase artifacts. |
 
 The rest of this part uses **only the terms in the legend above**, in plain English. References are cited as numbers in square brackets, with full bibliographic detail in the References section at the end of the document.
 
@@ -1027,32 +1038,32 @@ Adopting an architectural concept is a *trade*: it buys some properties and pays
 
 **What we gain.**
 - Pre-flight catches what would otherwise be mid-build failures: dependency cycles, missing user-story coverage, dangling edges, harness mismatches — all caught before any code is written.
-- The graph itself answers *"what's next?"* and *"can these run in parallel?"*. The coordinator does not have to infer either from prose at every step.
+- The graph itself answers *"what's next?"* and *"can these run in parallel?"*. The Build phase agent does not have to infer either from prose at every step.
 - Autonomy classification (which tasks can run autonomously and which need a human in the loop) is decided once, up front, rather than discovered mid-build when an agent stalls.
 - Every task names which user stories it satisfies, which makes the Review phase tractable as a structured query rather than a judgement call.
 
 **What we lose.**
 - An entire extra phase of tokens before any code is produced. The up-front investment is substantial relative to "just start coding".
 - A defect Review attributes to the Plan phase forces re-running the plan artifact — cheap as plans go, but not free.
-- The coordinator cannot "be clever" mid-build — it has no licence to renegotiate scope when an unforeseen issue arises. Predictability is bought at the cost of some agility.
+- The Build phase agent cannot "be clever" mid-build — it has no licence to renegotiate scope when an unforeseen issue arises. Predictability is bought at the cost of some agility.
 
 **What the evidence weighs in with.** Recursive plan-decomposition lifts agent-benchmark success by roughly 27 to 33 percentage points across three distinct task domains (a household-task simulator, an online-shopping simulator, a crafting environment) [11]. A verification step over the generated plan adds a further 4 to 8 percentage points on planning, financial-document, and olympiad benchmarks [12]. In production, the Devin coding agent's pull-request merge rate doubled — from 34 % in 2024 to 67 % in 2025 — after a Planning Checkpoint was added as one of two non-negotiable human checkpoints [42]. *Direction of the trade*: the gains in the literature are large enough that they consistently outweigh the up-front token cost, although the largest gains come from agent benchmarks more decomposable than real codebases.
 
 ---
 
-### 14.B — Executing the plan as a parallel dependency graph
+### 14.B — Executing the plan as a typed dependency graph with shared-state coordination
 
-**The concept.** Given a dependency graph, dispatch independent items in parallel rather than reasoning through them one at a time. Coordinate workers through a shared kanban-style state, not through chat-broadcast.
+**The concept.** Given a dependency graph, walk it in dependency order driven by the graph itself rather than by step-by-step prose reasoning. Coordinate through a shared kanban-style state on disk, not through chat-broadcast between agents.
 
 **What we gain.**
-- Wall-clock and dollar cost both drop substantially because items with no shared dependencies run concurrently rather than waiting their turn.
-- The graph itself *is* the parallelisation plan — no separate "## Parallelisation" prose paragraph to drift from reality as the build evolves.
-- Coordination by shared state means workers never see each other's transcripts. The cheap end of the multi-agent token-cost spread.
+- The graph itself answers *"what's next?"* — no inference from prose at every step.
+- The graph itself *is* the parallelisation plan — independent slices with disjoint file scope are visible at plan time, ready to be dispatched concurrently if and when the lifecycle needs to scale up.
+- Coordination through shared state on disk means phase agents never see each other's transcripts, only the previous phase's typed artifacts. The cheap end of the multi-agent token-cost spread.
 
 **What we lose.**
-- Each parallel worker requires concurrency primitives (locks, atomic writes) to keep the shared board consistent — operational complexity that a sequential pipeline avoids.
+- Writing to shared state requires concurrency primitives (locks, atomic writes) to keep the board consistent — operational complexity that a single-thread sequential pipeline avoids.
 - The structure catches file-scope conflicts but not all subtle ones. Two tasks that look independent in the graph can still semantically conflict on the same data model.
-- A graph-execution failure mode (deadlock, lock contention, mis-released lock) is qualitatively different from a sequential-execution failure mode and needs its own observability.
+- A graph-driven execution failure mode (deadlock, lock contention, mis-released lock) is qualitatively different from a one-prompt-at-a-time failure mode and needs its own observability.
 
 **What the evidence weighs in with.** Replacing sequential reasoning with a planner that emits a parallel graph cuts latency about 3.7-fold, dollar cost about 6.7-fold, and gains up to 9 percentage points of accuracy on tool-calling tasks [10]. On a multi-agent framework benchmark, the spread between the cheapest coordination style (shared state, ~14 thousand tokens) and the most expensive (chat-broadcast, ~1.35 million tokens) on the same task was roughly 100-fold [51] — this is a structural choice, not a tuning choice. *Direction of the trade*: a 100-fold cost spread on the same task makes the operational cost of locks and atomic writes look small.
 
@@ -1077,22 +1088,22 @@ Adopting an architectural concept is a *trade*: it buys some properties and pays
 
 ---
 
-### 14.D — Per-task fresh sub-agent context
+### 14.D — Fresh session per phase, vertical task slicing inside Build
 
-**The concept.** Each implementation task runs in its own fresh conversation — small file scope, lean instructions, no project history. The coordinator dispatches but never authors.
+**The concept.** Each phase — Spec, Design, Plan, Build, Review — runs in its own fresh session, dispatched by the orchestrator. The Build phase agent reads the typed task graph produced by Plan and walks it in dependency order within that single session, applying inline procedures (lock a card, write a failing test, implement, get the test green, transition, then a smoke pass at the end). Tasks declare their file scope at plan time, so the Build session reads only those files for each task rather than the whole repository.
 
 **What we gain.**
-- Every pass operates on the *high-accuracy* side of every long-context-degradation curve published in the literature.
-- Failures are bulkheaded inside their sub-agent: stack traces, debugger output, and red-herring hypotheses never leak back into the coordinator's context.
-- Token cost scales roughly linearly with task count rather than super-linearly. A 30-task project stays tractable where a shared-context approach saturates.
-- The coordinator's tool grant excludes `Edit` and `Write`, so it is *structurally* incapable of authoring code mid-dispatch. Scope drift becomes physically impossible rather than prompt-policed.
+- Every phase operates on the *high-accuracy* side of every long-context-degradation curve. The auditor (Review) never inherits the implementer's (Build's) accumulated tool history.
+- Failures are bulkheaded at the phase boundary: a runaway Build session exhausts its own context, not the orchestrator's, because the orchestrator only ever sees each phase's RETURN block.
+- The Build session pays the prompt-cache creation cost on its head bytes once and then reads its growing prefix at cache-read rates on every internal turn — within-session amortisation that splitting the same tasks across many fresh dispatches would forfeit.
+- Each phase agent's tool grant is the upper bound on what it can do. Review has no `Edit` or `Write` on the repository; Spec, Design, and Plan write only to their own artifact directory; no phase has commit, push, or deploy tools. Scope drift across phases is physically impossible, not prompt-policed.
 
 **What we lose.**
-- Each sub-agent must be briefed with the relevant excerpts of spec, design, plan, and code — a non-zero per-task overhead.
-- No cross-task learning *within* a single build. A sub-agent working on T-007 does not see what T-005 figured out. (The `/tune` loop captures learning *across* projects, not *within* them.)
-- Structured handoff through shared state is required. Ad-hoc inter-agent chat is no longer an option, which removes a debugging affordance available in chat-broadcast frameworks.
+- The Build session's own context grows monotonically across tasks. The growth is by design — earlier tasks' decisions stay visible to keep later tasks consistent — but it does mean the last task in a long graph reads from a larger working context than the first.
+- No cross-project learning *within* a single build. A later task does not see anything earlier tasks figured out unless the earlier task wrote it to disk. (The `/tune` loop captures learning *across* projects, not *within* one phase.)
+- Phase-to-phase handoff has to go through artifacts on disk. Ad-hoc inter-agent chat is not an option, which removes a debugging affordance available in chat-broadcast frameworks.
 
-**What the evidence weighs in with.** On a long-context benchmark, 11 of 13 frontier models drop below 50 % of their own short-context accuracy by 32 thousand tokens; a leading model falls from 99.3 % to 69.7 % on the same task [31]. Information placed mid-context attracts more than 30 percentage points less accuracy than the same information at the edges [30]. A 2025 follow-up reports that *every* frontier model tested degrades monotonically with input length, even far below stated window limits [32]. *Direction of the trade*: the briefing cost per task is small relative to the accuracy cliff a shared coordinator context falls off after a few dozen tasks.
+**What the evidence weighs in with.** On a long-context benchmark, 11 of 13 frontier models drop below 50 % of their own short-context accuracy by 32 thousand tokens; a leading model falls from 99.3 % to 69.7 % on the same task [31]. Information placed mid-context attracts more than 30 percentage points less accuracy than the same information at the edges [30]. A 2025 follow-up reports that *every* frontier model tested degrades monotonically with input length, even far below stated window limits [32]. *Direction of the trade*: each phase's input list is bounded by its signature, and per-task file scope further bounds what Build reads on any given task — keeping every phase well to the left of the cliff that a single accumulating session across the whole lifecycle would slide down.
 
 ---
 
@@ -1180,7 +1191,7 @@ xychart-beta
 
 **What the axes mean.** The horizontal axis is the size of the input given to the model, in thousands of tokens (a token is roughly three-quarters of an English word, so 32 thousand tokens is roughly a 50-page document). The vertical axis is accuracy on the same task, expressed as a percentage of what the same model achieves when the input is short. Source: [31] reports the endpoints; eleven of thirteen tested models fell below 50 on this scale at 32 thousand tokens.
 
-**Plain-English reading.** A model that is nearly perfect on short inputs falls to about half its accuracy by 32 thousand tokens — on the same task. The fix is not a bigger window; bigger windows do not flatten this curve. The fix is putting less stuff into the context in the first place. **Loom keeps each sub-agent's context under about 8 thousand tokens by design** (small file scope, lean instructions, no project history). A pipeline that shares a single coordinator context across all tasks instead has that context grow with the project, sliding the entire run rightward along this curve as it goes.
+**Plain-English reading.** A model that is nearly perfect on short inputs falls to about half its accuracy by 32 thousand tokens — on the same task. The fix is not a bigger window; bigger windows do not flatten this curve. The fix is putting less stuff into the context in the first place. **Loom keeps each phase to the inputs its signature names**, and within Build each task reads only the files its declared scope lists — so most phase sessions stay well below the cliff this curve describes. A pipeline that runs the entire lifecycle in one shared session instead has that context grow with the project, sliding the entire run rightward along this curve as it goes.
 
 ### 15.3 — Cost of fixing a defect grows the later you catch it
 
@@ -1208,7 +1219,7 @@ xychart-beta
 
 **What the axes mean.** Three published multi-agent frameworks on the horizontal axis, tested on identical work in a 2024 benchmark [51]. Vertical: total tokens consumed, in thousands.
 
-**Plain-English reading.** Same job, same underlying model, three different framework architectures — and the most expensive option burns roughly one hundred times the tokens of the cheapest, because it makes every agent see every other agent's full conversation history. **Loom's kanban with typed status returns is structurally LangGraph-shaped**: workers update a board, they do not broadcast their work to each other. The cheap end of this curve is the position Loom occupies by design.
+**Plain-English reading.** Same job, same underlying model, three different framework architectures — and the most expensive option burns roughly one hundred times the tokens of the cheapest, because it makes every agent see every other agent's full conversation history. **Loom's kanban with typed status returns is structurally LangGraph-shaped**: each phase updates a board and writes its artifacts to disk; phases do not broadcast their work to each other. The cheap end of this curve is the position Loom occupies by design.
 
 ### 15.5 — The four curves at a glance
 
@@ -1237,8 +1248,8 @@ The arithmetic below rests on five stated assumptions, each grounded in section 
 
 - **Project size**: 30 tasks. (Smaller projects compress all the numbers; the *direction* of the trade is unaffected.)
 - **Cost unit**: tokens, expressed in relative units. The cost of a pipeline that adopts *none* of the concepts is normalised to 100 units total; all other figures are quoted against that.
-- **Build cost without these concepts** grows faster than linearly with task count, because each task pays into a coordinator context the next task re-reads (the curve from section 15.2).
-- **Build cost with these concepts** grows roughly linearly with task count, because each task gets a fresh bounded context (the same curve, far-left position).
+- **Build cost without these concepts** grows faster than linearly with task count, because every task accumulates into one shared lifecycle context that the next task re-reads from the top (the curve from section 15.2).
+- **Build cost with these concepts** grows roughly linearly with task count, because each task reads only its declared file scope inside the Build session and each downstream phase runs in its own fresh session (the same curve, far-left position).
 - **Coordination cost without these concepts** assumes chat-broadcast (the expensive end of the curve from section 15.4); **with these concepts**, shared-state kanban (the cheap end).
 
 ### Projected cost growth
@@ -1260,7 +1271,7 @@ The shape is the whole argument: without the concepts, cost compounds super-line
 
 | Where the saving comes from | Without (units) | With (units) | Units saved | Cited curve |
 | --- | --- | --- | --- | --- |
-| Build cost over 30 tasks (per-task fresh context + retry cap) | 100 | 40 | **60** | §15.1 + §15.2 |
+| Build cost over 30 tasks (declared per-task file scope + within-session prefix amortisation + retry cap) | 100 | 40 | **60** | §15.1 + §15.2 |
 | Rework cost when a structural defect surfaces (Spec/Design split: re-burn design only, not spec) | 25 | 8 | **17** | §14.A + §14.G |
 | Mid-flight scope-change cost per ten tasks (plan locked before Build) | 18 | 3 | **15** | §14.A |
 | **Total saved per project** |   |   | **about 92** |  |

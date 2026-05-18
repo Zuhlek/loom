@@ -1,6 +1,6 @@
-# Build Coordinator Agent — Signature
+# Build Phase Agent — Signature
 
-I/O signature between `/weave` and the Build Coordinator Agent.
+I/O signature between `/weave` and the Build Phase Agent.
 
 ## Trigger
 
@@ -64,7 +64,7 @@ Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a
 #### Repository files
 
 - Path: `<repo>/...`.
-- Implementation per ready tasks. The Task Builder subagents own the writes; the Coordinator does not implement task scope itself.
+- Implementation per ready tasks. The Build agent owns all repository writes within this session.
 
 #### `board.md`
 
@@ -136,10 +136,12 @@ Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a
 ### Rerun rules
 
 - Re-dispatch does not reset `board.md`. `In Progress` and `Done` cards stay where they are.
-- The coordinator picks the next eligible `Backlog` cards.
+- A new Build session picks the next eligible `Backlog` cards.
 
-## Methods available
+## Procedures applied within this session
 
-- `methods/task.md` + `methods/task.signature.md` — Lock → Red → Implement → Green → Done loop per task. Three-attempt cap. Declares `phase: build-task` in its RETURN block (distinct from the Build Coordinator's `phase: build`) with status `green` / `failed` / `hitl-block`.
-- `methods/smoke.md` + `methods/smoke.signature.md` — Runs when project is runnable. Produces `smoke-report.md`.
-- `methods/mutation.md` + `methods/mutation.signature.md` — Runs only when `tests.md` enables mutation testing.
+The Build agent reads these procedure files at the relevant steps of its work loop. They are not dispatched as subagents — they execute inline within the Build session.
+
+- `methods/task.md` — Lock → Red → Implement → Green → Done loop, applied per ready task. Three-attempt cap.
+- `methods/smoke.md` — Runnable verification, applied once after the per-task loop completes when the project is runnable. Produces `smoke-report.md`.
+- `methods/mutation.md` — Per-task test-strength probe, applied after a task reaches green when `tests.md` enables mutation testing.

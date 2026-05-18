@@ -1,5 +1,14 @@
 # Cache regression analysis — v1 vs baseline
 
+> **Resolved.** The Build phase is restored to a single-session dispatch
+> shape (one `/weave` dispatch per Build phase entry; per-task work runs
+> inline within that session). The mechanical rationale and the platform
+> constraints that make this the only legal shape with within-session
+> amortization are captured in `orchestrator/weave/lifecycle-architecture.md`.
+> Sub-subagent dispatch — the path this analysis still considers in places
+> below — is forbidden by Claude Code. Read this file as historical record;
+> the source-of-truth for the current contract is `lifecycle-architecture.md`.
+
 Investigation triggered by the observation that `490c8af` ("cache improvement")
 appeared to **increase** `cache_create` and `cache_read` instead of reducing
 them. The analysis below is grounded in `usage.jsonl`, raw subagent

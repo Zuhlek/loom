@@ -1,9 +1,0 @@
-red:
-  Implementation already landed under T-008's scope-expanded
-  bootstrap (recorded in T-008.done.md). Tests written here as the
-  behaviour assertions for US-001 client slice. Without the existing
-  handler, all 5 tests would fail at runtime — the submit event
-  default would proceed and createBookmark would never be called.
-
-green:
-  ✓ test/client/main-save.test.ts (5 tests) 60ms — 5 passed

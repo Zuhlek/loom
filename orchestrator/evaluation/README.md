@@ -102,7 +102,7 @@ pooling.
 ## Known limitations
 
 - **Subagent rows only.** Orchestrator-side inference (mostly Spec's inline answers-queue consumption) is not captured. Roughly constant across runs of the same seed + answers file, so comparison signal is preserved.
-- **Build coordinator inline-implements tasks.** The /weave Build coordinator is supposed to dispatch one Task subagent per `T-NNN`; in practice it often implements tasks inline. One big Build row instead of many small ones. Cost is captured; per-task attribution is not.
+- **Build is one row per phase entry.** The Build phase agent runs as a single session and walks the dependency graph itself within that session (see `weave/lifecycle-architecture.md` §3). `usage.jsonl` therefore carries one Build row per dispatch, not one row per task. Per-task attribution is not extractable from the harvest; aggregate Build cost is.
 - **`duration_autonomous_ms` can exceed `duration_wall_ms`** by a few percent on multi-tool-call turns (timestamp-delta over-count). Treat autonomous as comparison-relative, not absolute.
 - **No spread / CI.** Means only. A single tail-latency run in a small pool can move a phase mean noticeably.
 

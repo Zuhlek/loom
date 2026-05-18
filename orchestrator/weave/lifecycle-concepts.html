@@ -1,0 +1,1216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loom — Lifecycle Concepts</title>
+<style>
+  :root{
+    --bg:#fafbfc;
+    --panel:#ffffff;
+    --panel-soft:#f3f5f8;
+    --line:#e2e7ee;
+    --line-strong:#cad2dc;
+    --ink:#1d2733;
+    --ink-soft:#46556a;
+    --mute:#6b7a8c;
+    --accent:#2563eb;
+    --accent-soft:#dbeafe;
+    --good:#15803d;
+    --good-soft:#dcfce7;
+    --warn:#b45309;
+    --warn-soft:#fef3c7;
+    --bad:#b91c1c;
+    --bad-soft:#fee2e2;
+    --purple:#6d28d9;
+    --purple-soft:#ede9fe;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+    font-size:15px;line-height:1.55}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:'SF Mono',Menlo,Consolas,monospace;font-size:.9em;
+    background:var(--panel-soft);padding:.05em .35em;border-radius:3px;color:var(--ink-soft)}
+
+  /* Layout */
+  .app{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+  aside{background:var(--panel);border-right:1px solid var(--line);
+    padding:24px 0;position:sticky;top:0;height:100vh;overflow-y:auto}
+  aside .brand{padding:0 24px 18px;border-bottom:1px solid var(--line)}
+  aside .brand h1{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+  aside .brand .sub{color:var(--mute);font-size:12px;margin-top:4px}
+  aside nav{padding:14px 0}
+  aside .group-label{padding:14px 24px 6px;font-size:11px;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--mute);font-weight:600}
+  aside nav a{display:block;padding:7px 24px;color:var(--ink-soft);font-size:13.5px;
+    border-left:3px solid transparent}
+  aside nav a:hover{background:var(--panel-soft);text-decoration:none;color:var(--ink)}
+  aside nav a.active{background:var(--accent-soft);color:var(--accent);
+    border-left-color:var(--accent);font-weight:600}
+  aside nav a .n{display:inline-block;width:22px;color:var(--mute);font-size:11.5px}
+  aside nav a.active .n{color:var(--accent)}
+
+  main{padding:36px 48px 96px;max-width:980px}
+
+  /* Page header */
+  .page-head{margin-bottom:28px}
+  .page-head .eyebrow{color:var(--mute);font-size:12px;text-transform:uppercase;
+    letter-spacing:.08em;font-weight:600;margin-bottom:8px}
+  .page-head h2{margin:0 0 10px;font-size:28px;font-weight:600;letter-spacing:-.015em;line-height:1.2}
+  .page-head .lede{color:var(--ink-soft);font-size:16px;max-width:720px;margin:0}
+
+  /* Cards / sections */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:22px 24px;margin-bottom:18px}
+  .card h3{margin:0 0 12px;font-size:15px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.04em;color:var(--mute)}
+  .card p{margin:0 0 10px}
+  .card p:last-child{margin-bottom:0}
+  .card ul{margin:0;padding-left:20px}
+  .card li{margin-bottom:6px}
+  .card li:last-child{margin-bottom:0}
+
+  /* Two-column rows */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:780px){
+    .two-col{grid-template-columns:1fr}
+    .app{grid-template-columns:1fr}
+    aside{position:static;height:auto}
+    main{padding:24px}
+  }
+
+  /* Benefit pills */
+  .benefits{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;
+    padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel-soft)}
+  .pill.good{background:var(--good-soft);border-color:#bbf7d0;color:#14532d}
+  .pill.warn{background:var(--warn-soft);border-color:#fde68a;color:#78350f}
+  .pill.bad{background:var(--bad-soft);border-color:#fecaca;color:#7f1d1d}
+  .pill.info{background:var(--accent-soft);border-color:#bfdbfe;color:#1e3a8a}
+  .pill.purple{background:var(--purple-soft);border-color:#ddd6fe;color:#4c1d95}
+  .pill .num{font-weight:700}
+
+  /* Diagrams — pure CSS flow boxes */
+  .diagram{background:var(--panel-soft);border:1px solid var(--line);border-radius:10px;
+    padding:24px;margin:6px 0 14px;overflow-x:auto}
+  .flow-row{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+  .flow-col{display:flex;flex-direction:column;gap:10px;align-items:center}
+  .node{background:var(--panel);border:1.5px solid var(--line-strong);border-radius:8px;
+    padding:10px 14px;min-width:120px;text-align:center;font-size:13px;font-weight:500;
+    box-shadow:0 1px 0 rgba(0,0,0,.02)}
+  .node.accent{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+  .node.good{border-color:#86efac;background:var(--good-soft);color:#14532d}
+  .node.warn{border-color:#fcd34d;background:var(--warn-soft);color:#78350f}
+  .node.bad{border-color:#fca5a5;background:var(--bad-soft);color:#7f1d1d}
+  .node.purple{border-color:#c4b5fd;background:var(--purple-soft);color:#4c1d95}
+  .node.muted{background:var(--panel-soft);color:var(--mute);border-style:dashed}
+  .node small{display:block;font-weight:400;font-size:11px;color:var(--mute);margin-top:3px}
+  .node.accent small{color:#1e3a8a}
+  .arrow{color:var(--line-strong);font-size:20px;line-height:1;user-select:none}
+  .arrow.dim{color:var(--mute);font-size:13px}
+  .stack{display:flex;flex-direction:column;gap:8px}
+
+  /* Side-by-side compare */
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:6px 0}
+  .compare > div{padding:16px;border-radius:8px;border:1px solid var(--line)}
+  .compare .without{background:#fff7f5;border-color:#fecaca}
+  .compare .with{background:#f0fdf4;border-color:#bbf7d0}
+  .compare h4{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+  .compare .without h4{color:var(--bad)}
+  .compare .with h4{color:var(--good)}
+  .compare ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--ink-soft)}
+  .compare li{margin-bottom:5px}
+  @media (max-width:680px){.compare{grid-template-columns:1fr}}
+
+  /* TL;DR table on home */
+  table.tldr{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.tldr th,table.tldr td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.tldr th{font-weight:600;color:var(--mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em}
+  table.tldr tr:last-child td{border-bottom:none}
+  table.tldr .concept{font-weight:600;color:var(--ink)}
+  table.tldr .num{color:var(--accent);font-weight:600;white-space:nowrap}
+
+  /* Home grid */
+  .home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:10px}
+  .home-card{display:block;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:16px 18px;color:inherit;transition:border-color .15s,transform .15s}
+  .home-card:hover{border-color:var(--accent);text-decoration:none;transform:translateY(-1px)}
+  .home-card .num{font-family:'SF Mono',Menlo,monospace;font-size:11.5px;color:var(--mute)}
+  .home-card .title{margin:4px 0 6px;font-size:15px;font-weight:600;color:var(--ink)}
+  .home-card .blurb{font-size:13px;color:var(--ink-soft);line-height:1.45}
+
+  .footer-nav{display:flex;justify-content:space-between;margin-top:36px;
+    padding-top:18px;border-top:1px solid var(--line);font-size:13.5px}
+  .footer-nav a.dim{color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">
+      <h1>Loom Lifecycle</h1>
+      <div class="sub">Concepts at a glance</div>
+    </div>
+    <nav id="nav">
+      <a data-page="home" href="#home"><span class="n">·</span>Overview</a>
+      <div class="group-label">Phase concepts</div>
+      <a data-page="plan" href="#plan"><span class="n">1</span>Dedicated Plan phase</a>
+      <a data-page="spec-design" href="#spec-design"><span class="n">2</span>Spec / Design split</a>
+      <a data-page="review" href="#review"><span class="n">3</span>Dedicated Review phase</a>
+      <a data-page="vertical" href="#vertical"><span class="n">4</span>Vertical slicing + single-session Build</a>
+      <div class="group-label">Cross-cutting</div>
+      <a data-page="ids" href="#ids"><span class="n">5</span>Stable cross-phase IDs</a>
+      <a data-page="append" href="#append"><span class="n">6</span>Append-only state</a>
+      <a data-page="signatures" href="#signatures"><span class="n">7</span>Typed phase signatures</a>
+      <a data-page="cache" href="#cache"><span class="n">8</span>Cache-aware dispatch</a>
+      <a data-page="least-auth" href="#least-auth"><span class="n">9</span>Review can't author</a>
+      <a data-page="quality" href="#quality"><span class="n">10</span>Opt-in Quality Check</a>
+      <a data-page="digest" href="#digest"><span class="n">11</span>Repo pre-flight digest</a>
+      <a data-page="tune" href="#tune"><span class="n">12</span>The /tune learning loop</a>
+    </nav>
+  </aside>
+
+  <main id="main"></main>
+</div>
+
+<script>
+const PAGES = {
+  home: {
+    title: "Loom Lifecycle",
+    eyebrow: "Executive summary",
+    lede: "Loom is a five-phase agent-orchestration lifecycle — Spec → Design → Plan → Build → Review — with human checkpoints between phases. Each concept on the left is one architectural choice. This page summarises why; click any concept for a one-page explanation.",
+    html: `
+      <div class="card">
+        <h3>The lifecycle at a glance</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="node accent">Spec<small>WHAT &amp; WHY</small></div>
+            <span class="arrow">›</span>
+            <div class="node accent">Design<small>HOW</small></div>
+            <span class="arrow">›</span>
+            <div class="node accent">Plan<small>task graph</small></div>
+            <span class="arrow">›</span>
+            <div class="node accent">Build<small>single-session graph walk</small></div>
+            <span class="arrow">›</span>
+            <div class="node accent">Review<small>fresh audit</small></div>
+          </div>
+          <p style="text-align:center;color:var(--mute);font-size:12.5px;margin:14px 0 0">
+            Human-in-the-loop gates sit between every phase. Review can send work back to any earlier phase.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>The three failure modes Loom is built to avoid</h3>
+        <div class="two-col">
+          <div>
+            <strong>Context degradation</strong>
+            <p style="font-size:13.5px;color:var(--ink-soft);margin-top:4px">Long-running agents forget what they were told. Every frontier model loses accuracy as inputs grow — even far below stated limits.</p>
+          </div>
+          <div>
+            <strong>Specification drift</strong>
+            <p style="font-size:13.5px;color:var(--ink-soft);margin-top:4px">By hour 6 the agent is quietly answering a different question than the one posed at hour 0. The user notices after release, when fixes are 60–100× more expensive.</p>
+          </div>
+          <div>
+            <strong>Coordination collapse</strong>
+            <p style="font-size:13.5px;color:var(--ink-soft);margin-top:4px">Multi-agent systems vary by 100× in token cost on the same job depending on how they coordinate. Chat-broadcast is the expensive end.</p>
+          </div>
+          <div>
+            <strong>The fix isn't a bigger model</strong>
+            <p style="font-size:13.5px;color:var(--ink-soft);margin-top:4px">More context makes it worse. More agents makes it more expensive. The mechanism that wins is <em>discipline about what each pass sees and produces.</em></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Two unifying principles every concept comes from</h3>
+        <div class="two-col">
+          <div>
+            <div class="node accent" style="display:inline-block;margin-bottom:8px">A. Context economy</div>
+            <p style="font-size:13.5px;color:var(--ink-soft);margin:0">Each cognitive pass sees the minimum sufficient context — not the full project history, not a sibling task's debug output.</p>
+          </div>
+          <div>
+            <div class="node accent" style="display:inline-block;margin-bottom:8px">B. Build-system semantics</div>
+            <p style="font-size:13.5px;color:var(--ink-soft);margin:0">Treat each phase like a Make/Bazel rule: typed inputs, typed outputs, deterministic contract. The orchestrator is a scheduler, not an author.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What independent research says about the four big architectural choices</h3>
+        <table class="tldr">
+          <thead><tr><th>Concept</th><th>What the literature reports, in plain English</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="concept">Dedicated planning phase</td>
+              <td>Plan-decomposition lifts agent-task scores by <span class="num">27–33 points</span>. Parallel dispatch is <span class="num">~3.7× faster</span> and <span class="num">~6.7× cheaper</span>. Verifying the plan adds <span class="num">+4–8 points</span> more.</td>
+            </tr>
+            <tr>
+              <td class="concept">Spec / Design split</td>
+              <td>Stories in a fixed grammar reduce 8 categories of ambiguity. A defect caught while writing the spec costs roughly <span class="num">1/100</span> of the same defect caught after release.</td>
+            </tr>
+            <tr>
+              <td class="concept">Dedicated Review phase</td>
+              <td>A fresh-context reviewer lifts coding accuracy by <span class="num">+11 points</span>. Three roles (writer / tester / executor) reach <span class="num">96.3%</span> on HumanEval at less than half the tokens. Critically: in-context self-review <em>degrades</em> accuracy.</td>
+            </tr>
+            <tr>
+              <td class="concept">Vertical slicing + single-session Build</td>
+              <td>Three frameworks burn <span class="num">14k vs 1.35M tokens</span> on the same task — <span class="num">~100× spread</span> from coordination overhead alone. Long context drops a leading model from <span class="num">99% → 70%</span> at 32k tokens — every Loom phase runs in its own fresh session well below that.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>The 12 concepts</h3>
+        <p style="color:var(--ink-soft);font-size:14px">Click any card for the one-page explanation, visualization, and estimated benefits.</p>
+        <div class="home-grid" id="home-grid"></div>
+      </div>
+
+      <div class="card">
+        <h3>Net effect — a representative 30-task project</h3>
+        <p>If a pipeline without any of these concepts costs <strong>100 units</strong> end-to-end, the with-concepts pipeline lands around <strong>62 units</strong> — roughly <strong>~40% cheaper</strong>, mostly from declared per-task file scope, within-session prefix amortisation in Build, and avoiding mid-flight scope changes.</p>
+        <div class="benefits">
+          <span class="pill good"><span class="num">~60</span> units saved on Build (declared per-task scope + within-session amortisation)</span>
+          <span class="pill good"><span class="num">~17</span> units saved on rework (Spec/Design split)</span>
+          <span class="pill good"><span class="num">~15</span> units saved on mid-flight scope changes</span>
+          <span class="pill warn"><span class="num">~6</span> units paid for the Review pass</span>
+          <span class="pill warn"><span class="num">~0.6</span> extra for up-front planning</span>
+        </div>
+        <p style="color:var(--mute);font-size:12.5px;margin-top:14px">
+          Direction (gains &gt; losses): <strong>high confidence</strong> — every gain line is grounded in independent published curves.
+          Specific magnitude: low confidence — depends on task shape, defect-catch rate, retry frequency, parallelism of the graph.
+          Real projects could land anywhere between 1.3× and 4× cheaper.
+        </p>
+      </div>
+    `
+  },
+
+  plan: {
+    eyebrow: "Phase concept · 1 of 4",
+    title: "A dedicated Plan phase",
+    lede: "Spend one explicit pass building a graph of tasks, dependencies, and tests — before any code is written. Then Build just executes the graph.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="stack">
+              <div class="node muted">User stories<small>US-001 · US-002 · US-003</small></div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="stack">
+              <div class="node accent">T-001<small>schema</small></div>
+              <div class="node accent">T-002<small>POST /orders</small></div>
+              <div class="node accent">T-003<small>Stripe webhook</small></div>
+              <div class="node accent">T-004<small>email send</small></div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node good">Build<small>executes the graph</small></div>
+          </div>
+          <p style="text-align:center;color:var(--mute);font-size:12.5px;margin:14px 0 0">
+            Each task names which stories it satisfies, what files it touches, what it depends on, and whether a human gate is needed.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>Instead of letting the build agent figure out "what's next?" at every step, the planner produces a complete dependency graph once. The graph itself answers <em>what runs next</em> and <em>what is blocked</em>. The build agent walks the graph in dependency order — no improvisation about scope or ordering at runtime.</p>
+        <p>Tasks are tagged <strong>AFK</strong> (safe to run autonomously) or <strong>HITL</strong> (needs human input — secrets, irreversible actions). The verification environment (what test harness is needed, what env vars must exist) is declared up front, so Build refuses to start in a broken environment instead of silently faking it.</p>
+      </div>
+
+      <div class="card">
+        <h3>Worked example — image attachments in a chat app</h3>
+        <p>The user asks: <em>"add image attachments to messages."</em> Here is what the first hour looks like in each case.</p>
+
+        <div style="border-left:4px solid #fca5a5;padding:12px 0 12px 18px;margin:14px 0 22px;background:#fff7f5;border-radius:0 8px 8px 0">
+          <div style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#b91c1c;font-weight:700;margin-bottom:10px">Without a Plan phase — the build agent decides on the fly</div>
+          <p style="margin:0 0 10px;font-size:13.5px">There is no graph. The agent picks a starting point and improvises every next step from prose:</p>
+          <div style="font-family:'SF Mono',Menlo,monospace;font-size:12.5px;line-height:1.65;background:#fff;border:1px solid #fecaca;border-radius:6px;padding:12px 14px;white-space:pre-wrap;color:#46556a">&gt; agent: I'll start with the R2 bucket. [creates bindings]
+&gt; agent: Now an upload endpoint. Validation? Size limit?
+         Guessing: 10 MB cap, image/* only.
+&gt; agent: Composer UI next. Thumbnails? Hacking one client-side.
+&gt; agent: Tests fail — R2_SECRET missing. Mocking it to continue.
+         [silently changes the contract]
+&gt; agent: History rendering — schema has no thumbnail_url field.
+         Migrating mid-build... [breaks the upload endpoint in flight]
+&gt; user:  what about all the old messages from before this feature?
+&gt; agent: ...I hadn't planned for backfill. Adding a task now.</div>
+          <p style="margin:10px 0 0;font-size:12.5px;color:#7f1d1d">Every surprise — validation rules, secrets, schema shape, backfill — hits mid-build in the worst order. Research on production code agents reports failed trajectories run 31–82% longer than successful ones, with "wrong order" as the dominant failure mode.</p>
+        </div>
+
+        <div style="border-left:4px solid #86efac;padding:12px 0 12px 18px;background:#f0fdf4;border-radius:0 8px 8px 0">
+          <div style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#14532d;font-weight:700;margin-bottom:10px">With a Plan phase — the graph is declared once, before any code</div>
+          <div class="diagram" style="background:#fff;margin:8px 0 12px">
+            <div class="stack" style="max-width:560px;margin:0 auto">
+              <div class="node good" style="text-align:left;min-width:0">T-001 · create R2 bucket + signed-URL helper<small>satisfies US-001 · blocked-by: — · AFK · file scope: storage/r2/*</small></div>
+              <div class="node good" style="text-align:left;min-width:0">T-002 · upload endpoint with size + MIME validation<small>satisfies US-001, US-003 · blocked-by: T-001 · AFK · file scope: api/upload/*</small></div>
+              <div class="node good" style="text-align:left;min-width:0">T-003 · composer: paste / drag-drop + inline thumbnail<small>satisfies US-001 · blocked-by: T-002 · AFK · file scope: web/composer/*</small></div>
+              <div class="node good" style="text-align:left;min-width:0">T-004 · render image messages in history view<small>satisfies US-002 · blocked-by: T-001 · AFK · file scope: web/history/*</small></div>
+              <div class="node warn" style="text-align:left;min-width:0">T-005 · server-side resize job (thumbnails ≤ 200 KB)<small>satisfies US-002 · blocked-by: T-001 · <strong>HITL</strong> · needs R2_SECRET</small></div>
+            </div>
+          </div>
+          <p style="margin:0 0 8px;font-size:13.5px">Three things this planner caught before a single line of code was written:</p>
+          <ul style="font-size:13.5px;margin:0">
+            <li>Every user story has ≥1 task satisfying it — a one-line <code>grep</code>, not a judgement call.</li>
+            <li>T-005 needs the R2 secret, so it's flagged HITL <em>at plan time</em> — not as a 2am mid-build stall.</li>
+            <li>T-003 and T-004 both depend on T-001 but not on each other → they're free to run in parallel.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Pre-flight catches <span class="num">cycles, missing coverage, dangling deps</span> before any code is written</span>
+          <span class="pill good">Recursive plan-decomposition: <span class="num">+27 to +33 points</span> on three agent benchmarks</span>
+          <span class="pill good">Parallel graph dispatch: <span class="num">~3.7× faster, ~6.7× cheaper, +9 points accuracy</span> vs sequential</span>
+          <span class="pill good">Verifying the plan before Build: <span class="num">+4 to +8 points</span> additional</span>
+          <span class="pill good">In production (Devin), adding a "Planning checkpoint" doubled merge rate: <span class="num">34% → 67%</span></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What goes wrong without it</h3>
+        <div class="compare">
+          <div class="without">
+            <h4>Without a Plan phase</h4>
+            <ul>
+              <li>Agent decides what to do next step by step, inferring task dependencies from prose</li>
+              <li>Parallelism is "looks independent" — until two tasks collide on the same file</li>
+              <li>The Stripe key surprise happens mid-build, the agent mocks it and silently changes the contract</li>
+              <li>A late task migrates the schema mid-build and breaks an endpoint already in flight</li>
+            </ul>
+          </div>
+          <div class="with">
+            <h4>With a Plan phase</h4>
+            <ul>
+              <li>The graph itself answers "what's next" and "what can run in parallel"</li>
+              <li>File-scope conflicts are impossible — the schema task owns the schema file</li>
+              <li>The Stripe key need is declared as a HITL gate at plan-time, not discovered mid-build</li>
+              <li>Build can resume cleanly because each task is a typed, isolated unit</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    `
+  },
+
+  "spec-design": {
+    eyebrow: "Phase concept · 2 of 4",
+    title: "Splitting Spec from Design",
+    lede: "Separate what we're building (Spec) from how we're building it (Design). Lock the spec read-only once Design begins. A structural change touches design.md only.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="node purple" style="min-width:200px">
+              Spec — WHAT &amp; WHY
+              <small>user stories · acceptance criteria · constraints</small>
+            </div>
+            <span class="arrow dim">read-only ›</span>
+            <div class="node accent" style="min-width:200px">
+              Design — HOW
+              <small>components · data · decision records</small>
+            </div>
+          </div>
+          <p style="text-align:center;color:var(--mute);font-size:12.5px;margin:14px 0 0">
+            If Design needs to change what the system <em>does</em>, the change has to walk back to Spec — gated explicitly.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p><strong>Spec</strong> answers <em>"what should the system do, for whom, and why?"</em> — user stories in a fixed grammar (e.g. <em>"When the user submits a complete order, the system shall persist the order and authorize payment within 3 seconds"</em>).</p>
+        <p><strong>Design</strong> answers <em>"how will we build it?"</em> — which components, which database, which payment provider, with a short Architecture Decision Record per choice.</p>
+        <p>Once Design begins, <strong>spec.md is read-only</strong>. If a design choice would force the spec to change, the system stops and asks: "are we still building the same thing?" That gate is the whole point.</p>
+      </div>
+
+      <div class="card">
+        <h3>Worked example — image attachments in a chat app</h3>
+        <p>Same feature, organised two ways. Watch what happens when ops decides mid-build to swap R2 for S3.</p>
+
+        <div style="border-left:4px solid #fca5a5;padding:12px 0 12px 18px;margin:14px 0 22px;background:#fff7f5;border-radius:0 8px 8px 0">
+          <div style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#b91c1c;font-weight:700;margin-bottom:10px">Without the split — one artifact mixes WHAT and HOW</div>
+          <p style="margin:0 0 10px;font-size:13.5px">Stories, design choices, and open questions all interleave in a single document:</p>
+          <div style="font-family:'SF Mono',Menlo,monospace;font-size:12.5px;line-height:1.65;background:#fff;border:1px solid #fecaca;border-radius:6px;padding:12px 14px;white-space:pre-wrap;color:#46556a"># plan.md  (single artifact)
+## Goal
+Users can attach images to messages.
+
+## Approach
+- R2 for storage (S3 + local disk considered, rejected).
+- Sharp for thumbnails, generated server-side on upload.
+- 10 MB cap, direct browser upload via pre-signed URL.
+
+## User stories
+1. User attaches image, sees thumbnail before send.
+2. User sees image messages in chat history.
+3. Oversize uploads are rejected with a clear error.
+
+## Open questions
+- Backfill historic messages?
+- Resize on upload or lazily?</div>
+          <p style="margin:10px 0 6px;font-size:12.5px;color:#7f1d1d"><strong>Mid-build, the team decides to swap R2 for S3:</strong></p>
+          <div style="font-family:'SF Mono',Menlo,monospace;font-size:12.5px;line-height:1.65;background:#fff;border:1px solid #fecaca;border-radius:6px;padding:12px 14px;white-space:pre-wrap;color:#46556a">&gt; agent: rewriting the Approach section...
+&gt; agent: user stories sit in the same file — re-emitting them too
+&gt; agent: open questions about R2 are stale, deleting them
+&gt; user:  did the user stories themselves change?
+&gt; agent: ...let me re-check; the diff touched lines 12–18
+         [no structural guarantee; trust is by inspection only]</div>
+        </div>
+
+        <div style="border-left:4px solid #86efac;padding:12px 0 12px 18px;background:#f0fdf4;border-radius:0 8px 8px 0">
+          <div style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#14532d;font-weight:700;margin-bottom:10px">With the split — Spec read-only, Design references by ID</div>
+          <div class="two-col">
+            <div class="node purple" style="text-align:left;min-width:0;background:#fff">
+              <strong>spec.md</strong> — read-only once Design begins
+              <div style="font-weight:400;font-size:12.5px;color:var(--ink-soft);margin-top:8px;line-height:1.5">
+                <strong>US-001</strong> — When the user attaches images to a message, the system SHALL upload them and show thumbnails before send.<br/><br/>
+                <strong>US-002</strong> — When a user opens a chat, the system SHALL render image messages inline with thumbnails ≤ 200 KB.<br/><br/>
+                <strong>US-003</strong> — When an upload exceeds 10 MB, the system SHALL reject it and tell the user why.
+              </div>
+            </div>
+            <div class="node accent" style="text-align:left;min-width:0;background:#fff">
+              <strong>design.md</strong> — consumes spec.md by ID
+              <div style="font-weight:400;font-size:12.5px;color:#1e3a8a;margin-top:8px;line-height:1.5">
+                <strong>ADR-001 · Storage</strong> — Cloudflare R2.<br/><em>Alternatives: S3 (vendor lock), local disk (doesn't scale).</em><br/><br/>
+                <strong>ADR-002 · Thumbnails</strong> — generated server-side on upload using sharp.<br/><br/>
+                <strong>ADR-003 · Upload path</strong> — direct browser → R2 via pre-signed URL.
+              </div>
+            </div>
+          </div>
+          <p style="margin-top:14px;margin-bottom:0;font-size:13.5px"><strong>Same swap, with the split:</strong> ADR-001's Decision flips to S3 and R2 moves to its Alternatives list. <code>spec.md</code> is not touched, so US-001/2/3 are guaranteed unchanged by construction. <code>git diff spec.md</code> is empty — no re-review of stories needed.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Defects caught at spec time cost roughly <span class="num">1/100</span> of the same defect caught after release</span>
+          <span class="pill good">User stories in a fixed grammar reduce <span class="num">8 measured categories</span> of ambiguity</span>
+          <span class="pill good">Adopted by <span class="num">NASA, Airbus, Rolls-Royce, Bosch, Honeywell, Intel, Siemens</span></span>
+          <span class="pill good">Acceptance tests derived directly from stories cut post-release fault cost by ~<span class="num">55%</span></span>
+          <span class="pill good">Structural rework re-burns <strong>design only</strong>, not spec — bounded rerun cost</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What goes wrong without it</h3>
+        <div class="compare">
+          <div class="without">
+            <h4>One artifact mixes WHAT and HOW</h4>
+            <ul>
+              <li>"Should we email confirmation?" sits next to "Should we use Stripe or Adyen?" — the agent biases its answers</li>
+              <li>Swap payment provider → the whole document gets rewritten, user stories included; you can no longer tell whether the user stories changed by looking at the diff</li>
+              <li>A design choice can quietly change what the system is supposed to do, with no gate</li>
+              <li>Every rework reopens the whole surface area</li>
+            </ul>
+          </div>
+          <div class="with">
+            <h4>Split, with spec read-only</h4>
+            <ul>
+              <li>Different question shapes don't compete: scope questions go to Spec, structural ones to Design</li>
+              <li>Swap payment provider → one ADR in design.md changes; spec.md is untouched by construction</li>
+              <li>"Did the user stories change?" becomes a one-line <code>git diff</code> question, not a code-review judgement</li>
+              <li>Each artifact is rerunnable independently</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    `
+  },
+
+  review: {
+    eyebrow: "Phase concept · 3 of 4",
+    title: "A dedicated Review phase",
+    lede: "After Build, hand the artifacts to a fresh reviewer that did not see the build happen. It checks outputs against inputs (spec, design, plan) and emits structured findings.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="stack">
+              <div class="node muted">spec.md</div>
+              <div class="node muted">design.md</div>
+              <div class="node muted">plan.md</div>
+              <div class="node muted">build output<br/>+ diff + tests</div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node accent" style="min-width:160px">
+              Fresh reviewer
+              <small>did not see the build happen</small>
+            </div>
+            <span class="arrow">›</span>
+            <div class="stack">
+              <div class="node bad">Blocker · halt</div>
+              <div class="node warn">Major · go back</div>
+              <div class="node muted">Minor · tracked</div>
+              <div class="node good">Note · learning</div>
+            </div>
+          </div>
+          <p style="text-align:center;color:var(--mute);font-size:12.5px;margin:14px 0 0">
+            Severity-graded findings, not pass/fail. Non-blocking concerns are captured without stalling the lifecycle.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>Tests verify that <em>behaviour matches assertions</em>. Review verifies that <em>assertions match the user stories</em>. These are different questions, and the build agent can't answer the second one — it wrote the assertions.</p>
+        <p>The reviewer runs in a <strong>fresh conversation</strong>, with the spec, design, and plan loaded but <em>not</em> the build transcript. It can't say "looks great" — its output is structured: <code>severity · evidence · expected · actual · recommendation · owner-phase</code>.</p>
+      </div>
+
+      <div class="card">
+        <h3>Worked example — image attachments in a chat app</h3>
+        <p>Build has finished. All tests pass. Here is what the closing step looks like in each case.</p>
+
+        <div style="border-left:4px solid #fca5a5;padding:12px 0 12px 18px;margin:14px 0 22px;background:#fff7f5;border-radius:0 8px 8px 0">
+          <div style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#b91c1c;font-weight:700;margin-bottom:10px">Without a Review phase — the build agent self-checks in the same context</div>
+          <div style="font-family:'SF Mono',Menlo,monospace;font-size:12.5px;line-height:1.65;background:#fff;border:1px solid #fecaca;border-radius:6px;padding:12px 14px;white-space:pre-wrap;color:#46556a">&gt; build: T-001..T-005 done. All tests green. Smoke test passed.
+&gt; build (self-check, same context):
+         R2 bucket up ✓  upload works ✓  thumbnails generated ✓
+         history view renders ✓  oversize rejection works ✓
+         Looks great.
+&gt; [ships]
+
+&gt; user (one week later):
+         my data egress bill is 4× last month. What changed?
+
+&gt; [Old messages from before the feature still serve 8 MB originals;
+   the resize job runs only on new uploads. spec.md US-002 said
+   "thumbnails ≤ 200 KB" but the tests only assert a thumbnail exists,
+   never its size, and never touch historic messages.]</div>
+          <p style="margin:10px 0 0;font-size:12.5px;color:#7f1d1d">The build agent was anchored on "I just made this work, the tests pass." Same-context self-correction is the configuration the literature specifically shows <em>degrades</em> accuracy. The defect lands at the far-right end of the cost-of-defect curve.</p>
+        </div>
+
+        <div style="border-left:4px solid #86efac;padding:12px 0 12px 18px;background:#f0fdf4;border-radius:0 8px 8px 0">
+          <div style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#14532d;font-weight:700;margin-bottom:10px">With a Review phase — fresh reviewer walks outputs against inputs</div>
+          <p style="margin:0 0 10px;font-size:13.5px">A fresh reviewer loads spec, design, and plan — but <em>not</em> the build transcript. It walks one user story end-to-end:</p>
+          <div class="diagram" style="background:#fff;margin:8px 0 12px">
+            <div class="stack" style="max-width:620px;margin:0 auto">
+              <div class="node muted" style="text-align:left;min-width:0"><strong>US-002</strong> — "render image messages inline with thumbnails ≤ 200 KB"</div>
+              <div style="text-align:center;color:var(--mute);font-size:12px">↓ which tasks claim to satisfy this story?</div>
+              <div class="node muted" style="text-align:left;min-width:0"><strong>T-004</strong> render images in history · <strong>T-005</strong> server-side resize job</div>
+              <div style="text-align:center;color:var(--mute);font-size:12px">↓ does the diff actually deliver the story?</div>
+              <div class="node bad" style="text-align:left;min-width:0">
+                <strong>Code:</strong> resize runs only on new uploads. Messages sent before the feature shipped still serve full-size originals (up to 8 MB each).<br/>
+                <strong>Tests:</strong> assert a thumbnail exists for a new upload, but never assert thumbnail <em>size</em>, and never touch historic messages.
+              </div>
+            </div>
+          </div>
+          <p style="margin:0 0 6px;font-size:13.5px"><strong>Structured finding emitted:</strong></p>
+          <ul style="font-size:13.5px;margin:0">
+            <li><strong>Severity:</strong> Major</li>
+            <li><strong>Owner phase:</strong> Plan <em>(the task graph missed a backfill task)</em></li>
+            <li><strong>Expected:</strong> every image message ≤ 200 KB</li>
+            <li><strong>Actual:</strong> backfill missing; historic messages still serve originals</li>
+            <li><strong>Recommendation:</strong> open T-006 (backfill resize, AFK). ADR-002 stands.</li>
+          </ul>
+          <p style="color:var(--mute);font-size:12.5px;margin-top:10px;margin-bottom:0">Caught at the test bar of the cost-of-defect curve — roughly 20–50× cheaper to fix than the egress-bill version above.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Fresh-context reflection lifts coding accuracy <span class="num">+11 points</span> (80% → 91% on HumanEval)</span>
+          <span class="pill good">Three-role split (writer / tester / executor) reaches <span class="num">96.3% HumanEval</span> at &lt; half the tokens</span>
+          <span class="pill good">Post-build debugger pass: <span class="num">+10 points</span> across three coding benchmarks</span>
+          <span class="pill good">Catching a defect at Review costs <span class="num">~5–15×</span> less than catching it after release</span>
+          <span class="pill bad">Counter-finding: <strong>same-context self-correction degrades accuracy</strong> — only fresh-context reviewers help</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What goes wrong without it</h3>
+        <div class="compare">
+          <div class="without">
+            <h4>Build self-checks in same context</h4>
+            <ul>
+              <li>Agent is anchored on "I made this work, the tests pass"</li>
+              <li>Tests verify behaviour against assertions; nobody verifies the assertions match the spec</li>
+              <li>"US-002 says email within 60 seconds" — implementation does direct SMTP with no retry, test asserts only that send() returned non-error</li>
+              <li>Defect surfaces in production a week later, at the 100× end of the cost curve</li>
+            </ul>
+          </div>
+          <div class="with">
+            <h4>Fresh-context reviewer</h4>
+            <ul>
+              <li>Reviewer holds the spec, the design ADRs, and the plan; not the build transcript</li>
+              <li>Walks story → tasks → diff structurally: does the body of work satisfy the contracts?</li>
+              <li>Same defect surfaces as a "Major" finding with owner-phase set to Plan: "T-004 had no harness step asserting the SLO"</li>
+              <li>Caught at the test bar of the cost curve, ~20–50× cheaper to fix</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    `
+  },
+
+  vertical: {
+    eyebrow: "Phase concept · 4 of 4",
+    title: "Vertical slicing + single-session Build",
+    lede: "Slice work by user-visible behaviour, not by stack layer. The Plan phase emits typed cards with declared file scope and a dependency graph. The Build phase agent walks that graph in a single fresh session and implements every ready task inline.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="node accent" style="min-width:180px">
+              Orchestrator
+              <small>/weave skill<br/>main session</small>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node good" style="min-width:240px">
+              Build phase agent
+              <small>one fresh session per phase entry<br/>walks the task graph in dependency order<br/>applies task / mutation / smoke procedures inline</small>
+            </div>
+            <span class="arrow dim">RETURN block ›</span>
+            <div class="node muted">
+              Kanban board on disk
+              <small>backlog · in-progress · review · done</small>
+            </div>
+          </div>
+          <p style="text-align:center;color:var(--mute);font-size:12.5px;margin:14px 0 0">
+            Each phase runs in its own fresh session. The orchestrator never sees Build's internal tool history — only the final RETURN block.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p><strong>Vertical slicing</strong> happens in the Plan phase. Each task is a thin slice that delivers a real user story end-to-end (schema + API + UI for one feature) — not "all schemas, then all APIs, then all UI". Every green slice is demoable. Each task declares the files it touches, the user stories it satisfies, and what blocks it.</p>
+        <p><strong>Single-session Build execution</strong> means the Build phase agent is dispatched once per phase entry by the orchestrator. That session reads the board, walks the dependency graph in order, and implements every ready task itself — applying the lock/red/implement/green/done procedure, the mutation procedure, and the smoke procedure as inline steps within the same session. Splitting the same work across many fresh dispatches would forfeit within-session prefix amortisation and is forbidden anyway by the Claude Code platform (subagents cannot dispatch further subagents).</p>
+        <p>The fresh-context property the long-context literature relies on is preserved at the <em>phase boundary</em>: Review never inherits Build's session, Build never inherits Plan's, and so on.</p>
+      </div>
+
+      <div class="card">
+        <h3>Worked example — image attachments in a chat app</h3>
+        <p>Same feature, sliced two ways. Watch what is demoable after each green task — and what happens at the seams.</p>
+
+        <div style="border-left:4px solid #fca5a5;padding:12px 0 12px 18px;margin:14px 0 22px;background:#fff7f5;border-radius:0 8px 8px 0">
+          <div style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#b91c1c;font-weight:700;margin-bottom:10px">Without vertical slicing — sliced by layer of the stack</div>
+          <ul style="font-size:13.5px;margin:0 0 12px;padding-left:20px">
+            <li><strong>T-001</strong> · attachments + thumbnails tables</li>
+            <li><strong>T-002</strong> · R2 bindings + signed-URL helper</li>
+            <li><strong>T-003</strong> · upload, delete, and resize endpoints</li>
+            <li><strong>T-004</strong> · composer paste/drop UI</li>
+            <li><strong>T-005</strong> · history rendering + fullscreen viewer</li>
+            <li><strong>T-006</strong> · wire everything together</li>
+          </ul>
+          <p style="margin:0 0 10px;font-size:13px;color:#7f1d1d"><strong>Demoable after T-001 – T-005: nothing.</strong> The user has never pasted an image. All integration risk concentrates in T-006:</p>
+          <div style="font-family:'SF Mono',Menlo,monospace;font-size:12.5px;line-height:1.65;background:#fff;border:1px solid #fecaca;border-radius:6px;padding:12px 14px;white-space:pre-wrap;color:#46556a">T-006 — wiring everything together
+&gt; composer sends thumbnail_url in the message envelope,
+   but T-001 put it in a sibling attachments table.
+   → re-migrating schema; breaking queries already deployed.
+&gt; history view fetches attachments per message — N+1, 5s page loads.
+   → refactoring the render path.
+&gt; resize endpoint takes 30s for old uploads; history times out.
+   → need backfill before launch. Re-prioritise sprint.
+
+&gt; three layers ago looked fine; now they all need rework.</div>
+        </div>
+
+        <div style="border-left:4px solid #86efac;padding:12px 0 12px 18px;background:#f0fdf4;border-radius:0 8px 8px 0">
+          <div style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#14532d;font-weight:700;margin-bottom:10px">With vertical slicing — sliced by user story</div>
+          <ul style="font-size:13.5px;margin:0 0 10px;padding-left:20px">
+            <li><strong>T-001</strong> · paste in composer → upload → thumbnail in the same message <em>(US-001 end-to-end)</em></li>
+            <li><strong>T-002</strong> · render image messages in history <em>(US-002 end-to-end)</em></li>
+            <li><strong>T-003</strong> · reject oversize uploads with a clear error <em>(US-003 end-to-end)</em></li>
+            <li><strong>T-004</strong> · backfill thumbnails for historic messages</li>
+          </ul>
+          <p style="margin:0;font-size:13px;color:#14532d"><strong>Demoable after T-001:</strong> the user can paste an image, watch it upload, see a thumbnail. Every green is a real user-facing slice. Integration risk is paid <em>per slice</em>, not deferred to the end. A task that doesn't satisfy a user story has no reason to exist — the artifact contract enforces the discipline, not reviewer judgement.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Token cost scales <strong>linearly</strong> with task count instead of super-linearly — each task reads only its declared file scope</span>
+          <span class="pill good">Three multi-agent frameworks on the same job: <span class="num">14k · 57k · 1,350k tokens</span> — a 100× spread from coordination style alone; phases coordinate through artifacts on disk, not chat</span>
+          <span class="pill good">Long-context cliff avoided: a leading model falls <span class="num">99% → 70%</span> at 32k tokens — every Loom phase runs in its own fresh session, well below the cliff</span>
+          <span class="pill good">Within-session amortisation: the Build session reads its growing prefix at cache-read rates on every internal turn</span>
+          <span class="pill good">Failure is bulkheaded at the phase boundary: a runaway phase exhausts its own session, never the orchestrator's</span>
+          <span class="pill good">Each green slice is <strong>demoable</strong> — partial progress has real user-facing value</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Vertical vs horizontal — the same project, sliced two ways</h3>
+        <div class="compare">
+          <div class="without">
+            <h4>Horizontal (by layer)</h4>
+            <ul>
+              <li>T-001 all schemas → T-002 all APIs → T-003 all webhooks → T-004 all UI → T-005 integration</li>
+              <li>After 4 of 5 tasks: zero demoable behaviour</li>
+              <li>"We're 70% done" reports task-count, not value delivered</li>
+              <li>Late-layer failures rework earlier layers — schema migration has to be rewritten when UI integration discovers a missing column</li>
+              <li>All integration risk concentrated in the final 10% of the schedule</li>
+            </ul>
+          </div>
+          <div class="with">
+            <h4>Vertical (by user story)</h4>
+            <ul>
+              <li>T-001 places an order (schema + API + UI) → T-002 payment → T-003 confirmation email</li>
+              <li>After T-001: US-001 works end-to-end, demoable</li>
+              <li>Partial failure is bounded to a story, not a layer — other stories still demo</li>
+              <li>A task that doesn't satisfy a user story has no reason to exist — the contract enforces slicing discipline</li>
+              <li>Integration risk paid per slice, not per stack</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    `
+  },
+
+  ids: {
+    eyebrow: "Cross-cutting · 5 of 12",
+    title: "The traceability spine — stable cross-phase IDs",
+    lede: "Three ID families thread the whole lifecycle: Q-NNN for spec questions, US-NNN for user stories, T-NNN for plan tasks. Everything downstream references by ID, not by re-quoting content.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="stack">
+              <div class="node purple">Q-001<small>answered</small></div>
+              <div class="node muted">Q-002<small>superseded by Q-007</small></div>
+              <div class="node purple">Q-007<small>answered</small></div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="stack">
+              <div class="node accent">US-001<small>checkout</small></div>
+              <div class="node accent">US-002<small>payment</small></div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="stack">
+              <div class="node good">T-001<small>satisfies US-001</small></div>
+              <div class="node good">T-002<small>satisfies US-001 + US-002</small></div>
+              <div class="node good">T-003<small>satisfies US-002</small></div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node accent">Review<small>cites IDs by name</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>Instead of every downstream artifact restating "the checkout flow with cart total and tax line", they all just write <code>US-001</code>. Names are cheap; restated content is expensive.</p>
+        <p>IDs are <strong>stable across reruns</strong>. If a question gets revisited, you don't renumber — Q-002 becomes <em>superseded by Q-007</em>, and the chain is preserved.</p>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Reference compression: "T-014 covers US-003 and US-005" is ~50 tokens; restating the stories is ~500 — a <span class="num">~10× reduction</span> across a 30-task plan</span>
+          <span class="pill good">Coverage check becomes a one-line <code>grep</code> instead of an LLM judgement call</span>
+          <span class="pill good">Review walks <span class="num">US-NNN → T-NNN → diff → test</span> as a structured query</span>
+          <span class="pill good">Idempotent reruns — IDs survive regeneration, with history preserved through supersede chains</span>
+        </div>
+      </div>
+    `
+  },
+
+  append: {
+    eyebrow: "Cross-cutting · 6 of 12",
+    title: "Append-only state, supersede-not-delete",
+    lede: "Phase outputs are read-only once a phase exits. A go-back doesn't erase the old version — it marks it superseded with a forward pointer to the new one. The history is the audit trail.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="stack">
+              <div class="node muted">spec.md v1<small>retired</small></div>
+              <div class="node muted">design.md v1<small>retired</small></div>
+              <div class="node muted">plan.md v1<small>retired</small></div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node bad" style="min-width:140px">Review finding<small>blocker · owner: spec</small></div>
+            <span class="arrow">›</span>
+            <div class="stack">
+              <div class="node good">spec.md v2<small>active</small></div>
+              <div class="node good">design.md v2<small>active</small></div>
+              <div class="node good">plan.md v2<small>active</small></div>
+            </div>
+          </div>
+          <p style="text-align:center;color:var(--mute);font-size:12.5px;margin:14px 0 0">
+            v1 artifacts are not deleted — they're tagged retired with a forward pointer. Easy to roll back, easy to learn from.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>Like Git's object model: data is never destroyed, only superseded. A go-back from Review to Spec doesn't blow away the design.md and plan.md you already had — they live on as v1 artifacts, with v2 active. The full history is recoverable.</p>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Cheap rollback — one append, not a destructive overwrite</span>
+          <span class="pill good">Crash-safe resumption — a compacted session rebuilds state from the log alone</span>
+          <span class="pill good">Learn-from-rejected — a rejected design is still there to mine for "what didn't work and why"</span>
+          <span class="pill good">Concurrency-safe writes across multiple subagents — no optimistic-locking ceremony</span>
+        </div>
+      </div>
+    `
+  },
+
+  signatures: {
+    eyebrow: "Cross-cutting · 7 of 12",
+    title: "Typed phase signatures & RETURN schemas",
+    lede: "Each phase ships with a signature file declaring its required inputs, required outputs, and a typed return schema (e.g. green / failed / hitl-block). Off-schema returns get a silent redispatch.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="node muted" style="min-width:180px">
+              spec.signature.md
+              <small>inputs · outputs · return shape</small>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node accent">Phase agent<small>typed contract</small></div>
+            <span class="arrow">›</span>
+            <div class="stack">
+              <div class="node good">on-schema → next phase</div>
+              <div class="node warn">off-schema → silent redispatch</div>
+              <div class="node bad">substantive failure → page user</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>Phases plug into the orchestrator <em>by signature</em>, not by prompt-level coupling. A new phase (Security, Performance, Localization) drops in with a signature; nothing else has to change. When a phase returns something that doesn't match the schema, the issue is caught at the seam — not three phases later as a missing field.</p>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Composability — phases swap by signature, no orchestrator changes</span>
+          <span class="pill good">Drift detection at the seams, not downstream</span>
+          <span class="pill good">Most schema slips self-correct silently — the human is paged only on real failures</span>
+          <span class="pill good">Each phase is testable in isolation: dummy inputs, asserted output shape</span>
+        </div>
+      </div>
+    `
+  },
+
+  cache: {
+    eyebrow: "Cross-cutting · 8 of 12",
+    title: "Cache-aware dispatch — stable head + dynamic tail",
+    lede: "Every task dispatch is built as a stable head (the phase's body + signature, byte-identical across calls) plus a small dynamic tail (just the project / phase / task / date). Anthropic's prompt cache hits on the head.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div style="display:grid;grid-template-columns:1fr;gap:8px;max-width:540px;margin:0 auto">
+            <div class="node accent" style="min-width:0">
+              Phase body (markdown)
+              <small>placeholders kept literal</small>
+            </div>
+            <div style="text-align:center;color:var(--mute);font-size:12px">— thematic break —</div>
+            <div class="node accent" style="min-width:0">
+              Phase signature
+              <small>inputs · outputs · return schema</small>
+            </div>
+            <div style="text-align:center;color:var(--good);font-size:11.5px;font-weight:600">↑ stable head — cacheable, hits the prompt cache</div>
+            <div style="text-align:center;color:var(--warn);font-size:11.5px;font-weight:600">↓ dynamic tail — not cached</div>
+            <div class="node warn" style="min-width:0">
+              &lt;system-reminder&gt;
+              <small>project · phase · task · date</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>The same phase agent gets called dozens of times during a build. If every call's prompt is slightly different, the cache misses and you pay full input freight. By making the body + signature byte-identical and pushing every variable into a small tail block, every dispatch after the first hits the cache.</p>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Anthropic prompt cache: <span class="num">~90% input-cost discount</span> on cache hits</span>
+          <span class="pill good">On a 30-task build with many redispatches, dispatch-side input cost collapses to the dynamic tail</span>
+          <span class="pill good">Cache misses are <strong>localised</strong> — a paraphrase breaks the cache for one callable, not the lifecycle</span>
+          <span class="pill good">Wrapper-text drift is structurally impossible — there's no place for sneaky context patches between calls</span>
+        </div>
+      </div>
+    `
+  },
+
+  "least-auth": {
+    eyebrow: "Cross-cutting · 9 of 12",
+    title: "Review-cannot-author — capability minimization at the audit boundary",
+    lede: "The Review phase agent has only Read and Bash against the repository, plus Write scoped to its own audit artifacts. It is structurally incapable of editing source files. The agent that decides whether the build meets intent is the same agent that cannot silently fix the build during its audit.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="node muted" style="min-width:160px">
+              Spec
+              <small>Read · Write · AskUserQuestion<br/>writes: spec.md, decisions.md</small>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node muted" style="min-width:160px">
+              Design
+              <small>Read · Write<br/>writes: design.md, mockup/</small>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node muted" style="min-width:160px">
+              Plan
+              <small>Read · Write<br/>writes: plan.md, board.md, tasks/</small>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node good" style="min-width:180px">
+              Build
+              <small>Read · Edit · Write · Bash<br/>writes: repo + board transitions<br/><strong style="color:var(--bad)">no git · no deploy</strong></small>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node muted" style="min-width:160px">
+              Review
+              <small>Read · Bash<br/>Write scoped to audit artifacts<br/><strong style="color:var(--bad)">no Edit · no Write on repo</strong></small>
+            </div>
+          </div>
+          <p style="text-align:center;color:var(--mute);font-size:12.5px;margin:14px 0 0">
+            Build is the only phase whose tool grant includes implementation tools — and even Build cannot commit, push, deploy, or run destructive commands.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>The principle of least authority, applied to LLM agents at the phase level. Each phase agent's tool grant is the upper bound on what it can possibly do — not a prompt instruction. The Review agent cannot "fix a small thing while auditing" because it physically has no edit tool on the repository. Spec, Design, and Plan can write to their own artifact directory, but never to repository source. The fresh-context audit property (a different agent looks at the result with no access to the build's session) is preserved structurally, not by convention.</p>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Audit drift is <strong>physically impossible</strong> — Review has no edit tool on the repo, not by prompt instruction</span>
+          <span class="pill good">A confused Spec agent can write a bad spec but cannot write bad code; a confused Review agent can miss a finding but cannot silently patch the code it evaluates</span>
+          <span class="pill good">Every phase is a bulkhead — blast radius bounded by tool grant, not by process</span>
+          <span class="pill good">Auditable in one glance — "what can this agent do?" is a tool-list question</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Anchors</h3>
+        <ul>
+          <li><strong>Anthropic — Building Effective Agents</strong> (Dec 2024): defines the orchestrator / phase-agent pattern and the audit/build separation.</li>
+          <li><strong>LangGraph Supervisor docs</strong>: production library implementing this kind of phase split.</li>
+          <li><strong>Magentic-One</strong> (MSR 2024): per-role tool grants as bulkheads.</li>
+          <li><strong>Netflix Hystrix bulkhead pattern</strong> (Nygard, <em>Release It!</em>): the canonical "contain the blast radius" architectural pattern.</li>
+          <li><strong>Saltzer &amp; Schroeder, 1975</strong>: the original principle-of-least-authority paper — a 50-year-old security tradition applied to LLM-agent architecture.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Theory linkage</h3>
+        <p><strong>Principle B</strong> — an auditor has fundamentally different capabilities from a builder; collapsing them makes both worse. <strong>Principle A</strong> — Review runs in its own fresh session and never sees Build's session, so its context stays small and its judgment stays independent of Build's accumulated noise. Capability minimization at the phase boundary is the structural enforcement of both principles at the lifecycle's most consequential seam.</p>
+      </div>
+    `
+  },
+
+  quality: {
+    eyebrow: "Cross-cutting · 10 of 12",
+    title: "Opt-in Quality Check — per-phase pre-rerun probe",
+    lede: "Before deciding whether to rerun a phase, the user can spend a small fraction of a phase's tokens on a narrow audit — holes, blind spots, contradictions. The rerun decision becomes informed instead of blind.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="node accent">Phase output</div>
+            <span class="arrow">›</span>
+            <div class="stack">
+              <div class="node good">Continue</div>
+              <div class="node warn">Run Quality Check<br/><small>narrow audit</small></div>
+              <div class="node bad">Rerun phase</div>
+              <div class="node muted">Go back to prior</div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node accent" style="min-width:180px">Re-ask gate with findings<small>continue · rerun with patches</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>A full phase rerun spends a phase's worth of tokens. A Quality Check spends a fraction of that to tell you whether the rerun is worth running. If you do rerun, the agent re-enters with the findings as additional context — every blocker and major finding must be addressed. The rerun isn't a blank-slate re-roll; it's a targeted patch.</p>
+        <p>Quality Check is <strong>opt-in at every gate</strong> — Loom never auto-loops on phase output.</p>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Rerun decisions become priced — accept-or-pay is no longer a blind binary</span>
+          <span class="pill good">Reruns are <strong>targeted patches</strong> with structured input, not blank-slate re-rolls</span>
+          <span class="pill good">Each phase's quality-check is scoped to its own failure modes (ambiguity for Spec, DAG holes for Plan, evidence sufficiency for Build)</span>
+          <span class="pill good">Inherits the cached-prefix property — repeated runs are cache-warm</span>
+        </div>
+      </div>
+    `
+  },
+
+  digest: {
+    eyebrow: "Cross-cutting · 11 of 12",
+    title: "Repository pre-flight + cached architectural digest",
+    lede: "On first contact with a repo, Loom dispatches an Explore subagent to write a digest of architectural facts (stack, topology, conventions, where X lives). The digest is hash-pinned to the files it cites, so refactors invalidate only the changed slice.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="node accent">First Spec dispatch</div>
+            <span class="arrow">›</span>
+            <div class="stack">
+              <div class="node good">cache hit · trust verbatim</div>
+              <div class="node warn">head/sha mismatch · re-explore mismatched files only</div>
+              <div class="node bad">no digest · full Explore</div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node accent" style="min-width:180px">
+              Foundation grilling
+              <small>asks user only what the repo cannot answer</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>Two artifacts: a <strong>repo-digest</strong> (stable architectural facts, shared across projects in this repo) and a project-scoped <strong>repo-context</strong> (the slice relevant to this specific spec). A manifest pins each digest section to the sha256 of the files it cites — refactors invalidate exactly what changed, not the whole digest.</p>
+        <p>Subsequent projects against the same repo skip the expensive first-pass exploration entirely.</p>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Cross-project amortisation — repo #2 pays only for its slice</span>
+          <span class="pill good">Bounded staleness — sha256 manifest means re-explore is structural, not vibes-based</span>
+          <span class="pill good">Foundation grilling stops asking the user for facts the code already states</span>
+          <span class="pill good">First-pass cost is paid <strong>once per repo</strong>; every subsequent run pays verification + delta only</span>
+        </div>
+      </div>
+    `
+  },
+
+  tune: {
+    eyebrow: "Cross-cutting · 12 of 12",
+    title: "The /tune learning loop — preventive process learning",
+    lede: "/tune curates Review findings and user corrections into edits to the phase prompts themselves. Loom learns from each project by updating its own behaviour rules — not by training, but by curated prompt-engineering against a structured audit trail.",
+    html: `
+      <div class="card">
+        <h3>The picture</h3>
+        <div class="diagram">
+          <div class="flow-row">
+            <div class="stack">
+              <div class="node bad">Review findings<small>structured severity + owner</small></div>
+              <div class="node warn">User corrections<small>memory: feedback_*.md</small></div>
+            </div>
+            <span class="arrow">›</span>
+            <div class="node accent">/tune curation</div>
+            <span class="arrow">›</span>
+            <div class="stack">
+              <div class="node good">Spec prompt</div>
+              <div class="node good">Design prompt</div>
+              <div class="node good">Plan prompt</div>
+              <div class="node good">Build prompt</div>
+              <div class="node good">Review prompt</div>
+            </div>
+            <span class="arrow dim">next project ›</span>
+            <div class="node accent">Improved behaviour</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What it is, in plain language</h3>
+        <p>A mistake corrected in a conversation dies with that conversation. A mistake corrected in a phase prompt is gone forever. <code>/tune</code> turns Review findings and user feedback memories into prompt edits, with every change tied back to a citation. The framework gets cheaper to run as it ages.</p>
+      </div>
+
+      <div class="card">
+        <h3>Estimated benefits</h3>
+        <div class="benefits">
+          <span class="pill good">Compound improvement across projects — corrections don't recur</span>
+          <span class="pill good">Auditable rule changes — every behaviour change has a finding-ID citation</span>
+          <span class="pill good">Preventive, not reactive — the input is already structured, so curation is cheap</span>
+          <span class="pill good">Meta-level context economy — distilled rules mean less per-project re-derivation</span>
+        </div>
+      </div>
+    `
+  },
+};
+
+// Render
+const orderedKeys = ["plan","spec-design","review","vertical","ids","append","signatures","cache","least-auth","quality","digest","tune"];
+
+function render(pageId){
+  if (!PAGES[pageId]) pageId = "home";
+  const p = PAGES[pageId];
+  const main = document.getElementById("main");
+  const idx = orderedKeys.indexOf(pageId);
+  const prev = idx > 0 ? orderedKeys[idx-1] : (pageId === "home" ? null : "home");
+  const next = idx >= 0 && idx < orderedKeys.length - 1 ? orderedKeys[idx+1] : null;
+
+  let footer = `<div class="footer-nav">`;
+  footer += prev
+    ? `<a href="#${prev}">‹ ${PAGES[prev].title || "Overview"}</a>`
+    : `<span></span>`;
+  footer += next
+    ? `<a href="#${next}">${PAGES[next].title} ›</a>`
+    : `<a class="dim" href="#home">Back to overview</a>`;
+  footer += `</div>`;
+
+  main.innerHTML = `
+    <div class="page-head">
+      <div class="eyebrow">${p.eyebrow || ""}</div>
+      <h2>${p.title}</h2>
+      <p class="lede">${p.lede || ""}</p>
+    </div>
+    ${p.html}
+    ${footer}
+  `;
+
+  // Active nav
+  document.querySelectorAll("#nav a").forEach(a => {
+    a.classList.toggle("active", a.dataset.page === pageId);
+  });
+
+  // Home grid (built dynamically)
+  const homeGrid = document.getElementById("home-grid");
+  if (homeGrid) {
+    homeGrid.innerHTML = orderedKeys.map((k, i) => `
+      <a class="home-card" href="#${k}">
+        <div class="num">${String(i+1).padStart(2,"0")}</div>
+        <div class="title">${PAGES[k].title}</div>
+        <div class="blurb">${PAGES[k].lede || ""}</div>
+      </a>
+    `).join("");
+  }
+
+  window.scrollTo({top:0, behavior:"instant"});
+}
+
+function route(){
+  const hash = (location.hash || "#home").slice(1);
+  render(hash);
+}
+
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>

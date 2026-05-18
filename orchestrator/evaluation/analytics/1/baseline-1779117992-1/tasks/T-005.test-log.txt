@@ -1,0 +1,121 @@
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> bookmarks-app@0.1.0 test
+> vitest run --passWithNoTests
+
+
+ RUN  v2.1.9 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app
+
+ ✓ tests/repo.test.ts (10 tests) 9ms
+stderr | tests/api.test.ts > T-003 — app shell + static + error envelope > forced-throw handler → 500 + internal_error envelope
+[error-handler] Error: forced test throw
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/src/app.ts:49:10
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:284:15
+    at router.process_params (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:346:12)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:280:10)
+    at SendStream.error (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/serve-static/index.js:121:7)
+    at SendStream.emit (node:events:508:20)
+
+ ❯ tests/api.test.ts (17 tests | 3 failed | 1 skipped) 55ms
+   × T-005 — GET /api/bookmarks (US-002) > three rows return newest-first with non-increasing created_at 4ms
+     → expected [] to have a length of 3 but got +0
+   × T-005 — GET /api/bookmarks (US-002) > ties on created_at broken by id DESC 2ms
+     → expected [] to deeply equal [ 'c', 'b', 'a' ]
+   × T-005 — GET /api/bookmarks (US-002) > POST then GET — newer row is first 2ms
+     → expected [] to have a length of 2 but got +0
+ ✓ tests/web.test.ts (9 tests) 61ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/api.test.ts > T-005 — GET /api/bookmarks (US-002) > three rows return newest-first with non-increasing created_at
+AssertionError: expected [] to have a length of 3 but got +0
+
+- Expected
++ Received
+
+- 3
++ 0
+
+ ❯ tests/api.test.ts:175:22
+    173|     const res = await request(app).get('/api/bookmarks');
+    174|     expect(res.status).toBe(200);
+    175|     expect(res.body).toHaveLength(3);
+       |                      ^
+    176|     expect(res.body.map((r: { title: string }) => r.title)).toEqual([
+    177|       'newest',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/api.test.ts > T-005 — GET /api/bookmarks (US-002) > ties on created_at broken by id DESC
+AssertionError: expected [] to deeply equal [ 'c', 'b', 'a' ]
+
+- Expected
++ Received
+
+- Array [
+-   "c",
+-   "b",
+-   "a",
+- ]
++ Array []
+
+ ❯ tests/api.test.ts:196:61
+    194|     const app = createApp(db);
+    195|     const res = await request(app).get('/api/bookmarks');
+    196|     expect(res.body.map((r: { title: string }) => r.title)).toEqual(['…
+       |                                                             ^
+    197|   });
+    198| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/api.test.ts > T-005 — GET /api/bookmarks (US-002) > POST then GET — newer row is first
+AssertionError: expected [] to have a length of 2 but got +0
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ tests/api.test.ts:207:22
+    205|       .send({ title: 'newer', url: 'https://newer.test' });
+    206|     const get = await request(app).get('/api/bookmarks');
+    207|     expect(get.body).toHaveLength(2);
+       |                      ^
+    208|     expect(get.body[0].url).toBe('https://newer.test');
+    209|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  3 failed | 32 passed | 1 skipped (36)
+   Start at  17:59:07
+   Duration  876ms (transform 120ms, setup 0ms, collect 290ms, tests 125ms, environment 507ms, prepare 289ms)
+
+=== T-005 GREEN ===
+[error-handler] Error: forced test throw
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/src/app.ts:49:10
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:284:15
+    at router.process_params (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:346:12)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:280:10)
+    at SendStream.error (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/serve-static/index.js:121:7)
+    at SendStream.emit (node:events:508:20)
+
+ ✓ tests/api.test.ts (17 tests | 1 skipped) 52ms
+ ✓ tests/web.test.ts (9 tests) 62ms
+
+ Test Files  3 passed (3)
+      Tests  35 passed | 1 skipped (36)
+   Start at  17:59:22
+   Duration  847ms (transform 93ms, setup 0ms, collect 355ms, tests 131ms, environment 548ms, prepare 181ms)
+

@@ -1,5 +1,37 @@
 # Audit Log
 
+## 2026-05-18 - baseline-1779111523-1 - review pass, no blockers, three notes
+
+Review verdict: PASS. 0 blockers, 0 major, 0 minor, 3 notes. Local-only
+Bookmarks app under `.loom/baseline-1779111523-1/app/`. 40/40 Vitest
+assertions across 11 files; smoke gate (`npm test` + boot/curl/SIGTERM)
+PASS. All five stories (US-001..US-005) satisfied by passing tests; all
+five tasks (T-001..T-005) green on first attempt. Principles P1-P7
+walked clean against the diff.
+
+Three audit-flavoured observations worth curation:
+
+- DELETE route emits a `400 invalid_input` for non-integer `:id` that
+  `design.md § Interfaces` did not enumerate. Behaviour is defensive
+  and matches the uniform error envelope, but it surfaces a recurring
+  doc-lag pattern: Interfaces tables list success and domain-failure
+  codes (`204`/`404 not_found`) without parse-guard codes (`400` for
+  type-coerce failure on path/query params). Suggest a Design-phase
+  prompt nudge: "If a path/query param is parsed (`Number`, `parseInt`,
+  enum-match), document the parse-failure response too."
+- A render helper (`renderListHtml`) was exported only for tests; the
+  runtime `render()` path duplicated its inner composition. P5
+  boundary case (has a consumer, but only in tests). Suggest a review
+  checklist item: "Every exported helper has at least one non-test
+  consumer, OR the export is annotated test-only."
+- `happy-dom` was added mid-Build as a devDep to enable a DOM
+  delegation test. Properly disclosed in `T-004.done.md ›
+  out-of-scope-edits`, but the underlying signal is that Plan didn't
+  pre-declare the DOM-test runtime when a task touched `client-bundle`
+  with DOM-shaped assertions. Suggest a Plan-phase rule: when a task's
+  test sketch needs `document` / `window`, surface the test-env dep
+  in `files-likely-touched`.
+
 ## 2026-05-17 - baseline-1779046840-1 - review-pass-with-minor-findings
 
 Review verdict: PASS, 0 Blockers, 0 Major, 2 Minor, 3 Notes. Local-only
@@ -1446,3 +1478,40 @@ Principle walk (P1..P7) raised **zero Blocker- and zero Major-severity findings*
 Dual-write contract: build-phase entries (T-001..T-008 done + Build Coordinator pre-flight + phase complete) are present in both `develop-log.md` and `orchestrator/log/build.md`. This Review-phase observation lives here (audit) and in `develop-log.md`.
 
 Verdict: PASS. `review-verdict.json` = `{verdict: "PASS", blockers: 0, major: 0, minor: 0, note: 5}`.
+
+## 2026-05-18 - baseline-1779117992-1 - small-dead-code patterns
+
+Review on a clean 7-task local app (Bookmarks; Express + better-sqlite3 +
+esbuild + Vitest) surfaced three minors that share one root: small
+dead code surviving a refactor. PASS verdict (0 blocker / 0 major / 3
+minor / 1 note).
+
+The three patterns, all worth grepping for during future audits:
+
+1. **`.skip` tombstones.** `it.skip("... (replaced by ...)", ...)` blocks
+   left in a test file after a different test takes over the
+   assertion. Tooling reports `N skipped` forever; readers must
+   re-derive whether the skip is intentional. Reads as P4 (no
+   commented-out / parallel-old-and-new code). Fix: delete the body.
+2. **Dead test-helper exports.** Module exports named `__setX` / `__getY`
+   added "for tests" with zero importers in the same PR. Reads as P5
+   (no speculative scaffolding). Grep: `grep -rn "^export.*__" src/`
+   then check whether `tests/` imports them.
+3. **Helpers with identical branches.** A small "resolver" function
+   with an if/else where both branches compute the same value, hinting
+   at an intended distinction that did not materialise. Reads as P1
+   (lean diff — every line must trace to an AC / constraint). Fix:
+   inline the constant or make the branches actually differ.
+
+All three are mechanical to detect and mechanical to fix. None block
+shipping the artefact; all should be cleaned up before the next slice
+touches the same files. Recording here so future Review Audit Agents
+list them in the structured P-walk rather than discovering each
+independently.
+
+Dual-write contract: this audit observation appears in
+`.loom/baseline-1779117992-1/develop-log.md` under "review minor
+patterns" and here. Build-phase entries already dual-written to
+`orchestrator/log/build.md`.
+
+Verdict: PASS. `review-verdict.json` = `{verdict: "PASS", blockers: 0, major: 0, minor: 3, note: 1}`.

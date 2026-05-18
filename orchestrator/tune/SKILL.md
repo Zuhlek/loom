@@ -144,7 +144,7 @@ The develop-log is sharded by source skill under `~/.claude/skills/log/`:
 | Shard | Written by | Entry types |
 |---|---|---|
 | `log/ideate.md` | `/weave` Spec / Design / Plan subagents (via Review dual-write) | Spec-phase entry, process entry |
-| `log/build.md` | `/weave` Build subagents (Task Builder, Smoke Test, Mutation Test, via Review dual-write) | Build-task entry, process entry |
+| `log/build.md` | `/weave` Build phase agent (per-task, smoke, and mutation steps, plus Review dual-write) | Build-task entry, process entry |
 | `log/feedback.md` | `/tune <text>` (this skill, feedback mode) | User feedback entry |
 | `log/audit.md` | `/tune insights` (this skill, insights mode) | Audit-recovered entry |
 

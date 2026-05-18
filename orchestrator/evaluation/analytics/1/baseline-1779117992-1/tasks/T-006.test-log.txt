@@ -1,0 +1,62 @@
+=== T-006 RED (anchors temporarily stripped of target/rel) ===
+npm warn Unknown env config "npm-globalconfig". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_jsr-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> bookmarks-app@0.1.0 test
+> vitest run --passWithNoTests tests/web.test.ts
+
+
+ RUN  v2.1.9 /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app
+
+ ❯ tests/web.test.ts (12 tests | 1 failed) 70ms
+   × T-005 — renderList + empty state (US-002) > every row anchor has target=_blank and rel=noopener noreferrer (US-003 AC1, AC2) 4ms
+     → expected null to be '_blank' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/web.test.ts > T-005 — renderList + empty state (US-002) > every row anchor has target=_blank and rel=noopener noreferrer (US-003 AC1, AC2)
+AssertionError: expected null to be '_blank' // Object.is equality
+
+- Expected: 
+"_blank"
+
++ Received: 
+null
+
+ ❯ tests/web.test.ts:242:40
+    240|     expect(anchors).toHaveLength(2);
+    241|     for (const a of anchors) {
+    242|       expect(a.getAttribute('target')).toBe('_blank');
+       |                                        ^
+    243|       expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+    244|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 passed (12)
+   Start at  18:00:20
+   Duration  755ms (transform 37ms, setup 0ms, collect 27ms, tests 70ms, environment 452ms, prepare 48ms)
+
+=== T-006 GREEN ===
+[error-handler] Error: forced test throw
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/src/app.ts:49:10
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/layer.js:95:5)
+    at /Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:284:15
+    at router.process_params (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:346:12)
+    at next (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/express/lib/router/index.js:280:10)
+    at SendStream.error (/Volumes/My Shared Files/repo/loom/.loom/baseline-1779117992-1/app/node_modules/serve-static/index.js:121:7)
+    at SendStream.emit (node:events:508:20)
+
+ ✓ tests/api.test.ts (17 tests | 1 skipped) 55ms
+ ✓ tests/web.test.ts (12 tests) 65ms
+
+ Test Files  3 passed (3)
+      Tests  38 passed | 1 skipped (39)
+   Start at  18:00:33
+   Duration  880ms (transform 103ms, setup 0ms, collect 293ms, tests 129ms, environment 553ms, prepare 276ms)
+
