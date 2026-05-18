@@ -1,0 +1,124 @@
+=== RED PHASE: 2026-05-18T08:14:45Z ===
+--- npm test (tsc --noEmit + vitest run) ---
+    152| 
+    153|     const first = await request(app).delete(`/api/bookmarks/${seeded.i…
+    154|     expect(first.status).toBe(204);
+       |                          ^
+    155| 
+    156|     const second = await request(app).delete(`/api/bookmarks/${seeded.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  tests/http/bookmarks.test.ts > DELETE /api/bookmarks/:id > returns 400 INVALID_ID for a non-integer id
+AssertionError: expected 404 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 404
+
+ ❯ tests/http/bookmarks.test.ts:165:24
+    163| 
+    164|     const res = await request(app).delete("/api/bookmarks/abc");
+    165|     expect(res.status).toBe(400);
+       |                        ^
+    166|     expect(res.body.error.code).toBe("INVALID_ID");
+    167|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+ FAIL  tests/http/bookmarks.test.ts > DELETE /api/bookmarks/:id > returns 400 INVALID_ID for a negative integer id
+AssertionError: expected 404 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 404
+
+ ❯ tests/http/bookmarks.test.ts:174:24
+    172| 
+    173|     const res = await request(app).delete("/api/bookmarks/-1");
+    174|     expect(res.status).toBe(400);
+       |                        ^
+    175|     expect(res.body.error.code).toBe("INVALID_ID");
+    176|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/12]⎯
+
+ FAIL  tests/unit/render.test.ts > renderList (delete control — US-004) > renders one delete button per list item carrying data-bookmark-id matching the row id
+AssertionError: expected null not to be null
+ ❯ tests/unit/render.test.ts:129:26
+    127| 
+    128|     const firstBtn = items[0].querySelector("button[data-bookmark-id]"…
+    129|     expect(firstBtn).not.toBeNull();
+       |                          ^
+    130|     expect(firstBtn!.getAttribute("data-bookmark-id")).toBe("2");
+    131| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/12]⎯
+
+ FAIL  tests/unit/render.test.ts > renderList (delete control — US-004) > renders each delete button with an accessible label
+AssertionError: expected null not to be null
+ ❯ tests/unit/render.test.ts:140:21
+    138|     renderList(parent, bookmarks);
+    139|     const btn = parent.querySelector("button[data-bookmark-id]") as HT…
+    140|     expect(btn).not.toBeNull();
+       |                     ^
+    141|     const ariaLabel = btn!.getAttribute("aria-label") ?? "";
+    142|     const visibleText = (btn!.textContent ?? "").trim();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/12]⎯
+
+ FAIL  tests/unit/render.test.ts > renderList (delete control — US-004) > renders each delete button enabled by default (not disabled)
+AssertionError: expected null not to be null
+ ❯ tests/unit/render.test.ts:149:21
+    147|     renderList(parent, bookmarks);
+    148|     const btn = parent.querySelector("button[data-bookmark-id]") as HT…
+    149|     expect(btn).not.toBeNull();
+       |                     ^
+    150|     expect(btn!.disabled).toBe(false);
+    151|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/12]⎯
+
+ FAIL  tests/unit/render.test.ts > renderList (delete control — US-004) > toggling the disabled flag does not throw and preserves data-bookmark-id
+AssertionError: expected null not to be null
+ ❯ tests/unit/render.test.ts:156:21
+    154|     renderList(parent, bookmarks);
+    155|     const btn = parent.querySelector("button[data-bookmark-id]") as HT…
+    156|     expect(btn).not.toBeNull();
+       |                     ^
+    157|     expect(() => {
+    158|       btn!.disabled = true;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯
+
+ Test Files  3 failed | 2 passed | 1 skipped (6)
+      Tests  12 failed | 33 passed | 2 skipped (47)
+   Start at  10:14:46
+   Duration  485ms (transform 185ms, setup 0ms, collect 369ms, tests 147ms, environment 121ms, prepare 342ms)
+
+
+=== GREEN PHASE: 2026-05-18T08:15:48Z ===
+--- npm test (tsc --noEmit + vitest run) ---
+
+> bookmarks@0.1.0 test
+> tsc --noEmit && vitest run
+
+
+ RUN  v2.1.3 /Users/tristankindle/dev/loom/.loom/baseline-1779088275-1/app
+
+ ↓ tests/smoke/run.test.ts  (2 tests | 2 skipped)
+ ✓ tests/unit/validation.test.ts  (10 tests) 4ms
+ ✓ tests/client/api.test.ts  (5 tests) 6ms
+ ✓ tests/unit/repo.test.ts  (7 tests) 18ms
+ ✓ tests/unit/render.test.ts  (12 tests) 17ms
+ ✓ tests/http/bookmarks.test.ts  (11 tests) 94ms
+
+ Test Files  5 passed | 1 skipped (6)
+      Tests  45 passed | 2 skipped (47)
+   Start at  10:15:49
+   Duration  463ms (transform 170ms, setup 0ms, collect 356ms, tests 138ms, environment 107ms, prepare 340ms)
+

@@ -1,0 +1,122 @@
+ ❯ tests/unit/validation.test.ts:21:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/18]⎯
+
+ FAIL  tests/unit/validation.test.ts > parseTitle > rejects non-string input
+Error: parseTitle: not implemented
+ ❯ Module.parseTitle src/server/validation.ts:6:9
+      4| 
+      5| export function parseTitle(_raw: unknown): ParseResult<string> {
+      6|   throw new Error("parseTitle: not implemented");
+       |         ^
+      7| }
+      8| 
+ ❯ tests/unit/validation.test.ts:27:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/18]⎯
+
+ FAIL  tests/unit/validation.test.ts > parseUrl > rejects a non-URL string
+Error: parseUrl: not implemented
+ ❯ Module.parseUrl src/server/validation.ts:10:9
+      8| 
+      9| export function parseUrl(_raw: unknown): ParseResult<string> {
+     10|   throw new Error("parseUrl: not implemented");
+       |         ^
+     11| }
+     12| 
+ ❯ tests/unit/validation.test.ts:35:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/18]⎯
+
+ FAIL  tests/unit/validation.test.ts > parseUrl > rejects ftp protocol
+Error: parseUrl: not implemented
+ ❯ Module.parseUrl src/server/validation.ts:10:9
+      8| 
+      9| export function parseUrl(_raw: unknown): ParseResult<string> {
+     10|   throw new Error("parseUrl: not implemented");
+       |         ^
+     11| }
+     12| 
+ ❯ tests/unit/validation.test.ts:44:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/18]⎯
+
+ FAIL  tests/unit/validation.test.ts > parseUrl > rejects javascript: protocol
+Error: parseUrl: not implemented
+ ❯ Module.parseUrl src/server/validation.ts:10:9
+      8| 
+      9| export function parseUrl(_raw: unknown): ParseResult<string> {
+     10|   throw new Error("parseUrl: not implemented");
+       |         ^
+     11| }
+     12| 
+ ❯ tests/unit/validation.test.ts:50:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/18]⎯
+
+ FAIL  tests/unit/validation.test.ts > parseUrl > accepts an http URL and returns the unnormalized original string
+Error: parseUrl: not implemented
+ ❯ Module.parseUrl src/server/validation.ts:10:9
+      8| 
+      9| export function parseUrl(_raw: unknown): ParseResult<string> {
+     10|   throw new Error("parseUrl: not implemented");
+       |         ^
+     11| }
+     12| 
+ ❯ tests/unit/validation.test.ts:56:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/18]⎯
+
+ FAIL  tests/unit/validation.test.ts > parseUrl > accepts an https URL
+Error: parseUrl: not implemented
+ ❯ Module.parseUrl src/server/validation.ts:10:9
+      8| 
+      9| export function parseUrl(_raw: unknown): ParseResult<string> {
+     10|   throw new Error("parseUrl: not implemented");
+       |         ^
+     11| }
+     12| 
+ ❯ tests/unit/validation.test.ts:62:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/18]⎯
+
+ FAIL  tests/unit/validation.test.ts > parseUrl > rejects non-string input
+Error: parseUrl: not implemented
+ ❯ Module.parseUrl src/server/validation.ts:10:9
+      8| 
+      9| export function parseUrl(_raw: unknown): ParseResult<string> {
+     10|   throw new Error("parseUrl: not implemented");
+       |         ^
+     11| }
+     12| 
+ ❯ tests/unit/validation.test.ts:68:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/18]⎯
+
+ Test Files  4 failed | 1 passed | 1 skipped (6)
+      Tests  18 failed | 9 passed | 2 skipped (29)
+   Start at  09:55:32
+   Duration  453ms (transform 165ms, setup 0ms, collect 370ms, tests 105ms, environment 157ms, prepare 406ms)
+
+
+=== GREEN PHASE: 2026-05-18T07:56:57Z ===
+--- npm test (tsc --noEmit + vitest run) ---
+
+> bookmarks@0.1.0 test
+> tsc --noEmit && vitest run
+
+
+ RUN  v2.1.3 /Users/tristankindle/dev/loom/.loom/baseline-1779088275-1/app
+
+ ↓ tests/smoke/run.test.ts  (2 tests | 2 skipped)
+ ✓ tests/unit/validation.test.ts  (10 tests) 2ms
+ ✓ tests/client/api.test.ts  (2 tests) 8ms
+ ✓ tests/unit/repo.test.ts  (5 tests) 13ms
+ ✓ tests/unit/render.test.ts  (4 tests) 8ms
+ ✓ tests/http/bookmarks.test.ts  (6 tests) 51ms
+
+ Test Files  5 passed | 1 skipped (6)
+      Tests  27 passed | 2 skipped (29)
+   Start at  09:56:58
+   Duration  465ms (transform 164ms, setup 0ms, collect 416ms, tests 83ms, environment 149ms, prepare 379ms)
+
