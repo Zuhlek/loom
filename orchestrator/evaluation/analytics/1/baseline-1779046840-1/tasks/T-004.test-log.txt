@@ -1,0 +1,8 @@
+red:
+  5 FAIL on POST tests (route not present): each got 404 from express
+  instead of the expected 201/400/409 — runtime assertion failure on
+  status code comparisons.
+
+green:
+  ✓ test/api.test.ts  (8 tests) 44ms
+  8 passed

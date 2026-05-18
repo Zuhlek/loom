@@ -1,0 +1,9 @@
+T-001 scaffold — no behaviour tests of its own; the scaffold passes
+the unit-level assertions delegated to T-012 smoke.
+
+red: not applicable (scaffold task; no behaviour assertion).
+
+green:
+  $ npm install  -> exit 0 (235 packages)
+  $ npm test     -> exit 0 (1 placeholder skipped)
+  $ npx tsc -p tsconfig.server.json --noEmit -> exit 0

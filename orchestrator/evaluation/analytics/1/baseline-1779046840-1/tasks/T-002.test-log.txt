@@ -1,0 +1,11 @@
+red:
+  FAIL test/db.test.ts > db > insert + list returns the rows newest-first
+  FAIL test/db.test.ts > db > insert returns a bookmark with numeric id, fields, and ISO createdAt
+  FAIL test/db.test.ts > db > duplicate url throws DuplicateUrlError
+  FAIL test/db.test.ts > db > remove returns true on hit, false on miss
+  FAIL test/db.test.ts > db > list on empty db returns []
+  -- all runtime: Error: openDb not implemented (stub)
+
+green:
+  ✓ test/db.test.ts (5 tests) 179ms
+  5 passed

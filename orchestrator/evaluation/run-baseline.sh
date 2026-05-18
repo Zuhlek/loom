@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # run-baseline — drive N /weave runs against a fixed seed + canned answer
-# queue. Each iteration creates `.loom/<project>/`, then invokes /weave
-# under `claude --print` until `pipeline.md.Lifecycle state == complete`.
-# Each /weave invocation runs one phase, pauses at the rerun-or-continue
-# gate (AskUserQuestion cancels with no interactive UI), and exits; the
-# next invocation resumes from the paused phase. The orchestrator records
-# its session pointer via `.eval-orchestrator-pointer` for later harvest.
-# Harvest and aggregation happen later, in `analyze.py` (npm: eval:analyse),
-# when you point it at the filed run under `analytics/<version>/<run>/`.
+# queue. Each iteration creates `.loom/<project>/` and invokes /weave once
+# under `claude --print --append-system-prompt "$AUTONOMY_PROMPT"`. The
+# autonomy directive tells the orchestrator to advance through every
+# rerun-or-continue gate without prompting, so one invocation drives the
+# full lifecycle to `Lifecycle state == complete`. A bounded re-invoke
+# loop stays as a safety net for the rare case where /weave returns
+# before completion. The orchestrator records its session pointer via
+# `.eval-orchestrator-pointer` for later harvest. Harvest and aggregation
+# happen later, in `analyze.py` (npm: eval:analyse), when you point it at
+# the filed run under `analytics/<version>/<run>/`.
 #
 # Usage:
 #   orchestrator/evaluation/run-baseline.sh [--n N] [--seed PATH] [--answers PATH]
@@ -68,11 +70,16 @@ cd "$REPO_ROOT"
 mkdir -p .loom
 
 PARSER="$REPO_ROOT/orchestrator/lib/pipeline-parser.py"
-# Per-iteration cap on /weave re-invocations. The orchestrator pauses on
-# every rerun-or-continue gate under `claude --print`; each pause needs
-# one resume invocation. Five phases × occasional schema-recovery dispatch
-# tolerated → ten resumes is the safety ceiling.
-MAX_RESUMES=10
+# Per-iteration safety cap. With the autonomy directive one /weave call
+# drives the full lifecycle; this only bounds the rare case where it
+# returns before reaching `Lifecycle state == complete`.
+MAX_ATTEMPTS=5
+
+# Injected via `claude --append-system-prompt` so the orchestrator drives
+# the lifecycle to completion without blocking on the rerun-or-continue
+# AskUserQuestion. Lives in the harness, not in SKILL.md, so interactive
+# /weave keeps its gates.
+AUTONOMY_PROMPT='Goal: autonomously drive the entire /weave run to completion in this single invocation. Non-interactive eval mode: never block on the rerun-or-continue AskUserQuestion at any phase gate, including the Review final gate; select the Continue option and advance. Never invoke Run quality check (opt-in only). Never invoke Go back to <prior-phase>. Drive the lifecycle until pipeline.md.Lifecycle state == complete and then exit.'
 
 failures=0
 ts="$(date -u +%s)"
@@ -82,34 +89,39 @@ for i in $(seq 1 "$N"); do
     pipeline="$workspace/pipeline.md"
     mkdir -p "$workspace"
     cp "$SEED" "$workspace/seed.md"
-    echo "[run-baseline] iteration $i / $N — project $project" >&2
+    echo "[run-baseline] iteration $i / $N — project $project — /weave driving lifecycle" >&2
 
-    resume=0
+    attempt=0
     iteration_failed=0
     while : ; do
-        resume=$((resume + 1))
-        if [ "$resume" -gt "$MAX_RESUMES" ]; then
-            echo "[run-baseline] iteration $i exceeded $MAX_RESUMES resumes; aborting" >&2
+        attempt=$((attempt + 1))
+        if [ "$attempt" -gt "$MAX_ATTEMPTS" ]; then
+            echo "[run-baseline] iteration $i aborted after $MAX_ATTEMPTS attempts without reaching Lifecycle complete" >&2
             iteration_failed=1
             break
         fi
-        echo "[run-baseline]   resume $resume — /weave $project" >&2
-        if ! claude --print "/weave $project --answers $ANSWERS"; then
-            echo "[run-baseline] iteration $i resume $resume returned non-zero; aborting iteration" >&2
+        if [ "$attempt" -gt 1 ]; then
+            echo "[run-baseline]   retry $((attempt - 1)) — /weave returned before Lifecycle complete; re-invoking" >&2
+        fi
+        if ! claude --print --append-system-prompt "$AUTONOMY_PROMPT" "/weave $project --answers $ANSWERS"; then
+            echo "[run-baseline] iteration $i: /weave returned non-zero on attempt $attempt; aborting iteration" >&2
             iteration_failed=1
             break
         fi
         if [ ! -f "$pipeline" ]; then
-            echo "[run-baseline] iteration $i: pipeline.md missing after resume $resume; aborting iteration" >&2
+            echo "[run-baseline] iteration $i: pipeline.md missing after attempt $attempt; aborting iteration" >&2
             iteration_failed=1
             break
         fi
         lifecycle="$(python3 "$PARSER" field "$pipeline" "Lifecycle state" 2>/dev/null || echo "")"
         if [ "$lifecycle" = "complete" ]; then
-            echo "[run-baseline] iteration $i complete after $resume resume(s)" >&2
+            if [ "$attempt" -eq 1 ]; then
+                echo "[run-baseline] iteration $i complete" >&2
+            else
+                echo "[run-baseline] iteration $i complete after $attempt attempt(s)" >&2
+            fi
             break
         fi
-        echo "[run-baseline]   lifecycle still '$lifecycle' — re-invoking" >&2
     done
     if [ "$iteration_failed" -eq 1 ]; then
         failures=$((failures + 1))

@@ -1,0 +1,8 @@
+red:
+  3 FAIL test/static.test.ts: GET /, /app.js, /styles.css returned
+  404 (createApp had no static fallthrough yet). 1 PASS — /api/bookmarks
+  unchanged from T-003.
+
+green:
+  ✓ test/static.test.ts (4 tests) 133ms — 4 passed
+  full suite: 21 passed | 1 skipped placeholder

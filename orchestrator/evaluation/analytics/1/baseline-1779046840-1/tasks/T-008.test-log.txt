@@ -1,0 +1,5 @@
+red:
+  4 FAIL — runtime: "Error: bootstrap not implemented" from stub.
+
+green:
+  ✓ test/client/main-list.test.ts (4 tests) 17ms — 4 passed
