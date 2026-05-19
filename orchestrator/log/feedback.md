@@ -252,3 +252,14 @@ analysis can filter real human signal vs. provisional acceptance markers
 — the autonomous entries are starting to dominate the shard tail.
 
 Reference: `.loom/baseline-1778931123-1/{feedback.md, review.md}`.
+
+## 2026-05-18 — pty-pivot — Underscore-prefixed unused params re-emerged
+
+User's recorded `feedback_naming_and_formatting.md` rule prohibits
+`_`-prefixed parameters (even unused ones). The pivot's
+`image-prompt-group.ts:130` shipped `reconcile(_sentAt)`. The
+TypeScript `noUnusedParameters` knob lets `_`-prefixed params slip
+through without a lint, so the constraint is enforced only by user
+memory — not by the toolchain. Build phase agents need to treat the
+`_`-prefix rule as a pre-flight check on every diff under
+`apps/web/src/lib/` rather than relying on tsc to surface it.

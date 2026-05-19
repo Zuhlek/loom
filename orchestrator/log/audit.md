@@ -1515,3 +1515,92 @@ patterns" and here. Build-phase entries already dual-written to
 `orchestrator/log/build.md`.
 
 Verdict: PASS. `review-verdict.json` = `{verdict: "PASS", blockers: 0, major: 0, minor: 3, note: 1}`.
+
+## 2026-05-18 — pty-pivot — Review found Clean-as-is sweep escapes
+
+The pivot's T-016 SDK-symbol grep is keyword-scoped to named SDK symbols
+(`claude-agent-sdk`, `MessagesTimeline`, `use-chat-bridge`, `chat-protocol`,
+`claude-session-bridge`, `tasks-update`) — it catches the symbol set but
+does NOT catch *narrative* comments that talk about the pivot in prose.
+Review found four such sites in pivot-touched server files (hooks-admin
+"hook-receiver was retired with the SDK chat surface"; metadata-store
+"Legacy SDK-era field" + "pty-pivot first-boot migration"; chat repo
+"post-pty-pivot surface" + "SDK-era columns scrubbed off any legacy
+snapshot"). Future clean-up gates should add a second keyword set for
+prose narrative (`pivot`, `legacy`, `retired`, `post-pivot`, `SDK-era`,
+`previously`, `formerly`) or a comment-density check that fails when a
+comment in a pivot-touched file matches the historical-narrative regex.
+
+## 2026-05-19 - pty-shell-hardening - grep-style UI tests hide unwired routes
+
+Review F-001 surfaced that SessionHeader's Reconnect / New session
+buttons POST to `/api/chats/:id/pty/{reconnect,new-session}` — routes
+never registered on the server. The Build-phase gate is grep-style
+static analysis on `.tsx` source (the codebase's existing UI test
+convention); it matched `onReconnect={` and the fetch URL literal
+without exercising the call. T-011's done report admitted "HTTP routes
+themselves are not in T-011 scope" and pipeline history's "reconnect /
+new-session route handlers flagged as follow-up" line memorialised the
+gap, but no follow-up task was filed and the spec's acceptance envelope
+shipped broken across three ACs (US-003 AC#4, US-007 AC#2/AC#3).
+
+Process implication: a "flagged as follow-up" line in pipeline history
+is not a follow-up task. When Build acknowledges an in-scope acceptance
+gap, it must either land the fix or file a follow-up task before
+Review. The next iteration of `task.md` / `done.md` should treat
+"flagged as follow-up" inside the project's own acceptance envelope as
+a Review-blocker trigger.
+
+## 2026-05-19 - pty-shell-hardening - speculative public surface slips through
+
+Review F-002 and F-003 found two P5 violations the grep-style UI tests
+did not catch: `TranscriptWatcher.onSessionIdDiscovered` declared and
+pushed handlers but never fired; `TerminalPaneProps.wsOptions` declared
+and never read. Both have zero same-PR consumers. P5's narrative
+self-check is too soft to catch this — `wsOptions` even shipped with
+a doc-comment that contradicts ADR-006 ("Reserved for routes that
+prefer to defer client construction" vs. ADR-006 "client is lifted to
+the route as the production path").
+
+Process implication: P5 needs a mechanical, greppable "every new
+exported identifier has at least one same-PR consumer" gate, not a
+narrative checklist. A small `dead-export.test.ts` walking the new
+exports and asserting at least one import elsewhere in the diff would
+have caught both findings.
+
+## 2026-05-19 - pty-shell-hardening - global-shard heading shape divergence
+
+Review F-005 flagged that the 14 build-shard entries this project
+appended to `orchestrator/log/build.md` use the heading shape
+`## <project> / <task> — <topic> (YYYY-MM-DD)` instead of the
+documented `## YYYY-MM-DD - <project> - <topic>`. The dual-write
+contract in `phase.signature.md § Writes` is structural; tooling that
+greps for the canonical shape skips every entry. The project-local
+`develop-log.md` uses yet another shape (`## T-NNN — <topic>
+(YYYY-MM-DD)`), so the per-stream contract is the only normalisation
+point.
+
+Process implication: dual-write needs either (a) a schema-check at
+append time inside `pipeline-write.sh` (or its successor) or (b) a
+one-shot normaliser pass during Review when the project closes. The
+current state — schema asserted in `phase.signature.md` but enforced
+nowhere — means global shards silently drift between phases and
+projects.
+
+## 2026-05-19 - pty-shell-hardening - review re-entry verdict PASS
+
+Re-entry Review after the T-014 build rerun (carried findings F-001
+blocker, F-002 and F-003 majors). All three closed at source plus test
+level; whole-suite stayed at 742 / 2 with the two failures matching
+the documented pre-project baseline. The two deferred minors (F-004
+scrollback UTF-16 vs byte cap; F-005 global-shard heading shape on
+earlier task entries) are unchanged and intentionally not gating per
+`quality-review.md § Deferred`.
+
+Process implication: the go-back-to-build loop closed cleanly inside
+one rerun because the prior Review's findings were concrete (named
+files, named symbols) and scoped (single new task with an explicit
+acceptance sketch). The `quality-review.md` → `T-NNN.md` → Build
+rerun → Review re-entry path is reusable as-is; future Reviews that
+emit a verdict FAIL should keep findings file-and-symbol specific so
+the rerun loop stays this short.
