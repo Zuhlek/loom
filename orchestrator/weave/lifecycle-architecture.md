@@ -73,8 +73,8 @@ Loom is five phases — **Spec → Design → Plan → Build → Review** — ea
    │         apply methods/mutation.md procedure when tests.md opts in
    │       apply methods/smoke.md procedure (once, when project is runnable)
    │     writes: repository files, tasks/T-*.done.md, tasks/T-*.test-log.txt,
-   │             smoke-report.md, test-report.md, develop-log.md,
-   │             orchestrator/log/build.md, board.md transitions
+   │             smoke-report.md, test-report.md, board.md transitions,
+   │             ~/.claude/skills/develop-log.md (task / smoke / mutation entries)
    │
    ├─► HITL gate
    │
@@ -151,9 +151,9 @@ The Build phase's `methods/` files are procedure references, not dispatch templa
 
 `pipeline.md` is the canonical workspace state, updated by `/weave` between phases. Phase agents write their own artifacts under `.loom/<project>/`.
 
-Subagent transcripts land at `~/.claude/projects/<encoded-cwd>/<orchestrator-session>/subagents/agent-<uuid>.jsonl` with a sidecar `agent-<uuid>.meta.json` containing the `agentType`. The post-tool-use hook `orchestrator/lib/tag-subagent-phase.py` writes a `.phase` sidecar tagging each subagent transcript with its lifecycle phase.
+Subagent transcripts land at `~/.claude/projects/<encoded-cwd>/<orchestrator-session>/subagents/agent-<uuid>.jsonl` with a sidecar `agent-<uuid>.meta.json` containing the `agentType`. The post-tool-use hook `orchestrator/lib/telemetry/tag-subagent-phase.py` writes a `.phase` sidecar tagging each subagent transcript with its lifecycle phase.
 
-`orchestrator/lib/transcript-harvest.py` walks one orchestrator session's `subagents/` directory and emits one row per dispatched subagent for `analyze.py`. Because all Loom subagents are depth-1 from `/weave` (see 1.1), the harvester sees every dispatched session. There is no hidden depth-2+ band.
+`orchestrator/lib/telemetry/transcript-harvest.py` walks one orchestrator session's `subagents/` directory and emits one row per dispatched subagent for `analyze.py`. Because all Loom subagents are depth-1 from `/weave` (see 1.1), the harvester sees every dispatched session. There is no hidden depth-2+ band.
 
 Each row carries `cache_creation_input_tokens`, `cache_read_input_tokens`, `input_tokens`, `output_tokens`, and wall / autonomous duration. Multiply at base rates to estimate Anthropic spend:
 

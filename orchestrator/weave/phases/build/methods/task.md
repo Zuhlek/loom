@@ -1,4 +1,4 @@
-# Task procedure — Lock → Red → Implement → Green → Done
+# Task procedure — Red → Implement → Green → Done
 
 Inline procedure the Build phase agent applies once per ready task. Not dispatched as a subagent. The agent reads this file at the start of each task and follows it within its own session.
 
@@ -10,19 +10,15 @@ Before the first task in this session, read `orchestrator/principles.md` into co
 
 For task `T-NNN`:
 
-1. **Lock.** Acquire `.loom/<project>/.locks/T-NNN.lock` via `orchestrator/lib/locks.sh acquire-task <project> T-NNN`. The framework does not enforce this call; invoke it from a `Bash` tool call.
+1. **Red phase.** Create stubs sufficient for tests to compile. Write behaviour tests from the task's test sketch (`tasks/T-NNN.md`). Run the tests and confirm every new test fails with a **runtime assertion error** — not a compile error, not a missing-import error. Append the red output to `tasks/T-NNN.test-log.txt` (pipe verbose runners through `tail -100`).
 
-2. **Red phase.** Create stubs sufficient for tests to compile. Write behaviour tests from the task's test sketch (`tasks/T-NNN.md`). Run the tests and confirm every new test fails with a **runtime assertion error** — not a compile error, not a missing-import error. Append the red output to `tasks/T-NNN.test-log.txt` (pipe verbose runners through `tail -100`).
+2. **Implement.** Make the smallest scoped change that satisfies the task acceptance criteria. Match prior art per `principles.md` P2. Do not touch files outside the declared scope without recording the reason in the done report.
 
-3. **Implement.** Make the smallest scoped change that satisfies the task acceptance criteria. Match prior art per `principles.md` P2. Do not touch files outside the declared scope without recording the reason in the done report.
+3. **Green phase.** Re-run the tests. On green, append the green output to the test log. On red, return to step 2 and try again. Stop after **three** failed implementation attempts and record `status: failed` in the done report.
 
-4. **Green phase.** Re-run the tests. On green, append the green output to the test log. On red, return to step 3 and try again. Stop after **three** failed implementation attempts and record `status: failed` in the done report.
+4. **Done report.** Write `tasks/T-NNN.done.md` per the schema below.
 
-5. **Done report.** Write `tasks/T-NNN.done.md` per the schema below.
-
-6. **Logs.** Append a build-task entry to `develop-log.md` AND to `orchestrator/log/build.md` (dual-write).
-
-7. **Release.** Release the task lock via `orchestrator/lib/locks.sh release-task <project> T-NNN`.
+5. **Log.** Append one entry to `~/.claude/skills/develop-log.md` under the header `## [YYYY-MM-DD] — <project> — Task: <task-number>` with a `**Skill:** weave` body line.
 
 ## Hard rules
 
@@ -61,15 +57,14 @@ notes: <optional one-paragraph remarks>
 | `failed` | Three implementation attempts exhausted | Card stays `In Progress` with `[failed]` annotation |
 | `hitl-block` | Test contract itself is wrong (contradiction with spec/design) — do not silently edit | `In Progress` → `Backlog` with `[HITL-blocked: <reason>]` |
 
-## "Done" means all five
+## "Done" means all four
 
-A task is done only when all five of these have happened — partial completion is not done:
+A task is done only when all four of these have happened — partial completion is not done:
 
 1. Green phase: every test in the task scope passes.
 2. `tasks/T-NNN.test-log.txt` contains both the red and the green output.
 3. `tasks/T-NNN.done.md` exists with `status: green` (or `failed` / `hitl-block` for terminal non-green states).
-4. `develop-log.md` and `orchestrator/log/build.md` both have a matching entry.
-5. The task lock has been released.
+4. `~/.claude/skills/develop-log.md` has a `## [YYYY-MM-DD] — <project> — Task: <task-number>` entry for this task.
 
 ## Writes
 
@@ -78,5 +73,4 @@ A task is done only when all five of these have happened — partial completion 
 | `<repo>/...` | task scope | Implementation files needed to satisfy the task's acceptance criteria. Smallest scoped diff per `principles.md` P1. |
 | `.loom/<project>/tasks/T-NNN.test-log.txt` | task | Red + green output, tail-sized. |
 | `.loom/<project>/tasks/T-NNN.done.md` | task | Done report per the schema above. |
-| `.loom/<project>/develop-log.md` | task | Build-task entry, dual-written. |
-| `orchestrator/log/build.md` | task | Matching entry for the global log shard. |
+| `~/.claude/skills/develop-log.md` | task | One `Task: <task-number>` entry with `**Skill:** weave`. |

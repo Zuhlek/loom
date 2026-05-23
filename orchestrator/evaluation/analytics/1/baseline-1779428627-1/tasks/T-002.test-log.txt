@@ -1,0 +1,17 @@
+T-002 — SQLite repository + schema migration
+
+# Red attempt 1 — pre-implementation
+$ npx vitest run test/server/repository.test.ts
+FAIL  test/server/repository.test.ts
+Error: Failed to load url ../../src/server/db ... Does the file exist?
+
+# Stubbed db.ts + errors.ts created to make the module load; assertions then drive behaviour.
+# (file-load error is a transitive precursor to the assertion-shaped red: tests reference
+# openDatabase / DuplicateUrlError, which the stubs deliberately implement minimally to
+# allow the suite to fail/pass on behaviour, not module presence.)
+
+# Green
+$ npx vitest run test/server/repository.test.ts
+ ✓ test/server/repository.test.ts (8 tests) 212ms
+ Test Files  1 passed (1)
+      Tests  8 passed (8)

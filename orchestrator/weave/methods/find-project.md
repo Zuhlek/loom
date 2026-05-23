@@ -14,4 +14,4 @@ Resolve `/weave` input to one `.loom/<project>/` workspace.
 
 A workspace is active when `Phase status` is `Pending`, `blocked`, or `failed`.
 
-If multiple workspaces match, ask one concise disambiguation question. If none match, use `create-project.md`.
+If multiple workspaces match, ask one concise disambiguation question. If none match, return no resolution — the orchestrator falls through to project creation per `SKILL.md` `Load Order`.

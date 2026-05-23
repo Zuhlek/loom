@@ -90,7 +90,7 @@ Loom treats LLM execution like a **build graph** (Make, Bazel, Nix), not like a 
 | Incremental rebuild | Supersede-not-delete; downstream artifacts retired with forward-pointers, not destroyed |
 | Build script | Orchestrator (`/weave`) — schedules phase sessions, never authors artifacts itself |
 | Hermetic builds | Each phase runs in its own fresh session; downstream phases never inherit upstream tool history |
-| Lockfile | `locks.sh` on shared state; atomic writes on every board mutation |
+| Lockfile | Single Task dispatch per phase entry — one writer per workspace, no lock helper needed |
 
 ### The two principles compose
 
@@ -723,7 +723,7 @@ flowchart TB
 - **Cheap rollback.** A go-back is one append, not a destructive overwrite. The build-system analogue: invalidating a cache entry doesn't *destroy* it, it marks it stale.
 - **Resumption is mechanical.** A crashed or context-compacted session reconstructs state from the append-only log alone. There is no "what was the agent thinking 4 hours ago?" problem — the log *is* the thinking.
 - **Learn-from-rejected.** A rejected design isn't gone — `/tune` mines "what didn't work and why" from supersede chains. Destructive in-place edits, by contrast, throw away the information needed to learn from rework.
-- **Concurrency safety.** Combined with `locks.sh` + `atomic-write.sh`, append-only semantics make multi-subagent writes to shared state collision-free without optimistic-locking ceremony.
+- **Concurrency safety.** With one Task dispatch per phase entry, there is never more than one writer per workspace — append-only semantics need no lock helper.
 
 ### Anchors
 

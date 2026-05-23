@@ -189,15 +189,10 @@ Either path keeps the prototype analysis as the canonical source of *what* to bu
 
 ## Logging
 
-After completing the exploration, append the same entry to BOTH surfaces (dual-write, per Loom's learning-log discipline):
-
-- `.loom/<project>/develop-log.md` — project-local raw observations
-- `orchestrator/log/ideate.md` — global learning shard (spec-phase observations live here per Review's dual-write contract)
-
-Entry format:
+After completing the exploration, append one entry to `~/.claude/skills/develop-log.md`:
 
 ```markdown
-## YYYY-MM-DD - <project-name> - Prototype Exploration
+## [YYYY-MM-DD] — <project-name> — Phase: spec
 **Skill:** explore-prototype
 **URL:** [prototype URL]
 **Source scan:** [yes/no]

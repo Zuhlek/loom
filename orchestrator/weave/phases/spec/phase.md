@@ -2,23 +2,22 @@
 
 Clarify the seed into specified intent. Own `spec.md` and `decisions.md`.
 
+## Reads
+
+- `methods/grilling.md` — HOW questions get generated, sequenced, answered, and revisited; six "good question" criteria; Foundation-then-Branching staging; triage logic; revisit mechanic; answer-slot format in `decisions.md`; stop rules.
+- `methods/categories.md` — five briefing-block categories (Y/N, Choice, Architecture, Background, Open) with per-category templates, the universal briefing block, and the demote-when-possible triage.
+- `methods/stories.md` — user-story shape, EARS acceptance-criteria patterns, story IDs and status lifecycle, the universal-acceptance-vs-story rule, distillation timing, and parser invariants.
+
 ## Work Loop
 
-1. Read the seed and existing decisions.
-2. **Repository pre-flight (first dispatch only).** Before Foundation, dispatch an Explore subagent and persist its findings into two artifacts:
-   - **`.loom/.cache/repo-digest.md`** — stable architectural facts shared across fabrics: stack, topology, protocol/frame chokepoints, conventions, "where X lives". Guarded by `.loom/.cache/repo-digest.manifest.json` recording `schema_version`, `git_head`, and the sha256 of every file the digest cites. Trust the cached digest verbatim when `schema_version == 1` AND `git_head` matches `git rev-parse HEAD`. Otherwise verify tracked-file sha256s and re-explore ONLY the mismatched files (and anything they cross-reference); replace the affected sections and rewrite the manifest. Build from scratch if either cache file is absent. `tracked_files` records only files the digest actually depends on — not the whole tree.
-   - **`.loom/<project>/repo-context.md`** — seed-relevant slice only: prior art for what the seed touches, integration points, files likely to be edited, out-of-repo facts grilling will need to ask. Cross-reference digest sections rather than restating them.
-
-   Subsequent dispatches read both files rather than re-exploring.
-3. If `quality-review.md` exists from a prior run, address its findings first.
-4. Run Foundation before Branching (see `methods/grilling.md` §2).
-5. Generate questions per `categories.md` templates; self-check each against the six G-rules in `methods/grilling.md` §1 before presenting.
-6. Ask via `AskUserQuestion` directly. Surface format per `methods/grilling.md` §4.
-7. Persist every branching decision in `decisions.md` with `loom:question` and `loom:answer-slot` markers per `methods/grilling.md` §6.
-8. Update `spec.md` in place after each answered decision.
-9. Apply the revisit mechanic per `methods/grilling.md` §5 when a new answer flips a prior recommendation.
-10. **Distill user stories.** When grilling has resolved enough scope, sweep the seed + answered decisions + foundation context and emit `US-NNN` user stories with EARS-format acceptance criteria into `spec.md` `## User stories`, per [`methods/stories.md`](methods/stories.md). Stories are agent-produced distillations — they are NOT user-answered questions. Cross-reference supporting Q-IDs when non-obvious. Universal acceptance conditions go under `## Constraints`, not Stories.
-11. Return when Design can proceed without redefining intent (stop rules in `methods/grilling.md` §7) AND `spec.md` `## User stories` contains at least one valid story (or the project genuinely has none — rare; document in `## Open ambiguity`).
+1. Read the seed and existing decisions. The pre-flight artifacts (`.loom/.cache/repo-digest.md`, `.loom/.cache/repo-digest.manifest.json`, `.loom/<project>/repo-context.md`) are read-only preconditions produced by `/weave`'s repo pre-flight (see `orchestrator/weave/SKILL.md § Repo pre-flight`); read them before Foundation, never produce or refresh them here.
+2. If `quality-review.md` exists from a prior run, address its findings first.
+3. Apply `grilling` — run Foundation before Branching, generate questions, self-check each against the six "good question" criteria, surface via `AskUserQuestion`, persist every branching decision in `decisions.md` with `loom:question` and `loom:answer-slot` markers, and run the revisit mechanic after every resolved answer.
+4. Apply `categories` — pick the cheapest category that fits (bias toward Y/N), open every question with the briefing block (`What's the issue` / `Current behavior` / `Options`), and validate the question against the per-category template before presenting. The recommendation goes LAST so the user is not pre-anchored.
+5. Update `spec.md` in place after each answered decision.
+6. Apply `stories` — when grilling has resolved enough scope, sweep the seed + answered decisions + foundation context and emit `US-NNN` user stories with EARS-format acceptance criteria into `spec.md` `## User stories`. Stories are agent-produced distillations — they are NOT user-answered questions. Cross-reference supporting Q-IDs when non-obvious. Universal acceptance conditions go under `## Constraints`, not Stories.
+7. Return when Design can proceed without redefining intent (the `grilling` stop rules) AND `spec.md` `## User stories` contains at least one valid story (or the project genuinely has none — rare; document in `## Open ambiguity`).
+8. Append a develop-log entry per `orchestrator/weave/methods/develop-log.md`.
 
 ## Rerun Behavior
 
@@ -52,5 +51,3 @@ Marker shape:
 <!-- loom:answer-slot start id=Q01 -->
 <!-- loom:answer-slot end id=Q01 -->
 ```
-
-Per-category briefing templates and validation live in [`methods/categories.md`](methods/categories.md). Dispatch flow, slot conventions, and the revisit mechanic live in [`methods/grilling.md`](methods/grilling.md).

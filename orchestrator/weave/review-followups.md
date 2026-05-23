@@ -8,11 +8,11 @@ Engineering follow-ups for the `/weave` orchestrator. Listed in priority order.
 
 **Fix:** add `lib/weave-checks.py` running these invariants on phase artifacts. Wire it into `/weave` before surfacing the rerun-or-continue gate. Frame as "before user gate", not "before Review" — Review is itself the project-level QC (see `SKILL.md`).
 
-## 2. Real RETURN-schema extractor + validator
+## 2. RETURN-schema enforcement consolidated to the hook
 
-`SKILL.md` § Schema-compliance extraction specifies the extraction rule (locate `### Return block` H3, parse the fenced `yaml`). Currently the orchestrator performs the check inside the agent prompt loop; nothing in code parses the schema.
+RETURN-block schema enforcement runs solely in `hooks/validate-subagent-output.py` as a `SubagentStop` hook. Malformed returns surface as visible `decision: block` reasons; the orchestrator does not maintain a parallel extractor.
 
-**Fix:** implement the extractor once in `lib/`. Reuse from the PostToolUse hook, from `lib/weave-checks.py` (item 1), and from unit tests. Catches malformed RETURN blocks deterministically instead of via re-dispatch.
+**Fix:** extend `hooks/validate-subagent-output.py` to enforce structural invariants beyond the flat-field check (board ↔ `done.md` consistency, "no In Progress without red log", "no Done without smoke evidence when runnable"). One enforcement site; one edit point.
 
 ## 3. Eval thresholds with fail conditions
 

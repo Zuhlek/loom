@@ -36,7 +36,7 @@ Usage: $(basename "$0") [--n N] [--seed PATH] [--answers PATH]
 
   --n N            number of iterations (default: 5)
   --seed PATH      seed file copied into each workspace (default: vendored)
-  --answers PATH   canned answer queue for /weave --answers (default: vendored)
+  --answers PATH   canned answer queue staged into .loom/<project>/.answers.yaml (default: vendored)
   -h, --help       show this help
 EOF
 }
@@ -69,7 +69,7 @@ fi
 cd "$REPO_ROOT"
 mkdir -p .loom
 
-PARSER="$REPO_ROOT/orchestrator/lib/pipeline-parser.py"
+PARSER="$REPO_ROOT/orchestrator/weave/lib/pipeline-parser.py"
 # Per-iteration safety cap. With the autonomy directive one /weave call
 # drives the full lifecycle; this only bounds the rare case where it
 # returns before reaching `Lifecycle state == complete`.
@@ -89,6 +89,15 @@ for i in $(seq 1 "$N"); do
     pipeline="$workspace/pipeline.md"
     mkdir -p "$workspace"
     cp "$SEED" "$workspace/seed.md"
+    # Validate and stage the answer queue under .loom/<project>/.answers.yaml.
+    # The orchestrator no longer accepts `--answers`; the Spec grilling agent
+    # reads the staged file if present.
+    if ! python3 "$REPO_ROOT/orchestrator/evaluation/answer-queue.py" validate "$ANSWERS" >/dev/null 2>&1; then
+        echo "[run-baseline] iteration $i: invalid answer queue $ANSWERS; aborting iteration" >&2
+        failures=$((failures + 1))
+        continue
+    fi
+    cp "$ANSWERS" "$workspace/.answers.yaml"
     echo "[run-baseline] iteration $i / $N — project $project — /weave driving lifecycle" >&2
 
     attempt=0
@@ -103,7 +112,7 @@ for i in $(seq 1 "$N"); do
         if [ "$attempt" -gt 1 ]; then
             echo "[run-baseline]   retry $((attempt - 1)) — /weave returned before Lifecycle complete; re-invoking" >&2
         fi
-        if ! claude --print --append-system-prompt "$AUTONOMY_PROMPT" "/weave $project --answers $ANSWERS"; then
+        if ! claude --print --append-system-prompt "$AUTONOMY_PROMPT" "/weave $project"; then
             echo "[run-baseline] iteration $i: /weave returned non-zero on attempt $attempt; aborting iteration" >&2
             iteration_failed=1
             break

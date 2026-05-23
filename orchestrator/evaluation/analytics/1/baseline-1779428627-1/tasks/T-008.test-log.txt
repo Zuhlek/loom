@@ -1,0 +1,10 @@
+T-008 — Client per-row delete behaviour
+
+# Red: test/client/delete.test.ts absent — delegated handler covered by
+# T-006/T-007 codebase but no acceptance specs for delete UX existed.
+
+# Green
+$ npx vitest run test/client/delete.test.ts
+ ✓ test/client/delete.test.ts (5 tests) 199ms
+ Test Files  1 passed (1)
+      Tests  5 passed (5)

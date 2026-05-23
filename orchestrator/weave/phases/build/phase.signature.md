@@ -112,18 +112,13 @@ Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a
 
 #### `develop-log.md`
 
-- Path: `.loom/<project>/develop-log.md`.
-- Build observations, dual-written with `orchestrator/log/build.md`.
-
-#### `orchestrator/log/build.md`
-
-- Path: `orchestrator/log/build.md`.
-- Build-task log shard (dual-write with `develop-log.md`).
+- Path: `~/.claude/skills/develop-log.md`.
+- One append per Build task entry (`## [YYYY-MM-DD] — <project> — Task: <task-number>`) and one append per smoke / mutation step (`## [YYYY-MM-DD] — <project> — Phase: build`). Single write target; no project-local shadow.
+- Entry body carries a `**Skill:** weave` line as the grouping key read by `/tune review`.
 
 ### State postconditions
 
 - Every implemented task's card has transitioned correctly per the board rules.
-- Per-task locks acquired and released (no orphaned `.locks/T-NNN.lock`).
 - No commits / pushes / deploys / destructive commands have been run.
 
 ## Throws

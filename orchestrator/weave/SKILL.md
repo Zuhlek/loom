@@ -17,56 +17,18 @@ Do not produce phase artifacts yourself. Phase agents own their artifacts.
 
 1. Read `methods/find-project.md` when resolving an existing workspace.
 2. Read `methods/create-project.md` when creating a workspace.
-3. Read `methods/recovery.md` before redispatching after malformed output.
-4. Read the active phase agent's two files (body + signature):
+3. Read the active phase agent's two files (body + signature):
    - `phases/spec/phase.md` + `phases/spec/phase.signature.md`
    - `phases/design/phase.md` + `phases/design/phase.signature.md`
    - `phases/plan/phase.md` + `phases/plan/phase.signature.md`
    - `phases/build/phase.md` + `phases/build/phase.signature.md`
    - `phases/review/phase.md` + `phases/review/phase.signature.md`
-5. Read `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` (available for `spec`, `design`, `plan`, `build`) only when the user opts into a quality check before deciding on a rerun. Review has no `quality-check.md` because Review is itself the project-level quality check.
+4. Read `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` (available for `spec`, `design`, `plan`, `build`) only when the user opts into a quality check before deciding on a rerun. Review has no `quality-check.md` because Review is itself the project-level quality check.
+5. Read `methods/develop-log.md` once per phase agent dispatch; the agent appends a phase entry to `~/.claude/skills/develop-log.md` at end-of-loop, and Build's per-task procedure additionally appends a task entry per task.
 
-The RETURN schema is no longer a sibling YAML file: it is the fenced `yaml` block under `### Return block` inside `phase.signature.md` / `quality-check.signature.md`. See Phase Cycle step 3c below for the extraction rule.
+The RETURN schema is the fenced `yaml` block under `### Return block` inside `phase.signature.md` / `quality-check.signature.md`. Phase RETURN-block schema is enforced solely by `hooks/validate-subagent-output.py`; failures surface as visible hook blocks rather than silent re-dispatch.
 
-## `--answers <path>` Flag (Non-Interactive Spec)
-
-At workspace-resolution time (before the Phase Cycle starts), parse
-`$ARGUMENTS` for a `--answers <path>` flag. Treat it as optional, position-
-independent, and case-sensitive (exactly `--answers`). The flag's value is a
-filesystem path to a `.answers.yaml` file (strict-subset YAML per
-`orchestrator/lib/answer-queue.py`).
-
-Lifecycle:
-
-1. **Stage.** If `--answers <path>` is present, copy the file verbatim to
-   `.loom/<project>/.answers.yaml` (overwrite any prior copy). Do this AFTER
-   the workspace exists and BEFORE the first Spec dispatch. If the source
-   path does not exist, fail dispatch with a clear `missing-file:` error
-   before any Task is started (do not silently fall back to interactive
-   mode — the user asked for non-interactive and got a typo).
-
-2. **Inert outside Spec.** The flag changes nothing for Design / Plan /
-   Build / Review. If `/weave` resumes a project whose `Current phase` is
-   not Spec, parse and ignore the flag silently. (Non-Spec phases never
-   call `AskUserQuestion` for question/answer flow, so the staged file is
-   never consulted by them.)
-
-3. **Cleanup.** After Spec returns (whether the user picks `Continue`,
-   `Rerun phase`, or any other path through the gate), delete
-   `.loom/<project>/.answers.yaml`. This ensures a manual re-run of Spec
-   (via the rerun gate, or a later `/weave` without `--answers`) re-enters
-   interactive mode rather than replaying stale answers.
-
-4. **Re-staging on rerun.** If the user picks `Rerun phase` at the Spec
-   gate AND `--answers` was supplied for this `/weave` invocation, re-stage
-   the file before the rerun dispatch (the post-Spec cleanup in step 3 will
-   have removed it). If `--answers` was NOT supplied, the rerun proceeds
-   interactively.
-
-Consumption of the staged file lives entirely inside the Spec grilling
-agent body (`phases/spec/methods/grilling.md`). The `/weave` orchestrator
-only stages and cleans up; it never reads or peeks `.answers.yaml`
-itself.
+The `--answers` flag is no longer accepted by `/weave`; the eval harness stages `.answers.yaml` directly under `.loom/<project>/` before invoking `/weave`. Unknown flags are silently ignored. The Spec grilling agent's existing read-if-present behaviour on `.loom/<project>/.answers.yaml` is preserved, so a harness-staged file is consumed as before.
 
 ## State Contract
 
@@ -103,6 +65,8 @@ Rules the orchestrator enforces on every dispatch:
 
 A dispatch that interleaves dynamic identifiers into the head, or that paraphrases the body file's instructions into wrapper boilerplate, is malformed and re-issued. The orchestrator never inlines seed content, never recites the answer queue, and never embeds the user's absolute filesystem path; the subagent inherits `cwd` from the orchestrator and resolves paths from there.
 
+> Note: this contract assumes the API-level prompt cache spans separate Task subagent dispatches sharing identical prefixes. The premise is asserted (working in practice per user observation) but not instrumented; a follow-up `/weave` rerun + transcript inspection for `cache_read_input_tokens > 0` is welcome but not blocking.
+
 ### List-ordering policy
 
 Lists in prompt files come in two flavours:
@@ -112,21 +76,52 @@ Lists in prompt files come in two flavours:
 
 The policy lives here so future authors keep both kinds of list deterministic across re-renders.
 
+## Repo pre-flight
+
+Runs on every `/weave` entry before the Phase Cycle. Validates the shared repo digest cache and, on miss, dispatches a single `Explore` Task that produces all three pre-flight artifacts. The cache files themselves are the only persistence layer.
+
+Procedure (procedure-ordered list — preserve step order on any future edit):
+
+1. Read `.loom/.cache/repo-digest.manifest.json`. Treat absent file or JSON parse error as a cache miss.
+2. Run `git rev-parse HEAD` to capture the current repo head. A non-zero exit fails pre-flight with a clear `git-rev-parse-failed` error before any Task is started; the orchestrator does not enter the Phase Cycle.
+3. Evaluate the cache-valid predicate. The cache is valid when ALL of the following hold:
+   - `manifest.schema_version == 1`.
+   - `manifest.git_head` equals the captured `git rev-parse HEAD`.
+   - For every `(path, sha256)` pair in `manifest.tracked_files`: the file exists on disk AND its current sha256 equals the recorded sha256. A missing tracked file is drift, not a hit.
+4. Branch on the predicate:
+   - **Full match → skip Explore.** Proceed directly to the Phase Cycle. The cached digest is trusted verbatim.
+   - **Any mismatch → dispatch a single `Explore` Task.** One Task call, one briefing covering both the cross-fabric digest and the per-project context. The briefing requires the Task to produce all three artifacts in the same run:
+     - `.loom/.cache/repo-digest.md`
+     - `.loom/.cache/repo-digest.manifest.json`
+     - `.loom/<project>/repo-context.md`
+5. After the Task returns, verify each of the three artifact paths exists. A missing artifact fails pre-flight with a clear error naming the absent path; the orchestrator does not enter the Phase Cycle.
+6. Proceed to the Phase Cycle.
+
+Failure modes:
+
+| Failure | Detection | Handling |
+| --- | --- | --- |
+| Manifest JSON malformed | Parse error during step 1 | Treat as cache miss; dispatch full Explore (overwrites manifest). |
+| `git rev-parse HEAD` fails | Non-zero exit in step 2 | Fail pre-flight before any Task is started. |
+| Tracked file missing on disk | Read fails during step 3's sha256 recomputation | Treat as drift; full Explore rebuild. |
+| Explore Task returns without all three artifacts | Step 5 artifact check | Fail pre-flight with the missing artifact path; do not enter Phase Cycle. |
+
+The pre-flight signal IS the cache. Every `/weave` entry re-evaluates the predicate; in steady state the work is two file reads plus one `git rev-parse`.
+
 ## Phase Cycle
 
 ```
-1. Resolve project, read pipeline.md, and write the resolved project name to `.loom/.active` (single line, no trailing newline-only content). The PostToolUse hook (`orchestrator/lib/tag-subagent-phase.py`) reads this to attribute each dispatched subagent's transcript to the active phase.
+1. Resolve project, read pipeline.md, and write the resolved project name to `.loom/.active` (single line, no trailing newline-only content). The PostToolUse telemetry hook reads this to attribute each dispatched subagent's transcript to the active phase (see "Telemetry hooks" below).
 2. If pipeline.md.Lifecycle state == complete: report the lifecycle as done and exit.
 3. Loop:
    a. Select the current phase.
    b. Dispatch the matching phase agent in a fresh Task session. The user-turn prompt is the two-band concatenation (stable head + dynamic tail) defined in `### Dispatch concatenation` below; the cached-prefix boundary contract in `## Conventions` is binding on every dispatch. Every phase, Build included, is one dispatch per phase entry; the Build agent runs its per-task work loop inline within that single session (see `phases/build/phase.md` and `lifecycle-architecture.md` §3).
-   c. Ensure return schema compliance: parse the RETURN block from the Task's reply and check it against the fenced `yaml` schema embedded in `phases/<phase>/phase.signature.md` under `## Returns` › `### Return block` (see "Schema-compliance extraction" below). This check is silent — on mismatch, re-dispatch the same agent with the schema mismatch as the rerun instruction (do not surface to the user). See `methods/recovery.md` for redispatch policy.
-   d. Surface the rerun-or-continue decision (see below) via AskUserQuestion.
-   e. On continue: update pipeline.md, advance phase, loop to (a). No
+   c. Surface the rerun-or-continue decision (see below) via AskUserQuestion. RETURN-block schema compliance is enforced by `hooks/validate-subagent-output.py` as a `SubagentStop` hook — malformed returns surface as visible hook blocks; the orchestrator does not run a parallel extractor.
+   d. On continue: update pipeline.md, advance phase, loop to (a). No
       live evaluation-row emit happens during the run; cost/usage figures
-      are produced post-hoc by `orchestrator/lib/transcript-harvest.py`
-      reading the session transcripts on disk after /weave finishes.
-   f. On rerun: re-dispatch the same phase agent with prior artifacts (+ optional Quality Check findings), loop to (c).
+      are produced post-hoc by the telemetry harvester reading the session
+      transcripts on disk after /weave finishes (see "Telemetry hooks" below).
+   e. On rerun: re-dispatch the same phase agent with prior artifacts (+ optional Quality Check findings), loop to (b).
 4. On Review continue: set Lifecycle state = complete, report and exit.
 ```
 
@@ -172,22 +167,24 @@ If either `<role>.md` or `<role>.signature.md` is missing for a callable about t
 
 The merged prompt is the dispatched Task's user turn only. The orchestrator never inlines it into its own context — the Task-isolation property is preserved.
 
-### Schema-compliance extraction
-
-For the silent schema-compliance check on a callable's RETURN block:
-
-1. Read `phases/<phase>/<role>.signature.md`.
-2. Locate the `### Return block` H3 inside the `## Returns` H2.
-3. Read the first fenced code block whose info-string is `yaml` that follows `### Return block`, before the next H2 or H3.
-4. The body of that fence (excluding the fence lines themselves) is the schema text. Parse as YAML and check the RETURN block against it.
-
-Exactly one fenced `yaml` block lives under `### Return block`. The fence info-string is literally `yaml` (lowercase, no modifiers). On parse failure or schema-compliance failure, `methods/recovery.md`'s silent-redispatch policy kicks in.
-
 The orchestrator runs the lifecycle to completion in one `/weave` invocation. It does not exit between phases — the rerun-or-continue gate is a regular `AskUserQuestion`, not a session boundary. The orchestrator exits only when:
 
 - `Lifecycle state` becomes `complete` (Review→done).
 - The user cancels at a gate `AskUserQuestion` (treat as "pause"; `pipeline.md` is preserved and a later `/weave` resumes from the current phase).
-- A hard failure occurs (malformed RETURN that recovery cannot fix, workspace unresolvable, etc.).
+- A hard failure occurs (malformed RETURN that the SubagentStop hook blocks, workspace unresolvable, etc.).
+
+### Telemetry hooks
+
+Only relevant if running with the evaluation harness. Loom's telemetry / eval substrate lives under `orchestrator/lib/telemetry/`:
+
+- `tag-subagent-phase.py` — PostToolUse hook; tags each dispatched subagent's transcript with the active phase by reading `.loom/.active`.
+- `transcript-harvest.py` — post-hoc walker; produces `usage.jsonl` from each session's `subagents/` directory.
+- `eval-aggregate.py` — folds usage rows into `usage.md` per workspace.
+- `retag-sidecars.py` — repair tool for retagging `.phase` sidecars after a phase change.
+- `session-store.sh` — sourced by the SessionStart / Stop hooks (`auto-advance.sh`, `resume-on-start.sh`) to record session ownership.
+- `artifacts.sh` — PostToolUse helper; rebuilds `.loom/<project>/artifacts.json` after Write/Edit/MultiEdit.
+
+A packager producing a slim loom profile can `rm -rf orchestrator/lib/telemetry/` and every `/weave` operation that does not run analysis continues to function.
 
 ## Rerun-or-Continue Decision (Human-In-The-Loop)
 

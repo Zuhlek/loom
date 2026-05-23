@@ -1,0 +1,12 @@
+T-004 — HTTP routes for list/create/delete
+
+# Red (pre-implementation)
+$ npx vitest run test/server/routes.test.ts
+FAIL Error: Failed to load url ../../src/server/app
+(no app.ts yet)
+
+# Green
+$ npx vitest run test/server/routes.test.ts
+ ✓ test/server/routes.test.ts (11 tests) 116ms
+ Test Files  1 passed (1)
+      Tests  11 passed (11)

@@ -1,6 +1,7 @@
 # Canned answer queue for the bookmarks baseline seed.
-# Consumed in order by the Spec grilling agent when /weave is invoked
-# with --answers <this-file>. Each entry pre-answers one Q<n> the agent
+# Consumed in order by the Spec grilling agent. The eval harness
+# (run-baseline.sh) stages this file as `.loom/<project>/.answers.yaml`
+# before invoking /weave; each entry pre-answers one Q<n> the agent
 # would otherwise surface via AskUserQuestion.
 #
 # These answers favour the minimal-surface direction from the seed:

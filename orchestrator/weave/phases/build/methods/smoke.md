@@ -42,5 +42,4 @@ Inline procedure the Build phase agent applies once near the end of its session,
 | --- | --- |
 | `.loom/<project>/smoke-report.md` | One entry per check (PASS / FAIL / SKIPPED with reason). |
 | `.loom/<project>/smoke-screenshots/<feature>.png` | One PNG per UI-visible feature exercised, when UI changed. |
-| `.loom/<project>/develop-log.md` | Smoke observations, dual-written. |
-| `orchestrator/log/build.md` | Matching smoke entry for the global log shard. |
+| `~/.claude/skills/develop-log.md` | One `## [YYYY-MM-DD] — <project> — Phase: build` entry summarising the smoke pass, with `**Skill:** weave`. |

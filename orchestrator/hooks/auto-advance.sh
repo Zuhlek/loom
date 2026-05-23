@@ -7,9 +7,8 @@ if [ -n "$input" ] && [ "$(printf '%s' "$input" | jq -r '.stop_hook_active // fa
 fi
 
 hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-lib_dir="$(cd "$hook_dir/../lib" && pwd)"
-parser="$lib_dir/pipeline-parser.py"
-store_lib="$hook_dir/../lib/session-store.sh"
+parser="$(cd "$hook_dir/../weave/lib" && pwd)/pipeline-parser.py"
+store_lib="$hook_dir/../lib/telemetry/session-store.sh"
 
 scan_pending_candidate() {
     local loom_root="$1"

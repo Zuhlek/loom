@@ -12,13 +12,12 @@ I/O signature for the top-level Loom orchestrator. The orchestrator coordinates 
 
 | Name | Source | Required | Description |
 | --- | --- | --- | --- |
-| `$ARGUMENTS` | Slash command argument | optional | Project name, ticket ID, or free text used to resolve or create a workspace; may include the flag `--answers <path>` (see below) |
-| `--answers <path>` | Parsed from `$ARGUMENTS` | optional | Path to a `.answers.yaml` file (strict-subset YAML per `lib/answer-queue.py` / ADR-006). When present, the orchestrator copies the file to `.loom/<project>/.answers.yaml` before dispatching the Spec phase; the Spec grilling agent consumes from it instead of surfacing `AskUserQuestion`. The orchestrator deletes the staged copy after Spec returns so re-runs do not replay stale answers. Silently inert for any phase other than Spec. |
+| `$ARGUMENTS` | Slash command argument | optional | Project name, ticket ID, or free text used to resolve or create a workspace. Unknown flags are silently ignored — the eval harness pre-stages `.loom/<project>/.answers.yaml` via `evaluation/answer-queue.py` rather than passing an orchestrator flag |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | required when resuming | Canonical state file; absence implies new workspace |
 | `seed.md` | `.loom/<project>/seed.md` | required for new projects | Raw user input that seeds the Spec phase |
 | Phase agent body | `phases/<current-phase>/phase.md` | required at dispatch | Body half of the phase agent's system prompt |
 | Phase agent signature | `phases/<current-phase>/phase.signature.md` | required at dispatch | Signature half of the phase agent's system prompt, carrying trigger, params, returns (including the embedded RETURN-block YAML schema), and throws |
-| Orchestrator methods | `methods/find-project.md`, `methods/create-project.md`, `methods/recovery.md` | conditional | Orchestrator-internal skills loaded per Load Order in `SKILL.md` |
+| Orchestrator methods | `methods/find-project.md`, `methods/create-project.md` | conditional | Orchestrator-internal skills loaded per Load Order in `SKILL.md` |
 | Phase quality-check agent | `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` | opt-in only | Loaded when user picks `Run quality check` (available for Spec, Design, Plan, Build — 4 of 5 phases; Review has no quality-check agent because Review is itself the project-level quality check) |
 
 ### State preconditions
@@ -34,7 +33,7 @@ The orchestrator does not own phase artifacts. It owns state transitions and the
 
 ### Return block
 
-The `/weave` orchestrator does not itself return a structured block to a caller — it is a user-invoked slash command. The phase agents it dispatches each return their own RETURN block conforming to the schema embedded in their `phase.signature.md`. The orchestrator's silent schema-compliance check (per `SKILL.md` Phase Cycle 3c) reads each phase agent's schema from `phases/<phase>/phase.signature.md` › `## Returns` › `### Return block`.
+The `/weave` orchestrator does not itself return a structured block to a caller — it is a user-invoked slash command. The phase agents it dispatches each return their own RETURN block conforming to the schema embedded in their `phase.signature.md`. RETURN-block schema enforcement is the responsibility of the `SubagentStop` hook (`hooks/validate-subagent-output.py`), which blocks malformed returns visibly rather than via an orchestrator-side extractor.
 
 ```yaml
 # /weave is a slash-command entrypoint, not a Task callable.
@@ -74,7 +73,7 @@ Each per-phase rerun-or-continue gate is a regular `AskUserQuestion` surfaced by
 
 | Condition | Orchestrator response |
 | --- | --- |
-| Phase RETURN block fails schema-compliance check | Silently re-dispatch per `methods/recovery.md` with the schema mismatch as the rerun instruction; do not advance state, do not surface to the user unless redispatch also fails |
+| Phase RETURN block fails schema-compliance check | `SubagentStop` hook (`hooks/validate-subagent-output.py`) blocks the dispatch with a `decision: block` reason; the user sees the failure and decides whether to rerun |
 | User cancels at a gate `AskUserQuestion` | Pause: exit cleanly with pipeline state preserved at the current phase; a later `/weave` invocation resumes from there |
 | Workspace cannot be resolved or created | Dispatch `methods/find-project.md` or `methods/create-project.md` per Load Order; if both fail, report to user and exit |
 | Phase quality-check agent returns `findings` | Surface findings in chat; ask the user to choose `Continue` or `Rerun phase`; do not act unilaterally |
@@ -86,7 +85,6 @@ Each per-phase rerun-or-continue gate is a regular `AskUserQuestion` surfaced by
 
 - [`methods/find-project.md`](methods/find-project.md) — resolve an existing `.loom/<name>/` workspace from arguments or active workspaces.
 - [`methods/create-project.md`](methods/create-project.md) — bootstrap a new workspace with `pipeline.md` + `seed.md`.
-- [`methods/recovery.md`](methods/recovery.md) — re-dispatch a phase agent after malformed RETURN.
 
 ## Phases dispatched
 

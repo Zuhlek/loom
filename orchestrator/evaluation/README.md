@@ -33,7 +33,7 @@ orchestrator/evaluation/
 ├── analyze.py                  ← harvest pending + render dashboard
 ├── chartjs/                    ← vendored Chart.js (no CDN)
 ├── baseline-seed.md            ← vendored bookmarks seed
-├── baseline-answers.yaml       ← canned --answers queue
+├── baseline-answers.yaml       ← canned answer queue staged into .loom/<project>/.answers.yaml
 ├── analysis.html               ← rendered output (gitignore-able)
 └── analytics/                  ← filed runs, grouped by version
     ├── baseline/
@@ -91,7 +91,7 @@ Exit zero on conformance; non-zero with offending rows on violation.
 
 `status: "crashed"` rows have `tokens: null` and `duration_autonomous_ms: null`,
 and are excluded from aggregation means. `status: "untagged"` rows are
-emitted when the PostToolUse hook (`orchestrator/lib/tag-subagent-phase.py`)
+emitted when the PostToolUse hook (`orchestrator/lib/telemetry/tag-subagent-phase.py`)
 did not write a `.phase` sidecar for that subagent — they carry usage
 data but no `phase`, and are excluded from per-phase rollups.
 

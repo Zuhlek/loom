@@ -3,7 +3,7 @@
 #
 # The eval harness no longer relies on a SubagentStop hook to capture usage
 # data. All cost/usage figures are produced post-hoc by reading Claude Code's
-# session transcripts on disk via `orchestrator/lib/transcript-harvest.py`.
+# session transcripts on disk via `orchestrator/lib/telemetry/transcript-harvest.py`.
 # This script just verifies the CLI prerequisites and that the test suite
 # is green. Idempotent — safe to re-run.
 set -uo pipefail

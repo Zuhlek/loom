@@ -45,8 +45,8 @@ from typing import Any
 
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-HARVESTER = _SCRIPT_DIR.parent / "lib" / "transcript-harvest.py"
-AGGREGATOR = _SCRIPT_DIR.parent / "lib" / "eval-aggregate.py"
+HARVESTER = _SCRIPT_DIR.parent / "lib" / "telemetry" / "transcript-harvest.py"
+AGGREGATOR = _SCRIPT_DIR.parent / "lib" / "telemetry" / "eval-aggregate.py"
 REPO_ROOT = _SCRIPT_DIR.parent.parent
 
 

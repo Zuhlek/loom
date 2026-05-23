@@ -2,6 +2,12 @@
 
 Implement every ready task on the board, verify the runnable result, and aggregate evidence. Own build artifacts and repository changes for the entire phase within this single session.
 
+## Reads
+
+- `methods/task.md` — per-task Red → Implement → Green → Done procedure, the three-attempt cap, the done-report schema, and the hard rules (no test weakening, no out-of-scope edits without recording, no destructive commands).
+- `methods/mutation.md` — per-task test-strength probe: select five to ten high-value mutation targets, apply one at a time, mark KILLED / SURVIVED / SURVIVED->KILLED / UNKILLABLE, add tests for real survivors without modifying existing tests.
+- `methods/smoke.md` — runnable verification: build-artifacts completeness, app-start, key endpoints / commands, UI screenshots when UI changed, shared-state integrity. Produces `smoke-report.md`.
+
 ## Work Loop
 
 0. **Verification-environment pre-flight.** Read `plan.md.Verification environment` (see Plan agent spec). Compare the declared environment against this agent's actual capability:
@@ -16,12 +22,12 @@ Implement every ready task on the board, verify the runnable result, and aggrega
 
    a. Read `tasks/T-NNN.md`.
    b. Transition the card in `board.md` from `Backlog` to `In Progress` (atomic-write discipline below).
-   c. Apply `methods/task.md` — the Lock → Red → Implement → Green → Done procedure for this single task. The procedure is inline within this session; do not dispatch it as a subagent.
+   c. Apply `task` — the Lock → Red → Implement → Green → Done procedure for this single task. The procedure is inline within this session; do not dispatch it as a subagent.
    d. Transition the card per the outcome (table below).
-   e. When `tests.md` declares `**Mutation Testing:** yes` at the top AND the task reached `green`, apply `methods/mutation.md` for this task. Inline within this session.
+   e. When `tests.md` declares `**Mutation Testing:** yes` at the top AND the task reached `green`, apply `mutation` for this task. Inline within this session.
    f. Continue to the next ready task. As earlier tasks reach `Done`, previously-blocked tasks may become ready — re-read `board.md` between iterations to pick them up.
 
-3. **Smoke.** When the project is runnable (per `design.md` / `plan.md`), apply `methods/smoke.md` once after the per-task loop is exhausted. Whole-project verification; produces `smoke-report.md`. Inline within this session.
+3. **Smoke.** When the project is runnable (per `design.md` / `plan.md`), apply `smoke` once after the per-task loop is exhausted. Whole-project verification; produces `smoke-report.md`. Inline within this session.
 
 4. Transition any cards from `Review` to `Done` per the smoke evidence.
 
@@ -43,19 +49,17 @@ When the orchestrator re-dispatches this agent after a user-initiated rerun:
 | Trigger | Source column | Target column | Card annotation |
 | --- | --- | --- | --- |
 | Picking up a ready task | `Backlog` | `In Progress` | (none) |
-| `methods/task.md` reaches green | `In Progress` | `Review` | (none) |
+| `task` reaches green | `In Progress` | `Review` | (none) |
 | Smoke evidence (and mutation when enabled) passes for the task | `Review` | `Done` | (none) |
-| `methods/task.md` exhausts the three-attempt cap | `In Progress` | `In Progress` | `[failed]` immediately after the ID |
-| `methods/task.md` surfaces a contradiction (hitl-block) | `In Progress` | `Backlog` | `[HITL-blocked: <one-line reason>]` immediately after the ID |
+| `task` exhausts the three-attempt cap | `In Progress` | `In Progress` | `[failed]` immediately after the ID |
+| `task` surfaces a contradiction (hitl-block) | `In Progress` | `Backlog` | `[HITL-blocked: <one-line reason>]` immediately after the ID |
 | Blocker for a backlog task moves to `Done` and unblocks it | `Backlog` | `Backlog` | Remove `(blocked by ...)` segment |
 
-### Atomic-write discipline (agent-enforced)
+### Direct write
 
-These are agent-discipline rules, not framework-enforced mechanisms: `orchestrator/lib/atomic-write.sh` and `orchestrator/lib/locks.sh` are available as libraries, but no hook enforces their invocation. This agent MUST call them from `Bash` tool calls per the contract below.
+The Build agent mutates `board.md` and `tasks/T-NNN.*` files with direct `Write` / `Edit` tool calls. One Task dispatch per phase entry (see `weave/SKILL.md` Phase Cycle 3b) guarantees a single writer per workspace within a Build session; no lock or atomic-write wrapper is required.
 
-- Every `board.md` mutation goes through `orchestrator/lib/atomic-write.sh`. Never partial-write the file.
-- Acquire the project lock via `orchestrator/lib/locks.sh acquire <project> build` before any board mutation; release after.
-- Per-task locks (`orchestrator/lib/locks.sh acquire-task <project> T-NNN`) gate the implementation work, not the board mutation. The `methods/task.md` procedure handles the per-task lock lifecycle.
+If a future project introduces parallel `/weave` sessions on one workspace, re-introduce locks + atomic-write helpers in that project's scope.
 
 ### Rerun-or-continue surface
 

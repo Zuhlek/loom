@@ -6,7 +6,7 @@ set -uo pipefail
 
 _HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _LIB_DIR="$(cd "$_HOOK_DIR/../lib" && pwd)"
-. "$_LIB_DIR/artifacts.sh" 2>/dev/null || exit 0
+. "$_LIB_DIR/telemetry/artifacts.sh" 2>/dev/null || exit 0
 
 root="${LOOM_ROOT:-.loom}"
 input="$(cat 2>/dev/null || true)"

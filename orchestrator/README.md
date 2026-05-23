@@ -16,7 +16,7 @@ State file: `.loom/<project>/pipeline.md`
 | Design | Design Structuring Agent | `design.md`, optional `mockup/` |
 | Plan | Work Graph Agent | `plan.md`, `board.md`, `task.md`, `tests.md`, `tasks/T-*.md` |
 | Build | Build Phase Agent | implementation, task logs, done reports, `test-report.md` |
-| Review | Review Audit Agent | `review.md`, `feedback.md`, `develop-log.md` |
+| Review | Review Audit Agent | `review.md`, `feedback.md` |
 
 After every phase the orchestrator surfaces a rerun-or-continue decision to the user. Reruns are never automatic. Four of the five phases (Spec, Design, Plan, Build) additionally offer an opt-in Quality Check subagent that analyses artifacts for holes, blind spots, and contradictions to help the user decide whether a rerun is worth the token burn. Review is itself the project-level quality check and has no separate Quality Check subagent.
 
@@ -41,7 +41,6 @@ Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatche
 | `hooks/` | Claude Code hooks |
 | `types/` | Domain guidance loaded by Type hint |
 | `templates/` | Project templates (seed) |
-| `log/` | Learning shards appended by Review |
 | `principles.md` | Engineering principles P1–P7 |
 
 ## Phase folder convention

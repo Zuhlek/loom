@@ -75,12 +75,6 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 - Path: `.loom/<project>/feedback.md`.
 - Must capture user approval, requested change, rejection, or risk acceptance when asked.
 
-#### `develop-log.md`
-
-- Path: `.loom/<project>/develop-log.md`.
-- Must record process observations worth later curation.
-- Learning entries must use the heading `## YYYY-MM-DD - <project> - <topic>`.
-
 #### `review-verdict.json`
 
 - Path: `.loom/<project>/review-verdict.json`.
@@ -98,27 +92,12 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 
 Counts are non-negative integers. `verdict` is `FAIL` whenever `blockers > 0`; otherwise `PASS`. Values must equal the counts in the RETURN block (`blockers`, `major`, `minor`) and the count of `## Note` findings in `review.md` (`note`).
 
-#### Global learning-shard appends (dual-write)
+#### `develop-log.md`
 
-Review writes learning observations to two surfaces. Both are required.
-
-| Stream | Path | Purpose |
-| --- | --- | --- |
-| Project-local | `.loom/<project>/develop-log.md` | Raw observations for this project |
-| Global shard | `orchestrator/log/{audit,build,feedback,ideate}.md` | Curation source for `/tune review` |
-
-For every learning observation written to `develop-log.md`, a matching `## YYYY-MM-DD - <project> - <topic>` entry must exist in the appropriate `orchestrator/log/<shard>.md`:
-
-| Topic | Shard |
-| --- | --- |
-| Spec / Design / Plan process notes | `ideate.md` |
-| Build / Smoke / Mutation process notes | `build.md` |
-| Cross-phase audit observations | `audit.md` |
-| User-pushback or feedback patterns the user surfaced | `feedback.md` |
-
-If the user opts into a Quality Check on Review, the check verifies that every project-local learning entry has a matching global-shard entry. A missing append is a `major` finding.
-
-Review-cycle findings (the `review.md` content itself) stay project-local — they are not duplicated to the global shards.
+- Path: `~/.claude/skills/develop-log.md`.
+- One append per Review process observation worth later curation. Single write target; no project-local shadow.
+- Entry header: `## [YYYY-MM-DD] — <project> — Phase: review`.
+- Entry body carries a `**Skill:** weave` line as the grouping key read by `/tune review`.
 
 ## Throws
 

@@ -6,7 +6,7 @@
 set -uo pipefail
 
 HOOK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/auto-advance.sh"
-STORE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/session-store.sh"
+STORE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/telemetry/session-store.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

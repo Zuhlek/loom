@@ -68,7 +68,7 @@ size-limit exceeded, decode error).
 ## Phase tagging
 
 `phase` is sourced from the `agent-<uuid>.phase` sidecar that the
-PostToolUse hook in `orchestrator/lib/tag-subagent-phase.py` writes next
+PostToolUse hook in `orchestrator/lib/telemetry/tag-subagent-phase.py` writes next
 to each dispatched subagent's transcript. The hook reads the active
 project from `.loom/.active` and the current phase from
 `.loom/<project>/pipeline.md`'s `Current phase` block, then writes one

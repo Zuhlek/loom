@@ -73,7 +73,7 @@ shows for the latest run.
 
 ## 3. The harvester only sees depth-1 subagents — "before" was undercounted
 
-`orchestrator/lib/transcript-harvest.py:279-297` walks
+`orchestrator/lib/telemetry/transcript-harvest.py:279-297` walks
 `~/.claude/projects/<encoded-cwd>/<session-uuid>/subagents/` — only the
 orchestrator's own subagents directory. Nested `Task` calls from inside
 a subagent live under that subagent's own session dir and are **not

@@ -1,0 +1,12 @@
+T-003 — Server validation rules + error taxonomy
+
+# Red (pre-implementation)
+$ npx vitest run test/server/validation.test.ts
+FAIL  Error: Failed to load url ../../src/server/validation
+(module not yet present)
+
+# Green
+$ npx vitest run test/server/validation.test.ts
+ ✓ test/server/validation.test.ts (20 tests) 3ms
+ Test Files  1 passed (1)
+      Tests  20 passed (20)

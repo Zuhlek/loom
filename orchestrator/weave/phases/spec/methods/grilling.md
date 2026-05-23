@@ -4,6 +4,23 @@ Spec-phase grilling discipline. Every question is a structured artifact validate
 
 ---
 
+## 0. Mandate
+
+The Spec agent's posture is **relentless**: keep asking until shared understanding is established, and **traverse every branch of the decision tree** before returning. An unasked branch is an unresolved branch, and an unresolved branch ships ambiguity into Design.
+
+The decision tree is whatever the seed + Foundation answers + prior Branching answers reveal as still-open scope, open architecture choices, and open trade-offs. Each branch is a question; each question gets an answer, a `[push back]`, or an explicit `[stop]` from the user — never a silent skip from the agent.
+
+Two consequences for the rules that follow:
+
+1. **Agent-initiated early bail is forbidden while branches remain.** The triage logic (§3) exits only at step 4 — when Foundation, revisit, and Branching queues are all empty. Ambiguity that "feels stable" is not a stop condition; an empty decision tree is.
+2. **Only the user declares "enough"** (§7 user-initiated stop, or the rerun-or-continue gate). The agent does not decide on the user's behalf that further questioning is futile.
+
+The six G-rules (§1) still apply — relentless does not mean asking bad questions, leading questions, or asking the same thing twice. It means: every decision-relevant, self-contained, briefed, opinionated, singular, decidable-now branch gets a question, and every question gets an answer.
+
+*Framing follows Mat Peacock's principle that a spec phase must traverse every branch of the decision tree, not stop at the first plausible understanding.*
+
+---
+
 ## 1. Six "good question" criteria
 
 Self-check before presenting any question:
@@ -12,10 +29,10 @@ Self-check before presenting any question:
 |---|---|---|
 | **G1** | Decision-relevant. A different answer changes the next step. | If both answers lead to the same plan, skip the question. |
 | **G2** | Self-contained. | If you have to say "as we discussed in Q2…", restructure or merge. |
-| **G3** | Briefed. Briefing block complete and visible up-front. | If the user has to ask `[explain more]` to understand the issue, the cause, or the option trade-offs, the briefing was lazy. See §1.5 and [`categories.md`](categories.md). |
+| **G3** | Briefed. Briefing block complete and visible up-front. | If the user has to ask `[explain more]` to understand the issue, the cause, or the option trade-offs, the briefing was lazy. See §1.5. |
 | **G4** | Opinionated. Recommendation included with reasoning. | Never *"what do you think?"*. Always *"I recommend X because Y."* If the recommendation is *"either is fine"*, this isn't a decision — skip it. |
 | **G5** | Singular. One thing at a time. | If the question uses "and" or "or", split it. |
-| **G6** | Decidable now. | If only the codebase can answer it, dispatch an `Explore` subagent — don't ask the user. |
+| **G6** | Decidable now. | If only the codebase can answer it, investigate inline using Read/Grep/Bash — don't ask the user. |
 
 A question failing any criterion is regenerated, not presented.
 
@@ -23,7 +40,7 @@ A question failing any criterion is regenerated, not presented.
 
 ## 1.5. Briefing block discipline
 
-Every question — Y/N, Choice, Architecture, Background, Open — opens with a three-section briefing the user reads before answering. The full template lives in [`categories.md`](categories.md) §"Briefing block". The discipline:
+Every question opens with a briefing block: three labelled sections (`What's the issue:`, `Current behavior / what's causing it:`, `Options:`) in plain text, followed by `Recommendation:` and `Why not the others:` lines. The Spec agent loads the briefing-block template alongside this file at session start and self-validates each question against it before presenting. The discipline:
 
 | Rule | Why |
 |---|---|
@@ -49,7 +66,7 @@ Grilling is **staged** — a direct application of the Double Diamond framework.
 
 Gather context. **No decisions yet.**
 
-Read `.loom/.cache/repo-digest.md` AND `repo-context.md` (both produced by the Spec agent's repository pre-flight — see `phase.md` Work Loop step 2) before generating Foundation questions. The digest carries stable cross-fabric facts; `repo-context.md` carries the seed-relevant slice. Never ask the user for a fact either file states directly — treat them as established. Foundation questions fill the gaps the repo cannot answer (team context, value bar, constraints not in code).
+Read `.loom/.cache/repo-digest.md` AND `repo-context.md` (both produced by the `/weave` orchestrator's repo pre-flight — see `orchestrator/weave/SKILL.md § Repo pre-flight`) before generating Foundation questions. The digest carries stable cross-fabric facts; `repo-context.md` carries the seed-relevant slice. Never ask the user for a fact either file states directly — treat them as established. Foundation questions fill the gaps the repo cannot answer (team context, value bar, constraints not in code).
 
 - Existing situation — current architecture, team, prior choices, integration points.
 - Value bar — what does "done" mean? what is the success criterion?
@@ -69,7 +86,7 @@ Explore the decision space.
 
 Typical categories: **Y/N**, **Choice**, **Architecture**. Foundation answers inform every Branching recommendation.
 
-**Exit Branching when:** ambiguity stops surfacing, OR the user signals "enough" (clicks `Stop`).
+**Exit Branching when:** triage (§3) returns "otherwise" — every branch in the decision tree has been asked or marked obsolete by a prior answer — OR the user signals "enough" (clicks `Stop`). Per §0, ambiguity "feeling stable" is not a stop condition; an empty decision tree is.
 
 ### Why staging matters
 
@@ -84,7 +101,7 @@ The agent MAY re-enter Foundation mid-Branching if a Branching question reveals 
 ```
 1. Are there foundation_topics_remaining?  → ask one.
 2. Are there active_revisits queued?       → handle one (see §5).
-3. Are there branching_topics_remaining?   → ask one (per categories.md triage).
+3. Are there branching_topics_remaining?   → ask one (cheapest viable category first).
 4. Otherwise:                              → return artifacts to the orchestrator.
 ```
 
@@ -96,61 +113,11 @@ The Spec Grilling Agent surfaces every question via `AskUserQuestion` and runs t
 
 `decisions.md` is the audit / recovery surface, not the primary answer surface — every answer is mirrored into the matching `<!-- loom:answer-slot -->` region as it is captured.
 
-### Non-interactive answer queue
-
-Before calling `AskUserQuestion` for any question Q<n>, the agent MUST first
-consult `.loom/<project>/.answers.yaml` (staged by `/weave --answers <path>`).
-The flow:
-
-1. Generate Q<n> exactly as in the interactive path (briefing block,
-   triage, etc.). Question generation is unchanged.
-2. Check whether `.loom/<project>/.answers.yaml` exists. If absent or
-   empty: fall through to the interactive `AskUserQuestion` surface
-   (the field mapping below).
-3. Otherwise, shell out:
-
-   ```bash
-   python3 orchestrator/lib/answer-queue.py pop "<project>" --q-id "Q<n>"
-   ```
-
-   Capture the JSON on stdout. Cases:
-
-   - `{"q_id": "Q<n>", "answer": "<value>"}` → use `<value>` as the user's
-     pick. Mirror into the matching `<!-- loom:answer-slot -->` region
-     **exactly** as if the user had selected it via the picker
-     (suffix-strip the `(Recommended)` marker if the literal answer
-     carries it; flip `Status: answered`; persist via
-     `orchestrator/lib/atomic-write.sh`).
-   - `{"answer": "<value>"}` → no q_id binding; same as above, value
-     used verbatim. (This is the FIFO entry path; the queue author
-     intentionally left q_id off.)
-   - `{}` → queue exhausted OR no entry matches Q<n>. Write `[stop]` to
-     the slot and exit the loop with `STATUS: stop-requested` (same
-     terminal state as the user clicking Stop in interactive mode). The
-     orchestrator's gate surfaces this naturally.
-
-4. The agent does NOT invent answers, does NOT silently fall back to its
-   own recommendation, and does NOT block indefinitely. Queue exhaustion
-   is a clean stop, not a coercion.
-
-5. `Explain more` and the revisit mechanic (§5) DO NOT apply in
-   non-interactive mode — there is no human on the other end to elaborate
-   for. If the queue's answer is something the agent would normally treat
-   as a `push back` / `side requirement` / free-text via the slot-body
-   parsing rules below, the same parsing applies (e.g. the queue can
-   include literal `[push back: <text>]` to drive the revisit path
-   non-interactively).
-
-The question-generation loop (§3 triage) runs structurally unchanged —
-only the ASK step (§4) gains the pre-check above. Non-interactive mode
-is purely a substitution at the ASK boundary; the agent's reasoning loop
-behaves identically to the interactive path.
-
 ### AskUserQuestion field mapping
 
 The agent populates the picker so the user can answer without opening `decisions.md`. Briefing fields fan out across the picker:
 
-| `AskUserQuestion` field | Loom briefing source |
+| `AskUserQuestion` field | Forge briefing source |
 |---|---|
 | `question` | Question heading + the briefing block's `What's the issue:` sentence (the user reads this first). |
 | `options[].label` | Option letter / `YES` / `NO`. The recommended option's label carries a trailing ` (Recommended)` suffix. |
@@ -163,7 +130,7 @@ The user's response options map onto picker entries and a free-text fallback:
 
 | Action | Surface |
 |---|---|
-| `(A)` / `(B)` / `YES` / `NO` / `Accept this direction` — direct answer | Picker entry. The recommended option's label carries a `(Recommended)` suffix. The agent strips the suffix and writes the option name to the slot via `orchestrator/lib/atomic-write.sh`. Status flips to `answered`. |
+| `(A)` / `(B)` / `YES` / `NO` / `Accept this direction` — direct answer | Picker entry. The recommended option's label carries a `(Recommended)` suffix. The agent strips the suffix and writes the option name to the slot. Status flips to `answered`. |
 | `Explain more` | Picker entry. The agent composes a 2–4 sentence elaboration grounded in the existing briefing and re-calls `AskUserQuestion` with the same options + the elaboration appended to the `question` field. Hard cap: **4 elaborations per Q** (raised from 2 — the user can iterate on understanding before being forced to commit). On the 5th attempt, write `[push back: needs more context]` to the slot. |
 | `Explain more: <focus>` | Free-text fallback. Same as `Explain more` but the agent focuses the elaboration on `<focus>` (the user's specific area of confusion — e.g., `Explain more: how does this affect deployment?`). Counted against the same 4-elab cap. |
 | `Stop` | Picker entry. The agent writes `[stop]` to the slot and exits the loop with `STATUS: stop-requested`. The next `/weave` kick force-ends Spec via the close branch, writes `spec.md` with whatever's resolved, and emits `phase-complete`. |
@@ -317,7 +284,7 @@ Design phase reads only `Status: active` and `Status: answered` entries (and cha
 
 | Trigger | Action |
 |---|---|
-| Ambiguity stable across 2 consecutive answers | Return artifacts; orchestrator surfaces the rerun-or-continue decision. |
+| Triage (§3) returns "otherwise" — Foundation, revisit, and Branching queues all empty (decision tree exhausted, per §0) | Return artifacts; orchestrator surfaces the rerun-or-continue decision. |
 | User says `stop`, `enough`, `let's move on`, `go` | Write current state, return artifacts. |
 | Ambiguity still surfacing after many turns | RETURN `STATUS: needs_more_grilling` to the orchestrator; let the user decide whether to extend. |
 | User clicks `Stop` before answering N≥3 questions in a row | Force-end Spec: write the resolved Qs to decisions.md, capture the unanswered ones in the "Deferred clarifications" section (these become `[NEEDS CLARIFICATION]` markers when plan.md is generated), return artifacts. |
@@ -328,10 +295,10 @@ Design phase reads only `Status: active` and `Status: answered` entries (and cha
 
 When the Spec phase agent returns, it MUST have written:
 
-1. `spec.md` — what the user is building, why, scope, out of scope, **user stories with EARS acceptance criteria** (per [`stories.md`](stories.md)), constraints, open ambiguity.
+1. `spec.md` — what the user is building, why, scope, out of scope, **user stories with EARS acceptance criteria**, constraints, open ambiguity.
 2. `decisions.md` — every Q with its slot, status, recommendation, resolution. Side requirements section. Deferred clarifications section. Parseable by the rules in §6.
 
-Stories are distilled from grilling answers + seed at the end of the loop (Work Loop step 10 in [`phase.md`](../phase.md)). They are NOT user-answered questions; they are agent-produced outputs. Universal acceptance conditions go under `spec.md` `## Constraints`, not Stories.
+Stories are distilled from grilling answers + seed at the end of the loop, after Branching has resolved. They are NOT user-answered questions; they are agent-produced outputs. Universal acceptance conditions go under `spec.md` `## Constraints`, not Stories.
 
 These two writes are non-negotiable. They are the contract Design inherits.
 
@@ -339,10 +306,10 @@ These two writes are non-negotiable. They are the contract Design inherits.
 
 ## Stop Rules (summary)
 
-1. Ambiguity stable across 2 consecutive answers.
-2. User indicates enough context.
-3. Ambiguity still grows after many turns.
-4. Repeated unanswered questions.
+1. Decision tree exhausted — triage (§3) returns "otherwise". This is the only agent-initiated stop.
+2. User indicates enough context (`Stop` / `enough` / `let's move on` / `go`).
+3. Ambiguity continues to grow after many turns — RETURN `needs_more_grilling` and let the user decide whether to extend.
+4. Repeated unanswered questions — write current state, return artifacts.
 
 ## Revisit Rules (summary)
 

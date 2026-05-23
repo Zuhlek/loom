@@ -5,8 +5,8 @@ set -euo pipefail
 # Writes are owned exclusively by the Stop hook.
 
 hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-parser="$(cd "$hook_dir/../lib" && pwd)/pipeline-parser.py"
-store_lib="$hook_dir/../lib/session-store.sh"
+parser="$(cd "$hook_dir/../weave/lib" && pwd)/pipeline-parser.py"
+store_lib="$hook_dir/../lib/telemetry/session-store.sh"
 
 emit_context() {
     local context="$1"
