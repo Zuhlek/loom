@@ -85,13 +85,13 @@ function makeWs(): WsClient & { sent: string[] } {
   return { sent, send: (t) => sent.push(t) };
 }
 
-function appendTodoWriteLine(tailRoot: string, chatId: string): void {
+function appendTaskCreateLine(tailRoot: string, chatId: string): void {
   const encoded = `-tmp-${chatId}`;
   mkdirSync(join(tailRoot, encoded), { recursive: true });
   const file = join(tailRoot, encoded, `sess-${chatId}.jsonl`);
   const line = JSON.stringify({
     type: "assistant",
-    uuid: "tw-1",
+    uuid: "tc-1",
     timestamp: "2026-05-23T00:00:00.000Z",
     message: {
       role: "assistant",
@@ -99,10 +99,8 @@ function appendTodoWriteLine(tailRoot: string, chatId: string): void {
         {
           type: "tool_use",
           id: "tu-1",
-          name: "TodoWrite",
-          input: {
-            todos: [{ content: "a", status: "pending" }],
-          },
+          name: "TaskCreate",
+          input: { subject: "a", activeForm: "Doing a" },
         },
       ],
     },
@@ -111,7 +109,7 @@ function appendTodoWriteLine(tailRoot: string, chatId: string): void {
 }
 
 describe("JsonlTailBridge — fan-out + onTasksUpdate (T-012)", () => {
-  it("onTasksUpdate: both listeners fire on a todo_write event", async () => {
+  it("onTasksUpdate: both listeners fire on a task_update event", async () => {
     const { opts, cleanup, tailRoot } = mkOpts();
     try {
       const bridge = createJsonlTailBridge(opts);
@@ -121,7 +119,7 @@ describe("JsonlTailBridge — fan-out + onTasksUpdate (T-012)", () => {
       const calls2: { chatId: string; tasks: unknown }[] = [];
       bridge.onTasksUpdate((chatId, tasks) => calls1.push({ chatId, tasks }));
       bridge.onTasksUpdate((chatId, tasks) => calls2.push({ chatId, tasks }));
-      appendTodoWriteLine(tailRoot, "c-1");
+      appendTaskCreateLine(tailRoot, "c-1");
       await new Promise((r) => setTimeout(r, 250));
       expect(calls1.length).toBeGreaterThanOrEqual(1);
       expect(calls2.length).toBeGreaterThanOrEqual(1);
@@ -139,7 +137,7 @@ describe("JsonlTailBridge — fan-out + onTasksUpdate (T-012)", () => {
       const calls: unknown[] = [];
       const off = bridge.onTasksUpdate(() => calls.push("hit"));
       off();
-      appendTodoWriteLine(tailRoot, "c-1");
+      appendTaskCreateLine(tailRoot, "c-1");
       await new Promise((r) => setTimeout(r, 250));
       expect(calls).toEqual([]);
       await bridge.dispose("c-1");
@@ -162,7 +160,7 @@ describe("JsonlTailBridge — fan-out + onTasksUpdate (T-012)", () => {
       wsA.sent.length = 0;
       wsB.sent.length = 0;
       wsC.sent.length = 0;
-      appendTodoWriteLine(tailRoot, "c-1");
+      appendTaskCreateLine(tailRoot, "c-1");
       await new Promise((r) => setTimeout(r, 250));
       const aFrames = wsA.sent.map((s) => JSON.parse(s));
       const bFrames = wsB.sent.map((s) => JSON.parse(s));
@@ -190,7 +188,7 @@ describe("JsonlTailBridge — fan-out + onTasksUpdate (T-012)", () => {
       await bridge.attach("c-1", badWs);
       await bridge.attach("c-1", goodWs);
       goodWs.sent.length = 0;
-      appendTodoWriteLine(tailRoot, "c-1");
+      appendTaskCreateLine(tailRoot, "c-1");
       await new Promise((r) => setTimeout(r, 250));
       const goodFrames = goodWs.sent.map((s) => JSON.parse(s));
       expect(goodFrames.find((f) => f.kind === "tasks-update")).toBeDefined();

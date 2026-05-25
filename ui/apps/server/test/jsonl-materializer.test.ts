@@ -1,6 +1,6 @@
 /**
  * T-005 — jsonl/materializer.ts: per-chat folder ClaudeEvent → ChatItem[].
- * Dedupes on event id; derives `tasks-update` from `todo_write` events.
+ * Dedupes on event id; derives `tasks-update` from `task_update` events.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
@@ -66,27 +66,159 @@ describe("jsonl/materializer — dedupe + folding", () => {
     expect(b.snapshot()).toEqual(a.snapshot());
   });
 
-  it("todo_write yields a tasks-update frame matching the wire body shape", () => {
+  it("AC2: task_update{action:'create'} appends a Task and emits a tasks-update frame", () => {
     const m = createMaterializer();
     const frames = m.ingest(
       ev({
-        kind: "todo_write",
-        id: "e-todo",
-        tasks: [
-          { step: "do thing", status: "inProgress", activeForm: "Doing thing" },
-          { step: "next thing", status: "pending" },
-        ],
+        kind: "task_update",
+        id: "e1",
+        action: "create",
+        subject: "do thing",
+        activeForm: "Doing thing",
       } as any),
     );
     const tu = frames.find((f) => f.kind === "tasks-update");
     expect(tu).toBeDefined();
-    expect(tu?.kind).toBe("tasks-update");
     if (tu?.kind === "tasks-update") {
       expect(tu.body.tasks).toEqual([
-        { step: "do thing", status: "inProgress", activeForm: "Doing thing" },
-        { step: "next thing", status: "pending" },
+        { step: "do thing", status: "pending", activeForm: "Doing thing" },
       ]);
     }
+  });
+
+  it("AC3: task_update{action:'update'} mutates the slot resolved by taskId", () => {
+    const m = createMaterializer();
+    m.ingest(
+      ev({
+        kind: "task_update",
+        id: "e1",
+        action: "create",
+        subject: "S",
+        activeForm: "A",
+      } as any),
+    );
+    const frames = m.ingest(
+      ev({
+        kind: "task_update",
+        id: "e2",
+        action: "update",
+        taskId: "1",
+        status: "inProgress",
+      } as any),
+    );
+    const tu = frames.find((f) => f.kind === "tasks-update");
+    expect(tu).toBeDefined();
+    if (tu?.kind === "tasks-update") {
+      expect(tu.body.tasks[0]).toMatchObject({ step: "S", status: "inProgress" });
+    }
+  });
+
+  it("AC3: out-of-range taskId is a no-op (no frame, no mutation)", () => {
+    const m = createMaterializer();
+    const frames = m.ingest(
+      ev({
+        kind: "task_update",
+        id: "e1",
+        action: "update",
+        taskId: "5",
+        status: "completed",
+      } as any),
+    );
+    expect(frames).toEqual([]);
+    expect(m.snapshot().tasks).toEqual([]);
+  });
+
+  it("task_update{action:'list'} emits a snapshot frame without mutating", () => {
+    const m = createMaterializer();
+    m.ingest(
+      ev({
+        kind: "task_update",
+        id: "e1",
+        action: "create",
+        subject: "S1",
+        activeForm: "A1",
+      } as any),
+    );
+    const before = [...m.snapshot().tasks];
+    const frames = m.ingest(
+      ev({ kind: "task_update", id: "e2", action: "list" } as any),
+    );
+    const tu = frames.find((f) => f.kind === "tasks-update");
+    expect(tu).toBeDefined();
+    if (tu?.kind === "tasks-update") {
+      expect(tu.body.tasks).toEqual(before);
+    }
+    expect(m.snapshot().tasks).toEqual(before);
+  });
+
+  it("AC5: tasks-update frame body matches the wire Task interface exactly", () => {
+    const m = createMaterializer({ chatId: "the-chat" });
+    const frames = m.ingest(
+      ev({
+        kind: "task_update",
+        id: "e1",
+        chatId: "the-chat",
+        action: "create",
+        subject: "S",
+        activeForm: "A",
+      } as any),
+    );
+    const tu = frames.find((f) => f.kind === "tasks-update");
+    expect(tu).toBeDefined();
+    if (tu?.kind === "tasks-update") {
+      expect(tu["chat-id"]).toBe("the-chat");
+      for (const t of tu.body.tasks) {
+        const keys = Object.keys(t).sort();
+        // Allowed keys: step (req), status (req), activeForm (opt).
+        for (const k of keys) {
+          expect(["step", "status", "activeForm"]).toContain(k);
+        }
+        expect(t.step).toBeDefined();
+        expect(t.status).toBeDefined();
+      }
+    }
+  });
+
+  it("replay idempotency: same task_update event ingested twice yields one frame total", () => {
+    const m = createMaterializer();
+    const e = ev({
+      kind: "task_update",
+      id: "e1",
+      action: "create",
+      subject: "S",
+      activeForm: "A",
+    } as any);
+    const first = m.ingest(e);
+    const second = m.ingest(e);
+    expect(first.length).toBe(1);
+    expect(second.length).toBe(0);
+    expect(m.snapshot().tasks).toHaveLength(1);
+  });
+
+  it("reset() clears tasks; positional counter restarts from 1", () => {
+    const m = createMaterializer();
+    m.ingest(
+      ev({
+        kind: "task_update",
+        id: "e1",
+        action: "create",
+        subject: "S1",
+        activeForm: "A1",
+      } as any),
+    );
+    m.reset();
+    m.ingest(
+      ev({
+        kind: "task_update",
+        id: "e2",
+        action: "create",
+        subject: "S2",
+        activeForm: "A2",
+      } as any),
+    );
+    expect(m.snapshot().tasks).toEqual([
+      { step: "S2", status: "pending", activeForm: "A2" },
+    ]);
   });
 
   it("snapshot() returns the current ChatItem[] synchronously", () => {

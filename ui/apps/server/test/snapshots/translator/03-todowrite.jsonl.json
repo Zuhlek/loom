@@ -35,29 +35,33 @@
     "chatId": "chat-03-todowrite.jsonl",
     "sessionId": "session-03-todowrite.jsonl",
     "tsIso": "2026-05-13T12:39:33.753Z",
-    "kind": "todo_write",
-    "tasks": [
-      {
-        "step": "Define friendly mode labels + descriptions + icons in ChatComposer",
-        "status": "pending",
-        "activeForm": "Defining friendly mode labels + descriptions + icons"
-      },
-      {
-        "step": "Replace muted-bg chip with ghost-styled <select> + leading mode icon",
-        "status": "pending",
-        "activeForm": "Replacing chip with ghost-styled select + leading icon"
-      },
-      {
-        "step": "Add vertical separators between footer items (/commands, mode, send)",
-        "status": "pending",
-        "activeForm": "Adding vertical separators between footer items"
-      },
-      {
-        "step": "Verify tsc still passes and existing tests still match the new JSX",
-        "status": "pending",
-        "activeForm": "Verifying tsc + tests"
-      }
-    ]
+    "kind": "tool_use",
+    "toolName": "TodoWrite",
+    "toolUseId": "toolu_01LzLvSuUYTXbe9xm1sPYPEQ",
+    "input": {
+      "todos": [
+        {
+          "content": "Define friendly mode labels + descriptions + icons in ChatComposer",
+          "activeForm": "Defining friendly mode labels + descriptions + icons",
+          "status": "in_progress"
+        },
+        {
+          "content": "Replace muted-bg chip with ghost-styled <select> + leading mode icon",
+          "activeForm": "Replacing chip with ghost-styled select + leading icon",
+          "status": "pending"
+        },
+        {
+          "content": "Add vertical separators between footer items (/commands, mode, send)",
+          "activeForm": "Adding vertical separators between footer items",
+          "status": "pending"
+        },
+        {
+          "content": "Verify tsc still passes and existing tests still match the new JSX",
+          "activeForm": "Verifying tsc + tests",
+          "status": "pending"
+        }
+      ]
+    }
   },
   {
     "id": "f0dd74aa-0900-4dea-bf5f-b8ae37e69a81",

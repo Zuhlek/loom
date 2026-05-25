@@ -204,34 +204,103 @@ describe("jsonl/schema", () => {
     }
   });
 
-  it("todo_write event: tool_use with name=TodoWrite is hoisted to its own variant", () => {
-    const line = JSON.stringify({
-      type: "assistant",
-      uuid: "u-7",
-      timestamp: "2026-05-23T00:00:04.000Z",
-      message: {
-        role: "assistant",
-        content: [
-          {
-            type: "tool_use",
-            id: "tu-2",
-            name: "TodoWrite",
-            input: {
-              todos: [
-                { content: "do thing", status: "pending", activeForm: "Doing thing" },
-              ],
+  describe("schema — task_update family", () => {
+    function taskToolLine(uuid: string, name: string, input: unknown): string {
+      return JSON.stringify({
+        type: "assistant",
+        uuid,
+        timestamp: "2026-05-23T00:00:04.000Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: `tu-${uuid}`,
+              name,
+              input,
             },
-          },
-        ],
-      },
-    });
-    const evt = parseLine(line, ctx);
-    expect(evt.kind).toBe("todo_write");
-    if (evt.kind === "todo_write") {
-      expect(evt.tasks).toEqual([
-        { step: "do thing", status: "pending", activeForm: "Doing thing" },
-      ]);
+          ],
+        },
+      });
     }
+
+    it("AC1: TaskCreate tool_use is hoisted to kind=task_update, action=create", () => {
+      const evt = parseLine(
+        taskToolLine("u-tc", "TaskCreate", { subject: "S", activeForm: "A" }),
+        ctx,
+      );
+      expect(evt.kind).toBe("task_update");
+      if (evt.kind === "task_update") {
+        expect(evt.action).toBe("create");
+        expect(evt.subject).toBe("S");
+        expect(evt.activeForm).toBe("A");
+      }
+    });
+
+    it("AC1: TaskUpdate tool_use is hoisted to kind=task_update, action=update", () => {
+      const evt = parseLine(
+        taskToolLine("u-tu", "TaskUpdate", { taskId: "1", status: "in_progress" }),
+        ctx,
+      );
+      expect(evt.kind).toBe("task_update");
+      if (evt.kind === "task_update") {
+        expect(evt.action).toBe("update");
+        expect(evt.taskId).toBe("1");
+      }
+    });
+
+    it("AC1: TaskList tool_use is hoisted to kind=task_update, action=list", () => {
+      const evt = parseLine(taskToolLine("u-tl", "TaskList", {}), ctx);
+      expect(evt.kind).toBe("task_update");
+      if (evt.kind === "task_update") {
+        expect(evt.action).toBe("list");
+        expect(evt.taskId).toBeUndefined();
+      }
+    });
+
+    it("AC4: TaskUpdate.input.status \"in_progress\" normalises to \"inProgress\" at the schema seam", () => {
+      const evt = parseLine(
+        taskToolLine("u-tu-ip", "TaskUpdate", { taskId: "1", status: "in_progress" }),
+        ctx,
+      );
+      expect(evt.kind).toBe("task_update");
+      if (evt.kind === "task_update") {
+        expect(evt.status).toBe("inProgress");
+      }
+    });
+
+    it("AC4: TaskUpdate with already-camelCase status passes through unchanged", () => {
+      const evt = parseLine(
+        taskToolLine("u-tu-camel", "TaskUpdate", { taskId: "1", status: "inProgress" }),
+        ctx,
+      );
+      expect(evt.kind).toBe("task_update");
+      if (evt.kind === "task_update") {
+        expect(evt.status).toBe("inProgress");
+      }
+    });
+
+    it("schema falls through to generic tool_use for unknown status (e.g. \"failed\")", () => {
+      const evt = parseLine(
+        taskToolLine("u-tu-failed", "TaskUpdate", { taskId: "1", status: "failed" }),
+        ctx,
+      );
+      expect(evt.kind).toBe("tool_use");
+      if (evt.kind === "tool_use") {
+        expect(evt.toolName).toBe("TaskUpdate");
+      }
+    });
+
+    it("TaskCreate without subject falls back to description", () => {
+      const evt = parseLine(
+        taskToolLine("u-tc-desc", "TaskCreate", { description: "D", activeForm: "A" }),
+        ctx,
+      );
+      expect(evt.kind).toBe("task_update");
+      if (evt.kind === "task_update") {
+        expect(evt.subject).toBe("D");
+      }
+    });
   });
 
   it("session_meta event for type=summary records session lifecycle", () => {

@@ -1,0 +1,110 @@
+[
+  {
+    "id": "b5aa9e36-e31e-4017-bfd8-d3a6dd7f9b22",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:46.023Z",
+    "kind": "task_update",
+    "action": "create",
+    "subject": "task 1"
+  },
+  {
+    "id": "dbd57048-1e5c-4533-9b56-b585ccc3a632",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:46.038Z",
+    "kind": "unknown",
+    "rawKind": "attachment"
+  },
+  {
+    "id": "4de27c21-fc49-4dbf-8d4a-35c2af9e57a1",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:46.056Z",
+    "kind": "tool_result",
+    "toolUseId": "toolu_01VvGoCYCV2HrZ1X7ZH4WGdP",
+    "ok": true,
+    "output": "Task #1 created successfully: task 1"
+  },
+  {
+    "id": "a55e6e50-f322-48ed-8251-a2e47d59c0c0",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:46.056Z",
+    "kind": "unknown",
+    "rawKind": "attachment"
+  },
+  {
+    "id": "d5bdbffe-3919-4150-8ae6-99a5e67df906",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:46.547Z",
+    "kind": "task_update",
+    "action": "create",
+    "subject": "task 2"
+  },
+  {
+    "id": "e4393479-ea88-43b2-81cf-5d6e193048c1",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:46.566Z",
+    "kind": "unknown",
+    "rawKind": "attachment"
+  },
+  {
+    "id": "0d00059b-6c16-4397-a273-81cae32b68a1",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:46.583Z",
+    "kind": "tool_result",
+    "toolUseId": "toolu_019RC6FKs2bdWLCPRivcqZEF",
+    "ok": true,
+    "output": "Task #2 created successfully: task 2"
+  },
+  {
+    "id": "ef48be2b-0466-459d-91bd-047e7323e726",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:46.583Z",
+    "kind": "unknown",
+    "rawKind": "attachment"
+  },
+  {
+    "id": "7ed0dcf5-d637-4f7b-a3ca-1b68c4a25eb9",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:46.985Z",
+    "kind": "task_update",
+    "action": "create",
+    "subject": "task 3"
+  },
+  {
+    "id": "67303b38-0b12-412b-87c2-f540380ffd16",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:47.009Z",
+    "kind": "unknown",
+    "rawKind": "attachment"
+  },
+  {
+    "id": "aadfc0b4-45fe-45f7-8960-e72661ee8b0c",
+    "schemaVersion": "v1",
+    "chatId": "chat-12-task-create.jsonl",
+    "sessionId": "session-12-task-create.jsonl",
+    "tsIso": "2026-05-25T13:56:47.029Z",
+    "kind": "tool_result",
+    "toolUseId": "toolu_0154wvR4o1hbD15zLhuoQKAj",
+    "ok": true,
+    "output": "Task #3 created successfully: task 3"
+  }
+]

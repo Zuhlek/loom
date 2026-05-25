@@ -13,7 +13,6 @@
 import { randomUUID } from "node:crypto";
 
 import type {
-  Task,
   SessionLifecycle,
   WireSlashCommand,
 } from "../../chat-protocol/messages.ts";
@@ -42,10 +41,12 @@ export const FIELDS_V1 = {
   IS_ERROR: "is_error",
   ID: "id",
   TEXT: "text",
-  TODOS: "todos",
   STEP: "step",
   STATUS: "status",
   ACTIVE_FORM: "activeForm",
+  SUBJECT: "subject",
+  DESCRIPTION: "description",
+  TASK_ID: "taskId",
 } as const;
 
 /** Pretty alias of `FIELDS_V1` values, for documentation purposes. */
@@ -100,13 +101,17 @@ export type ClaudeEvent =
       output: unknown;
     }
   | {
-      kind: "todo_write";
+      kind: "task_update";
       id: string;
       schemaVersion: SchemaVersion;
       chatId: string;
       sessionId: string;
       tsIso: string;
-      tasks: Task[];
+      action: "create" | "update" | "list";
+      subject?: string;
+      activeForm?: string;
+      taskId?: string;
+      status?: "pending" | "inProgress" | "completed";
     }
   | {
       kind: "session_meta";
@@ -206,28 +211,66 @@ function findContentBlock(content: unknown, blockType: string): Record<string, u
   return undefined;
 }
 
-/** Coerce TodoWrite input.todos into the wire `Task[]` shape. */
-function normaliseTasks(input: unknown): Task[] {
-  const todos = field(input, FIELDS_V1.TODOS);
-  if (!Array.isArray(todos)) return [];
-  const out: Task[] = [];
-  for (const t of todos) {
-    // The TodoWrite v1 input shape uses `content` / `status` / `activeForm`.
-    // The `step` field on the wire is the textual task description.
-    const stepFromContent = asString(field(t, FIELDS_V1.CONTENT));
-    const stepFromStep = asString(field(t, FIELDS_V1.STEP));
-    const step = stepFromStep ?? stepFromContent ?? "";
-    const status = asString(field(t, FIELDS_V1.STATUS));
-    const activeForm = asString(field(t, FIELDS_V1.ACTIVE_FORM));
-    const okStatus =
-      status === "pending" || status === "inProgress" || status === "completed"
-        ? status
-        : "pending";
-    const task: Task = { step, status: okStatus };
-    if (activeForm !== undefined) task.activeForm = activeForm;
-    out.push(task);
+/**
+ * Coerce a `Task*` family tool_use into the variant-field subset the
+ * `task_update` `ClaudeEvent` carries. Returns `undefined` when the
+ * tool name is outside the family or when `TaskUpdate.input.status`
+ * carries a value outside the v1 vocabulary (forces the caller to
+ * fall through to the generic `tool_use` arm per Design § State and
+ * error handling).
+ */
+function parseTaskUpdate(
+  toolName: string,
+  input: unknown,
+):
+  | {
+      action: "create" | "update" | "list";
+      subject?: string;
+      activeForm?: string;
+      taskId?: string;
+      status?: "pending" | "inProgress" | "completed";
+    }
+  | undefined {
+  if (toolName === "TaskCreate") {
+    const subject =
+      asString(field(input, FIELDS_V1.SUBJECT)) ??
+      asString(field(input, FIELDS_V1.DESCRIPTION));
+    const activeForm = asString(field(input, FIELDS_V1.ACTIVE_FORM));
+    const out: {
+      action: "create";
+      subject?: string;
+      activeForm?: string;
+    } = { action: "create" };
+    if (subject !== undefined) out.subject = subject;
+    if (activeForm !== undefined) out.activeForm = activeForm;
+    return out;
   }
-  return out;
+  if (toolName === "TaskUpdate") {
+    const taskId = asString(field(input, FIELDS_V1.TASK_ID));
+    const rawStatus = asString(field(input, FIELDS_V1.STATUS));
+    let status: "pending" | "inProgress" | "completed" | undefined;
+    if (rawStatus === "in_progress" || rawStatus === "inProgress") {
+      status = "inProgress";
+    } else if (rawStatus === "pending" || rawStatus === "completed") {
+      status = rawStatus;
+    } else if (rawStatus !== undefined) {
+      // Unknown status — defensive default: refuse the task_update arm so
+      // the parser falls through to the generic tool_use shape.
+      return undefined;
+    }
+    const out: {
+      action: "update";
+      taskId?: string;
+      status?: "pending" | "inProgress" | "completed";
+    } = { action: "update" };
+    if (taskId !== undefined) out.taskId = taskId;
+    if (status !== undefined) out.status = status;
+    return out;
+  }
+  if (toolName === "TaskList") {
+    return { action: "list" };
+  }
+  return undefined;
 }
 
 function parseV1(raw: unknown, ctx: ParseCtx): ClaudeEvent {
@@ -256,11 +299,12 @@ function parseV1(raw: unknown, ctx: ParseCtx): ClaudeEvent {
         const toolName = asString(field(toolUseBlock, FIELDS_V1.TOOL_NAME)) ?? "";
         const toolUseId = asString(field(toolUseBlock, FIELDS_V1.ID)) ?? "";
         const input = field(toolUseBlock, FIELDS_V1.INPUT);
-        if (toolName === "TodoWrite") {
+        const taskFields = parseTaskUpdate(toolName, input);
+        if (taskFields) {
           return {
             ...base,
-            kind: "todo_write",
-            tasks: normaliseTasks(input),
+            kind: "task_update",
+            ...taskFields,
           };
         }
         return {

@@ -22,11 +22,13 @@
  *   tool_result        → updates the matching       (item-update)
  *                        assistant message's
  *                        tool_use block status
- *   todo_write         → tasks-update frame; the
- *                        TodoWrite tool_use itself
- *                        is NOT rendered as an item
- *                        (matches today's SDK
- *                        bridge behaviour)
+ *   task_update        → tasks-update frame; the
+ *                        Task* tool_use itself
+ *                        is NOT rendered as an item.
+ *                        Action sub-discriminator:
+ *                          create → append slot
+ *                          update → mutate slot by positional taskId
+ *                          list   → echo snapshot
  *   session_meta       → session-state frame (lifecycle pass-through)
  *   slash_command_set  → slash-commands-update frame
  *   context_usage      → context-usage-update frame
@@ -194,13 +196,45 @@ export function createMaterializer(opts: MaterializerOptions = {}): Materializer
         return [];
       }
 
-      case "todo_write": {
-        tasks = event.tasks;
+      case "task_update": {
+        if (event.action === "create") {
+          if (event.subject === undefined) return [];
+          const task: Task = {
+            step: event.subject,
+            status: "pending",
+          };
+          if (event.activeForm !== undefined) task.activeForm = event.activeForm;
+          tasks = [...tasks, task];
+          return [
+            {
+              kind: "tasks-update",
+              "chat-id": chatId,
+              body: { tasks: [...tasks] },
+            },
+          ];
+        }
+        if (event.action === "update") {
+          if (event.taskId === undefined || event.status === undefined) return [];
+          const idx = Number(event.taskId) - 1;
+          if (!Number.isFinite(idx) || idx < 0 || idx >= tasks.length) return [];
+          const current = tasks[idx];
+          if (!current) return [];
+          const updated: Task = { ...current, status: event.status };
+          tasks = tasks.map((t, i) => (i === idx ? updated : t));
+          return [
+            {
+              kind: "tasks-update",
+              "chat-id": chatId,
+              body: { tasks: [...tasks] },
+            },
+          ];
+        }
+        // action === "list" — echo snapshot, no mutation.
         return [
           {
             kind: "tasks-update",
             "chat-id": chatId,
-            body: { tasks: event.tasks },
+            body: { tasks: [...tasks] },
           },
         ];
       }
