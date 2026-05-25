@@ -11,6 +11,7 @@
  * never touched.
  */
 import type { MetadataStore } from "../metadata-store/index.ts";
+import { jsonResponse } from "./_response.ts";
 import { invalidateFabricCache } from "./sidebar.ts";
 
 export function mountFabricArchiveRoute(
@@ -48,9 +49,3 @@ export function mountFabricArchiveRoute(
   };
 }
 
-function jsonResponse(body: unknown, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}

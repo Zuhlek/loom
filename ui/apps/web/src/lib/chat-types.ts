@@ -16,9 +16,9 @@ export interface AssistantTextBlock {
   type: "text";
   text: string;
   /**
-   * Bridge-internal marker for dense-array filler blocks produced
-   * by `claude-session-bridge.ts` when `content_block_start` arrives
-   * at an index past the current `blocks.length`. The web's
+   * Bridge-internal marker for dense-array filler blocks (a
+   * pre-cutover SDK-bridge concern; preserved here for wire-mirror
+   * compatibility). The web's
    * `AssistantRow.map` filters these out before discrimination so
    * the streaming caret can't land on an invisible node. Excess
    * metadata on an otherwise legal text block — NOT a new wire
@@ -135,8 +135,8 @@ export type TurnState = "idle" | "running" | "interrupted" | "error";
 /**
  * Session-lifetime resilience state — mirrors the server
  * `SessionLifecycle` byte-for-byte. Orthogonal to `TurnState`: drives
- * the recovery banner while the bridge auto-respawns the SDK after a
- * mid-session crash. See `claude-session-bridge.ts` `handleSessionFailure`.
+ * the recovery banner while the bridge auto-respawns after a
+ * mid-session crash.
  */
 export type SessionLifecycle = "active" | "recovering" | "failed";
 
@@ -213,6 +213,18 @@ export type ServerFrame =
   | { kind: "turn-state"; "chat-id": string; body: { state: TurnState; lastError?: string } }
   | { kind: "pending-permission"; "chat-id": string; body: PendingPermission | null }
   | { kind: "pending-question"; "chat-id": string; body: PendingQuestion | null }
+  | {
+      /**
+       * Bridge acknowledgement that a permission prompt has been resolved
+       * by the user. Carries the original prompt-id and the user's verb
+       * (`"allow"` / `"deny"`). Mirror of the server
+       * `PermissionResolvedFrame`. Distinct from the `pending-permission`
+       * body:null clear — the two are complementary signals.
+       */
+      kind: "permission-resolved";
+      "chat-id": string;
+      body: { id: string; behavior: "allow" | "deny" };
+    }
   | { kind: "tasks-update"; "chat-id": string; body: { tasks: Task[]; replay?: boolean } }
   | {
       /**
@@ -256,7 +268,21 @@ export type ServerFrame =
         model: string;
       };
     }
-  | { kind: "error"; "chat-id"?: string; body: { message: string } };
+  | {
+      kind: "error";
+      "chat-id"?: string;
+      body: {
+        message: string;
+        /**
+         * Optional stable error code the UI can branch on. Currently used:
+         *   - `"runtime-unavailable"` — a backend dependency (tmux, claude)
+         *     is missing; the UI renders an install/setup banner. The
+         *     `details.reason` field carries the specific dependency name.
+         */
+        code?: string;
+        details?: Record<string, unknown>;
+      };
+    };
 
 export type ClientFrame =
   | { kind: "attach"; "chat-id": string }

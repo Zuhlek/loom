@@ -15,6 +15,8 @@
  */
 import { spawnSync } from "node:child_process";
 
+import { jsonResponse } from "./_response.ts";
+
 export interface DiffSection {
   kind: "per-turn" | "whole";
   label: string;
@@ -29,7 +31,7 @@ export function mountDiffRoute(
     const base = url.searchParams.get("base") ?? "main";
     const mode = (url.searchParams.get("mode") ?? "whole") as "per-turn" | "whole";
     if (!worktreePath) {
-      return new Response(JSON.stringify({ error: "missing worktreePath" }), { status: 400 });
+      return jsonResponse({ error: "missing worktreePath" }, 400);
     }
     const sections: DiffSection[] = [];
     if (mode === "per-turn") {
@@ -66,9 +68,6 @@ export function mountDiffRoute(
       });
       sections.push({ kind: "whole", label: `${base}…working tree`, diff: d.stdout || "" });
     }
-    return new Response(JSON.stringify({ sections }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return jsonResponse({ sections }, 200);
   };
 }

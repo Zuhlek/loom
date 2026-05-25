@@ -189,7 +189,7 @@ export type TurnState = "idle" | "running" | "interrupted" | "error";
  *
  * The lifecycle replaces the previous "mark chat inert + leave a stale
  * ChatSession in the map" failure mode, which silently dropped any
- * subsequent user input. See `claude-session-bridge.ts` `handleSessionFailure`.
+ * subsequent user input.
  */
 export type SessionLifecycle = "active" | "recovering" | "failed";
 

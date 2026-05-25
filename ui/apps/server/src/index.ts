@@ -9,12 +9,21 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+
 import { startServer } from "./http-ws-server.ts";
 import { resolveConfig } from "./config-loader/index.ts";
 import { initMetadataStore } from "./metadata-store/index.ts";
-import { ClaudeSessionBridge } from "./process-manager/claude-session-bridge.ts";
+import { createJsonlTailBridge } from "./process-manager/jsonl/bridge.ts";
+import { createTmuxSession } from "./process-manager/tmux-session.ts";
+import {
+  probeTmux,
+  formatTmuxUnavailableNotice,
+} from "./process-manager/tmux-availability.ts";
+import { createSessionIdStore } from "./process-manager/session-store.ts";
+import { createJsonlPathProbe } from "./process-manager/jsonl-path-probe.ts";
+import { createPaneProcessApi } from "./process-manager/pane-process.ts";
 import { ensureClaudeOnboarded } from "./process-manager/claude-onboarding.ts";
-import { mountHookReceiver } from "./hook-receiver/index.ts";
+import { mountHookReceiver, setEnvelopeBroadcaster } from "./hook-receiver/index.ts";
 import { mountConfigRoute } from "./routes/config.ts";
 import { mountSidebarRoute } from "./routes/sidebar.ts";
 import { mountCwdRoute } from "./routes/cwd.ts";
@@ -32,7 +41,7 @@ import { mountFabricBoardRoute } from "./routes/fabric-board.ts";
 import { mountFabricRoute } from "./routes/fabric.ts";
 import { mountFabricArchiveRoute } from "./routes/fabric-archive.ts";
 import { mountSettingsRoute } from "./routes/settings.ts";
-import { mountHooksAdminRoute } from "./routes/hooks-admin.ts";
+import { mountHooksAdminRoute, buildStatus as buildHooksStatus } from "./routes/hooks-admin.ts";
 
 function parseRootFlag(argv: string[]): string | undefined {
   const i = argv.indexOf("--root");
@@ -124,9 +133,52 @@ if (isEntrypoint) {
   const store = await initMetadataStore();
   const claudeBin = resolveClaudeBin();
   console.log(`[loom] using claude binary: ${claudeBin}`);
-  const bridge = new ClaudeSessionBridge(store, { pathToClaudeCodeExecutable: claudeBin });
+
+  // JsonlTailBridge is the only bridge after the cutover. The
+  // pre-cutover SDK bridge and the `LOOM_BRIDGE` env switch are
+  // deleted. License posture: zero `claude-agent-sdk` dependency
+  // in `ui/`.
+  //
+  // Lazy tmux probe: the server must boot in environments where tmux
+  // isn't installed yet so the UI can render a setup banner. The probe
+  // never throws; we cache its result and wire an `availability` getter
+  // into `createTmuxSession`. The UI surfaces missing-tmux through
+  // typed runtime-unavailable error frames at first chat-attach
+  // (`jsonl/bridge.ts`).
+  const tmuxProbe = await probeTmux();
+  if (!tmuxProbe.available) {
+    const notice = formatTmuxUnavailableNotice(tmuxProbe);
+    if (notice) {
+      // Single actionable line. No stack trace.
+      console.warn(`[loom] ${notice}`);
+    }
+  } else if (tmuxProbe.version) {
+    console.log(`[loom] tmux probe: ${tmuxProbe.version}`);
+  }
+  const tmux = createTmuxSession({
+    claudeBin,
+    availability: () => ({ available: tmuxProbe.available }),
+  });
+  const sessionStore = createSessionIdStore({
+    storagePath: path.join(os.homedir(), ".claude", "loom", "session-id-store.json"),
+  });
+  const pathProbe = createJsonlPathProbe({
+    storagePath: path.join(os.homedir(), ".claude", "loom", "tail-root.json"),
+  });
+  const bridge = createJsonlTailBridge({
+    tmux,
+    sessionStore,
+    pathProbe,
+    paneProcess: createPaneProcessApi(),
+    cwdResolver: async (chatId: string) => {
+      const chat = store.chats.get(chatId);
+      return chat?.cwd ?? process.cwd();
+    },
+  });
+  // Hook-receiver ownership.
+  setEnvelopeBroadcaster((env) => bridge.routeHookEnvelope(env));
   const routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>> = {};
-  mountHookReceiver(routes, store);
+  mountHookReceiver(routes, store, sessionStore);
   mountConfigRoute(routes, config);
   mountSidebarRoute(routes, store, bridge);
   mountCwdRoute(routes, store);
@@ -154,6 +206,25 @@ if (isEntrypoint) {
   console.log(
     `loom-server listening at ${server.url} (root: ${config.root ?? "<none>"} / source: ${config.source})`,
   );
+
+  // Hooks-health preflight. Single line — the UI surfaces the same
+  // signal via HooksHealthBanner, but headless / dev users see it here.
+  // Never fatal: we don't want a missing settings.json to block boot.
+  try {
+    const hs = buildHooksStatus({ receiverPort: loomPort });
+    if (!hs.installed) {
+      console.warn(
+        `[loom] hooks not installed in ${hs.settingsPath} — permission prompts and AskUserQuestion popups won't appear. POST /hooks/install to install.`,
+      );
+    } else if (!hs.healthy) {
+      const missing = hs.eventsExpected.filter((e) => !hs.eventsInstalled.includes(e));
+      console.warn(
+        `[loom] hooks installed but out of date — missing ${missing.join(", ")} in ${hs.settingsPath}. POST /hooks/install to reinstall.`,
+      );
+    }
+  } catch (err) {
+    console.warn(`[loom] hooks preflight skipped: ${(err as Error)?.message ?? err}`);
+  }
 
   const shutdown = async (sig: string) => {
     console.log(`[loom-server] received ${sig}, shutting down...`);

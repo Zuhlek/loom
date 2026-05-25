@@ -14,7 +14,11 @@ interface HooksStatus {
   hasMarker: boolean;
   hasUserHooks: boolean;
   receiverPort: number;
+  /** @deprecated alias for eventsExpected — kept for older payloads. */
   eventsWired: string[];
+  eventsExpected?: string[];
+  eventsInstalled?: string[];
+  healthy?: boolean;
   installedAt: string | null;
   lastDelivered: { channel: string; at: string } | null;
 }
@@ -221,7 +225,11 @@ function LiveHooks() {
           {actionError}
         </div>
       )}
-      <WiredEvents events={status.eventsWired} dim={showConflict} />
+      <WiredEvents
+        events={status.eventsExpected ?? status.eventsWired}
+        installed={status.eventsInstalled}
+        dim={showConflict}
+      />
       {showInstalled && <MarkerBlock status={status} />}
       {showInstalled && <Diagnostics status={status} />}
     </>
@@ -243,23 +251,35 @@ function InstalledBanner({
   onReinstall: () => void;
   onUninstall: () => void;
 }) {
+  // Drift: marker present but not every expected event is wired. Show
+  // the same panel in amber with a per-event missing list. Reinstall
+  // resolves it in one click.
+  const expected = status.eventsExpected ?? status.eventsWired;
+  const installedSet = new Set(status.eventsInstalled ?? expected);
+  const missing = expected.filter((e) => !installedSet.has(e));
+  const drift = status.healthy === false && missing.length > 0;
+  const accent = drift ? "245,158,11" : "16,185,129";
   return (
-    <div className="rounded-xl border p-4 flex items-start gap-3" style={{ borderColor: "rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.04)" }}>
-      <div className="size-8 rounded-full grid place-items-center" style={{ background: "rgba(16,185,129,0.18)" }}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-4" style={{ color: "var(--success-foreground)" }}>
-          <path d="M5 12l5 5L20 7" />
+    <div className="rounded-xl border p-4 flex items-start gap-3" style={{ borderColor: `rgba(${accent},0.3)`, background: `rgba(${accent},0.04)` }}>
+      <div className="size-8 rounded-full grid place-items-center" style={{ background: `rgba(${accent},0.18)` }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-4" style={{ color: drift ? "rgb(146 64 14)" : "var(--success-foreground)" }}>
+          {drift ? <path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.18A2 2 0 003.84 21h16.32a2 2 0 001.73-2.96L13.71 3.86a2 2 0 00-3.42 0z" /> : <path d="M5 12l5 5L20 7" />}
         </svg>
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium">Hooks installed and healthy.</p>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "rgba(16,185,129,0.18)", color: "var(--success-foreground)" }}>
+          <p className="text-sm font-medium">
+            {drift ? "Hooks installed but out of date." : "Hooks installed and healthy."}
+          </p>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: `rgba(${accent},0.18)`, color: drift ? "rgb(146 64 14)" : "var(--success-foreground)" }}>
             id: 127.0.0.1/hooks/event
           </span>
         </div>
         <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
           {status.installedAt ? `Installed ${formatTimestamp(status.installedAt)} · ` : ""}
-          {status.eventsWired.length} events wired · receiver port {status.receiverPort}
+          {drift
+            ? `missing ${missing.join(", ")} — reinstall to wire them`
+            : `${expected.length} events wired · receiver port ${status.receiverPort}`}
         </p>
       </div>
       <div className="flex items-center gap-1.5">
@@ -380,19 +400,44 @@ function ConflictBanner({
 /*                        Wired events / Marker / Diagnostics         */
 /* ------------------------------------------------------------------ */
 
-function WiredEvents({ events, dim }: { events: string[]; dim?: boolean }) {
+function WiredEvents({
+  events,
+  installed,
+  dim,
+}: {
+  events: string[];
+  installed?: string[];
+  dim?: boolean;
+}) {
+  // If we know which events are actually in settings.json, surface
+  // per-event drift (amber dot + "missing" tag). Otherwise fall back
+  // to the old "all green" rendering.
+  const installedSet = installed ? new Set(installed) : null;
   return (
     <div className={dim ? "opacity-50" : ""}>
       <h2 className="text-xs font-medium mb-2">
         Wired events {dim && <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>(after install)</span>}
       </h2>
       <div className="grid grid-cols-2 gap-1.5">
-        {events.map((e) => (
-          <div key={e} className="px-3 py-2 rounded-md border flex items-center gap-2" style={{ borderColor: "var(--border)" }}>
-            <span className="size-1.5 rounded-full" style={{ background: dim ? "var(--muted-foreground)" : "var(--success)" }} />
-            <code className="font-mono text-[11px]">{e}</code>
-          </div>
-        ))}
+        {events.map((e) => {
+          const isInstalled = installedSet ? installedSet.has(e) : !dim;
+          const dotColor = dim
+            ? "var(--muted-foreground)"
+            : isInstalled
+              ? "var(--success)"
+              : "rgb(245 158 11)"; // amber-500 — drift signal
+          return (
+            <div key={e} className="px-3 py-2 rounded-md border flex items-center gap-2" style={{ borderColor: "var(--border)" }}>
+              <span className="size-1.5 rounded-full" style={{ background: dotColor }} />
+              <code className="font-mono text-[11px]">{e}</code>
+              {!isInstalled && !dim && installedSet ? (
+                <span className="ml-auto text-[10px] font-mono px-1 rounded" style={{ background: "rgba(245,158,11,0.16)", color: "rgb(146 64 14)" }}>
+                  missing
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -7,15 +7,9 @@
  */
 import { commitOnly, createPullRequest } from "../git/workflow.ts";
 import { push } from "../git/manager.ts";
+import { jsonResponse } from "./_response.ts";
 
 type Handler = (req: Request, url: URL) => Response | Promise<Response>;
-
-function json(body: unknown, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
 
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -29,22 +23,22 @@ export function mountGitActionsRoute(routes: Record<string, Handler>): void {
     try {
       body = await req.json();
     } catch {
-      return json({ error: "invalid json" }, 400);
+      return jsonResponse({ error: "invalid json" }, 400);
     }
     if (typeof body?.worktreePath !== "string" || body.worktreePath.length === 0) {
-      return json({ error: "worktreePath required" }, 400);
+      return jsonResponse({ error: "worktreePath required" }, 400);
     }
     if (typeof body?.message !== "string" || body.message.length === 0) {
-      return json({ error: "message required" }, 400);
+      return jsonResponse({ error: "message required" }, 400);
     }
     const fullMessage = typeof body.body === "string" && body.body.length > 0
       ? `${body.message}\n\n${body.body}`
       : body.message;
     try {
       const result = await commitOnly({ cwd: body.worktreePath, message: fullMessage });
-      return json({ sha: result.sha }, 200);
+      return jsonResponse({ sha: result.sha }, 200);
     } catch (e) {
-      return json({ error: errorMessage(e) }, 500);
+      return jsonResponse({ error: errorMessage(e) }, 500);
     }
   };
 
@@ -54,10 +48,10 @@ export function mountGitActionsRoute(routes: Record<string, Handler>): void {
     try {
       body = await req.json();
     } catch {
-      return json({ error: "invalid json" }, 400);
+      return jsonResponse({ error: "invalid json" }, 400);
     }
     if (typeof body?.worktreePath !== "string" || body.worktreePath.length === 0) {
-      return json({ error: "worktreePath required" }, 400);
+      return jsonResponse({ error: "worktreePath required" }, 400);
     }
     try {
       await push(body.worktreePath, {
@@ -65,9 +59,9 @@ export function mountGitActionsRoute(routes: Record<string, Handler>): void {
         setUpstream: body.setUpstream === true,
         force: body.forceWithLease === true,
       });
-      return json({ ok: true }, 200);
+      return jsonResponse({ ok: true }, 200);
     } catch (e) {
-      return json({ error: errorMessage(e) }, 500);
+      return jsonResponse({ error: errorMessage(e) }, 500);
     }
   };
 
@@ -77,13 +71,13 @@ export function mountGitActionsRoute(routes: Record<string, Handler>): void {
     try {
       body = await req.json();
     } catch {
-      return json({ error: "invalid json" }, 400);
+      return jsonResponse({ error: "invalid json" }, 400);
     }
     if (typeof body?.worktreePath !== "string" || body.worktreePath.length === 0) {
-      return json({ error: "worktreePath required" }, 400);
+      return jsonResponse({ error: "worktreePath required" }, 400);
     }
     if (typeof body?.title !== "string" || body.title.length === 0) {
-      return json({ error: "title required" }, 400);
+      return jsonResponse({ error: "title required" }, 400);
     }
     try {
       const pr = await createPullRequest({
@@ -92,9 +86,9 @@ export function mountGitActionsRoute(routes: Record<string, Handler>): void {
         title: body.title,
         body: typeof body.body === "string" ? body.body : undefined,
       });
-      return json({ url: pr.url }, 200);
+      return jsonResponse({ url: pr.url }, 200);
     } catch (e) {
-      return json({ error: errorMessage(e) }, 500);
+      return jsonResponse({ error: errorMessage(e) }, 500);
     }
   };
 }

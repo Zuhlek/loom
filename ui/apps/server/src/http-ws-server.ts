@@ -27,7 +27,7 @@ import { acquireLock } from "./lockfile.ts";
 import { makeError, type ChatEnvelope } from "./chat-protocol/envelope.ts";
 import { serializeServerFrame, type TasksUpdateFrame } from "./chat-protocol/frames.ts";
 import { sanitizeUserTurnImages } from "./chat-protocol/sanitize-user-turn-images.ts";
-import type { ClaudeSessionBridge } from "./process-manager/claude-session-bridge.ts";
+import type { JsonlTailBridge } from "./process-manager/jsonl/bridge.ts";
 
 export interface ServerOptions {
   port?: number;
@@ -35,7 +35,7 @@ export interface ServerOptions {
   origins?: string[];
   routes?: Record<string, (req: Request, url: URL) => Response | Promise<Response>>;
   onWsMessage?: (data: ChatEnvelope, send: (msg: ChatEnvelope) => void) => void;
-  bridge?: ClaudeSessionBridge;
+  bridge?: JsonlTailBridge;
   acquireLock?: boolean;
   lockPath?: string;
   version?: string;
@@ -271,7 +271,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             send(makeError(chatId, "plan-accept: missing chat-id or body.planId"));
             return;
           }
-          // Fire-and-forget per ADR-004; any SDK error is surfaced as a
+          // Fire-and-forget per design-ADR; any SDK error is surfaced as a
           // session-scoped system-notice by the bridge.
           void opts.bridge.acceptPlanProposal(chatId, planId);
           return;
@@ -301,7 +301,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             send(makeError(chatId, "permission-mode-set: missing chat-id or invalid body.mode"));
             return;
           }
-          // Fire-and-forget; per ADR-004 the call is forwarded straight
+          // Fire-and-forget; per design-ADR the call is forwarded straight
           // to the SDK Query handle without coalescing/debouncing. Any
           // SDK rejection is surfaced as a session-scoped notice by the
           // bridge, so we do not propagate the promise here.

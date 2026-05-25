@@ -11,12 +11,13 @@ import {
   install,
   uninstall,
   detectConflict,
+  detectInstalledEvents,
   resolveSettingsPath,
   settingsExists,
+  DEFAULT_EVENTS,
 } from "../hook-installer.ts";
 import { getLastDelivered } from "../hook-receiver/index.ts";
-
-const WIRED_EVENTS = ["PostToolUse", "SessionStart", "Stop", "SubagentStop", "PermissionRequest"];
+import { jsonResponse } from "./_response.ts";
 
 export interface HooksAdminOptions {
   /** Receiver port that install() writes into the hook commands. */
@@ -32,15 +33,26 @@ export interface HooksStatus {
   hasMarker: boolean;
   hasUserHooks: boolean;
   receiverPort: number;
+  /** Events the installer would wire today (single source of truth). */
+  eventsExpected: readonly string[];
+  /** Events that currently have a loom-managed entry in settings.json. */
+  eventsInstalled: readonly string[];
+  /** True iff installed and every expected event is present. */
+  healthy: boolean;
+  /** @deprecated use eventsExpected — kept for back-compat with older clients. */
   eventsWired: readonly string[];
   installedAt: string | null;
   lastDelivered: { channel: string; at: string } | null;
 }
 
-function buildStatus(opts: HooksAdminOptions): HooksStatus {
+export function buildStatus(opts: HooksAdminOptions): HooksStatus {
   const settingsPath = resolveSettingsPath({ settingsPath: opts.settingsPath });
   const exists = settingsExists({ settingsPath: opts.settingsPath });
   const conflict = detectConflict({ settingsPath: opts.settingsPath });
+  const eventsInstalled = detectInstalledEvents({ settingsPath: opts.settingsPath });
+  const eventsExpected = [...DEFAULT_EVENTS];
+  const installedSet = new Set(eventsInstalled);
+  const healthy = conflict.hasMarker && eventsExpected.every((e) => installedSet.has(e));
   let installedAt: string | null = null;
   if (exists && conflict.hasMarker) {
     try {
@@ -54,32 +66,28 @@ function buildStatus(opts: HooksAdminOptions): HooksStatus {
     hasMarker: conflict.hasMarker,
     hasUserHooks: conflict.hasUserHooks,
     receiverPort: opts.receiverPort,
-    eventsWired: WIRED_EVENTS,
+    eventsExpected,
+    eventsInstalled,
+    healthy,
+    eventsWired: eventsExpected,
     installedAt,
     lastDelivered: getLastDelivered(),
   };
-}
-
-function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
 }
 
 export function mountHooksAdminRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   opts: HooksAdminOptions,
 ): void {
-  routes["/hooks/status"] = async () => json(200, buildStatus(opts));
+  routes["/hooks/status"] = async () => jsonResponse(buildStatus(opts), 200);
 
   routes["/hooks/install"] = async (req) => {
     if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
     try {
       install({ settingsPath: opts.settingsPath, receiverPort: opts.receiverPort });
-      return json(200, buildStatus(opts));
+      return jsonResponse(buildStatus(opts), 200);
     } catch (err: any) {
-      return json(500, { error: err?.message ?? String(err) });
+      return jsonResponse({ error: err?.message ?? String(err) }, 500);
     }
   };
 
@@ -87,9 +95,9 @@ export function mountHooksAdminRoute(
     if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
     try {
       uninstall({ settingsPath: opts.settingsPath });
-      return json(200, buildStatus(opts));
+      return jsonResponse(buildStatus(opts), 200);
     } catch (err: any) {
-      return json(500, { error: err?.message ?? String(err) });
+      return jsonResponse({ error: err?.message ?? String(err) }, 500);
     }
   };
 
@@ -97,13 +105,13 @@ export function mountHooksAdminRoute(
     if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
     const settingsPath = resolveSettingsPath({ settingsPath: opts.settingsPath });
     if (!fs.existsSync(settingsPath)) {
-      return json(404, { error: "settings.json not found", settingsPath });
+      return jsonResponse({ error: "settings.json not found", settingsPath }, 404);
     }
     try {
       revealInFileManager(settingsPath);
-      return json(200, { ok: true, settingsPath });
+      return jsonResponse({ ok: true, settingsPath }, 200);
     } catch (err: any) {
-      return json(500, { error: err?.message ?? String(err) });
+      return jsonResponse({ error: err?.message ?? String(err) }, 500);
     }
   };
 }

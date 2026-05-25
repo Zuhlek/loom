@@ -7,6 +7,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 
+import { jsonResponse } from "./_response.ts";
+
 const ALLOWED_MIME = new Set([
   "image/png",
   "image/jpeg",
@@ -34,7 +36,7 @@ export function mountUploadImageRoute(
       const form = await req.formData();
       const file = form.get("file");
       if (!(file instanceof Blob)) {
-        return new Response(JSON.stringify({ error: "missing file" }), { status: 400 });
+        return jsonResponse({ error: "missing file" }, 400);
       }
       mime = file.type || mime;
       buf = new Uint8Array(await file.arrayBuffer());
@@ -43,15 +45,12 @@ export function mountUploadImageRoute(
       buf = new Uint8Array(await req.arrayBuffer());
     }
     if (!ALLOWED_MIME.has(mime)) {
-      return new Response(JSON.stringify({ error: `unsupported mime ${mime}` }), { status: 415 });
+      return jsonResponse({ error: `unsupported mime ${mime}` }, 415);
     }
     const id = crypto.randomBytes(16).toString("hex");
     const ext = mime.split("/")[1].replace("jpeg", "jpg");
     const file = path.join(UPLOAD_DIR, `${id}.${ext}`);
     fs.writeFileSync(file, buf);
-    return new Response(JSON.stringify({ id, path: file, mime, size: buf.byteLength }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return jsonResponse({ id, path: file, mime, size: buf.byteLength }, 200);
   };
 }

@@ -13,7 +13,7 @@
  * create/delete to call when they may have changed fabric state.
  */
 import type { MetadataStore } from "../metadata-store/index.ts";
-import type { ClaudeSessionBridge } from "../process-manager/claude-session-bridge.ts";
+import type { JsonlTailBridge } from "../process-manager/jsonl/bridge.ts";
 import { decorateChat } from "./chat-decorator.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -154,12 +154,17 @@ export function fabricId(projectId: string, fabricName: string, cwd: string): st
 export function mountSidebarRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   store: MetadataStore,
-  bridge?: ClaudeSessionBridge,
+  bridge?: JsonlTailBridge,
 ): void {
-  // The bridge holds in-memory `ChatSession`s; the sidebar payload pulls
-  // turn-state + needs-input per chat so the nav can render a liveness
-  // indicator without opening a WS per row.
-  const liveStateFor = bridge ? (id: string) => bridge.getLiveState(id) : undefined;
+  // Post-cutover: `JsonlTailBridge` does not expose a
+  // `getLiveState(chatId)` method — live state would require
+  // `tmux.exists` + a materializer snapshot per row, which is too
+  // expensive for the sidebar fan-out. The liveness indicator is
+  // therefore unconditionally suppressed for the JSONL bridge.
+  // Re-introduce when (and if) the JSONL bridge gains a cheap
+  // per-chat liveness probe.
+  const liveStateFor = undefined;
+  void bridge;
   routes["/sidebar/state"] = async () => {
     const projects = store.projects.list();
     const chats = store.chats.list();

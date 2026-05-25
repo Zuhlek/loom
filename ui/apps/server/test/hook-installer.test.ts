@@ -2,13 +2,27 @@ import { describe, expect, test } from "vitest";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
-import { install, uninstall, detectConflict, resolveSettingsPath } from "../src/hook-installer";
+import {
+  install,
+  uninstall,
+  detectConflict,
+  detectInstalledEvents,
+  resolveSettingsPath,
+  DEFAULT_EVENTS,
+} from "../src/hook-installer";
 
 function tmp(): string {
   return mkdtempSync(path.join(tmpdir(), "loom-hook-"));
 }
 
-const WIRED_EVENTS = ["PostToolUse", "SessionStart", "Stop", "SubagentStop", "PermissionRequest"];
+const WIRED_EVENTS = [
+  "PostToolUse",
+  "PreToolUse",
+  "SessionStart",
+  "Stop",
+  "SubagentStop",
+  "PermissionRequest",
+];
 
 function loomEntryCount(parsed: any): number {
   let count = 0;
@@ -200,8 +214,126 @@ describe("hook-installer", () => {
     rmSync(dir, { recursive: true });
   });
 
+  test("install purges orphan loom entries from PermissionRequest while preserving non-loom hooks", () => {
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    writeFileSync(
+      settingsPath,
+      JSON.stringify(
+        {
+          hooks: {
+            PermissionRequest: [
+              {
+                matcher: "*",
+                hooks: [
+                  { type: "command", command: "curl http://127.0.0.1:7891/hooks/event" },
+                ],
+              },
+              {
+                matcher: "Bash",
+                hooks: [{ type: "command", command: "user-perm-script.sh" }],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    install({ settingsPath, receiverPort: 7891 });
+    const parsed = JSON.parse(readFileSync(settingsPath, "utf8"));
+    const perm = parsed.hooks.PermissionRequest;
+    expect(Array.isArray(perm)).toBe(true);
+    // Non-loom hook is preserved.
+    expect(perm).toContainEqual({
+      matcher: "Bash",
+      hooks: [{ type: "command", command: "user-perm-script.sh" }],
+    });
+    // No loom command remains under PermissionRequest.
+    for (const entry of perm) {
+      for (const h of entry.hooks ?? []) {
+        expect(typeof h.command === "string" && h.command.includes("/hooks/event")).toBe(false);
+      }
+    }
+    rmSync(dir, { recursive: true });
+  });
+
   test("resolveSettingsPath defaults to ~/.claude/settings.json", () => {
     const home = process.env.HOME ?? "";
     expect(resolveSettingsPath()).toBe(path.join(home, ".claude", "settings.json"));
+  });
+});
+
+describe("detectInstalledEvents", () => {
+  test("returns empty list when settings.json is missing", () => {
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    expect(detectInstalledEvents({ settingsPath })).toEqual([]);
+    rmSync(dir, { recursive: true });
+  });
+
+  test("returns empty list when settings.json has no loom entries", () => {
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PostToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "user-only" }] }],
+        },
+      }),
+    );
+    expect(detectInstalledEvents({ settingsPath })).toEqual([]);
+    rmSync(dir, { recursive: true });
+  });
+
+  test("returns the full event set after install()", () => {
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    install({ settingsPath, receiverPort: 7891 });
+    const installed = detectInstalledEvents({ settingsPath });
+    expect(installed.sort()).toEqual([...DEFAULT_EVENTS].sort());
+    rmSync(dir, { recursive: true });
+  });
+
+  test("returns only the events that still have a loom entry after partial uninstall", () => {
+    // Simulates drift: install today's events, then hand-edit settings to drop one.
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    install({ settingsPath, receiverPort: 7891 });
+    const parsed = JSON.parse(readFileSync(settingsPath, "utf8")) as any;
+    delete parsed.hooks.PreToolUse;
+    delete parsed.hooks.Notification;
+    writeFileSync(settingsPath, JSON.stringify(parsed));
+    const installed = detectInstalledEvents({ settingsPath });
+    expect(installed).not.toContain("PreToolUse");
+    expect(installed).not.toContain("Notification");
+    expect(installed).toContain("PostToolUse");
+    expect(installed).toContain("Stop");
+    rmSync(dir, { recursive: true });
+  });
+
+  test("ignores user-only sub-hooks but counts events that also have a loom sub-hook", () => {
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    install({ settingsPath, receiverPort: 7891 });
+    const parsed = JSON.parse(readFileSync(settingsPath, "utf8")) as any;
+    parsed.hooks.PostToolUse.push({
+      matcher: "Bash",
+      hooks: [{ type: "command", command: "user-only-script.sh" }],
+    });
+    writeFileSync(settingsPath, JSON.stringify(parsed));
+    const installed = detectInstalledEvents({ settingsPath });
+    expect(installed).toContain("PostToolUse");
+    rmSync(dir, { recursive: true });
+  });
+
+  test("tolerates malformed JSON without throwing", () => {
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    writeFileSync(settingsPath, "{ not json");
+    expect(() => detectInstalledEvents({ settingsPath })).not.toThrow();
+    expect(detectInstalledEvents({ settingsPath })).toEqual([]);
+    rmSync(dir, { recursive: true });
   });
 });

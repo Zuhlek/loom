@@ -44,7 +44,7 @@ describe("hooks-admin route", () => {
     expect(s.hasMarker).toBe(false);
     expect(s.hasUserHooks).toBe(false);
     expect(s.receiverPort).toBe(4242);
-    expect(s.eventsWired.length).toBe(5);
+    expect(s.eventsWired.length).toBe(6);
     rmSync(dir, { recursive: true });
   });
 
@@ -141,6 +141,68 @@ describe("hooks-admin route", () => {
     const s = body as HooksStatus;
     expect(s.installedAt).not.toBeNull();
     expect(new Date(s.installedAt!).getTime()).toBeGreaterThan(0);
+    rmSync(dir, { recursive: true });
+  });
+
+  test("status: healthy=true and eventsInstalled matches eventsExpected after fresh install", async () => {
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    const routes = mount(settingsPath);
+    await callJson(routes["/hooks/install"], { method: "POST" });
+    const { body } = await callJson(routes["/hooks/status"]);
+    const s = body as HooksStatus;
+    expect(s.healthy).toBe(true);
+    expect([...s.eventsInstalled].sort()).toEqual([...s.eventsExpected].sort());
+    rmSync(dir, { recursive: true });
+  });
+
+  test("status: healthy=false when settings.json is hand-edited to drop a loom event", async () => {
+    // The drift case that hit production: install was run with an older
+    // DEFAULT_EVENTS, then the list grew. Simulated by hand-deleting events.
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    const routes = mount(settingsPath);
+    await callJson(routes["/hooks/install"], { method: "POST" });
+    const parsed = JSON.parse(readFileSync(settingsPath, "utf8")) as any;
+    delete parsed.hooks.PreToolUse;
+    delete parsed.hooks.Notification;
+    writeFileSync(settingsPath, JSON.stringify(parsed));
+    const { body } = await callJson(routes["/hooks/status"]);
+    const s = body as HooksStatus;
+    expect(s.installed).toBe(true);
+    expect(s.healthy).toBe(false);
+    expect(s.eventsExpected).toContain("PreToolUse");
+    expect(s.eventsExpected).toContain("Notification");
+    expect(s.eventsInstalled).not.toContain("PreToolUse");
+    expect(s.eventsInstalled).not.toContain("Notification");
+    rmSync(dir, { recursive: true });
+  });
+
+  test("status: healthy=false when not installed at all", async () => {
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    const routes = mount(settingsPath);
+    const { body } = await callJson(routes["/hooks/status"]);
+    const s = body as HooksStatus;
+    expect(s.installed).toBe(false);
+    expect(s.healthy).toBe(false);
+    expect(s.eventsInstalled).toEqual([]);
+    expect(s.eventsExpected.length).toBeGreaterThan(0);
+    rmSync(dir, { recursive: true });
+  });
+
+  test("reinstall after drift restores healthy=true", async () => {
+    const dir = tmp();
+    const settingsPath = path.join(dir, "settings.json");
+    const routes = mount(settingsPath);
+    await callJson(routes["/hooks/install"], { method: "POST" });
+    const parsed = JSON.parse(readFileSync(settingsPath, "utf8")) as any;
+    delete parsed.hooks.PreToolUse;
+    writeFileSync(settingsPath, JSON.stringify(parsed));
+    expect(((await callJson(routes["/hooks/status"])).body as HooksStatus).healthy).toBe(false);
+    await callJson(routes["/hooks/install"], { method: "POST" });
+    const { body } = await callJson(routes["/hooks/status"]);
+    expect((body as HooksStatus).healthy).toBe(true);
     rmSync(dir, { recursive: true });
   });
 });

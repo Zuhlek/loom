@@ -10,8 +10,10 @@
  *      `M6 9l6 6 6-6` appears only in the shared module.
  *   3. `PermissionLevelPill.tsx` no longer carries private
  *      `ShieldIcon` / `PenLineIcon` / `LockOpenIcon` definitions.
- *   4. `claude-session-bridge.ts` no longer exports
- *      `ULTRATHINK_BUDGET_TOKENS` (the pill is now the source of truth).
+ *
+ * The pre-cutover ULTRATHINK_BUDGET_TOKENS assertion (against the
+ * deleted `claude-session-bridge.ts`) is gone — the constant was a
+ * SDK-bridge legacy and the bridge file no longer exists post-T-021.
  *
  * Test runtime is `node` (no jsdom). Assertions are static-source
  * string-grep against the source files, matching the project's
@@ -22,14 +24,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
-const serverRoot = fileURLToPath(new URL("../../server/", import.meta.url));
 
 const sharedPath = webRoot + "src/components/chat/composer-pill-icons.tsx";
 const permissionPath = webRoot + "src/components/chat/PermissionLevelPill.tsx";
 const modelSelectorPath = webRoot + "src/components/chat/ModelSelectorPill.tsx";
 const modelSettingsPath = webRoot + "src/components/chat/ModelSettingsPill.tsx";
 const chatComposerPath = webRoot + "src/components/chat/ChatComposer.tsx";
-const bridgePath = serverRoot + "src/process-manager/claude-session-bridge.ts";
 
 const CHEVRON_PATH_LITERAL = 'M6 9l6 6 6-6';
 
@@ -109,8 +109,4 @@ describe("T-018 composer-pill-icons — shared icon module + bridge constant cle
     }
   });
 
-  test("claude-session-bridge does not export ULTRATHINK_BUDGET_TOKENS", () => {
-    const src = readFileSync(bridgePath, "utf8");
-    expect(src).not.toMatch(/export\s+const\s+ULTRATHINK_BUDGET_TOKENS\b/);
-  });
 });

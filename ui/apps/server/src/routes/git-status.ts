@@ -7,6 +7,7 @@
  */
 import { executeGit } from "../git/worktree.ts";
 import { currentBranch, getRemoteUrl, hasUncommittedChanges } from "../git/manager.ts";
+import { jsonResponse } from "./_response.ts";
 
 interface GitStatusResponse {
   branch: string;
@@ -24,10 +25,7 @@ export function mountGitStatusRoute(
     const worktreePath = url.searchParams.get("worktreePath") ?? "";
     const base = url.searchParams.get("base") ?? "main";
     if (!worktreePath) {
-      return new Response(JSON.stringify({ error: "worktreePath required" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "worktreePath required" }, 400);
     }
     try {
       const branch = (await currentBranch(worktreePath)) ?? "";
@@ -44,16 +42,10 @@ export function mountGitStatusRoute(
       const remote = (await getRemoteUrl(worktreePath)) ?? undefined;
       const body: GitStatusResponse = { branch, base, ahead, behind, uncommitted };
       if (remote) body.remote = remote;
-      return new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse(body, 200);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      return new Response(JSON.stringify({ error: message }), {
-        status: 500,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: message }, 500);
     }
   };
 }

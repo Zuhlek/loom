@@ -240,6 +240,24 @@ export interface PendingQuestionFrame {
   body: PendingQuestion | null;
 }
 
+/**
+ * Acknowledgement frame emitted by the bridge after a permission prompt
+ * has been resolved by the user. Carries the original `prompt-id` plus
+ * the user's choice (`"allow"` / `"deny"`) so attached clients can
+ * audit the decision and clear any structured-UI affordance keyed on
+ * that id. The `pending-permission` clear (body:null) still goes out
+ * alongside this frame — they are complementary signals, not
+ * substitutes.
+ */
+export interface PermissionResolvedFrame {
+  kind: "permission-resolved";
+  "chat-id": string;
+  body: {
+    id: string;
+    behavior: "allow" | "deny";
+  };
+}
+
 export interface TasksUpdateFrame {
   kind: "tasks-update";
   "chat-id": string;
@@ -249,7 +267,21 @@ export interface TasksUpdateFrame {
 export interface ErrorFrame {
   kind: "error";
   "chat-id"?: string;
-  body: { message: string };
+  body: {
+    message: string;
+    /**
+     * Optional stable error code the UI can branch on. Currently used:
+     *   - `"runtime-unavailable"` — a backend dependency (tmux, claude)
+     *     is missing; the UI renders an install/setup banner. The
+     *     `details.reason` field carries the specific dependency name.
+     *
+     * Absent from legacy error frames; consumers MUST treat the absence
+     * as "generic error, display message verbatim".
+     */
+    code?: string;
+    /** Optional structured payload that accompanies `code`. */
+    details?: Record<string, unknown>;
+  };
 }
 
 /**
@@ -311,6 +343,7 @@ export type ServerFrame =
   | TurnStateFrame
   | PendingPermissionFrame
   | PendingQuestionFrame
+  | PermissionResolvedFrame
   | TasksUpdateFrame
   | SessionStateFrame
   | ChatUpdateFrame

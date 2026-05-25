@@ -1,0 +1,60 @@
+[
+  {
+    "id": "synthetic-086a2ad3b18c042a",
+    "schemaVersion": "v1",
+    "chatId": "chat-07-mid-turn-interrupt.jsonl",
+    "sessionId": "session-07-mid-turn-interrupt.jsonl",
+    "tsIso": "",
+    "kind": "unknown",
+    "rawKind": "ai-title"
+  },
+  {
+    "id": "synthetic-4f9aee9db6e1d255",
+    "schemaVersion": "v1",
+    "chatId": "chat-07-mid-turn-interrupt.jsonl",
+    "sessionId": "session-07-mid-turn-interrupt.jsonl",
+    "tsIso": "",
+    "kind": "unknown",
+    "rawKind": "permission-mode"
+  },
+  {
+    "id": "a69645cd-419c-480f-8b8e-9731fd760d25",
+    "schemaVersion": "v1",
+    "chatId": "chat-07-mid-turn-interrupt.jsonl",
+    "sessionId": "session-07-mid-turn-interrupt.jsonl",
+    "tsIso": "2026-05-21T09:56:37.186Z",
+    "kind": "tool_result",
+    "toolUseId": "toolu_017YrMEpVB7YAWtgbVqetHCS",
+    "ok": true,
+    "output": "1\t# Create Project\n2\t\n3\tCreate `.forge/<project>/` from a seed.\n4\t\n5\t## Steps\n6\t\n7\t1. Derive a kebab-case project name.\n8\t2. **Overlap scan.** Before continuing, scan existing `.forge/*/spec.md` and `.forge/*/seed.md`. If any project's seed or \"What we're building\" section has substantial overlap (>0.4 token Jaccard) with the new seed, surface via `AskUserQuestion`: *\"This looks similar to existing project `<name>` (seed: `<one-line>`). Continue that project, or create a new one?\"* On \"Continue existing\", dispatch `find-project` for the existing name and exit `create-project` without creating a new workspace. Skip the scan when `.forge/` has no projects yet.\n9\t3. **Inline every referenced source byte-for-byte.** If the user's input references external content — `@path/to/file`, a raw filesystem path, a URL, a pasted attachment marker, a screenshot path, etc. — **read the referenced content now and inline it verbatim into the seed text** before passing `--seed` to the CLI. Never pass just the reference. The referenced source may be temporary (a scratch file, a session-only attachment, a chat-uploaded image, a URL that may go offline); if it disappears later, `seed.md` must still fully reflect the original input. For each inlined source, wrap it with a clear provenance block so the boundary is recoverable:\n10\t\n11\t   ```\n12\t   <!-- forge:seed-source kind=file|url|paste path=\"<original-ref>\" fetched=\"<ISO-timestamp>\" -->\n13\t   <verbatim content, unmodified>\n14\t   <!-- forge:seed-source end -->\n15\t   ```\n16\t\n17\t   Rules:\n18\t   - **Byte-for-byte.** Do not summarize, reformat, re-wrap, translate, or \"clean up\" the source. Copy the exact bytes (text files) or a base64/description block (binary/image) plus the original path.\n19\t   - **Multiple references** in one input each get their own provenance block, in the order they appeared.\n20\t   - **Unreachable references** (file missing, URL fails) abort `create-project` with a clear error to the user; do not silently fall back to the bare reference.\n21\t   - **Inline user prose** that surrounded the reference stays in place around the provenance blocks, so the seed reads as the user wrote it but with every linked artifact fully captured.\n22\t\n23\t4. Extract optional ticket ID and type hint from the (now fully inlined) seed.\n24\t5. Run `forge/craft/lib/pipeline.sh init <parent_dir> <project> [--seed <path>] [--ticket <id>] [--type-hint <type>]`. The script takes the **parent directory** (typically the project root or the active workspace parent); it constructs `<parent_dir>/.forge/<project>/` itself and writes `pipeline.md` into it (and copies the seed file to `seed.md` when `--seed` is supplied). `Lifecycle state` is initialized to `active`. The script refuses to overwrite an existing `pipeline.md` at the target — handle that as a recovery prompt for the user.\n25\t6. Initial state (set by `init`): current phase `spec`, status `pending`, lifecycle state `active`, resume point `spec phase, first dispatch`.\n26\t\n27\t## Seed shape\n28\t\n29\tThe seed file is markdown with these sections:\n30\t\n31\t- `# Seed` — the user's raw input, with every referenced source inlined per Step 3.\n32\t- `## Ticket` (optional) — ticket ID.\n33\t- `## Type hint` (optional) — type name from `forge/types/`.\n34\t- `## Notes` (optional, free-form).\n35\t\n36\tThe Spec agent reads the seed at first dispatch.\n37\t"
+  },
+  {
+    "id": "55bc02ad-0145-4731-9829-24c9a4a5e9df",
+    "schemaVersion": "v1",
+    "chatId": "chat-07-mid-turn-interrupt.jsonl",
+    "sessionId": "session-07-mid-turn-interrupt.jsonl",
+    "tsIso": "2026-05-21T09:56:39.665Z",
+    "kind": "text",
+    "role": "user",
+    "text": "[Request interrupted by user]"
+  },
+  {
+    "id": "synthetic-d45ace2a1399aa9d",
+    "schemaVersion": "v1",
+    "chatId": "chat-07-mid-turn-interrupt.jsonl",
+    "sessionId": "session-07-mid-turn-interrupt.jsonl",
+    "tsIso": "",
+    "kind": "unknown",
+    "rawKind": "file-history-snapshot"
+  },
+  {
+    "id": "5a86ab3a-2d21-4a9b-bfe5-b9f90490e263",
+    "schemaVersion": "v1",
+    "chatId": "chat-07-mid-turn-interrupt.jsonl",
+    "sessionId": "session-07-mid-turn-interrupt.jsonl",
+    "tsIso": "2026-05-21T09:57:30.499Z",
+    "kind": "text",
+    "role": "user",
+    "text": "sry, i was not clear, i do want you to generate seed files for both points which i pck up later. put em here <REPO_ROOT>/repo/scratch/seeds/tune-reset-to-forge-baseline.md"
+  }
+]

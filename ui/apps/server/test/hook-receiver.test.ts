@@ -4,20 +4,28 @@ import { initMetadataStore } from "../src/metadata-store/index.ts";
 import { mountHookReceiver } from "../src/hook-receiver/index.ts";
 
 describe("normalizeHookEvent", () => {
-  test("PermissionRequest yields pending-gate", () => {
+  test("PermissionRequest (legacy) yields pending-gate", () => {
     const r = normalizeHookEvent({ channel: "PermissionRequest", chatId: "c1", payload: { tool: "Bash" } });
     expect(r.pendingGate?.kind).toBe("permissionrequest");
     expect(r.envelopes[0].kind).toBe("gate-pending");
   });
 
-  test("AskUserQuestion via PostToolUse yields pending-gate", () => {
+  test("AskUserQuestion via PreToolUse yields pending-gate", () => {
+    // Real Claude Code emits AskUserQuestion as a PreToolUse — interception
+    // at PostToolUse is too late (user already answered in the TUI).
     const r = normalizeHookEvent({
-      channel: "PostToolUse",
+      channel: "PreToolUse",
       chatId: "c1",
       toolName: "AskUserQuestion",
-      payload: { questions: [{}] },
+      payload: {
+        question: "Pick one",
+        options: [{ label: "yes" }, { label: "no" }],
+      },
     });
     expect(r.pendingGate?.kind).toBe("askuserquestion");
+    expect(r.envelopes[0].kind).toBe("gate-pending");
+    const data = (r.envelopes[0].body as { data: { options: Array<{ id: string }> } }).data;
+    expect(data.options.map((o) => o.id)).toEqual(["opt-1", "opt-2"]);
   });
 
   test("Stop clears gates", () => {

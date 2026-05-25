@@ -29,6 +29,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { MetadataStore } from "../metadata-store/index.ts";
+import { jsonResponse } from "./_response.ts";
 
 const ARTIFACT_MAX_BYTES = 200 * 1024;
 const TREE_MAX_DEPTH = 2;
@@ -296,13 +297,6 @@ export function mountFabricRoute(
     cache.set(cacheKey, { at: now, body });
     return jsonResponse(body, 200);
   };
-}
-
-function jsonResponse(body: unknown, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
 }
 
 export const __test__ = { parsePipeline, listTree };

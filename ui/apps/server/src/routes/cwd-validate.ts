@@ -3,6 +3,7 @@
  * so the spawn dialog's worktree opt-in checkbox can guard non-git cwds.
  */
 import { isGitRepo } from "../git/is-git-repo.ts";
+import { jsonResponse } from "./_response.ts";
 
 export function mountCwdValidateRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
@@ -13,20 +14,20 @@ export function mountCwdValidateRoute(
     try {
       body = await req.json();
     } catch {
-      return new Response(JSON.stringify({ error: "invalid json" }), { status: 400 });
+      return jsonResponse({ error: "invalid json" }, 400);
     }
     const cwd = body?.cwd;
     if (typeof cwd !== "string" || cwd.length === 0) {
-      return new Response(JSON.stringify({ error: "missing cwd" }), { status: 400 });
+      return jsonResponse({ error: "missing cwd" }, 400);
     }
     const probe = isGitRepo(cwd);
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         isGit: probe.isGit,
         repoName: probe.repoName,
         topLevel: probe.topLevel,
-      }),
-      { status: 200, headers: { "content-type": "application/json" } },
+      },
+      200,
     );
   };
 }

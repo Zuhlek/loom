@@ -7,25 +7,21 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { jsonResponse } from "./_response.ts";
+
 export function mountFabricMockupRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
 ): void {
   routes["/fabric/mockup/list"] = async (req, url) => {
     const cwd = url.searchParams.get("cwd") ?? "";
     const project = url.searchParams.get("project") ?? "";
-    if (!cwd || !project) return new Response(JSON.stringify({ error: "missing cwd or project" }), { status: 400 });
+    if (!cwd || !project) return jsonResponse({ error: "missing cwd or project" }, 400);
     const dir = path.join(cwd, ".loom", project, "mockup");
     if (!fs.existsSync(dir)) {
-      return new Response(JSON.stringify({ files: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ files: [] }, 200);
     }
     const files = fs.readdirSync(dir).filter((f) => f.endsWith(".html"));
-    return new Response(JSON.stringify({ files }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return jsonResponse({ files }, 200);
   };
 
   routes["/fabric/mockup/file"] = async (req, url) => {

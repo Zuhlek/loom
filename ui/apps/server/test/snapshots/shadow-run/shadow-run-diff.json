@@ -1,0 +1,225 @@
+{
+  "createdAt": "2026-05-24T08:57:13.555Z",
+  "whitelist": {
+    "sdkOnly": [
+      "chat-update",
+      "snapshot",
+      "slash-commands-update",
+      "context-usage-update",
+      "turn-state",
+      "session-state"
+    ],
+    "jsonlOnly": [
+      "tasks-update",
+      "pending-permission",
+      "session-state"
+    ]
+  },
+  "fixtures": [
+    {
+      "fixture": "01-text-and-tools.jsonl",
+      "lineCount": 30,
+      "eventCount": 30,
+      "jsonlFrameCount": 21,
+      "sdkFrameCount": 26,
+      "comparableJsonlCount": 21,
+      "comparableSdkCount": 21,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "turn-state": 1,
+        "slash-commands-update": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "02-tool-result-error.jsonl",
+      "lineCount": 13,
+      "eventCount": 13,
+      "jsonlFrameCount": 9,
+      "sdkFrameCount": 14,
+      "comparableJsonlCount": 9,
+      "comparableSdkCount": 9,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "slash-commands-update": 1,
+        "turn-state": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "03-todowrite.jsonl",
+      "lineCount": 7,
+      "eventCount": 7,
+      "jsonlFrameCount": 6,
+      "sdkFrameCount": 10,
+      "comparableJsonlCount": 5,
+      "comparableSdkCount": 5,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "slash-commands-update": 1,
+        "item-append:TodoWrite-tool_use": 1
+      },
+      "whitelistedJsonlOnly": {
+        "tasks-update": 1
+      },
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "04-permission-rejected.jsonl",
+      "lineCount": 5,
+      "eventCount": 5,
+      "jsonlFrameCount": 3,
+      "sdkFrameCount": 8,
+      "comparableJsonlCount": 3,
+      "comparableSdkCount": 3,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "slash-commands-update": 1,
+        "turn-state": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "05-permission-auto-denied.jsonl",
+      "lineCount": 6,
+      "eventCount": 6,
+      "jsonlFrameCount": 6,
+      "sdkFrameCount": 10,
+      "comparableJsonlCount": 6,
+      "comparableSdkCount": 6,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "slash-commands-update": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "06-slash-clear.jsonl",
+      "lineCount": 5,
+      "eventCount": 5,
+      "jsonlFrameCount": 3,
+      "sdkFrameCount": 7,
+      "comparableJsonlCount": 3,
+      "comparableSdkCount": 3,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "turn-state": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "07-mid-turn-interrupt.jsonl",
+      "lineCount": 6,
+      "eventCount": 6,
+      "jsonlFrameCount": 2,
+      "sdkFrameCount": 7,
+      "comparableJsonlCount": 2,
+      "comparableSdkCount": 2,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "slash-commands-update": 1,
+        "turn-state": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "08-slash-model.jsonl",
+      "lineCount": 5,
+      "eventCount": 5,
+      "jsonlFrameCount": 4,
+      "sdkFrameCount": 8,
+      "comparableJsonlCount": 4,
+      "comparableSdkCount": 4,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "turn-state": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "09-session-resume.jsonl",
+      "lineCount": 4,
+      "eventCount": 4,
+      "jsonlFrameCount": 1,
+      "sdkFrameCount": 5,
+      "comparableJsonlCount": 1,
+      "comparableSdkCount": 1,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "turn-state": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "10-ask-user-question.jsonl",
+      "lineCount": 6,
+      "eventCount": 6,
+      "jsonlFrameCount": 4,
+      "sdkFrameCount": 8,
+      "comparableJsonlCount": 4,
+      "comparableSdkCount": 4,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "slash-commands-update": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    },
+    {
+      "fixture": "11-edit-tool.jsonl",
+      "lineCount": 4,
+      "eventCount": 4,
+      "jsonlFrameCount": 4,
+      "sdkFrameCount": 8,
+      "comparableJsonlCount": 4,
+      "comparableSdkCount": 4,
+      "whitelistedSdkOnly": {
+        "chat-update": 1,
+        "snapshot": 1,
+        "context-usage-update": 1,
+        "slash-commands-update": 1
+      },
+      "whitelistedJsonlOnly": {},
+      "diffs": [],
+      "parity": "match"
+    }
+  ]
+}

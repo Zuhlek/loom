@@ -27,7 +27,26 @@ export interface HookInstallerOptions {
   events?: readonly string[];
 }
 
-const DEFAULT_EVENTS = ["PostToolUse", "SessionStart", "Stop", "SubagentStop", "PermissionRequest"] as const;
+// Canonical Claude Code hook event names. `PermissionRequest` is NOT a real
+// Claude Code hook event — permission gating piggybacks on `PreToolUse`
+// (the bridge filters by tool name; see hook-receiver/normalize.ts).
+export const DEFAULT_EVENTS = [
+  "PreToolUse",
+  "PostToolUse",
+  "Notification",
+  "SessionStart",
+  "Stop",
+  "SubagentStop",
+] as const;
+
+/**
+ * Event keys that loom NEVER installs into but still purges loom-owned
+ * entries from on every install/uninstall. Keeps the file clean if an
+ * older loom version once installed under that event.
+ */
+const PURGE_ONLY_EVENTS = ["PermissionRequest"] as const;
+
+export type DefaultEvent = (typeof DEFAULT_EVENTS)[number];
 
 interface HookCommand {
   type?: string;
@@ -51,6 +70,33 @@ export function resolveSettingsPath(opts: HookInstallerOptions = {}): string {
 /** Whether the settings file exists (might be empty if first-run). */
 export function settingsExists(opts: HookInstallerOptions = {}): boolean {
   return fs.existsSync(resolveSettingsPath(opts));
+}
+
+/**
+ * Inspect settings.json and return the set of event names that have at
+ * least one loom-managed sub-hook. Returns an empty array if the file
+ * is missing, empty, unparseable, or has no loom entries.
+ *
+ * This is the ground-truth complement to `DEFAULT_EVENTS` — diff the two
+ * to detect installer drift (events the installer would write today but
+ * that aren't currently in settings.json).
+ */
+export function detectInstalledEvents(opts: HookInstallerOptions = {}): string[] {
+  const filePath = resolveSettingsPath(opts);
+  if (!fs.existsSync(filePath)) return [];
+  const text = fs.readFileSync(filePath, "utf8");
+  if (text.trim() === "") return [];
+  const parsed = tryParse(text);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const hooks = (parsed as { hooks?: Record<string, unknown> })?.hooks;
+  if (!hooks || typeof hooks !== "object" || Array.isArray(hooks)) return [];
+  const installed: string[] = [];
+  for (const [evt, arr] of Object.entries(hooks as Record<string, unknown>)) {
+    if (!Array.isArray(arr)) continue;
+    const hasLoom = (arr as HookEntry[]).some((entry) => countLoomCommands(entry) > 0);
+    if (hasLoom) installed.push(evt);
+  }
+  return installed;
 }
 
 /**
@@ -134,6 +180,19 @@ export function install(opts: HookInstallerOptions = {}): { wroteFreshFile: bool
     }
     purged.push(makeLoomEntry(port));
     hooks[evt] = purged;
+  }
+
+  // Purge-only sweep: never inject a loom entry, but strip any pre-existing
+  // loom command (orphaned by older installer versions).
+  for (const evt of PURGE_ONLY_EVENTS) {
+    if (!Array.isArray(hooks[evt])) continue;
+    const existing = hooks[evt] as HookEntry[];
+    const cleaned: HookEntry[] = [];
+    for (const entry of existing) {
+      const stripped = purgeLoomFromEntry(entry);
+      if (stripped !== null) cleaned.push(stripped);
+    }
+    hooks[evt] = cleaned;
   }
   parsed.hooks = hooks;
 

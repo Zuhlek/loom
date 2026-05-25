@@ -1,0 +1,147 @@
+[
+  {
+    "id": "9928d380-d9b0-4f39-8e59-8b1c7e13d7a9",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:28:42.525Z",
+    "kind": "tool_use",
+    "toolName": "Bash",
+    "toolUseId": "toolu_01YFZY4GGw7a1L1EbAJSiGEi",
+    "input": {
+      "command": "sleep 20 && tail -60 \"/private/tmp/claude-501/-Volumes-My-Shared-Files-repo-scratch-t3code-main/e4ed0331-cd07-4af1-a977-99bfe1af3c73/tasks/b90evmctq.output\"",
+      "description": "Check dev server output again",
+      "timeout": 30000
+    }
+  },
+  {
+    "id": "c346ec7b-87ff-4ef4-8862-daa17780dd42",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:03.818Z",
+    "kind": "tool_result",
+    "toolUseId": "toolu_01YFZY4GGw7a1L1EbAJSiGEi",
+    "ok": true,
+    "output": "$ node scripts/dev-runner.ts dev\n[14:26:39.392] INFO (#1): [dev-runner] mode=dev source=default ports serverPort=13773 webPort=5733 baseDir=<HOME>/.t3\n\nAttention:\nTurborepo now collects completely anonymous telemetry regarding usage.\nThis information is used to shape the Turborepo roadmap and prioritize features.\nYou can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:\nhttps://turborepo.dev/docs/telemetry\n\n• turbo 2.8.17\n• Packages in scope: @t3tools/contracts, @t3tools/web, t3\n• Running dev in 3 packages\n• Remote caching disabled\n@t3tools/contracts:build: cache miss, executing 7f1f7db99db21a6a\n@t3tools/contracts:build: $ tsdown src/index.ts --format esm,cjs --dts --clean\n@t3tools/contracts:build: \u001b[34mℹ\u001b[39m tsdown \u001b[2mv0.20.3\u001b[22m powered by rolldown \u001b[2mv1.0.0-rc.3\u001b[22m\n@t3tools/contracts:build: \u001b[34mℹ\u001b[39m entry: \u001b[34msrc/index.ts\u001b[39m\n@t3tools/contracts:build: \u001b[34mℹ\u001b[39m tsconfig: \u001b[34mtsconfig.json\u001b[39m\n@t3tools/contracts:build: \u001b[34mℹ\u001b[39m Build start\n@t3tools/contracts:build: \u001b[34mℹ\u001b[39m Cleaning 4 files\n@t3tools/contracts:build: \u001b[34mℹ\u001b[39m \u001b[33m[CJS]\u001b[39m \u001b[2mdist/\u001b[22m\u001b[1mindex.cjs\u001b[22m  \u001b[2m197.65 kB\u001b[22m \u001b[2m│ gzip: 31.47 kB\u001b[22m\n@t3tools/contracts:build: \u001b[34mℹ\u001b[39m \u001b[33m[CJS]\u001b[39m 1 files, total: 197.65 kB\n@t3tools/contracts:build: \u001b[33m[PLUGIN_TIMINGS] Warning:\u001b[0m Your build spent significant time in plugin `tsdown:external`. See https://rolldown.rs/options/checks#plugintimings for more details.\n@t3tools/contracts:build:"
+  },
+  {
+    "id": "26e2a3d0-82d1-4ae0-a52e-b6ee06a0fb3b",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:07.760Z",
+    "kind": "text",
+    "role": "assistant",
+    "text": ""
+  },
+  {
+    "id": "f2263683-d095-4239-8913-00aed9945293",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:07.987Z",
+    "kind": "tool_use",
+    "toolName": "Bash",
+    "toolUseId": "toolu_01R7UYYgXSftxnNz6d6Qm7qv",
+    "input": {
+      "command": "sleep 30 && tail -80 \"/private/tmp/claude-501/-Volumes-My-Shared-Files-repo-scratch-t3code-main/e4ed0331-cd07-4af1-a977-99bfe1af3c73/tasks/b90evmctq.output\"",
+      "description": "Check dev output",
+      "timeout": 45000
+    }
+  },
+  {
+    "id": "28020b03-8882-43ff-b964-0325e6d0038a",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:07.988Z",
+    "kind": "tool_result",
+    "toolUseId": "toolu_01R7UYYgXSftxnNz6d6Qm7qv",
+    "ok": false,
+    "output": "<tool_use_error>Blocked: sleep 30 followed by: tail -80 \"/private/tmp/claude-501/-Volumes-My-Shared-Files-repo-scratch-t3code-main/e4ed0331-cd07-4af1-a977-99bfe1af3c73/tasks/b90evmctq.output\". To wait for a condition, use Monitor with an until-loop (e.g. `until <check>; do sleep 2; done`). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to work around this block.</tool_use_error>"
+  },
+  {
+    "id": "3c3e7f57-e865-45b5-ac38-24ae5abfa03b",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:14.448Z",
+    "kind": "tool_use",
+    "toolName": "Monitor",
+    "toolUseId": "toolu_01PmG9mzk4FLwpmBArPpnhad",
+    "input": {
+      "command": "until grep -qE \"(localhost:5733|localhost:13773|Local:|ready in|Ready|VITE.*ready|ELIFECYCLE|error TS|Error:)\" \"/private/tmp/claude-501/-Volumes-My-Shared-Files-repo-scratch-t3code-main/e4ed0331-cd07-4af1-a977-99bfe1af3c73/tasks/b90evmctq.output\"; do sleep 2; done; echo \"---READY-OR-ERROR---\"; tail -40 \"/private/tmp/claude-501/-Volumes-My-Shared-Files-repo-scratch-t3code-main/e4ed0331-cd07-4af1-a977-99bfe1af3c73/tasks/b90evmctq.output\"",
+      "description": "Wait for dev server ready or error",
+      "timeout_ms": 180000,
+      "persistent": false
+    }
+  },
+  {
+    "id": "acad42ad-5bee-449d-be50-dd5636e25e03",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:14.957Z",
+    "kind": "tool_result",
+    "toolUseId": "toolu_01PmG9mzk4FLwpmBArPpnhad",
+    "ok": true,
+    "output": "Monitor started (task bwf78zimv, timeout 180000ms). You will be notified on each event. Keep working — do not poll or sleep. Events may arrive while you are waiting for the user — an event is not their reply."
+  },
+  {
+    "id": "08610158-d107-4d17-af62-f09bba12bbe3",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:17.632Z",
+    "kind": "text",
+    "role": "assistant",
+    "text": "Dev runner started. Ports configured: server on 13773, web on 5733. Waiting for the web server to come up — I'll let you know when it's ready or if it errors."
+  },
+  {
+    "id": "30a3be6b-8377-44b3-adbd-16ffe26ff102",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:18.129Z",
+    "kind": "unknown",
+    "rawKind": "system"
+  },
+  {
+    "id": "ebd4dfb8-f0ab-41f7-99a1-663332efbbe7",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:18.222Z",
+    "kind": "unknown",
+    "rawKind": "system"
+  },
+  {
+    "id": "synthetic-9a07149e3ba02f63",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:56.074Z",
+    "kind": "unknown",
+    "rawKind": "queue-operation"
+  },
+  {
+    "id": "synthetic-41efeefa4d5a5f7c",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:56.113Z",
+    "kind": "unknown",
+    "rawKind": "queue-operation"
+  },
+  {
+    "id": "5a62ec58-12bd-4d80-95d2-20897ee250c6",
+    "schemaVersion": "v1",
+    "chatId": "chat-02-tool-result-error.jsonl",
+    "sessionId": "session-02-tool-result-error.jsonl",
+    "tsIso": "2026-05-06T12:29:56.152Z",
+    "kind": "text",
+    "role": "user",
+    "text": "<task-notification>\n<task-id>bz4r7yq6r</task-id>\n<tool-use-id>toolu_01KfaazPY6Sz1vkbSUPnqQAi</tool-use-id>\n<output-file>/private/tmp/claude-501/-Volumes-My-Shared-Files-repo-scratch-t3code-main/e4ed0331-cd07-4af1-a977-99bfe1af3c73/tasks/bz4r7yq6r.output</output-file>\n<status>completed</status>\n<summary>Background command \"Wait for dev server ready or error\" completed (exit code 0)</summary>\n</task-notification>"
+  }
+]

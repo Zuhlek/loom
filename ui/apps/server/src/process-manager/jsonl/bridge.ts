@@ -1,0 +1,779 @@
+/**
+ * jsonl/bridge.ts — JsonlTailBridge.
+ *
+ * One bridge per server process. Holds per-chat
+ * `ChatState`. The factory returns the public surface consumed by
+ * `http-ws-server.ts` and the routes.
+ *
+ * Composition:
+ *   - tmux: `TmuxSessionApi` — only path to the `claude` PTY.
+ *   - sessionStore: `SessionIdStore` — chatId → sessionId persistence.
+ *   - pathProbe: `JsonlPathProbe` — resolves the tail-root + cwd encoder.
+ *   - tail: `JsonlTail` (per chat) — append-only line reader.
+ *   - materializer: `Materializer` (per chat) — ClaudeEvent → ChatItem[].
+ *
+ * No drain timer. No idle reaper. Detach is a pure WS removal — the
+ * `claude` process keeps running until `dispose(chatId)` is called
+ * (chat delete) or the user explicitly kills the chat through retry.
+ */
+
+import { join } from "node:path";
+
+import { createJsonlTail, type JsonlTail } from "./tail.ts";
+import { createMaterializer, type Materializer } from "./materializer.ts";
+import { translate, type TranslatorCtx } from "./translator.ts";
+import { discoverActiveJsonl } from "./discover-active-jsonl.ts";
+import { createBridgeLog, type BridgeLog } from "./bridge-log.ts";
+import type { TmuxSessionApi } from "../tmux-session.ts";
+import { TmuxUnavailableError } from "../tmux-availability.ts";
+import type { SessionIdStore } from "../session-store.ts";
+import type { JsonlPathProbe } from "../jsonl-path-probe.ts";
+import type { PaneProcessApi } from "../pane-process.ts";
+import type {
+  ChatItem,
+  PendingPermission,
+  PendingQuestion,
+  Task,
+  WireModelSettings,
+} from "../../chat-protocol/messages.ts";
+import type { WirePermissionMode } from "../../chat-protocol/frames.ts";
+import {
+  serializeServerFrame,
+  type ServerFrame,
+  type SnapshotFrame,
+} from "../../chat-protocol/frames.ts";
+import type { ChatEnvelope } from "../../chat-protocol/envelope.ts";
+
+export interface WsClient {
+  send(text: string): void;
+  close?(): void;
+}
+
+export type TasksUpdateListener = (chatId: string, tasks: Task[]) => void;
+
+export interface JsonlTailBridgeOptions {
+  tmux: TmuxSessionApi;
+  sessionStore: SessionIdStore;
+  pathProbe: JsonlPathProbe;
+  /**
+   * File-ownership identity check for the rotation poller. The bridge
+   * adopts a candidate JSONL only when `paneProcess.paneOwnsFile`
+   * confirms the writer descends from this chat's tmux pane PID — the
+   * authoritative gate against bystander claude sessions writing in
+   * the same encoded-cwd directory.
+   */
+  paneProcess: PaneProcessApi;
+  /** Resolve the cwd to spawn `claude` under for a given chat. */
+  cwdResolver(chatId: string): Promise<string> | string;
+  /** Tail polling interval — small in tests, default 250ms in production. */
+  tailPollingMs?: number;
+  /**
+   * Rotation-discovery interval. The bridge re-runs directory-scan on
+   * this cadence to detect claude rotating its session-id mid-
+   * conversation. Default 500ms; smaller values shorten the rotation-
+   * detection latency at the cost of more `readdir` calls.
+   */
+  rotationPollMs?: number;
+  /**
+   * Structured per-stage log. When omitted, a default log is created
+   * from `process.env.LOOM_LOG_BRIDGE` so production deployments get
+   * info-level visibility into attach / detach / first-emit. Tests
+   * inject a sink recorder.
+   */
+  log?: BridgeLog;
+}
+
+interface ChatState {
+  chatId: string;
+  sessionId: string;
+  cwd: string;
+  jsonlPath: string;
+  /** Mtime of the currently-tailed file — used by the rotation poller. */
+  jsonlMtimeMs: number;
+  sessionDir: string;
+  state: "absent" | "starting" | "live" | "disposed";
+  tail: JsonlTail;
+  materializer: Materializer;
+  clients: Set<WsClient>;
+  pendingPermissions: Map<string, PendingPermission>;
+  pendingQuestions: Map<string, PendingQuestion>;
+  /** In-process permission-mode preference (does not by itself reach claude). */
+  permissionMode: WirePermissionMode;
+  modelSettings: Partial<WireModelSettings>;
+  latestTasks: Task[];
+  /** Wall-clock millis at attach time — used for first-emit latency log. */
+  attachedAtMs: number;
+  /** Whether at least one outbound frame has been emitted for this chat. */
+  hasEmittedFrame: boolean;
+  /**
+   * Interval handle for the rotation poller. Claude can rotate its
+   * session-id mid-conversation (a new `.jsonl` file appears in the
+   * encoded-cwd directory); the poller re-runs discovery and swaps
+   * the tail when that happens. Cleared on dispose.
+   */
+  rotationPoll: ReturnType<typeof setInterval> | undefined;
+}
+
+export interface JsonlTailBridge {
+  // Lifecycle
+  attach(chatId: string, client: WsClient): Promise<void>;
+  detach(chatId: string, client: WsClient): void;
+  hasSession(chatId: string): Promise<boolean>;
+  dispose(chatId: string): Promise<void>;
+
+  // User input
+  submitUserTurnWithPriority(
+    chatId: string,
+    text: string,
+    priority?: "now" | "next" | "later",
+    images?: unknown,
+  ): Promise<void>;
+  interrupt(chatId: string): Promise<void>;
+  respondToPermission(
+    chatId: string,
+    id: string,
+    behavior: "allow" | "deny",
+    opts?: { remember?: boolean; message?: string },
+  ): Promise<void>;
+  respondToQuestion(
+    chatId: string,
+    id: string,
+    body: { answers: string[]; otherText?: string },
+  ): Promise<void>;
+
+  // Control surface
+  setPermissionMode(chatId: string, mode: WirePermissionMode): Promise<void>;
+  acceptPlanProposal(chatId: string, planId: string): Promise<void>;
+  rejectPlanProposal(chatId: string, planId: string): Promise<void>;
+  setModelSettings(chatId: string, patch: Partial<WireModelSettings>): Promise<void>;
+  retrySession(chatId: string): Promise<void>;
+
+  // Subscriptions
+  onTasksUpdate(cb: TasksUpdateListener): () => void;
+
+  // Hook-envelope routing.
+  routeHookEnvelope(env: ChatEnvelope): void;
+}
+
+export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBridge {
+  const chats = new Map<string, ChatState>();
+  const tasksListeners = new Set<TasksUpdateListener>();
+  const log: BridgeLog = opts.log ?? createBridgeLog();
+
+  function sendTo(client: WsClient, frame: ServerFrame): void {
+    try {
+      client.send(serializeServerFrame(frame));
+    } catch {
+      // Slow / dead client: best-effort detach (fan-out resilience).
+      // We can't know the chatId here without a reverse index; fan-out
+      // callers handle their own per-frame error trapping.
+    }
+  }
+
+  function broadcast(state: ChatState, frame: ServerFrame): void {
+    const dead: WsClient[] = [];
+    for (const c of state.clients) {
+      try {
+        c.send(serializeServerFrame(frame));
+      } catch {
+        dead.push(c);
+      }
+    }
+    for (const c of dead) state.clients.delete(c);
+    log.emit(state.chatId, {
+      kind: frame.kind,
+      clients: state.clients.size,
+    });
+    if (!state.hasEmittedFrame) {
+      state.hasEmittedFrame = true;
+      log.emitFirst(state.chatId, {
+        kind: frame.kind,
+        latencyMs: Date.now() - state.attachedAtMs,
+      });
+    }
+  }
+
+  function buildSnapshotFrame(state: ChatState): SnapshotFrame {
+    const snap = state.materializer.snapshot();
+    return {
+      kind: "snapshot",
+      "chat-id": state.chatId,
+      body: {
+        items: snap.items as ChatItem[],
+        turnState: "idle",
+        pendingPermission:
+          state.pendingPermissions.size > 0
+            ? [...state.pendingPermissions.values()][0]!
+            : null,
+        pendingQuestion:
+          state.pendingQuestions.size > 0
+            ? [...state.pendingQuestions.values()][0]!
+            : null,
+        lifecycle: "active",
+      },
+    };
+  }
+
+  function onTailLine(state: ChatState, rawLine: string, byteLen: number): void {
+    log.tailLine(state.chatId, { bytes: byteLen });
+    const ctx: TranslatorCtx = {
+      chatId: state.chatId,
+      sessionId: state.sessionId,
+    };
+    const ev = translate(rawLine, ctx);
+    log.translatorEvent(state.chatId, {
+      kind: ev?.kind ?? null,
+    });
+    if (!ev) return;
+    const frames = state.materializer.ingest(ev);
+    for (const f of frames) {
+      broadcast(state, f);
+      if (f.kind === "tasks-update") {
+        state.latestTasks = f.body.tasks;
+        for (const cb of tasksListeners) {
+          try {
+            cb(state.chatId, f.body.tasks);
+          } catch {
+            // Listener exceptions don't break delivery.
+          }
+        }
+      }
+    }
+  }
+
+  async function ensureChatState(chatId: string): Promise<ChatState> {
+    let state = chats.get(chatId);
+    if (state) return state;
+
+    const resolvedCwd = await Promise.resolve(opts.cwdResolver(chatId));
+    const entry = await opts.sessionStore.getOrCreate(chatId, resolvedCwd);
+    let sessionId = entry.sessionId;
+    const cwd = entry.cwd;
+
+    await opts.tmux.ensure(chatId, cwd, sessionId);
+
+    const tail = createJsonlTail({ pollingIntervalMs: opts.tailPollingMs });
+    const materializer = createMaterializer({ chatId });
+
+    // Bystander-resistance: BIND the tail to `<sessionId>.jsonl`. The
+    // persisted sessionId is the UUID we just passed to
+    // `claude --session-id` via tmux; that is the file claude SHOULD
+    // be writing to. No directory-scan at attach — a bystander claude
+    // session (the user's `/weave` session, a developer's direct
+    // `claude` invocation) writing in the same cwd must NOT be
+    // adopted just because it is the most-recently-modified entry.
+    const resolved = await opts.pathProbe.resolve();
+    const encodedCwd = opts.pathProbe.encodeCwd(cwd);
+    const sessionDir = join(resolved.tailRoot, encodedCwd);
+    const jsonlPath = join(sessionDir, `${sessionId}.jsonl`);
+    const tailStrategy = "bound";
+
+    state = {
+      chatId,
+      sessionId,
+      cwd,
+      jsonlPath,
+      jsonlMtimeMs: 0,
+      sessionDir,
+      state: "starting",
+      tail,
+      materializer,
+      clients: new Set(),
+      pendingPermissions: new Map(),
+      pendingQuestions: new Map(),
+      permissionMode: "default",
+      modelSettings: {},
+      latestTasks: [],
+      attachedAtMs: Date.now(),
+      hasEmittedFrame: false,
+      rotationPoll: undefined,
+    };
+    chats.set(chatId, state);
+
+    tail.onLine((line) => onTailLine(state!, line.text, line.text.length));
+    tail.start({ filePath: jsonlPath });
+    state.state = "live";
+
+    // Rotation poller — mid-conversation rotation handling. Claude has
+    // been observed to mint a NEW `.jsonl` file in the encoded-cwd
+    // directory partway through a conversation. The directory-scan we
+    // ran at attach picked the most-recent file at THAT moment, but a
+    // newer one can appear later. The poller re-runs discovery on
+    // `rotationPollMs` (default 500ms) and swaps the tail when the
+    // active file changes.
+    state.rotationPoll = setInterval(() => {
+      void pollForRotation(state!);
+    }, opts.rotationPollMs ?? 500);
+
+    log.attach(chatId, {
+      sessionId,
+      jsonlPath,
+      strategy: tailStrategy,
+    });
+
+    return state;
+  }
+
+  /**
+   * Re-run directory discovery; if a newer `.jsonl` file is present
+   * AND the writing process descends from this chat's tmux pane PID,
+   * stop the current tail and start a new one on that file. The
+   * materializer is preserved across rotation — dedupe-on-event-id
+   * absorbs any overlap.
+   *
+   * Identity gate: `paneProcess.paneOwnsFile` runs `lsof` against the
+   * candidate path and walks each writer's ppid chain looking for the
+   * pane root PID. This is the single authoritative answer to "is
+   * this JSONL mine?" — it accepts legitimate claude session-id
+   * rotation, rejects bystander claude sessions (terminal `claude`,
+   * `/weave`, onboarding JSONLs), and ignores mtime races entirely.
+   */
+  async function pollForRotation(state: ChatState): Promise<void> {
+    if (state.state === "disposed") return;
+    let discovered;
+    try {
+      discovered = await discoverActiveJsonl(state.sessionDir);
+    } catch {
+      return;
+    }
+    if (!discovered) return;
+    if (discovered.filePath === state.jsonlPath) {
+      if (discovered.mtimeMs > state.jsonlMtimeMs) {
+        state.jsonlMtimeMs = discovered.mtimeMs;
+      }
+      return;
+    }
+    const paneRoot = await opts.paneProcess.paneRootPid(state.chatId);
+    if (paneRoot === null) return;
+    const owned = await opts.paneProcess.paneOwnsFile(paneRoot, discovered.filePath);
+    if (!owned) return;
+    // Rotation detected and ownership confirmed. Swap the tail.
+    const oldTail = state.tail;
+    const newTail = createJsonlTail({ pollingIntervalMs: opts.tailPollingMs });
+    state.tail = newTail;
+    state.jsonlPath = discovered.filePath;
+    state.jsonlMtimeMs = discovered.mtimeMs;
+    // Update the inner sessionId — the new file's sessionId becomes
+    // the authoritative one.
+    if (discovered.sessionId && discovered.sessionId !== state.sessionId) {
+      state.sessionId = discovered.sessionId;
+      try {
+        await opts.sessionStore.upsert(state.chatId, discovered.sessionId, state.cwd);
+      } catch {
+        /* best-effort */
+      }
+    }
+    newTail.onLine((line) => onTailLine(state, line.text, line.text.length));
+    newTail.start({ filePath: discovered.filePath });
+    try {
+      await oldTail.stop();
+    } catch {
+      /* ignore */
+    }
+    log.attach(state.chatId, {
+      sessionId: state.sessionId,
+      jsonlPath: state.jsonlPath,
+      strategy: "rotated",
+    });
+  }
+
+  function getChat(chatId: string): ChatState | undefined {
+    return chats.get(chatId);
+  }
+
+  /**
+   * Build the typed runtime-unavailable error frame consumed by the UI
+   * to render an install/setup banner (M3 fix). Currently only fired
+   * for missing tmux; the shape generalises to other backend deps.
+   */
+  function runtimeUnavailableFrame(
+    chatId: string,
+    reason: "tmux",
+    err: TmuxUnavailableError,
+  ): ServerFrame {
+    return {
+      kind: "error",
+      "chat-id": chatId,
+      body: {
+        message: err.message,
+        code: "runtime-unavailable",
+        details: {
+          reason,
+          actionable:
+            "Install tmux >= 3.0 and ensure it is on PATH — see docs/setup.md.",
+        },
+      },
+    };
+  }
+
+  /**
+   * Emit a runtime-unavailable frame to a single ws client (no
+   * broadcast — used at attach time before the chat state exists).
+   */
+  function emitRuntimeUnavailableTo(
+    client: WsClient,
+    chatId: string,
+    err: TmuxUnavailableError,
+  ): void {
+    sendTo(client, runtimeUnavailableFrame(chatId, "tmux", err));
+  }
+
+  /**
+   * Emit a runtime-unavailable frame via broadcast to all clients
+   * attached to the chat (used by input-path methods after attach has
+   * already wired ws into the chat state).
+   */
+  function broadcastRuntimeUnavailable(
+    chatId: string,
+    err: TmuxUnavailableError,
+  ): void {
+    const state = chats.get(chatId);
+    if (!state) return;
+    broadcast(state, runtimeUnavailableFrame(chatId, "tmux", err));
+  }
+
+  function literalChoiceForBehavior(behavior: "allow" | "deny"): string {
+    // Permission-prompt UX in `claude` is a numbered choice list.
+    // Per the Phase 0 catalog: choice 1 = accept (allow), choice 2 = reject
+    // (deny). The bridge translates the UI verb into the literal text the
+    // user would type. Catalog field-name discipline: this string is a
+    // literal CHOICE, not a JSONL field name.
+    return behavior === "allow" ? "1" : "2";
+  }
+
+  return {
+    async attach(chatId, client) {
+      let state: ChatState;
+      try {
+        state = await ensureChatState(chatId);
+      } catch (err) {
+        if (err instanceof TmuxUnavailableError) {
+          // M3 fix: surface a typed runtime-unavailable frame to the
+          // client and return cleanly. The chat is NOT registered; the
+          // UI can render a setup banner and `bridge.hasSession`
+          // resolves false (delegated to `tmux.exists` which also
+          // short-circuits when unavailable).
+          emitRuntimeUnavailableTo(client, chatId, err);
+          return;
+        }
+        throw err;
+      }
+      state.clients.add(client);
+      // Always deliver a snapshot frame before any subsequent deltas.
+      sendTo(client, buildSnapshotFrame(state));
+    },
+
+    detach(chatId, client) {
+      const state = chats.get(chatId);
+      if (!state) return;
+      state.clients.delete(client);
+      // No drain timer, no kill, no dispose.
+    },
+
+    async hasSession(chatId) {
+      return opts.tmux.exists(chatId);
+    },
+
+    async dispose(chatId) {
+      const state = chats.get(chatId);
+      if (!state) return;
+      // Stop the rotation poller first so it cannot resurrect the
+      // tail mid-dispose.
+      state.state = "disposed";
+      if (state.rotationPoll) {
+        clearInterval(state.rotationPoll);
+        state.rotationPoll = undefined;
+      }
+      try {
+        await state.tail.stop();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await opts.tmux.kill(chatId);
+      } catch {
+        /* ignore — idempotent */
+      }
+      state.clients.clear();
+      state.pendingPermissions.clear();
+      state.pendingQuestions.clear();
+      chats.delete(chatId);
+    },
+
+    // ─── User input ──────────────────────────────────────────────────────────
+    async submitUserTurnWithPriority(chatId, text, _priority, images) {
+      try {
+        await ensureChatState(chatId);
+      } catch (err) {
+        if (err instanceof TmuxUnavailableError) {
+          broadcastRuntimeUnavailable(chatId, err);
+          return;
+        }
+        throw err;
+      }
+      if (images !== undefined && Array.isArray(images) && images.length > 0) {
+        const state = getChat(chatId);
+        if (state) {
+          broadcast(state, {
+            kind: "error",
+            "chat-id": chatId,
+            body: {
+              message:
+                "image attachments are not supported by the JSONL bridge in this iteration",
+            },
+          });
+        }
+        // Iteration policy: typed not-supported error; text still sends.
+      }
+      try {
+        await opts.tmux.sendInput(chatId, text);
+      } catch (err) {
+        if (err instanceof TmuxUnavailableError) {
+          broadcastRuntimeUnavailable(chatId, err);
+          return;
+        }
+        throw err;
+      }
+    },
+
+    async interrupt(chatId) {
+      try {
+        await opts.tmux.interrupt(chatId);
+      } catch (err) {
+        if (err instanceof TmuxUnavailableError) {
+          broadcastRuntimeUnavailable(chatId, err);
+          return;
+        }
+        throw err;
+      }
+    },
+
+    async respondToPermission(chatId, id, behavior, _opts) {
+      const state = getChat(chatId);
+      if (state) {
+        state.pendingPermissions.delete(id);
+        broadcast(state, {
+          kind: "pending-permission",
+          "chat-id": chatId,
+          body: null,
+        });
+      }
+      await opts.tmux.sendInput(chatId, literalChoiceForBehavior(behavior));
+      // Emit the resolution acknowledgement AFTER the response reaches
+      // tmux. The frame carries the original prompt-id + the user's
+      // verb so attached clients can audit the decision and clear UI
+      // affordances keyed on the id.
+      if (state) {
+        broadcast(state, {
+          kind: "permission-resolved",
+          "chat-id": chatId,
+          body: { id, behavior },
+        });
+      }
+    },
+
+    async respondToQuestion(chatId, id, body) {
+      const state = getChat(chatId);
+      const pending = state?.pendingQuestions.get(id);
+      if (state) {
+        state.pendingQuestions.delete(id);
+        broadcast(state, {
+          kind: "pending-question",
+          "chat-id": chatId,
+          body: null,
+        });
+      }
+
+      // Map answer ids → 1-based option indices for the TUI numeric prompt.
+      // AskUserQuestion in Claude's TUI accepts the option number (1..N).
+      // For multi-select / "Other" freeform we fall back gracefully:
+      //   - freeform "__freeform__": send the typed text as plain input.
+      //   - multi-select: send the FIRST selected index (TODO: real
+      //     multi-select keys — unconfirmed in the TUI catalog).
+      //   - fallback (lost pending state): send the first answer id raw.
+      let toSend: string;
+      if (body.answers.includes("__freeform__")) {
+        toSend = body.otherText ?? "";
+      } else if (pending && pending.options && pending.options.length > 0) {
+        const firstAnswerId = body.answers[0];
+        const idx = pending.options.findIndex((o) => o.id === firstAnswerId);
+        toSend = idx >= 0 ? String(idx + 1) : (firstAnswerId ?? "");
+      } else {
+        toSend = body.answers[0] ?? "";
+      }
+      await opts.tmux.sendInput(chatId, toSend);
+    },
+
+    // ─── Control surface ─────────────────────────────────────────────────────
+    async setPermissionMode(chatId, mode) {
+      const state = await ensureChatState(chatId);
+      state.permissionMode = mode;
+      broadcast(state, {
+        kind: "permission-mode-set",
+        "chat-id": chatId,
+        body: { mode },
+      });
+    },
+
+    async acceptPlanProposal(chatId, _planId) {
+      // Reuses the permission-flow path: the user "accepts" the plan by
+      // sending the accept literal into the tmux session. Catalog: plan
+      // proposals (when present) ride the same numbered-choice protocol.
+      await opts.tmux.sendInput(chatId, "1");
+    },
+
+    async rejectPlanProposal(chatId, _planId) {
+      await opts.tmux.sendInput(chatId, "2");
+    },
+
+    async setModelSettings(chatId, patch) {
+      const state = await ensureChatState(chatId);
+      state.modelSettings = { ...state.modelSettings, ...patch };
+      // Emit /model slash-command literal — the slash-command path is
+      // the only model toggle.
+      //
+      // TODO(m3): `/model` argument grammar is unconfirmed by the JSONL
+      // event catalog (`docs/jsonl-event-catalog.md` §"/model switch").
+      // The catalog captured only the
+      // `<command-name>/model</command-name>` form typed alone, after
+      // which `claude` renders an interactive picker — there is no
+      // recorded evidence that `claude` accepts `--effort=` /
+      // `--context=` flags here. The current best-effort grammar below
+      // is preserved to avoid silently regressing the existing wire
+      // contract; m3 cleanup deferred pending a live re-mining session
+      // that confirms (or refutes) the argument shape. If `claude`
+      // rejects the argument string, the tmux session shows the
+      // rejection and the user can correct it interactively — see
+      // `review.md` §m3 for the audit trail.
+      const args: string[] = [];
+      if (patch.model != null) args.push(patch.model);
+      if (patch.effort != null) args.push(`--effort=${patch.effort}`);
+      if (patch.contextWindow != null) args.push(`--context=${patch.contextWindow}`);
+      await opts.tmux.sendInput(chatId, `/model ${args.join(" ")}`.trim());
+    },
+
+    async retrySession(chatId) {
+      await opts.tmux.kill(chatId);
+      await opts.sessionStore.delete(chatId);
+      const state = chats.get(chatId);
+      if (state) {
+        state.materializer.reset();
+        broadcast(state, buildSnapshotFrame(state));
+      }
+      // The next ensureChatState call will mint a fresh sessionId.
+    },
+
+    // ─── Subscriptions ───────────────────────────────────────────────────────
+    onTasksUpdate(cb) {
+      tasksListeners.add(cb);
+      return () => {
+        tasksListeners.delete(cb);
+      };
+    },
+
+    // ─── Hook-envelope routing ───────────────────────────────────────────────
+    routeHookEnvelope(env) {
+      const chatId = env["chat-id"];
+      if (!chatId) return;
+      const state = chats.get(chatId);
+      if (!state) return; // unknown chat — silently drop.
+
+      if (process.env.LOOM_TRACE_HOOKS === "1") {
+        console.warn(
+          `[loom hook trace] route chat=${chatId} kind=${env.kind} body=${JSON.stringify(
+            env.body ?? null,
+          ).slice(0, 2000)}`,
+        );
+      }
+
+      switch (env.kind) {
+        case "gate-pending": {
+          const body = env.body as
+            | { kind?: string; data?: Record<string, unknown> }
+            | undefined;
+          if (!body) return;
+          if (body.kind === "permissionrequest") {
+            const data = body.data ?? {};
+            const id =
+              (data.id as string | undefined) ?? `perm-${Date.now()}`;
+            const perm: PendingPermission = {
+              id,
+              toolName: (data.toolName as string | undefined) ?? "",
+              input: (data.input as Record<string, unknown> | undefined) ?? {},
+              title: data.title as string | undefined,
+              displayName: data.displayName as string | undefined,
+              description: data.description as string | undefined,
+            };
+            state.pendingPermissions.set(id, perm);
+            broadcast(state, {
+              kind: "pending-permission",
+              "chat-id": chatId,
+              body: perm,
+            });
+            return;
+          }
+          if (body.kind === "askuserquestion") {
+            const data = body.data ?? {};
+            const id =
+              (data.id as string | undefined) ?? `q-${Date.now()}`;
+            const q: PendingQuestion = {
+              id,
+              question: (data.question as string | undefined) ?? "",
+              options:
+                (data.options as PendingQuestion["options"] | undefined) ?? [],
+              multiSelect: (data.multiSelect as boolean | undefined),
+            };
+            state.pendingQuestions.set(id, q);
+            broadcast(state, {
+              kind: "pending-question",
+              "chat-id": chatId,
+              body: q,
+            });
+            return;
+          }
+          return;
+        }
+        case "session-start":
+          broadcast(state, {
+            kind: "session-state",
+            "chat-id": chatId,
+            body: { lifecycle: "active" },
+          });
+          return;
+        case "stop":
+          broadcast(state, {
+            kind: "turn-state",
+            "chat-id": chatId,
+            body: { state: "idle" },
+          });
+          return;
+        case "pre-tool-use": {
+          // pre-tool-use carries the permission-prompt side-channel.
+          const body = env.body as
+            | { toolName?: string; payload?: Record<string, unknown> }
+            | undefined;
+          const payload = body?.payload ?? {};
+          const id = (payload.id as string | undefined) ?? `pre-${Date.now()}`;
+          const perm: PendingPermission = {
+            id,
+            toolName: body?.toolName ?? (payload.toolName as string) ?? "",
+            input: (payload.input as Record<string, unknown> | undefined) ?? {},
+            title: payload.title as string | undefined,
+            displayName: payload.displayName as string | undefined,
+            description: payload.description as string | undefined,
+            toolUseId: payload.toolUseId as string | undefined,
+          };
+          state.pendingPermissions.set(id, perm);
+          broadcast(state, {
+            kind: "pending-permission",
+            "chat-id": chatId,
+            body: perm,
+          });
+          return;
+        }
+        default:
+          return;
+      }
+    },
+  };
+}

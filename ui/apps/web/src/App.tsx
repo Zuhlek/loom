@@ -8,6 +8,7 @@ import { SidebarStateProvider } from "./lib/sidebar-state";
 import { UnreadChatsProvider } from "./lib/unread-chats";
 import { SnackbarProvider } from "./components/ui/Snackbar";
 import { BackendOfflineBanner } from "./components/BackendOfflineBanner";
+import { HooksHealthBanner } from "./components/HooksHealthBanner";
 import { useHealthPoll } from "./lib/useHealthPoll";
 
 export function App() {
@@ -21,6 +22,7 @@ export function App() {
           offlineSince={health.offlineSince}
           onRetry={health.retryNow}
         />
+        {!health.isOffline && <HooksHealthBanner />}
         <Switch>
         <Route path="/" component={LiveHome} />
         <Route path="/discover" component={DiscoverWizard} />

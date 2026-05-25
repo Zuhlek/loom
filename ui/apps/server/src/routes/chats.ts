@@ -17,19 +17,104 @@
  * Spawning the underlying claude PTY is deferred to the WS attach handler
  * so we don't burn a process before the user actually opens the chat.
  */
+import { spawn as childSpawn, execFileSync } from "node:child_process";
+
 import type { MetadataStore } from "../metadata-store/index.ts";
-import type { ClaudeSessionBridge } from "../process-manager/claude-session-bridge.ts";
-import {
-  launchHandoffTerminal as defaultLaunchHandoffTerminal,
-  type HandoffResult,
-  type HandoffSession,
-} from "../process-manager/handoff.ts";
+import type { JsonlTailBridge } from "../process-manager/jsonl/bridge.ts";
+import { jsonResponse } from "./_response.ts";
 import { decorateChat } from "./chat-decorator.ts";
 import { invalidateFabricCache } from "./sidebar.ts";
 
+/**
+ * Handoff session payload — kept local to this module. `handoff.ts` is
+ * intentionally deleted; the launcher logic lives inline at the only
+ * site that ever called it (this file).
+ */
+export interface HandoffSession {
+  chatId: string;
+}
+
+export interface HandoffResult {
+  ok: boolean;
+  error?: string;
+  launched?: { command: string; pid: number };
+}
+
 export interface ChatsRouteDeps {
-  /** Injectable for tests. Defaults to the real launcher. */
+  /** Injectable for tests. Defaults to the inlined launcher below. */
   launchHandoffTerminal?: (session: HandoffSession) => Promise<HandoffResult>;
+}
+
+/**
+ * Inlined handoff launcher — opens the host's native terminal attached
+ * to the chat's tmux session (`tmux attach-session -t loom-<chatId>`).
+ *
+ *   - macOS: `open -a Terminal.app -n --args bash -lc "tmux attach-session -t loom-<id>"`.
+ *   - Linux: chain `x-terminal-emulator` → `gnome-terminal` → `konsole`
+ *     → `xterm` (first-hit wins via `which`).
+ *   - Windows / other: returns `{ ok: false, error }` without spawning.
+ */
+function defaultLaunchHandoffTerminal(
+  session: HandoffSession,
+): Promise<HandoffResult> {
+  const platform = process.platform;
+  const tmuxCmd = `tmux attach-session -t loom-${session.chatId}`;
+
+  function which(cmd: string): string | null {
+    try {
+      const out = execFileSync("/usr/bin/env", ["which", cmd], {
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      const path = out.toString().trim();
+      return path.length > 0 ? path : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (platform === "darwin") {
+    const args = ["-a", "Terminal.app", "-n", "--args", "bash", "-lc", tmuxCmd];
+    const child = childSpawn("open", args, { detached: true, stdio: "ignore" });
+    child.unref?.();
+    return Promise.resolve({
+      ok: true,
+      launched: { command: `open ${args.join(" ")}`, pid: child.pid ?? 0 },
+    });
+  }
+
+  if (platform === "linux") {
+    // Order: x-terminal-emulator is the Debian/Ubuntu meta-symlink that
+    // honours the user's default; the others are explicit fallbacks.
+    const chain = ["x-terminal-emulator", "gnome-terminal", "konsole", "xterm"];
+    for (const term of chain) {
+      if (which(term)) {
+        const child = childSpawn(term, ["-e", "bash", "-lc", tmuxCmd], {
+          detached: true,
+          stdio: "ignore",
+        });
+        child.unref?.();
+        return Promise.resolve({
+          ok: true,
+          launched: { command: `${term} -e bash -lc "${tmuxCmd}"`, pid: child.pid ?? 0 },
+        });
+      }
+    }
+    return Promise.resolve({
+      ok: false,
+      error:
+        "No supported terminal emulator found. Install one of: " + chain.join(", "),
+    });
+  }
+
+  if (platform === "win32") {
+    return Promise.resolve({
+      ok: false,
+      error:
+        "Windows is not supported for handoff in v1 (use WSL — see setup docs).",
+    });
+  }
+
+  return Promise.resolve({ ok: false, error: `Unsupported platform: ${platform}` });
 }
 
 function newId(): string {
@@ -44,34 +129,25 @@ function newId(): string {
 export function mountChatsRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   store: MetadataStore,
-  bridge?: ClaudeSessionBridge,
+  bridge?: JsonlTailBridge,
   deps: ChatsRouteDeps = {},
 ): void {
   const launchHandoffTerminal = deps.launchHandoffTerminal ?? defaultLaunchHandoffTerminal;
   routes["/chats"] = async (req) => {
     if (req.method === "GET") {
       const chats = store.chats.list().map((row) => decorateChat(row, store));
-      return new Response(JSON.stringify({ chats }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ chats }, 200);
     }
     if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
     let body: any;
     try {
       body = await req.json();
     } catch {
-      return new Response(JSON.stringify({ error: "invalid json" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "invalid json" }, 400);
     }
     const cwd = body?.cwd;
     if (typeof cwd !== "string" || cwd.length === 0) {
-      return new Response(JSON.stringify({ error: "cwd required" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "cwd required" }, 400);
     }
     const permissionMode = body?.permissionMode ?? "default";
     const worktreeMode = body?.worktreeMode === "worktree" ? "worktree" : "local";
@@ -84,19 +160,16 @@ export function mountChatsRoute(
     if (typeof body?.projectId === "string" && body.projectId.length > 0) {
       const proj = store.projects.get(body.projectId);
       if (!proj) {
-        return new Response(JSON.stringify({ error: "project not found" }), {
-          status: 404,
-          headers: { "content-type": "application/json" },
-        });
+        return jsonResponse({ error: "project not found" }, 404);
       }
       if (!proj.paths.includes(cwd)) {
-        return new Response(
-          JSON.stringify({
+        return jsonResponse(
+          {
             error: "cwd must be one of the project's declared paths",
             cwd,
             projectPaths: proj.paths,
-          }),
-          { status: 400, headers: { "content-type": "application/json" } },
+          },
+          400,
         );
       }
       projectId = proj.id;
@@ -126,31 +199,19 @@ export function mountChatsRoute(
     // the fabric cache so the next sidebar refresh re-scans.
     invalidateFabricCache();
 
-    return new Response(JSON.stringify({ chat: decorateChat(chat, store) }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return jsonResponse({ chat: decorateChat(chat, store) }, 200);
   };
 
   routes["/chats/get"] = async (req, url) => {
     const id = url.searchParams.get("id");
     if (!id) {
-      return new Response(JSON.stringify({ error: "id required" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "id required" }, 400);
     }
     const chat = store.chats.get(id);
     if (!chat) {
-      return new Response(JSON.stringify({ error: "not found" }), {
-        status: 404,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "not found" }, 404);
     }
-    return new Response(JSON.stringify({ chat: decorateChat(chat, store) }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return jsonResponse({ chat: decorateChat(chat, store) }, 200);
   };
 
   routes["/chats/delete"] = async (req, url) => {
@@ -159,17 +220,11 @@ export function mountChatsRoute(
     }
     const id = url.searchParams.get("id");
     if (!id) {
-      return new Response(JSON.stringify({ error: "id required" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "id required" }, 400);
     }
     const chat = store.chats.get(id);
     if (!chat) {
-      return new Response(JSON.stringify({ error: "not found" }), {
-        status: 404,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "not found" }, 404);
     }
     // Tear down the PTY if one is running, then drop the row.
     if (bridge) {
@@ -192,17 +247,11 @@ export function mountChatsRoute(
     }
     const id = url.searchParams.get("id");
     if (!id) {
-      return new Response(JSON.stringify({ error: "id required" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "id required" }, 400);
     }
     const source = store.chats.get(id);
     if (!source) {
-      return new Response(JSON.stringify({ error: "not found" }), {
-        status: 404,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "not found" }, 404);
     }
     const forked = store.chats.create({
       id: newId(),
@@ -214,10 +263,7 @@ export function mountChatsRoute(
       // UUID. pid / inert / worktree_path reset to their defaults.
     });
     invalidateFabricCache();
-    return new Response(JSON.stringify({ chat: decorateChat(forked, store) }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return jsonResponse({ chat: decorateChat(forked, store) }, 200);
   };
 
   routes["/chats/rename"] = async (req, url) => {
@@ -226,26 +272,17 @@ export function mountChatsRoute(
     }
     const id = url.searchParams.get("id");
     if (!id) {
-      return new Response(JSON.stringify({ error: "missing id" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "missing id" }, 400);
     }
     let body: any;
     try {
       body = await req.json();
     } catch {
-      return new Response(JSON.stringify({ error: "invalid body" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "invalid body" }, 400);
     }
     const customName = body?.customName;
     if (customName !== null && typeof customName !== "string") {
-      return new Response(JSON.stringify({ error: "invalid customName" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "invalid customName" }, 400);
     }
     let effective: string | null;
     if (customName === null) {
@@ -253,10 +290,7 @@ export function mountChatsRoute(
     } else {
       const trimmed = customName.trim();
       if (trimmed.length > 80) {
-        return new Response(JSON.stringify({ error: "customName too long" }), {
-          status: 400,
-          headers: { "content-type": "application/json" },
-        });
+        return jsonResponse({ error: "customName too long" }, 400);
       }
       effective = trimmed.length === 0 ? null : trimmed;
     }
@@ -265,17 +299,11 @@ export function mountChatsRoute(
       row = store.chats.setCustomName(id, effective);
     } catch (err) {
       if (err instanceof Error && err.message === "chat not found") {
-        return new Response(JSON.stringify({ error: "chat not found" }), {
-          status: 404,
-          headers: { "content-type": "application/json" },
-        });
+        return jsonResponse({ error: "chat not found" }, 404);
       }
       throw err;
     }
-    return new Response(JSON.stringify({ chat: decorateChat(row, store) }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return jsonResponse({ chat: decorateChat(row, store) }, 200);
   };
 
   routes["/chats/handoff"] = async (req, url) => {
@@ -284,36 +312,27 @@ export function mountChatsRoute(
     }
     const id = url.searchParams.get("id");
     if (!id) {
-      return new Response(JSON.stringify({ error: "id required" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "id required" }, 400);
     }
     const chat = store.chats.get(id);
     if (!chat) {
-      return new Response(JSON.stringify({ error: "not found" }), {
-        status: 404,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "not found" }, 404);
     }
-    if (!bridge || !bridge.hasSession(id)) {
-      return new Response(JSON.stringify({ error: "no live session" }), {
-        status: 409,
-        headers: { "content-type": "application/json" },
-      });
+    const hasSession =
+      bridge !== undefined ? await Promise.resolve(bridge.hasSession(id)) : false;
+    if (!bridge || !hasSession) {
+      return jsonResponse({ error: "no live session" }, 409);
     }
     const result = await launchHandoffTerminal({ chatId: id });
     if (!result.ok) {
-      return new Response(
-        JSON.stringify({ error: result.error ?? "handoff failed" }),
-        { status: 500, headers: { "content-type": "application/json" } },
-      );
+      return jsonResponse({ error: result.error ?? "handoff failed" }, 500);
     }
-    // PTY is intentionally NOT disposed — the session keeps running in
-    // the bridge and the new terminal re-attaches via `loom attach`.
-    return new Response(
-      JSON.stringify({ ok: true, command: result.launched?.command ?? "" }),
-      { status: 200, headers: { "content-type": "application/json" } },
+    // PTY is intentionally NOT disposed — the tmux session keeps running
+    // and the new terminal re-attaches via `tmux attach-session`. Both
+    // surfaces share the tmux session; neither owns it.
+    return jsonResponse(
+      { ok: true, command: result.launched?.command ?? "" },
+      200,
     );
   };
 }
