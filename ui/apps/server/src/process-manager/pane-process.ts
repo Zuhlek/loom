@@ -25,7 +25,7 @@
  * would never adopt any rotation on a system without lsof installed.
  */
 
-import { execFile } from "node:child_process";
+import { execArgv } from "./exec-argv.ts";
 
 export interface PaneProcessApi {
   /** tmux list-panes -t loom-<chatId> -F '#{pane_pid}'. Returns null if no pane. */
@@ -43,35 +43,6 @@ export interface PaneProcessOptions {
   psBin?: string;
   /** Env-var kill switch. When LOOM_DISABLE_PANE_PID_GATE=1, paneOwnsFile always returns true. */
   disabledByEnv?: () => boolean;
-}
-
-interface ExecResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-  errnoCode?: string;
-}
-
-function runArgv(cmd: string, args: string[]): Promise<ExecResult> {
-  return new Promise((resolve) => {
-    execFile(cmd, args, (err, stdout, stderr) => {
-      if (err) {
-        const errnoCode = (err as NodeJS.ErrnoException).code;
-        const numCode =
-          typeof (err as NodeJS.ErrnoException & { code?: unknown }).code === "number"
-            ? ((err as unknown as { code: number }).code)
-            : 1;
-        resolve({
-          code: numCode,
-          stdout: stdout ?? "",
-          stderr: stderr ?? "",
-          errnoCode: typeof errnoCode === "string" ? errnoCode : undefined,
-        });
-        return;
-      }
-      resolve({ code: 0, stdout: stdout ?? "", stderr: stderr ?? "" });
-    });
-  });
 }
 
 function paneTargetFor(chatId: string): string {
@@ -93,7 +64,7 @@ export function createPaneProcessApi(opts: PaneProcessOptions = {}): PaneProcess
 
   return {
     async paneRootPid(chatId) {
-      const r = await runArgv(tmuxBin, [
+      const r = await execArgv(tmuxBin, [
         "list-panes",
         "-t",
         paneTargetFor(chatId),
@@ -119,7 +90,7 @@ export function createPaneProcessApi(opts: PaneProcessOptions = {}): PaneProcess
         return true;
       }
 
-      const lsof = await runArgv(lsofBin, ["-nP", "-Fpn", "--", path]);
+      const lsof = await execArgv(lsofBin, ["-nP", "-Fpn", "--", path]);
       if (lsof.errnoCode === "ENOENT") {
         if (!lsofMissingLogged) {
           lsofMissingLogged = true;
@@ -191,7 +162,7 @@ async function chainHas(
 }
 
 async function readPpid(pid: number, psBin: string): Promise<number | null> {
-  const r = await runArgv(psBin, ["-o", "ppid=", "-p", String(pid)]);
+  const r = await execArgv(psBin, ["-o", "ppid=", "-p", String(pid)]);
   if (r.code !== 0) return null;
   const trimmed = r.stdout.trim();
   if (trimmed.length === 0) return null;

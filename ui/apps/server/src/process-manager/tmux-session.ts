@@ -10,9 +10,8 @@
  * state across restarts (Design ADR-004 / ADR-007).
  */
 
-import { execFile } from "node:child_process";
-
 import { buildClaudeSpawnEnv } from "./claude-env.ts";
+import { execArgv, type ExecArgvResult } from "./exec-argv.ts";
 import { TmuxUnavailableError } from "./tmux-availability.ts";
 
 export interface TmuxSessionApi {
@@ -62,44 +61,32 @@ export interface TmuxSessionOptions {
   availability?: () => { available: boolean };
 }
 
-interface ExecResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function targetFor(chatId: string): string {
   return `loom-${chatId}`;
 }
 
-function runArgv(
+/**
+ * `execArgv` wrapper that promotes ENOENT (binary missing) into a
+ * structural error — tmux subcommands return non-zero for many normal
+ * conditions (`has-session`, `kill-session` for an absent target) so we
+ * can't conflate "tmux binary missing" with "tmux said no". Non-zero
+ * exit codes are surfaced as a structured result for the caller to
+ * branch on.
+ */
+async function runTmux(
   cmd: string,
   args: string[],
   env: NodeJS.ProcessEnv,
-): Promise<ExecResult> {
-  return new Promise((resolve, reject) => {
-    execFile(cmd, args, { env }, (err, stdout, stderr) => {
-      if (err) {
-        const code = (err as NodeJS.ErrnoException & { code?: unknown }).code;
-        // ENOENT (binary missing) bubbles out as a structural error.
-        if (code === "ENOENT") {
-          const wrapped = new Error(
-            `tmux: binary not found (ENOENT). Install tmux >= 3.0 and ensure it is on PATH.`,
-          );
-          (wrapped as NodeJS.ErrnoException).code = "ENOENT";
-          reject(wrapped);
-          return;
-        }
-        // Non-zero exit codes are surfaced as a structured result — many
-        // tmux subcommands (`has-session`, `kill-session` for absent target)
-        // return non-zero as their normal "not present" signal.
-        const numCode = typeof code === "number" ? code : 1;
-        resolve({ code: numCode, stdout: stdout ?? "", stderr: stderr ?? "" });
-        return;
-      }
-      resolve({ code: 0, stdout: stdout ?? "", stderr: stderr ?? "" });
-    });
-  });
+): Promise<ExecArgvResult> {
+  const r = await execArgv(cmd, args, env);
+  if (r.errnoCode === "ENOENT") {
+    const wrapped = new Error(
+      `tmux: binary not found (ENOENT). Install tmux >= 3.0 and ensure it is on PATH.`,
+    );
+    (wrapped as NodeJS.ErrnoException).code = "ENOENT";
+    throw wrapped;
+  }
+  return r;
 }
 
 export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi {
@@ -120,7 +107,7 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
   }
 
   async function hasSession(chatId: string): Promise<boolean> {
-    const r = await runArgv(
+    const r = await runTmux(
       tmuxBin,
       ["has-session", "-t", targetFor(chatId)],
       buildEnv(),
@@ -144,7 +131,7 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
         "--session-id",
         sessionId,
       ];
-      const r = await runArgv(tmuxBin, args, buildEnv());
+      const r = await runTmux(tmuxBin, args, buildEnv());
       if (r.code !== 0) {
         throw new Error(
           `tmux: new-session failed (code ${r.code}) for chat ${chatId}. stderr: ${r.stderr}`,
@@ -158,8 +145,8 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
       if (!isAvailable()) return;
       // Idempotent: tmux returns non-zero when the session is absent; we
       // swallow that. Genuine permission / config errors still surface
-      // because they manifest as ENOENT (handled in `runArgv`).
-      await runArgv(
+      // because they manifest as ENOENT (handled in `runTmux`).
+      await runTmux(
         tmuxBin,
         ["kill-session", "-t", targetFor(chatId)],
         buildEnv(),
@@ -171,7 +158,7 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
       // The `-l --` combination is mandatory: -l = literal mode (no
       // key-name parsing), -- = end-of-flags so a leading-dash payload
       // does not look like a tmux flag. Two argv slots, each separate.
-      const literal = await runArgv(
+      const literal = await runTmux(
         tmuxBin,
         ["send-keys", "-t", targetFor(chatId), "-l", "--", text],
         buildEnv(),
@@ -181,7 +168,7 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
           `tmux: send-keys (literal) failed (code ${literal.code}) for chat ${chatId}.`,
         );
       }
-      const enter = await runArgv(
+      const enter = await runTmux(
         tmuxBin,
         ["send-keys", "-t", targetFor(chatId), "Enter"],
         buildEnv(),
@@ -195,7 +182,7 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
 
     async interrupt(chatId) {
       if (!isAvailable()) throw unavailableError("interrupt");
-      const r = await runArgv(
+      const r = await runTmux(
         tmuxBin,
         ["send-keys", "-t", targetFor(chatId), "Escape"],
         buildEnv(),

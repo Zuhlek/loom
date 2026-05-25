@@ -29,6 +29,7 @@ import { TmuxUnavailableError } from "../tmux-availability.ts";
 import type { SessionIdStore } from "../session-store.ts";
 import type { JsonlPathProbe } from "../jsonl-path-probe.ts";
 import type { PaneProcessApi } from "../pane-process.ts";
+import { traceHook } from "../../hook-receiver/trace.ts";
 import type {
   ChatItem,
   PendingPermission,
@@ -678,13 +679,11 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       const state = chats.get(chatId);
       if (!state) return; // unknown chat — silently drop.
 
-      if (process.env.LOOM_TRACE_HOOKS === "1") {
-        console.warn(
-          `[loom hook trace] route chat=${chatId} kind=${env.kind} body=${JSON.stringify(
-            env.body ?? null,
-          ).slice(0, 2000)}`,
-        );
-      }
+      traceHook("route", {
+        chat: chatId,
+        kind: env.kind,
+        body: env.body ?? null,
+      });
 
       switch (env.kind) {
         case "gate-pending": {

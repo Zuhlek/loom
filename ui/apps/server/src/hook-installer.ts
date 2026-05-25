@@ -170,14 +170,8 @@ export function install(opts: HookInstallerOptions = {}): { wroteFreshFile: bool
   let hadOtherHooks = false;
   for (const evt of events) {
     const existing = Array.isArray(hooks[evt]) ? (hooks[evt] as HookEntry[]) : [];
-    const purged: HookEntry[] = [];
-    for (const entry of existing) {
-      const stripped = purgeLoomFromEntry(entry);
-      if (stripped !== null) {
-        purged.push(stripped);
-        hadOtherHooks = true;
-      }
-    }
+    const purged = purgeLoomEntries(existing);
+    if (purged.length > 0) hadOtherHooks = true;
     purged.push(makeLoomEntry(port));
     hooks[evt] = purged;
   }
@@ -186,13 +180,7 @@ export function install(opts: HookInstallerOptions = {}): { wroteFreshFile: bool
   // loom command (orphaned by older installer versions).
   for (const evt of PURGE_ONLY_EVENTS) {
     if (!Array.isArray(hooks[evt])) continue;
-    const existing = hooks[evt] as HookEntry[];
-    const cleaned: HookEntry[] = [];
-    for (const entry of existing) {
-      const stripped = purgeLoomFromEntry(entry);
-      if (stripped !== null) cleaned.push(stripped);
-    }
-    hooks[evt] = cleaned;
+    hooks[evt] = purgeLoomEntries(hooks[evt] as HookEntry[]);
   }
   parsed.hooks = hooks;
 
@@ -254,6 +242,21 @@ function isLoomCommand(h: HookCommand | undefined | null): boolean {
 function countLoomCommands(entry: HookEntry | undefined | null): number {
   if (!entry || !Array.isArray(entry.hooks)) return 0;
   return entry.hooks.filter(isLoomCommand).length;
+}
+
+/**
+ * Apply `purgeLoomFromEntry` across an array of entries, dropping the
+ * loom-only ones. The returned array preserves entry order; pre-existing
+ * non-loom entries are kept intact (object identity preserved when they
+ * had no loom sub-hooks).
+ */
+function purgeLoomEntries(entries: HookEntry[]): HookEntry[] {
+  const out: HookEntry[] = [];
+  for (const entry of entries) {
+    const stripped = purgeLoomFromEntry(entry);
+    if (stripped !== null) out.push(stripped);
+  }
+  return out;
 }
 
 /**

@@ -15,6 +15,7 @@
 import type { MetadataStore } from "../metadata-store/index.ts";
 import type { SessionIdStore } from "../process-manager/session-store.ts";
 import { normalizeHookEvent, type ClaudeHookEvent } from "./normalize.ts";
+import { traceHook } from "./trace.ts";
 
 export type EnvelopeBroadcaster = (envelope: any) => void;
 
@@ -61,13 +62,12 @@ export function mountHookReceiver(
     const channel = (body.hook_event_name ?? body.channel) as string;
     lastDelivered = { channel, at: new Date().toISOString() };
 
-    if (process.env.LOOM_TRACE_HOOKS === "1") {
-      console.warn(
-        `[loom hook trace] channel=${channel} tool_name=${
-          (body as { tool_name?: unknown }).tool_name ?? ""
-        } session_id=${body.session_id ?? ""} body=${JSON.stringify(body).slice(0, 2000)}`,
-      );
-    }
+    traceHook("inbound", {
+      channel,
+      tool_name: (body as { tool_name?: unknown }).tool_name,
+      session_id: body.session_id,
+      body,
+    });
 
     // Resolve chat-id: legacy explicit `chatId`, else reverse-lookup by
     // Claude's `session_id`. If neither resolves, drop silently — we
