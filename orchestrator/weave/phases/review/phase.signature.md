@@ -20,7 +20,7 @@ I/O signature between `/weave` and the Review Audit Agent.
 | `smoke-report.md` | `.loom/<project>/smoke-report.md` | conditional | When Build ran smoke-test |
 | Repository diff | working tree | yes | Code under review |
 | `principles.md` | `methods/principles.md` (inlined into dispatch head) | yes | Engineering principles |
-| `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
+| `type-guidance.md` | `.loom/<project>/type-guidance.md` | when typed | Domain guidance (materialized at project creation from the active `types/<type>.md`) |
 
 ### State preconditions
 

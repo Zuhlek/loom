@@ -20,7 +20,7 @@ I/O signature between `/weave` and the Build Phase Agent.
 | `tests.md` | `.loom/<project>/tests.md` | yes | Test strategy + mutation-test opt-in |
 | `tasks/T-*.md` | `.loom/<project>/tasks/T-NNN.md` | yes | Per-task definitions |
 | `principles.md` | `methods/principles.md` (inlined into dispatch head) | yes | Engineering principles |
-| `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
+| `type-guidance.md` | `.loom/<project>/type-guidance.md` | when typed | Domain guidance (materialized at project creation from the active `types/<type>.md`) |
 
 ### State preconditions
 

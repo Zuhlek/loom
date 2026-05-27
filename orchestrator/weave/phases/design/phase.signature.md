@@ -18,7 +18,7 @@ I/O signature between `/weave` and the Design Structuring Agent.
 | `design.md` | `.loom/<project>/design.md` | on rerun | Prior run's output (starting point, not blank slate) |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | when present | Quality Check findings to address |
 | `mockup/` | `.loom/<project>/mockup/` | optional | Evidence from prior Design iterations |
-| `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
+| `type-guidance.md` | `.loom/<project>/type-guidance.md` | when typed | Domain guidance (materialized at project creation from the active `types/<type>.md`) |
 
 ### State preconditions
 

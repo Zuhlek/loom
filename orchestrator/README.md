@@ -39,7 +39,7 @@ Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatche
 | `tune/SKILL.md` | `/tune` meta-skill (feedback, review, insights) |
 | `lib/` | Workspace helpers (pipeline parser, events, artifacts, locks, atomic write) |
 | `hooks/` | Claude Code hooks |
-| `types/` | Domain guidance loaded by Type hint |
+| `types/` | Domain guidance keyed by Type hint; the active type is materialized into each workspace as `.loom/<project>/type-guidance.md` at project creation |
 | `templates/` | Project templates (seed) |
 | `weave/methods/principles.md` | Engineering principles P1–P7 (inlined into Build/Review dispatch heads) |
 

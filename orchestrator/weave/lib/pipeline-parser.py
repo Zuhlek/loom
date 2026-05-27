@@ -223,6 +223,26 @@ spec:foundation
 """
 
 
+def materialize_type_guidance(workspace: Path, type_hint: str) -> None:
+    """Copy the active type's domain-guidance file into the workspace as
+    `type-guidance.md` so phase agents read it from their inherited cwd, not
+    from the cross-tree `orchestrator/types/<type>.md` skill path.
+
+    The source is resolved relative to this script's real location
+    (`<orchestrator>/types/`) via `__file__`, so it is cwd-independent and
+    works through the `~/.claude/skills/weave` install symlink. Silently skips
+    when no type hint is given or the type is unknown — the `<type>.md` input
+    is conditional, and agents read it only when present.
+    """
+    name = type_hint.strip()
+    if not name:
+        return
+    source = Path(__file__).resolve().parents[2] / "types" / f"{name}.md"
+    if not source.is_file():
+        return
+    atomic_write(workspace / "type-guidance.md", source.read_text(encoding="utf-8"))
+
+
 def init_workspace(parent_dir: Path, project: str, seed: str, ticket: str, type_hint: str) -> None:
     workspace = parent_dir / ".loom" / project
     if (workspace / "seed.md").exists():
@@ -233,6 +253,7 @@ def init_workspace(parent_dir: Path, project: str, seed: str, ticket: str, type_
     workspace.mkdir(parents=True, exist_ok=True)
     atomic_write(workspace / "pipeline.md", initial_pipeline(project, ticket, type_hint))
     atomic_write(workspace / "seed.md", seed.rstrip() + "\n")
+    materialize_type_guidance(workspace, type_hint)
 
 
 def validate_record(record: dict[str, object]) -> list[str]:

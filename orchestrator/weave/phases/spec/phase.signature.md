@@ -25,7 +25,7 @@ The `methods/*` rows below are skill-resident procedures: the orchestrator reads
 | `phases/spec/methods/grilling.md` | `orchestrator/weave/phases/spec/methods/grilling.md` | yes | Six-rule question discipline, dispatch flow, slot conventions, revisit mechanic |
 | `phases/spec/methods/categories.md` | `orchestrator/weave/phases/spec/methods/categories.md` | yes | Per-category briefing templates and validation |
 | `phases/spec/methods/stories.md` | `orchestrator/weave/phases/spec/methods/stories.md` | yes | User story format, EARS acceptance-criteria patterns, marker shape, IDs, status |
-| `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
+| `type-guidance.md` | `.loom/<project>/type-guidance.md` | when typed | Domain guidance (materialized at project creation from the active `types/<type>.md`) |
 
 ### State preconditions
 
