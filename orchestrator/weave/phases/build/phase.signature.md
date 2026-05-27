@@ -19,7 +19,7 @@ I/O signature between `/weave` and the Build Phase Agent.
 | `board.md` | `.loom/<project>/board.md` | yes | Kanban (task readiness) |
 | `tests.md` | `.loom/<project>/tests.md` | yes | Test strategy + mutation-test opt-in |
 | `tasks/T-*.md` | `.loom/<project>/tasks/T-NNN.md` | yes | Per-task definitions |
-| `principles.md` | `orchestrator/principles.md` | yes | Engineering principles |
+| `principles.md` | `methods/principles.md` (inlined into dispatch head) | yes | Engineering principles |
 | `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
 
 ### State preconditions
@@ -135,7 +135,7 @@ Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a
 
 ## Procedures applied within this session
 
-The Build agent reads these procedure files at the relevant steps of its work loop. They are not dispatched as subagents — they execute inline within the Build session.
+These procedure files arrive inlined in the dispatch prompt (per the body's `## Reads`, see `orchestrator/weave/SKILL.md § Dispatch concatenation`); the Build agent applies them from the inlined head at the relevant steps of its work loop — no disk read. They are not dispatched as subagents — they execute inline within the Build session.
 
 - `methods/task.md` — Lock → Red → Implement → Green → Done loop, applied per ready task. Three-attempt cap.
 - `methods/smoke.md` — Runnable verification, applied once after the per-task loop completes when the project is runnable. Produces `smoke-report.md`.

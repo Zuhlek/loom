@@ -41,4 +41,4 @@ Severities: `blocker`, `major`, `minor`, `note`. A `blocker` finding implies the
 
 ## User-Facing Decision
 
-The agent does NOT call `AskUserQuestion`. It writes `quality-review.md` and returns. The orchestrator surfaces the rerun-or-continue decision using the findings preview (see `weave/SKILL.md`).
+The agent does NOT call `AskUserQuestion`. It writes `quality-review.md` and returns. The orchestrator surfaces the rerun-or-continue decision using the findings preview (see `orchestrator/weave/SKILL.md`).

@@ -4,9 +4,9 @@ Clarify the seed into specified intent. Own `spec.md` and `decisions.md`.
 
 ## Reads
 
-- `methods/grilling.md` — HOW questions get generated, sequenced, answered, and revisited; six "good question" criteria; Foundation-then-Branching staging; triage logic; revisit mechanic; answer-slot format in `decisions.md`; stop rules.
-- `methods/categories.md` — five briefing-block categories (Y/N, Choice, Architecture, Background, Open) with per-category templates, the universal briefing block, and the demote-when-possible triage.
-- `methods/stories.md` — user-story shape, EARS acceptance-criteria patterns, story IDs and status lifecycle, the universal-acceptance-vs-story rule, distillation timing, and parser invariants.
+- `phases/spec/methods/grilling.md` — HOW questions get generated, sequenced, answered, and revisited; six "good question" criteria; Foundation-then-Branching staging; triage logic; revisit mechanic; answer-slot format in `decisions.md`; stop rules.
+- `phases/spec/methods/categories.md` — five briefing-block categories (Y/N, Choice, Architecture, Background, Open) with per-category templates, the universal briefing block, and the demote-when-possible triage.
+- `phases/spec/methods/stories.md` — user-story shape, EARS acceptance-criteria patterns, story IDs and status lifecycle, the universal-acceptance-vs-story rule, distillation timing, and parser invariants.
 
 ## Work Loop
 
@@ -36,7 +36,7 @@ Required sections (in this order):
 - Users and value
 - Scope
 - Out of scope
-- User stories — `US-NNN` blocks with EARS acceptance criteria, per [`methods/stories.md`](methods/stories.md)
+- User stories — `US-NNN` blocks with EARS acceptance criteria, per [`phases/spec/methods/stories.md`](methods/stories.md)
 - Constraints — envelope conditions and universal invariants (not user-action-shaped)
 - Open ambiguity
 

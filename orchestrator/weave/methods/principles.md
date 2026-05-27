@@ -2,7 +2,7 @@
 
 > **What this is:** the default engineering principles every code-touching Loom subagent (Build phase agent, Review Audit Agent) operates under. These are *enforceable rules*, not vibes.
 >
-> **Where it lives:** `orchestrator/principles.md` — team-shared. Per-project invariants and overrides live in the project's `spec.md ## Constraints` section, which the Build phase agent and Review Audit Agent both read as part of their input context. A Constraint wins over a principle on conflict.
+> **Where it lives:** `weave/methods/principles.md` (in the weave skill base) — team-shared, inlined into the Build and Review dispatch heads via each phase body's `## Reads`. Per-project invariants and overrides live in the project's `spec.md ## Constraints` section, which the Build phase agent and Review Audit Agent both read as part of their input context. A Constraint wins over a principle on conflict.
 >
 > **How agents pick this up:** subagent-pull, not orchestrator-push. The Build phase agent (via [`weave/phases/build/methods/task.md`](weave/phases/build/methods/task.md)) and the Review Audit Agent (via [`weave/phases/review/phase.md`](weave/phases/review/phase.md)) each open with a "Reads first" instruction pointing here. They read this file before any work-loop step. The orchestrator never injects this file into dispatch prompts.
 >

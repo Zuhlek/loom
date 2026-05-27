@@ -19,7 +19,7 @@ I/O signature between `/weave` and the Review Audit Agent.
 | `test-report.md` | `.loom/<project>/test-report.md` | yes | Aggregated verification |
 | `smoke-report.md` | `.loom/<project>/smoke-report.md` | conditional | When Build ran smoke-test |
 | Repository diff | working tree | yes | Code under review |
-| `principles.md` | `orchestrator/principles.md` | yes | Engineering principles |
+| `principles.md` | `methods/principles.md` (inlined into dispatch head) | yes | Engineering principles |
 | `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
 
 ### State preconditions

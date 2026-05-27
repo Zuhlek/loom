@@ -10,6 +10,8 @@ I/O signature between `/weave` and the Spec Grilling Agent.
 
 ## Params
 
+The `methods/*` rows below are skill-resident procedures: the orchestrator reads them from the listed source path and inlines them verbatim into the dispatch head (per the body's `## Reads`, see `orchestrator/weave/SKILL.md § Dispatch concatenation`). The subagent applies them from the inlined head — it does not disk-read them. The `.loom/...` artifact rows are workspace files the subagent reads from its cwd.
+
 | Name | Source path | Required | Description |
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
@@ -20,9 +22,9 @@ I/O signature between `/weave` and the Spec Grilling Agent.
 | `repo-digest.manifest.json` | `.loom/.cache/repo-digest.manifest.json` | yes | Versioning surface for the digest (`schema_version`, `git_head`, `tracked_files` sha256) |
 | `repo-context.md` | `.loom/<project>/repo-context.md` | yes | Seed-relevant slice produced by `/weave`'s repo pre-flight |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | when present | Quality Check findings to address |
-| `methods/grilling.md` | `orchestrator/weave/phases/spec/methods/grilling.md` | yes | Six-rule question discipline, dispatch flow, slot conventions, revisit mechanic |
-| `methods/categories.md` | `orchestrator/weave/phases/spec/methods/categories.md` | yes | Per-category briefing templates and validation |
-| `methods/stories.md` | `orchestrator/weave/phases/spec/methods/stories.md` | yes | User story format, EARS acceptance-criteria patterns, marker shape, IDs, status |
+| `phases/spec/methods/grilling.md` | `orchestrator/weave/phases/spec/methods/grilling.md` | yes | Six-rule question discipline, dispatch flow, slot conventions, revisit mechanic |
+| `phases/spec/methods/categories.md` | `orchestrator/weave/phases/spec/methods/categories.md` | yes | Per-category briefing templates and validation |
+| `phases/spec/methods/stories.md` | `orchestrator/weave/phases/spec/methods/stories.md` | yes | User story format, EARS acceptance-criteria patterns, marker shape, IDs, status |
 | `<type>.md` | `orchestrator/types/<type>.md` | when typed | Domain guidance |
 
 ### State preconditions

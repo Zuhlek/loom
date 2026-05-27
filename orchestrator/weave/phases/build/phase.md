@@ -4,10 +4,10 @@ Implement every ready task on the board, verify the runnable result, and aggrega
 
 ## Reads
 
-- `methods/task.md` — per-task Red → Implement → Green → Done procedure, the three-attempt cap, the done-report schema, and the hard rules (no test weakening, no out-of-scope edits without recording, no destructive commands).
-- `methods/mutation.md` — per-task test-strength probe: select five to ten high-value mutation targets, apply one at a time, mark KILLED / SURVIVED / SURVIVED->KILLED / UNKILLABLE, add tests for real survivors without modifying existing tests.
-- `methods/smoke.md` — runnable verification: build-artifacts completeness, app-start, key endpoints / commands, UI screenshots when UI changed, shared-state integrity. Produces `smoke-report.md`.
-- `orchestrator/principles.md` — engineering principles P1–P7 the implementation must honour.
+- `phases/build/methods/task.md` — per-task Red → Implement → Green → Done procedure, the three-attempt cap, the done-report schema, and the hard rules (no test weakening, no out-of-scope edits without recording, no destructive commands).
+- `phases/build/methods/mutation.md` — per-task test-strength probe: select five to ten high-value mutation targets, apply one at a time, mark KILLED / SURVIVED / SURVIVED->KILLED / UNKILLABLE, add tests for real survivors without modifying existing tests.
+- `phases/build/methods/smoke.md` — runnable verification: build-artifacts completeness, app-start, key endpoints / commands, UI screenshots when UI changed, shared-state integrity. Produces `smoke-report.md`.
+- `methods/principles.md` — engineering principles P1–P7 the implementation must honour.
 
 ## Work Loop
 
@@ -58,7 +58,7 @@ When the orchestrator re-dispatches this agent after a user-initiated rerun:
 
 ### Direct write
 
-The Build agent mutates `board.md` and `tasks/T-NNN.*` files with direct `Write` / `Edit` tool calls. One Task dispatch per phase entry (see `weave/SKILL.md` Phase Cycle 3b) guarantees a single writer per workspace within a Build session; no lock or atomic-write wrapper is required.
+The Build agent mutates `board.md` and `tasks/T-NNN.*` files with direct `Write` / `Edit` tool calls. One Task dispatch per phase entry (see `orchestrator/weave/SKILL.md` Phase Cycle 3b) guarantees a single writer per workspace within a Build session; no lock or atomic-write wrapper is required.
 
 If a future project introduces parallel `/weave` sessions on one workspace, re-introduce locks + atomic-write helpers in that project's scope.
 

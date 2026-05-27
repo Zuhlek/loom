@@ -49,7 +49,7 @@ Loom is five phases — **Spec → Design → Plan → Build → Review** — ea
    ├─► Agent: Spec phase                                [depth-1 subagent]
    │     reads:  seed.md
    │     writes: spec.md, decisions.md
-   │     internal: may call methods/grilling.md procedure
+   │     inlined: applies methods/grilling.md procedure (arrives in dispatch head)
    │
    ├─► HITL gate (AskUserQuestion in /weave)
    │
@@ -66,12 +66,13 @@ Loom is five phases — **Spec → Design → Plan → Build → Review** — ea
    ├─► HITL gate
    │
    ├─► Agent: Build phase                               [depth-1 subagent, long session]
-   │     reads:  spec.md, design.md, plan.md, board.md, tests.md, tasks/T-*.md, principles.md
+   │     reads:  spec.md, design.md, plan.md, board.md, tests.md, tasks/T-*.md
+   │     inlined: principles.md, methods/task.md, methods/mutation.md, methods/smoke.md
    │     internal work loop:
    │       for each task in dependency order:
-   │         apply methods/task.md procedure (Lock → Red → Implement → Green → Done)
-   │         apply methods/mutation.md procedure when tests.md opts in
-   │       apply methods/smoke.md procedure (once, when project is runnable)
+   │         apply the inlined methods/task.md procedure (Lock → Red → Implement → Green → Done)
+   │         apply the inlined methods/mutation.md procedure when tests.md opts in
+   │       apply the inlined methods/smoke.md procedure (once, when project is runnable)
    │     writes: repository files, tasks/T-*.done.md, tasks/T-*.test-log.txt,
    │             smoke-report.md, test-report.md, board.md transitions,
    │             ~/.claude/skills/develop-log.md (task / smoke / mutation entries)
@@ -80,6 +81,7 @@ Loom is five phases — **Spec → Design → Plan → Build → Review** — ea
    │
    └─► Agent: Review phase                              [depth-1 subagent]
          reads:  spec.md, design.md, plan.md, board.md, repository
+         inlined: principles.md (arrives in dispatch head)
          writes: review.md, review-verdict.json
 ```
 
@@ -129,7 +131,7 @@ A `/weave`-initiated rerun (from the rerun-or-continue gate) re-dispatches a fre
 
 ## 4. Dispatch contract
 
-`SKILL.md` § Dispatch concatenation defines the wire shape: every dispatch is a stable head (body file + `---` + signature file) followed by a dynamic tail (one `<system-reminder>` block with substituted identifiers). The closing `</system-reminder>` is the cached-prefix boundary.
+`SKILL.md` § Dispatch concatenation defines the wire shape: every dispatch is a stable head (body file + `---` + signature file + the `## Inlined methods` band — every file in the body's `## Reads` plus the universal `methods/develop-log.md`, appended verbatim) followed by a dynamic tail (one `<system-reminder>` block with substituted identifiers). The closing `</system-reminder>` is the cached-prefix boundary. The subagent fetches no method or skill file from disk; everything it needs arrives inlined in the head.
 
 Every phase agent has the same two-file pair:
 

@@ -41,7 +41,7 @@ Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatche
 | `hooks/` | Claude Code hooks |
 | `types/` | Domain guidance loaded by Type hint |
 | `templates/` | Project templates (seed) |
-| `principles.md` | Engineering principles P1–P7 |
+| `weave/methods/principles.md` | Engineering principles P1–P7 (inlined into Build/Review dispatch heads) |
 
 ## Phase folder convention
 
