@@ -2,9 +2,11 @@
 
 Validate the built result against intent, design, plan, and evidence. Own review outputs and learning append.
 
-## Reads first
+## Reads
 
-Before walking the Review Targets, read `orchestrator/principles.md` into context — engineering principles P1–P7 with per-principle **Review check** rules. The Principle compliance target below uses these as a structured checklist. Project-level invariants live in `spec.md ## Constraints` (which you already read as part of intent satisfaction); they override any principle conflict for this project.
+- `orchestrator/principles.md` — engineering principles P1–P7 with per-principle **Review check** rules; the Principle compliance target below uses these as a structured checklist.
+
+These arrive inlined (see `## Inlined methods` appended below) — apply them before walking the Review Targets, no disk read. Project-level invariants live in `spec.md ## Constraints` (a workspace artifact you read as part of intent satisfaction); they override any principle conflict for this project.
 
 ## Review Targets
 

@@ -2,6 +2,10 @@
 
 Opt-in subagent that analyzes Plan-phase artifacts and reports whether a rerun would meaningfully change the result.
 
+## Reads
+
+- `methods/quality-check-protocol.md` — output format, severity definitions, and the no-AskUserQuestion rule.
+
 ## Checks
 
 The agent looks for evidence that a rerun is worth the token burn:
@@ -15,4 +19,4 @@ The agent looks for evidence that a rerun is worth the token burn:
 | HITL surfacing | A decision the autonomous-Build commitment would normally interrupt on is not represented as a variant in Plan. |
 | Test coverage | A task lists `US-NNN` in `satisfies-stories` but its test sketch doesn't address the story's EARS acceptance criteria. |
 
-See `weave/methods/quality-check-protocol.md` for output format, severity definitions, and the no-AskUserQuestion rule.
+Apply `methods/quality-check-protocol.md` (inlined below) for output format, severity definitions, and the no-AskUserQuestion rule.

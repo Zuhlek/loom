@@ -17,7 +17,7 @@ Clarify the seed into specified intent. Own `spec.md` and `decisions.md`.
 5. Update `spec.md` in place after each answered decision.
 6. Apply `stories` — when grilling has resolved enough scope, sweep the seed + answered decisions + foundation context and emit `US-NNN` user stories with EARS-format acceptance criteria into `spec.md` `## User stories`. Stories are agent-produced distillations — they are NOT user-answered questions. Cross-reference supporting Q-IDs when non-obvious. Universal acceptance conditions go under `## Constraints`, not Stories.
 7. Return when Design can proceed without redefining intent (the `grilling` stop rules) AND `spec.md` `## User stories` contains at least one valid story (or the project genuinely has none — rare; document in `## Open ambiguity`).
-8. Append a develop-log entry per `orchestrator/weave/methods/develop-log.md`.
+8. Append a develop-log entry per the develop-log method (`methods/develop-log.md`, inlined below) to `~/.claude/skills/develop-log.md`.
 
 ## Rerun Behavior
 

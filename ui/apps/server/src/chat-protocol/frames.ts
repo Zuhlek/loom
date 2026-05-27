@@ -335,6 +335,41 @@ export interface ContextUsageUpdateFrame {
   };
 }
 
+/**
+ * Project-scoped `.git/HEAD` mutation. Carries the new branch name (parsed
+ * out of `ref: refs/heads/<branch>`) and the cwd the watcher is keyed by.
+ * Local-mode chats whose cwd matches subscribe to update their attached-ref
+ * pill; worktree-mode chats ignore frames keyed by the parent project cwd.
+ */
+export interface RefChangeFrame {
+  kind: "ref-change";
+  /** Not tied to a single chat — the cwd is the routing key. */
+  "chat-id"?: string;
+  body: { cwd: string; branch: string };
+}
+
+/**
+ * A turn checkpoint has been captured. Emitted by the checkpoint reactor
+ * after `CheckpointStore.captureTurn` returns successfully. Carries the
+ * 1-indexed turn number (synthetic chat-start uses 0).
+ */
+export interface CheckpointCapturedFrame {
+  kind: "checkpoint-captured";
+  "chat-id": string;
+  body: { turn: number; ref: string };
+}
+
+/**
+ * The chat row's `(branch, worktree_path)` tuple was patched via
+ * `PATCH /chats/meta` (or a verb route that calls into it). Carries the
+ * post-patch values so the web client can update without a refetch.
+ */
+export interface ChatMetaChangedFrame {
+  kind: "chat-meta-changed";
+  "chat-id": string;
+  body: { branch: string | null; worktreePath: string | null };
+}
+
 export type ServerFrame =
   | AttachedFrame
   | SnapshotFrame
@@ -349,6 +384,9 @@ export type ServerFrame =
   | ChatUpdateFrame
   | SlashCommandsUpdateFrame
   | ContextUsageUpdateFrame
+  | RefChangeFrame
+  | CheckpointCapturedFrame
+  | ChatMetaChangedFrame
   | ErrorFrame;
 
 /**

@@ -73,8 +73,18 @@ export type AssistantBlock = AssistantTextBlock | AssistantThinkingBlock | Assis
  */
 export interface UserMessageImage {
   mediaType: string;
-  dataB64: string;
+  /**
+   * Inline base64 bytes. Present on freshly-sent (live) turns. ABSENT on
+   * materializer-resolved past-turn images on reattach — those are fetched
+   * via `GET /chat-image?chatId=&id=` instead (ADR-002).
+   */
+  dataB64?: string;
   filename?: string;
+  /**
+   * Stable staged image id set by the materializer on reattach. Used to build
+   * the `/chat-image` read-back URL when `dataB64` is absent.
+   */
+  id?: string;
 }
 
 export interface UserMessageItem {
@@ -267,6 +277,36 @@ export type ServerFrame =
         maxTokens: number;
         model: string;
       };
+    }
+  | {
+      /**
+       * Verb-route mutation of `(branch, worktree_path)` on the chat row.
+       * Broadcast after `switchRef` / `createRef` / `createWorktree` /
+       * `removeWorktree` / `PATCH /chats/meta` so the composer pills +
+       * diff panel re-render without a refetch.
+       */
+      kind: "chat-meta-changed";
+      "chat-id": string;
+      body: { branch: string | null; worktreePath: string | null };
+    }
+  | {
+      /**
+       * Project-scoped HEAD watcher notifying of an out-of-band branch
+       * change at `body.cwd`. Local-mode chats whose cwd matches subscribe
+       * to update their attached-ref pill; worktree-mode chats ignore.
+       */
+      kind: "ref-change";
+      "chat-id"?: string;
+      body: { cwd: string; branch: string };
+    }
+  | {
+      /**
+       * Checkpoint reactor notification — a turn was captured into a
+       * loom-checkpoints ref. Drives the timeline-strip auto-refresh.
+       */
+      kind: "checkpoint-captured";
+      "chat-id": string;
+      body: { turn: number; ref: string };
     }
   | {
       kind: "error";

@@ -12,7 +12,11 @@ export function mountSettingsRoute(
     const auth = getClaudeLoginStatus();
     return new Response(
       JSON.stringify({
-        workspace: { root: config.root, source: config.source },
+        workspace: {
+          root: config.root,
+          source: config.source,
+          defaultEnvMode: config.defaultEnvMode,
+        },
         worktrees: { root: config.worktreesRoot ?? null },
         auth,
       }),

@@ -24,7 +24,7 @@ Do not produce phase artifacts yourself. Phase agents own their artifacts.
    - `phases/build/phase.md` + `phases/build/phase.signature.md`
    - `phases/review/phase.md` + `phases/review/phase.signature.md`
 4. Read `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` (available for `spec`, `design`, `plan`, `build`) only when the user opts into a quality check before deciding on a rerun. Review has no `quality-check.md` because Review is itself the project-level quality check.
-5. Read `methods/develop-log.md` once per phase agent dispatch; the agent appends a phase entry to `~/.claude/skills/develop-log.md` at end-of-loop, and Build's per-task procedure additionally appends a task entry per task.
+5. Inline `methods/develop-log.md` into every phase agent dispatch (it is the universal method appended to the head per `### Dispatch concatenation` step 1.4); the agent then appends a phase entry to `~/.claude/skills/develop-log.md` at end-of-loop from that inlined procedure, and Build's per-task procedure additionally appends a task entry per task. `~/.claude/skills/develop-log.md` is a write target (a real symlink at a fixed absolute path), not a method the subagent fetches.
 
 The RETURN schema is the fenced `yaml` block under `### Return block` inside `phase.signature.md` / `quality-check.signature.md`. Phase RETURN-block schema is enforced solely by `hooks/validate-subagent-output.py`; failures surface as visible hook blocks rather than silent re-dispatch.
 
@@ -59,11 +59,11 @@ Every Task dispatch is a stable head + dynamic tail (see `### Dispatch concatena
 Rules the orchestrator enforces on every dispatch:
 
 - The body and signature files (`phase.md`, `phase.signature.md`, `quality-check.md`, `quality-check.signature.md`) carry literal placeholder tokens — `<project>`, `<phase>`, `<task>` — and the orchestrator does NOT substitute real values into the head when constructing the dispatch.
-- The head is the *only* stable region. Everything the agent needs to know about its job — method file paths to read from disk, the RETURN-block schema, what to write, what to skip — already lives in `phase.md` / `phase.signature.md`. The orchestrator never paraphrases, summarises, restates, or extends that content into a wrapper around the body.
+- The head is the *only* stable region. Everything the agent needs to know about its job — the method procedures (inlined from the body's `## Reads` list, see `### Dispatch concatenation` step 1.4), the RETURN-block schema, what to write, what to skip — lives in the head. The orchestrator never paraphrases, summarises, restates, or extends that content into a wrapper around the body; it inlines the method files verbatim and otherwise adds nothing.
 - The dynamic tail carries the substituted identifiers in the fixed `<system-reminder>` shape and nothing else. Two dispatches of the same callable differ only in the contents of this block (project name, current task, date).
 - The agent resolves placeholder tokens it encounters in the head by reading the tail block. The agent's own work loop never expects the orchestrator to have pre-substituted the placeholders.
 
-A dispatch that interleaves dynamic identifiers into the head, or that paraphrases the body file's instructions into wrapper boilerplate, is malformed and re-issued. The orchestrator never inlines seed content, never recites the answer queue, and never embeds the user's absolute filesystem path; the subagent inherits `cwd` from the orchestrator and resolves paths from there.
+A dispatch that interleaves dynamic identifiers into the head, or that paraphrases the body file's instructions into wrapper boilerplate, is malformed and re-issued. The orchestrator never inlines seed content, never recites the answer queue, and never embeds the user's absolute filesystem path. Method files are the one thing the orchestrator *does* inline (verbatim, per the body's `## Reads` list) — the subagent fetches no method or skill file from disk itself; everything it needs arrives in the prompt. The subagent's `cwd` (inherited from the orchestrator) is used only for the project workspace it operates on, never for locating skill-resident method files.
 
 > Note: this contract assumes the API-level prompt cache spans separate Task subagent dispatches sharing identical prefixes. The premise is asserted (working in practice per user observation) but not instrumented; a follow-up `/weave` rerun + transcript inspection for `cache_read_input_tokens > 0` is welcome but not blocking.
 
@@ -90,7 +90,7 @@ Procedure (procedure-ordered list — preserve step order on any future edit):
    - For every `(path, sha256)` pair in `manifest.tracked_files`: the file exists on disk AND its current sha256 equals the recorded sha256. A missing tracked file is drift, not a hit.
 4. Branch on the predicate:
    - **Full match → skip Explore.** Proceed directly to the Phase Cycle. The cached digest is trusted verbatim.
-   - **Any mismatch → dispatch a single `Explore` Task.** One Task call, one briefing covering both the cross-fabric digest and the per-project context. The briefing requires the Task to produce all three artifacts in the same run:
+   - **Any mismatch → dispatch a single `Explore` Task.** One Task call, one briefing covering both the cross-fabric digest and the per-project context, scoped per the **Briefing scope** below. The briefing requires the Task to produce all three artifacts in the same run:
      - `.loom/.cache/repo-digest.md`
      - `.loom/.cache/repo-digest.manifest.json`
      - `.loom/<project>/repo-context.md`
@@ -107,6 +107,16 @@ Failure modes:
 | Explore Task returns without all three artifacts | Step 5 artifact check | Fail pre-flight with the missing artifact path; do not enter Phase Cycle. |
 
 The pre-flight signal IS the cache. Every `/weave` entry re-evaluates the predicate; in steady state the work is two file reads plus one `git rev-parse`.
+
+### Briefing scope
+
+The digest captures productive program code only — the stack, topology, chokepoints, and conventions a fabric run would re-derive. The Explore Task briefing MUST pin the following so the pass stays bounded and never analyzes the orchestrator's own workspace:
+
+- **Enumerate the file universe with `git ls-files`, then drop every path under `.loom/`.** `git ls-files` already excludes `.gitignore`'d output (build artifacts, `node_modules`, etc.); the explicit `.loom/` filter removes the orchestrator's workspace — its project artifacts, caches, develop-logs, and prior digests are NOT productive code and must never enter the digest or the manifest's `tracked_files`. Treat the resulting list as the only files in scope; do not read, cite, or sha256 anything outside it.
+- **Breadth `medium`, not exhaustive.** The goal is the architectural skeleton, not a file-by-file census. Sample representative files per area; stop once the stack, topology, and "where X lives" are answerable. Do not open every file in a large directory to confirm a pattern already established by the first few.
+- **The manifest cites only what the digest actually relies on.** `tracked_files` holds the sha256 of each file a digest section is derived from — a small, load-bearing set — not the whole `git ls-files` output.
+
+These constraints are why a first pass should cost tens of tool uses, not hundreds: an unbounded free-roam over the full tree (including `.loom/`) is the failure this section exists to prevent.
 
 ## Phase Cycle
 
@@ -136,17 +146,22 @@ Every Task dispatch — phase agent, quality-check agent, or any callable that f
 \n\n
 <stable head: <role>.signature.md>
 \n\n
+---
+\n\n
+<stable head: ## Inlined methods — content of every file the body's `## Reads` lists (omitted if none)>
+\n\n
 <dynamic tail: <system-reminder> block>
 ```
 
 Operationalised:
 
-1. **Stable head — body + signature, verbatim, nothing else.**
+1. **Stable head — body + signature + inlined methods, verbatim, nothing else.**
    1. Read the body file (`phases/<phase>/phase.md` or `phases/<phase>/quality-check.md`).
    2. Append exactly two newlines, then `---` on its own line (a markdown thematic break), then two more newlines.
    3. Append the signature file's contents (`phases/<phase>/phase.signature.md`, etc.).
-   4. The body and signature carry their `<project>`, `<phase>`, `<task>` placeholder tokens **literally** — do NOT substitute real values into the head. The body is what makes the prefix cacheable across projects.
-   5. The head is the entirety of the cacheable region. Method file paths, RETURN-block schema, what to write, what to skip — all of it already lives inside `phase.md` / `phase.signature.md`. The orchestrator adds **no wrapper text** around them.
+   4. **Inline the methods the body needs.** The inline set is: every file listed in the body's `## Reads` (or `## Reads first`) section, **plus** the universal develop-log method `methods/develop-log.md` (every phase appends a log entry at end-of-loop — see Load Order item 5), each resolved relative to the skill base. For each file, `## Reads` entries in listed order followed by `methods/develop-log.md` last, append two newlines, `---`, two newlines, then `## Inlined methods` (once, before the first), then `### <path-as-listed>` on its own line, then the file's verbatim content. A phase with an empty or absent `## Reads` (e.g. Design, Plan) still gets the develop-log method. The subagent reads no method file from disk — it has the content inline. The orchestrator already reads these files the same way it reads the body, so this needs no path knowledge the orchestrator lacks and no filesystem access the subagent has.
+   5. The body and signature carry their `<project>`, `<phase>`, `<task>` placeholder tokens **literally** — do NOT substitute real values into the head. The body is what makes the prefix cacheable across projects.
+   6. The head is the entirety of the cacheable region — body, signature, and inlined methods are all stable per callable, so the whole head caches. The RETURN-block schema, what to write, what to skip, and now the method procedures themselves all live in the head. The orchestrator adds **no wrapper text** around them and **no path for the subagent to resolve**.
 2. **Dynamic tail — single `<system-reminder>` block.** Append the substituted identifiers in exactly this shape, at the very end of the user turn:
 
    ```

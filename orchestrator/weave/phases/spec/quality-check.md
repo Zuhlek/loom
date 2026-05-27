@@ -2,6 +2,12 @@
 
 Opt-in subagent that analyzes Spec-phase artifacts and reports whether a rerun would meaningfully change the result.
 
+## Reads
+
+- `methods/quality-check-protocol.md` — output format, severity definitions, and the no-AskUserQuestion rule.
+- `methods/grilling.md` — the six "good question" criteria the Briefing-quality check applies (§1).
+- `methods/stories.md` — story-shape invariants the Story-shape check applies (§9).
+
 ## Checks
 
 The agent looks for evidence that a rerun is worth the token burn:
@@ -18,4 +24,4 @@ The agent looks for evidence that a rerun is worth the token burn:
 | Misplaced acceptance | A "story" body lacks a concrete user role/action/value triple (universal acceptance condition wedged into a story when it belongs under `## Constraints`). |
 | Stale ambiguity | "Open ambiguity" items that the next phase cannot consume. |
 
-See `weave/methods/quality-check-protocol.md` for output format, severity definitions, and the no-AskUserQuestion rule.
+Apply `methods/quality-check-protocol.md` (inlined below) for output format, severity definitions, and the no-AskUserQuestion rule.

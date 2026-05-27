@@ -7,6 +7,7 @@ Implement every ready task on the board, verify the runnable result, and aggrega
 - `methods/task.md` — per-task Red → Implement → Green → Done procedure, the three-attempt cap, the done-report schema, and the hard rules (no test weakening, no out-of-scope edits without recording, no destructive commands).
 - `methods/mutation.md` — per-task test-strength probe: select five to ten high-value mutation targets, apply one at a time, mark KILLED / SURVIVED / SURVIVED->KILLED / UNKILLABLE, add tests for real survivors without modifying existing tests.
 - `methods/smoke.md` — runnable verification: build-artifacts completeness, app-start, key endpoints / commands, UI screenshots when UI changed, shared-state integrity. Produces `smoke-report.md`.
+- `orchestrator/principles.md` — engineering principles P1–P7 the implementation must honour.
 
 ## Work Loop
 
@@ -14,7 +15,7 @@ Implement every ready task on the board, verify the runnable result, and aggrega
    - If the environment is executable here (e.g. `node-test`, `headless-browser`, `cli-shell` with the required runtime installed): proceed.
    - If the environment requires a harness this agent does not have (e.g. `manual-browser-desktop` on a non-GUI host, or a `headless-browser` harness without the binary): return immediately with `status: blocked`, list the env mismatch as the blocker reason, and do NOT promote any task to `In Progress`. The Plan-level contract MUST NOT be silently substituted.
 
-1. Read `board.md`, `tests.md`, and `principles.md` once at session start. Resolve the dependency order across tasks from `board.md` (`blocked-by` relations) and the per-task definitions in `tasks/T-*.md`.
+1. Read the project artifacts `board.md` and `tests.md` from the workspace once at session start (the `principles.md` engineering principles arrive inlined — see `## Reads`, no disk read). Resolve the dependency order across tasks from `board.md` (`blocked-by` relations) and the per-task definitions in `tasks/T-*.md`.
 
 2. **Loop over ready tasks in dependency order.** A task is ready when its `blocked-by` set is empty OR every blocker is already in `Done`.
 

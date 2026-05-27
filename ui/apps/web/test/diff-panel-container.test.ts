@@ -97,12 +97,19 @@ describe("T-008 DiffPanelContainer — props + state shape", () => {
     );
   });
 
-  test("scope state is initialised to \"per-turn\"", () => {
+  test("scope is derived from selectedTurn (single source of truth)", () => {
     const src = readFileSync(containerPath, "utf8");
-    // Either a `useState<"per-turn" | "whole">("per-turn")` or a
-    // destructured-default. Anchor on the literal seed.
+    // Follow-up 3 — the legacy independent `scope` state was removed.
+    // `selectedTurn` is the single source of truth; `scope` is a
+    // derived value: "whole" when selectedTurn === "whole", "per-turn"
+    // otherwise. We anchor on the derivation expression.
     expect(src).toMatch(
-      /useState<\s*["']per-turn["']\s*\|\s*["']whole["']\s*>\s*\(\s*["']per-turn["']\s*\)/,
+      /selectedTurn\s*===\s*["']whole["']\s*\?\s*["']whole["']\s*:\s*["']per-turn["']/,
+    );
+    // selectedTurn itself still seeds to "whole" so the panel default
+    // behaviour (no marker selected → whole-chat diff) is preserved.
+    expect(src).toMatch(
+      /useState<\s*number\s*\|\s*["']whole["']\s*>\s*\(\s*["']whole["']\s*\)/,
     );
   });
 
@@ -118,21 +125,25 @@ describe("T-008 DiffPanelContainer — props + state shape", () => {
   });
 });
 
-describe("T-008 DiffPanelContainer — null worktreePath guard", () => {
-  test("renders \"worktree not initialized\" when worktreePath is null", () => {
+describe("DiffPanelContainer — unconditional mount (replaces null-worktreePath guard)", () => {
+  // The legacy "Worktree not initialized" early-return was deliberately
+  // dropped — the panel mounts for every chat (including non-git cwds
+  // and chats whose worktree is not yet materialised). The mount-
+  // assertion + empty-state-copy assertion live in
+  // `diff-panel-container-mount.test.ts`.
+  test("legacy 'worktree not initialized' copy is no longer present", () => {
     const src = readFileSync(containerPath, "utf8");
-    expect(src).toMatch(/worktree not initialized/i);
+    expect(src).not.toMatch(/worktree not initialized/i);
   });
 
-  test("the null-worktreePath branch is gated on a null check (no fetch fires)", () => {
+  test("no top-level null-worktreePath early-return JSX guard remains", () => {
     const src = readFileSync(containerPath, "utf8");
-    // Either `if (!worktreePath)` early return or a render-tree
-    // ternary that branches on the same predicate.
-    const hasGuard =
-      /!\s*worktreePath/.test(src) ||
-      /worktreePath\s*===\s*null/.test(src) ||
-      /worktreePath\s*==\s*null/.test(src);
-    expect(hasGuard).toBe(true);
+    // The container still has in-effect / in-callback guards on
+    // worktreePath for the legacy fetch lifecycle — that's fine. What
+    // must be gone is the top-level "return <aside>...Worktree not
+    // initialized...</aside>" branch. Assert by the absence of the
+    // legacy copy: the deprecation marker.
+    expect(src).not.toMatch(/Worktree not initialized/);
   });
 });
 
@@ -181,13 +192,15 @@ describe("T-008 DiffPanelContainer — scope toggle abort + re-fetch", () => {
     expect(src).toMatch(/\.abort\s*\(\s*\)/);
   });
 
-  test("scope change re-fires getDiff (status is not re-fetched on scope change)", () => {
+  test("scope change re-fires getDiff via onScopeChange handler (not a useEffect)", () => {
     const src = readFileSync(containerPath, "utf8");
-    // The scope re-fetch path must call getDiff at a site distinct
-    // from the initial Promise.all. Anchor on the literal scope
-    // identifier appearing near a getDiff call (a useEffect with
-    // `scope` in its deps that calls `getDiff(...)`).
-    expect(src).toMatch(/useEffect[\s\S]{0,500}getDiff[\s\S]{0,200}\[\s*[^\]]*\bscope\b/);
+    // Follow-up 3 — the legacy scope-change useEffect was removed.
+    // The re-fetch lives inline in `onScopeChange("whole")` so the
+    // two selectors (scope toggle + marker click) can't race. We
+    // anchor on the getDiff call adjacent to the "whole" branch
+    // inside onScopeChange.
+    expect(src).toMatch(/onScopeChange/);
+    expect(src).toMatch(/next\s*===\s*["']whole["'][\s\S]{0,400}getDiff/);
   });
 
   test("scope toggle is wired (inline composition; shell abstraction was removed)", () => {

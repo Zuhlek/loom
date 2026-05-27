@@ -57,12 +57,20 @@ export function NewProjectDialog({ onClose, onCreated, onUseExisting }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // Escape closes the picker first; only the next press closes the
+      // whole dialog. Prevents the common "I just wanted to dismiss the
+      // browser" footgun where a single Escape blew away the whole modal.
+      if (pickerOpen) {
+        setPickerOpen(false);
+        return;
+      }
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pickerOpen]);
 
   const submit = async () => {
     setError(null);
@@ -100,7 +108,11 @@ export function NewProjectDialog({ onClose, onCreated, onUseExisting }: Props) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-xl rounded-2xl bg-white shadow-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+      <div
+        className="w-full max-w-xl rounded-2xl bg-white shadow-xl border overflow-hidden"
+        style={{ borderColor: "var(--border)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: "var(--border)" }}>
           <div className="size-8 rounded-lg grid place-items-center" style={{ background: "var(--muted)" }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
@@ -176,7 +188,8 @@ export function NewProjectDialog({ onClose, onCreated, onUseExisting }: Props) {
               </div>
             ) : null}
             <p className="text-[10px] mt-1" style={{ color: "var(--muted-foreground)" }}>
-              You can add more cwds to this project later.
+              The project is anchored to this directory. To work in a sibling
+              directory, create a separate project.
             </p>
           </div>
 

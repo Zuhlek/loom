@@ -93,10 +93,20 @@ export type AssistantBlock = AssistantTextBlock | AssistantThinkingBlock | Assis
 export interface UserMessageImage {
   /** MIME type, e.g. `"image/png"`. */
   mediaType: string;
-  /** Base64-encoded image bytes (no `data:` prefix). */
-  dataB64: string;
+  /**
+   * Base64-encoded image bytes (no `data:` prefix). Present on freshly-sent
+   * (live) turns; ABSENT on materializer-resolved past-turn images, which the
+   * client fetches via `GET /chat-image?chatId=&id=` instead (ADR-002).
+   */
+  dataB64?: string;
   /** Optional source filename — surfaced as `alt` / `title`. */
   filename?: string;
+  /**
+   * Stable staged image id (manifest `id`, basename without extension). Set by
+   * the materializer on reattach so the renderer can address the durable file
+   * via the read-back route when `dataB64` is absent. Non-wire addition.
+   */
+  id?: string;
 }
 
 export interface UserMessageItem {

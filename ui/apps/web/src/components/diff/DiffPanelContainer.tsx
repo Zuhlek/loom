@@ -1,26 +1,8 @@
-/**
- * DiffPanelContainer — the right-drawer surface for worktree-mode chats.
- *
- * Owns:
- *   - Fetch lifecycle (parallel `getGitStatus` + `getDiff`, scope-keyed
- *     re-fetch on scope toggle, manual refresh, post-action refresh,
- *     mount/unmount cancellation via `AbortController`).
- *   - Scope state (`"per-turn" | "whole"`) and its render-time
- *     transformation (per-turn keeps section boundaries; whole flows
- *     through `aggregateSectionsByFile`).
- *   - Action plumbing: `CommitDialog` open/cancel/confirm, the three
- *     chained intents (commit / commit-push / pr), short-circuit on
- *     step failure, unconditional post-action refresh, snackbar
- *     feedback via the global `useSnackbar` hook.
- *   - Loading / empty / error UI (initial-mount animate-pulse skeleton,
- *     refresh spinner on the toolbar button only, centred empty copy,
- *     red destructive callout + Retry).
- *
- * Owns the scope state directly — no `DiffPanelShell` indirection.
- */
+// DiffPanelContainer — right-drawer diff surface. Mounts unconditionally.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  getCheckpointDiff,
   getDiff,
   getGitStatus,
   postGitCommit,
@@ -36,11 +18,24 @@ import { BranchToolbar } from "./DiffPanel";
 import type { DiffFile, DiffLine } from "./DiffPanel";
 import { DiffFileCard } from "./DiffFileCard";
 import { CommitDialog, type CommitDialogIntent } from "./CommitDialog";
+import { TurnTimelineStrip, type TurnMarker } from "./TurnTimelineStrip";
 import { useSnackbar } from "../ui/Snackbar";
 
 export interface DiffPanelContainerProps {
   worktreePath: string | null;
   chatId: string;
+  /**
+   * Chat's VCS kind. `"unknown"` swaps the empty-state badge to the
+   * "non-git project" copy and dims provider-routed affordances. Null
+   * is treated as "git" pending the row's vcs_kind probe.
+   */
+  vcsKind?: "git" | "unknown" | null;
+  /**
+   * Sorted ascending list of checkpoint turn numbers for this chat
+   * (synthetic turn 0 included). Drives the timeline-strip marker
+   * rendering. Empty list → empty-state badge.
+   */
+  checkpointTurns?: number[];
 }
 
 type SnackbarState =
@@ -110,7 +105,17 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
 
   const [status, setStatus] = useState<ApiGitStatus | null>(null);
   const [sections, setSections] = useState<ApiDiffSection[]>([]);
-  const [scope, setScope] = useState<"per-turn" | "whole">("per-turn");
+  // Timeline-strip selection — the single source of truth for "what
+  // am I showing". "whole" → whole-chat diff (legacy
+  // `getDiff(worktreePath)` working-tree path); a turn index N →
+  // checkpoint-range diff between refs N-1 and N. The explicit
+  // scope toggle below is a UI affordance that maps onto this one
+  // state: "whole" pill = setSelectedTurn("whole"). The legacy
+  // independent `scope` state has been removed so the two selectors
+  // can't disagree.
+  const [selectedTurn, setSelectedTurn] = useState<number | "whole">("whole");
+  const scope: "per-turn" | "whole" =
+    selectedTurn === "whole" ? "whole" : "per-turn";
   const [initialLoading, setInitialLoading] = useState<boolean>(
     worktreePath !== null,
   );
@@ -216,19 +221,13 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worktreePath, chatId]);
 
-  // ---- Scope change: abort diff + re-fetch (status unchanged) ------------
+  // ---- Scope/selection change: abort diff + re-fetch (status unchanged) ----
 
-  // Skip the synthetic initial run (the mount effect already fetched
-  // the diff with the seed scope). Re-runs of this effect call the
-  // diff client for the new scope. Status is scope-independent.
-  const scopeFirstRunRef = useRef<boolean>(true);
-  useEffect(() => {
-    if (scopeFirstRunRef.current) { scopeFirstRunRef.current = false; return; }
-    if (!worktreePath) return;
-    diffCtrlRef.current?.abort();
-    diffCtrlRef.current = new AbortController();
-    getDiff(worktreePath, { mode: scope, signal: diffCtrlRef.current.signal }).then(handleDiffOk, handleDiffErr);
-  }, [scope, worktreePath]);
+  // `scope` is now derived from `selectedTurn`, so the legacy
+  // "fire-on-scope-change" effect is gone — its responsibility is
+  // covered by the explicit click handlers below (onScopeChange and
+  // the timeline-strip onSelect), which both abort+refetch directly.
+  // Status is scope-independent and only refetched on mount/refresh.
 
   // ---- Snackbar mirroring: container state → global useSnackbar ----------
 
@@ -411,34 +410,31 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
   }, [refresh]);
 
   const onScopeChange = useCallback((next: "per-turn" | "whole") => {
-    setScope(next);
-  }, []);
+    // Single source of truth: the explicit scope toggle maps onto the
+    // timeline-strip selection. "whole" clears the marker selection;
+    // "per-turn" is a no-op when no marker is selected (the user
+    // selects a turn via the strip).
+    if (next === "whole") {
+      diffCtrlRef.current?.abort();
+      const controller = new AbortController();
+      diffCtrlRef.current = controller;
+      setSelectedTurn("whole");
+      if (worktreePath) {
+        getDiff(worktreePath, { mode: "whole", signal: controller.signal }).then(
+          handleDiffOk,
+          handleDiffErr,
+        );
+      }
+    }
+  }, [worktreePath, handleDiffOk, handleDiffErr]);
 
   // ---- Render ------------------------------------------------------------
 
-  if (!worktreePath) {
-    return (
-      <aside
-        className="w-[44vw] min-w-[420px] max-w-[640px] shrink-0 flex flex-col border-l"
-        style={{ borderColor: "var(--border)" }}
-        data-testid="diff-panel-container"
-      >
-        <div className="flex-1 grid place-items-center p-6 text-center">
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Worktree not initialized</p>
-            <p
-              className="text-[11px]"
-              style={{ color: "var(--muted-foreground)" }}
-            >
-              This chat is in worktree mode but its working tree path is
-              not yet ready. Try again once the worktree finishes
-              provisioning.
-            </p>
-          </div>
-        </div>
-      </aside>
-    );
-  }
+  // Per ADR-009 the panel mounts for every chat, including non-git
+  // cwds. The legacy `worktreePath === null` early-return is gone;
+  // the empty-state badge below covers both the legacy-chat path
+  // (`vcs_kind === "git"` but no checkpoint refs) and the non-git
+  // path (`vcs_kind === "unknown"`).
 
   const showError = statusError !== null || diffError !== null;
   const renderedFiles: DiffFile[] =
@@ -480,6 +476,45 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
         onCreatePr={onCreatePr}
         onRefresh={onRefresh}
       />
+
+      {/*
+        Turn-timeline strip — one marker per checkpoint ref. Empty
+        markers + `vcsKind === "git"` ⇒ "no per-turn history"; empty
+        markers + `vcsKind === "unknown"` ⇒ "non-git project".
+        Selection wires into a checkpoint-range fetch URL of the form
+        `mode=checkpoint-range&from=<n-1>&to=<n>`.
+      */}
+      {((props.checkpointTurns ?? []).length > 0 ||
+        props.vcsKind === "unknown") && (
+        <TurnTimelineStrip
+          markers={(props.checkpointTurns ?? []).map((n): TurnMarker => ({
+            turn: n,
+            ref: `refs/loom-checkpoints/${chatId}/${n}`,
+          }))}
+          selected={selectedTurn}
+          onSelect={(sel) => {
+            setSelectedTurn(sel);
+            diffCtrlRef.current?.abort();
+            const controller = new AbortController();
+            diffCtrlRef.current = controller;
+            const promise =
+              sel === "whole"
+                ? getCheckpointDiff(chatId, 0, "latest", { signal: controller.signal })
+                : getCheckpointDiff(chatId, sel - 1, sel, { signal: controller.signal });
+            promise.then(handleDiffOk, handleDiffErr);
+          }}
+          emptyState={
+            (props.checkpointTurns ?? []).length === 0
+              ? {
+                  badgeCopy:
+                    props.vcsKind === "unknown"
+                      ? "non-git project"
+                      : "no per-turn history",
+                }
+              : undefined
+          }
+        />
+      )}
 
       {/* Scope toggle strip + totals. */}
       <div
@@ -619,7 +654,11 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
               className="text-[11px]"
               style={{ color: "var(--muted-foreground)" }}
             >
-              No changes on this branch yet.
+              {props.vcsKind === "unknown"
+                ? "non-git project"
+                : (props.checkpointTurns ?? []).length === 0
+                  ? "no per-turn history"
+                  : "No changes on this branch yet."}
             </p>
           </div>
         )}

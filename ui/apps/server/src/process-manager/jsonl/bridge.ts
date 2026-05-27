@@ -21,6 +21,11 @@ import { join } from "node:path";
 
 import { createJsonlTail, type JsonlTail } from "./tail.ts";
 import { createMaterializer, type Materializer } from "./materializer.ts";
+import {
+  StageImageError,
+  type ImageStore,
+} from "./image-store.ts";
+import type { UserTurnImage } from "../../chat-protocol/frames.ts";
 import { translate, type TranslatorCtx } from "./translator.ts";
 import { discoverActiveJsonl } from "./discover-active-jsonl.ts";
 import { createBridgeLog, type BridgeLog } from "./bridge-log.ts";
@@ -66,6 +71,16 @@ export interface JsonlTailBridgeOptions {
   paneProcess: PaneProcessApi;
   /** Resolve the cwd to spawn `claude` under for a given chat. */
   cwdResolver(chatId: string): Promise<string> | string;
+  /**
+   * Resolve the chat's persisted permission mode for spawn-time CLI
+   * flag selection. Returning `"default"` (or omitting the resolver
+   * entirely) keeps claude in its built-in supervised mode.
+   * `bypassPermissions` ⇒ `--dangerously-skip-permissions`;
+   * `plan` / `acceptEdits` ⇒ `--permission-mode <m>`.
+   */
+  permissionModeResolver?(
+    chatId: string,
+  ): Promise<WirePermissionMode> | WirePermissionMode;
   /** Tail polling interval — small in tests, default 250ms in production. */
   tailPollingMs?: number;
   /**
@@ -82,6 +97,28 @@ export interface JsonlTailBridgeOptions {
    * inject a sink recorder.
    */
   log?: BridgeLog;
+  /**
+   * Lifecycle hooks for chat-diff-panel substrate wiring.
+   *  - `onChatAttach` runs once per `attach()` call. Used by
+   *    `persistVcsKindOnAttach` and `turnWatcher.start`.
+   *  - `onFirstUserTurn` runs before the first `submitUserTurnWithPriority`
+   *    for a chat. Used by `runFirstSendHook`. The bridge awaits the
+   *    returned promise before forwarding the turn input.
+   *  - `onAssistantTurnComplete` runs after the bridge's materializer
+   *    has emitted a turn-state idle frame for an assistant terminus.
+   *    Used by `createCheckpointReactor.captureTurn` (via TurnWatcher).
+   */
+  onChatAttach?(chatId: string, cwd: string): void;
+  onFirstUserTurn?(chatId: string): Promise<void> | void;
+  onAssistantTurnComplete?(chatId: string, cwd: string): void;
+  /**
+   * Durable image store for the submit path. When a user turn carries
+   * `images`, the bridge stages them via this store and appends an
+   * `@<absPath>` token per image to the outbound tmux text. Injected in
+   * `index.ts`; the materializer's read-back resolver is curried from the
+   * same store.
+   */
+  imageStore?: ImageStore;
 }
 
 interface ChatState {
@@ -106,6 +143,10 @@ interface ChatState {
   attachedAtMs: number;
   /** Whether at least one outbound frame has been emitted for this chat. */
   hasEmittedFrame: boolean;
+  /** Whether the first user turn has been sent (drives onFirstUserTurn). */
+  hasFirstSent: boolean;
+  /** Whether the chat-attach hook has fired for this chat. */
+  hasAttachHookFired: boolean;
   /**
    * Interval handle for the rotation poller. Claude can rotate its
    * session-id mid-conversation (a new `.jsonl` file appears in the
@@ -154,6 +195,11 @@ export interface JsonlTailBridge {
 
   // Hook-envelope routing.
   routeHookEnvelope(env: ChatEnvelope): void;
+
+  // Outbound frame fan-out for routes outside the bridge (verb routes,
+  // head-watcher, checkpoint reactor).
+  broadcastFrameToChat(chatId: string, frame: ServerFrame): void;
+  broadcastFrameToAll(frame: ServerFrame): void;
 }
 
 export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBridge {
@@ -250,11 +296,19 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     const entry = await opts.sessionStore.getOrCreate(chatId, resolvedCwd);
     let sessionId = entry.sessionId;
     const cwd = entry.cwd;
+    const resolvedPermissionMode: WirePermissionMode = opts.permissionModeResolver
+      ? await Promise.resolve(opts.permissionModeResolver(chatId))
+      : "default";
 
-    await opts.tmux.ensure(chatId, cwd, sessionId);
+    await opts.tmux.ensure(chatId, cwd, sessionId, resolvedPermissionMode);
 
     const tail = createJsonlTail({ pollingIntervalMs: opts.tailPollingMs });
-    const materializer = createMaterializer({ chatId });
+    const materializer = createMaterializer({
+      chatId,
+      resolveImage: opts.imageStore
+        ? (absPath) => opts.imageStore!.lookupByPath(chatId, absPath)
+        : undefined,
+    });
 
     // Bystander-resistance: BIND the tail to `<sessionId>.jsonl`. The
     // persisted sessionId is the UUID we just passed to
@@ -282,11 +336,13 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       clients: new Set(),
       pendingPermissions: new Map(),
       pendingQuestions: new Map(),
-      permissionMode: "default",
+      permissionMode: resolvedPermissionMode,
       modelSettings: {},
       latestTasks: [],
       attachedAtMs: Date.now(),
       hasEmittedFrame: false,
+      hasFirstSent: false,
+      hasAttachHookFired: false,
       rotationPoll: undefined,
     };
     chats.set(chatId, state);
@@ -462,6 +518,16 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       state.clients.add(client);
       // Always deliver a snapshot frame before any subsequent deltas.
       sendTo(client, buildSnapshotFrame(state));
+      if (!state.hasAttachHookFired) {
+        state.hasAttachHookFired = true;
+        try {
+          opts.onChatAttach?.(chatId, state.cwd);
+        } catch (err) {
+          console.warn(
+            `[loom] onChatAttach hook failed for ${chatId}: ${(err as Error).message}`,
+          );
+        }
+      }
     },
 
     detach(chatId, client) {
@@ -503,8 +569,9 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
 
     // ─── User input ──────────────────────────────────────────────────────────
     async submitUserTurnWithPriority(chatId, text, _priority, images) {
+      let state: ChatState;
       try {
-        await ensureChatState(chatId);
+        state = await ensureChatState(chatId);
       } catch (err) {
         if (err instanceof TmuxUnavailableError) {
           broadcastRuntimeUnavailable(chatId, err);
@@ -512,22 +579,49 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
         }
         throw err;
       }
-      if (images !== undefined && Array.isArray(images) && images.length > 0) {
-        const state = getChat(chatId);
-        if (state) {
-          broadcast(state, {
-            kind: "error",
-            "chat-id": chatId,
-            body: {
-              message:
-                "image attachments are not supported by the JSONL bridge in this iteration",
-            },
-          });
+      if (!state.hasFirstSent) {
+        state.hasFirstSent = true;
+        try {
+          await opts.onFirstUserTurn?.(chatId);
+        } catch (err) {
+          console.warn(
+            `[loom] onFirstUserTurn hook failed for ${chatId}: ${(err as Error).message}`,
+          );
         }
-        // Iteration policy: typed not-supported error; text still sends.
+      }
+      let outboundText = text;
+      if (
+        images !== undefined &&
+        Array.isArray(images) &&
+        images.length > 0 &&
+        opts.imageStore
+      ) {
+        try {
+          const staged = await opts.imageStore.stageTurnImages(
+            chatId,
+            images as UserTurnImage[],
+          );
+          const tokens = staged.map((s) => `@${s.absPath}`).join(" ");
+          if (tokens) outboundText = `${text} ${tokens}`;
+        } catch (err) {
+          // ADR-004: surface one typed error frame on staging failure, but
+          // never drop the user's text — it still sends below.
+          const chatState = getChat(chatId);
+          if (chatState) {
+            const message =
+              err instanceof StageImageError
+                ? err.message
+                : `failed to attach image: ${(err as Error).message}`;
+            broadcast(chatState, {
+              kind: "error",
+              "chat-id": chatId,
+              body: { message },
+            });
+          }
+        }
       }
       try {
-        await opts.tmux.sendInput(chatId, text);
+        await opts.tmux.sendInput(chatId, outboundText);
       } catch (err) {
         if (err instanceof TmuxUnavailableError) {
           broadcastRuntimeUnavailable(chatId, err);
@@ -585,17 +679,73 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
         });
       }
 
-      // Map answer ids → 1-based option indices for the TUI numeric prompt.
-      // AskUserQuestion in Claude's TUI accepts the option number (1..N).
-      // For multi-select / "Other" freeform we fall back gracefully:
-      //   - freeform "__freeform__": send the typed text as plain input.
-      //   - multi-select: send the FIRST selected index (TODO: real
-      //     multi-select keys — unconfirmed in the TUI catalog).
-      //   - fallback (lost pending state): send the first answer id raw.
-      let toSend: string;
+      // Single-select: claude's AskUserQuestion TUI is a navigable numbered
+      // list where the option's number key is a quick-select that confirms
+      // in one stroke. Send the bare digit with NO trailing Enter — a
+      // trailing Enter (as sendInput appends) lands on the freshly-emptied
+      // composer as a stray submit, and when it races ahead of the digit it
+      // confirms the default option instead of the user's pick.
+      if (
+        pending &&
+        !pending.multiSelect &&
+        !body.answers.includes("__freeform__") &&
+        pending.options &&
+        pending.options.length > 0
+      ) {
+        const idx = pending.options.findIndex((o) => o.id === body.answers[0]);
+        if (idx >= 0) {
+          await opts.tmux.sendKey(chatId, String(idx + 1));
+          return;
+        }
+      }
+
+      // Multi-select: in claude's widget the number keys TOGGLE each checkbox
+      // (they do not confirm). After toggling, "Right" opens the Submit review
+      // tab where "1" ("Submit answers") confirms. Verified against claude
+      // v2.1.150's AskUserQuestion multi-select widget.
+      if (
+        pending &&
+        pending.multiSelect &&
+        !body.answers.includes("__freeform__") &&
+        pending.options &&
+        pending.options.length > 0
+      ) {
+        let toggled = 0;
+        for (const ansId of body.answers) {
+          const idx = pending.options.findIndex((o) => o.id === ansId);
+          if (idx >= 0) {
+            await opts.tmux.sendKey(chatId, String(idx + 1));
+            toggled++;
+          }
+        }
+        if (toggled > 0) {
+          await opts.tmux.sendKey(chatId, "Right");
+          await opts.tmux.sendKey(chatId, "1");
+          return;
+        }
+      }
+
+      // Freeform "Other": claude appends a "Type something" row right after
+      // the parsed options. Its number key only MOVES the cursor there (it
+      // does not confirm); typing then fills the row inline and Enter submits.
+      // So navigate with the bare key, then sendInput supplies the text + the
+      // confirming Enter. Verified against claude v2.1.150 (single-select).
       if (body.answers.includes("__freeform__")) {
-        toSend = body.otherText ?? "";
-      } else if (pending && pending.options && pending.options.length > 0) {
+        const text = body.otherText ?? "";
+        if (pending && !pending.multiSelect && pending.options && pending.options.length > 0) {
+          await opts.tmux.sendKey(chatId, String(pending.options.length + 1));
+          await opts.tmux.sendInput(chatId, text);
+          return;
+        }
+        // Multi-select freeform / lost-pending-state: best-effort plain text.
+        await opts.tmux.sendInput(chatId, text);
+        return;
+      }
+
+      // Lost-pending-state fallback: no options to map against, so type the
+      // first answer id raw as a submitted turn.
+      let toSend: string;
+      if (pending && pending.options && pending.options.length > 0) {
         const firstAnswerId = body.answers[0];
         const idx = pending.options.findIndex((o) => o.id === firstAnswerId);
         toSend = idx >= 0 ? String(idx + 1) : (firstAnswerId ?? "");
@@ -745,6 +895,13 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
             "chat-id": chatId,
             body: { state: "idle" },
           });
+          try {
+            opts.onAssistantTurnComplete?.(chatId, state.cwd);
+          } catch (err) {
+            console.warn(
+              `[loom] onAssistantTurnComplete hook failed for ${chatId}: ${(err as Error).message}`,
+            );
+          }
           return;
         case "pre-tool-use": {
           // pre-tool-use carries the permission-prompt side-channel.
@@ -772,6 +929,18 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
         }
         default:
           return;
+      }
+    },
+
+    // ─── Outbound frame fan-out for non-bridge frame producers ───────────────
+    broadcastFrameToChat(chatId, frame) {
+      const state = chats.get(chatId);
+      if (!state) return;
+      broadcast(state, frame);
+    },
+    broadcastFrameToAll(frame) {
+      for (const state of chats.values()) {
+        broadcast(state, frame);
       }
     },
   };

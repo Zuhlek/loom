@@ -37,6 +37,12 @@ export interface ExecuteGitOptions {
   timeoutMs?: number;
   allowNonZeroExit?: boolean;
   maxOutputBytes?: number;
+  /**
+   * Extra env vars merged on top of `process.env`. Useful for git plumbing
+   * commands that need `GIT_INDEX_FILE` to point at a temp index without
+   * disturbing the user's working tree state.
+   */
+  env?: Record<string, string>;
 }
 
 export interface ExecuteGitResult {
@@ -56,7 +62,7 @@ export function executeGit(
   return new Promise((resolve, reject) => {
     const proc = spawn("git", args.slice(), {
       cwd,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...(options.env ?? {}) },
       stdio: ["pipe", "pipe", "pipe"],
     });
     const chunks: Buffer[] = [];

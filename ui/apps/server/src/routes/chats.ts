@@ -150,7 +150,14 @@ export function mountChatsRoute(
       return jsonResponse({ error: "cwd required" }, 400);
     }
     const permissionMode = body?.permissionMode ?? "default";
-    const worktreeMode = body?.worktreeMode === "worktree" ? "worktree" : "local";
+    // `worktree_mode` is left as `null` on creation when the request
+    // doesn't provide it — the first-send hook commits the resolved
+    // `defaultEnvMode` once the user sends their first message. Explicit
+    // request-time values ("local" or "worktree") are honoured and
+    // bypass the hook's mode-resolution.
+    let worktreeMode: "local" | "worktree" | null = null;
+    if (body?.worktreeMode === "worktree") worktreeMode = "worktree";
+    else if (body?.worktreeMode === "local") worktreeMode = "local";
 
     let projectId: string | null = null;
     // New project-first flow: caller passes a projectId for an existing

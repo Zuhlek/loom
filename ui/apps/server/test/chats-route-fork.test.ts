@@ -29,7 +29,7 @@ describe("T-008 POST /chats/fork", () => {
       id: "c1",
       cwd: "/tmp/repo",
       project_id: proj.id,
-      permission_mode: "accept-edits",
+      permission_mode: "acceptEdits",
       worktree_mode: "worktree",
     });
     // Source row has a session_id and a pid simulating a live spawn.
@@ -45,7 +45,7 @@ describe("T-008 POST /chats/fork", () => {
     expect(forked).toBeDefined();
     expect(forked.id).not.toBe(src.id);
     expect(forked.cwd).toBe(src.cwd);
-    expect(forked.permission_mode).toBe("accept-edits");
+    expect(forked.permission_mode).toBe("acceptEdits");
     expect(forked.worktree_mode).toBe("worktree");
     expect(forked.project_id).toBe(proj.id);
     // Per-spawn fields are NOT copied.

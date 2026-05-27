@@ -2,6 +2,10 @@
 
 Opt-in subagent that analyzes Design-phase artifacts and reports whether a rerun would meaningfully change the result.
 
+## Reads
+
+- `methods/quality-check-protocol.md` — output format, severity definitions, and the no-AskUserQuestion rule.
+
 ## Checks
 
 The agent looks for evidence that a rerun is worth the token burn:
@@ -15,4 +19,4 @@ The agent looks for evidence that a rerun is worth the token burn:
 | Story duplication | `design.md` restates user-facing behaviour (a flow, a story, an acceptance criterion) that already lives in `spec.md`. Design specifies HOW, not WHAT — restating Spec content is a defect. |
 | Ambiguity actionable | An item in `design.md` Open ambiguity is too vague for Plan to consume (no concrete question, no decision frame). |
 
-See `weave/methods/quality-check-protocol.md` for output format, severity definitions, and the no-AskUserQuestion rule.
+Apply `methods/quality-check-protocol.md` (inlined below) for output format, severity definitions, and the no-AskUserQuestion rule.

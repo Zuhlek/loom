@@ -1,32 +1,13 @@
-/**
- * Tests for POST /git/commit, /git/push, /git/pr — branch toolbar actions.
- *
- * Uses a real local temp repo (file-based remote for push), and mocks the
- * source-control provider so /git/pr stays offline.
- */
+// Tests for POST /git/commit and /git/push — branch toolbar actions.
+// POST /git/pr lives in source-control-rpc.ts; coverage is in
+// source-control-route.test.ts.
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 
-// Mocks must be declared before the routes module is imported.
-vi.mock("../src/source-control/index.ts", async () => {
-  const actual: any = await vi.importActual("../src/source-control/index.ts");
-  return {
-    ...actual,
-    getProvider: vi.fn((_remoteUrl: string) => ({
-      name: "mock",
-      matches: () => true,
-      createPr: async (_args: any) => ({ url: "https://example.test/owner/repo/pull/42", number: 42 }),
-    })),
-  };
-});
-
-// eslint-disable-next-line import/first
 import { mountGitActionsRoute } from "../src/routes/git-actions.ts";
-// eslint-disable-next-line import/first
-import * as sourceControl from "../src/source-control/index.ts";
 
 type Handler = (req: Request, url: URL) => Response | Promise<Response>;
 
@@ -90,16 +71,6 @@ function makeRepoWithBareRemote(): { workdir: string; remote: string } {
   git(workdir, ["add", "a.txt"]);
   git(workdir, ["commit", "-q", "-m", "third"]);
   return { workdir, remote };
-}
-
-function makeRepoWithRemoteForPr(): { workdir: string; remote: string } {
-  // Same setup as bare-remote, but pushes once so we have a remote-tracked branch.
-  const r = makeRepoWithBareRemote();
-  // give the worktree a dirty file so commitAndPush has something to commit
-  fs.writeFileSync(path.join(r.workdir, "b.txt"), "b\n");
-  // push initial state so origin/main exists for subsequent PR
-  git(r.workdir, ["push", "-q", "-u", "origin", "main"]);
-  return r;
 }
 
 const tmpRoots: string[] = [];
@@ -195,43 +166,9 @@ describe("POST /git/push", () => {
   });
 });
 
-describe("POST /git/pr", () => {
-  test("returns { url } when provider succeeds (mocked)", async () => {
-    const { workdir } = makeRepoWithRemoteForPr();
-    track(workdir);
+describe("M1 — /git/pr is not registered by git-actions (de-duplication)", () => {
+  test("mountGitActionsRoute does NOT register /git/pr", () => {
     const routes = makeRoutes();
-    const res = await call(routes["/git/pr"], "http://localhost/git/pr", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ worktreePath: workdir, title: "My PR" }),
-    });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.url).toBe("https://example.test/owner/repo/pull/42");
-    expect(sourceControl.getProvider).toHaveBeenCalled();
-  });
-
-  test("missing title returns 400", async () => {
-    const routes = makeRoutes();
-    const res = await call(routes["/git/pr"], "http://localhost/git/pr", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ worktreePath: "/tmp/anything" }),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toBe("title required");
-  });
-
-  test("missing worktreePath returns 400", async () => {
-    const routes = makeRoutes();
-    const res = await call(routes["/git/pr"], "http://localhost/git/pr", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: "x" }),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toBe("worktreePath required");
+    expect(routes["/git/pr"]).toBeUndefined();
   });
 });

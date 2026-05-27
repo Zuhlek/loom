@@ -21,8 +21,13 @@ export interface ApiChat {
   id: string;
   project_id: string | null;
   cwd: string;
-  permission_mode: "default" | "plan" | "accept-edits" | "trusted-vm";
-  worktree_mode: "local" | "worktree";
+  permission_mode: "default" | "plan" | "acceptEdits" | "bypassPermissions";
+  /**
+   * `null` until the first-send hook commits the chat's mode. Pre-commit
+   * the composer renders the resolved `defaultEnvMode` from `/settings`
+   * with a "(pending first-send)" qualifier.
+   */
+  worktree_mode: "local" | "worktree" | null;
   worktree_path: string | null;
   session_id: string | null;
   pid: number | null;
@@ -34,6 +39,10 @@ export interface ApiChat {
   custom_name: string | null;
   auto_title: string | null;
   model_settings: WireModelSettings | null;
+  /** Current branch checked out for this chat. */
+  branch: string | null;
+  /** Cached VCS kind for the chat's cwd; `null` for legacy rows pre-attach. */
+  vcs_kind: "git" | "unknown" | null;
   /** Live session state; `null` for inert / unattached chats. */
   live?: ChatLiveState | null;
 }
@@ -268,7 +277,12 @@ export async function listRecentCwds(limit = 10): Promise<{ cwds: string[] }> {
  * Mirrors `ui/apps/server/src/routes/settings.ts` response shape.
  */
 export interface ApiSettings {
-  workspace: { root: string; source: string };
+  workspace: {
+    root: string;
+    source: string;
+    /** Resolved default working-tree mode for new chats' first-send. */
+    defaultEnvMode?: "local" | "worktree";
+  };
   worktrees: { root: string | null };
   auth: {
     loggedIn: boolean;
@@ -382,4 +396,36 @@ export async function postGitPr(input: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
+}
+
+/**
+ * Fetch a per-checkpoint diff range. `to === "latest"` resolves to the
+ * highest checkpoint ref on the chat; otherwise both endpoints are
+ * turn indices written by `CheckpointStore`. Mirrors the server's
+ * `GET /diff?mode=checkpoint-range` route.
+ */
+export async function getCheckpointDiff(
+  chatId: string,
+  from: number,
+  to: number | "latest",
+  opts: { signal?: AbortSignal } = {},
+): Promise<ApiDiffResponse> {
+  const qs =
+    `chatId=${encodeURIComponent(chatId)}` +
+    `&mode=checkpoint-range` +
+    `&from=${from}` +
+    `&to=${to === "latest" ? "latest" : String(to)}`;
+  return apiFetch<ApiDiffResponse>(`/diff?${qs}`, { signal: opts.signal });
+}
+
+/**
+ * List the checkpoint turn indices recorded for a chat. Returns a
+ * sorted ascending list including synthetic turn 0 when written.
+ * Empty list ⇒ no checkpoint refs yet (legacy / non-git / freshly
+ * created chats before first-send commits).
+ */
+export async function listCheckpointTurns(chatId: string): Promise<{ turns: number[] }> {
+  return apiFetch<{ turns: number[] }>(
+    `/checkpoints/list?chatId=${encodeURIComponent(chatId)}`,
+  );
 }

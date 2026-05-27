@@ -84,6 +84,48 @@ describe("tmux-session", () => {
     expect(call).toContain("sess-uuid");
   });
 
+  it("ensure: bypassPermissions appends --dangerously-skip-permissions to the claude argv", async () => {
+    capture.rcByCmd.set("has-session", 1);
+    capture.rcByCmd.set("new-session", 0);
+    const tmux = createTmuxSession();
+    await tmux.ensure("c-1", "/tmp/cwd", "sess-uuid", "bypassPermissions");
+    const call = capture.argv.find((a) => a[1] === "new-session")!;
+    expect(call).toContain("--dangerously-skip-permissions");
+    expect(call).not.toContain("--permission-mode");
+    // Flag lands after --session-id <uuid>, i.e. inside the claude arg
+    // tail rather than as a tmux option.
+    const dashDash = call.indexOf("--");
+    const flagIdx = call.indexOf("--dangerously-skip-permissions");
+    expect(flagIdx).toBeGreaterThan(dashDash);
+  });
+
+  it("ensure: plan / acceptEdits append --permission-mode <m> to the claude argv", async () => {
+    capture.rcByCmd.set("has-session", 1);
+    capture.rcByCmd.set("new-session", 0);
+    const tmux = createTmuxSession();
+    await tmux.ensure("c-1", "/tmp/cwd", "sess-uuid", "acceptEdits");
+    const acceptCall = capture.argv.find((a) => a[1] === "new-session")!;
+    expect(acceptCall).toContain("--permission-mode");
+    expect(acceptCall).toContain("acceptEdits");
+
+    capture.argv = [];
+    capture.rcByCmd.set("has-session", 1);
+    await tmux.ensure("c-2", "/tmp/cwd", "sess-uuid-2", "plan");
+    const planCall = capture.argv.find((a) => a[1] === "new-session")!;
+    expect(planCall).toContain("--permission-mode");
+    expect(planCall).toContain("plan");
+  });
+
+  it("ensure: default (and omitted) permission mode adds no extra claude flags", async () => {
+    capture.rcByCmd.set("has-session", 1);
+    capture.rcByCmd.set("new-session", 0);
+    const tmux = createTmuxSession();
+    await tmux.ensure("c-1", "/tmp/cwd", "sess-uuid");
+    const call = capture.argv.find((a) => a[1] === "new-session")!;
+    expect(call).not.toContain("--dangerously-skip-permissions");
+    expect(call).not.toContain("--permission-mode");
+  });
+
   it("ensure: calling twice for the same chatId still produces exactly one new-session (when the second call sees has-session=0)", async () => {
     // First call: has-session=1 (creates), Second call: has-session=0 (skips)
     let counter = 0;
@@ -157,6 +199,23 @@ describe("tmux-session", () => {
     // a shell.)
     expect(literal.indexOf("payload")).toBeGreaterThan(0);
     expect(literal).not.toContain("-- payload");
+  });
+
+  it("sendKey: passes the key via tmux send-keys -- <key> (key-name mode, no -l, no Enter)", async () => {
+    capture.rcByCmd.set("send-keys", 0);
+    const tmux = createTmuxSession();
+    await tmux.sendKey("c-1", "Right");
+    const sendCalls = capture.argv.filter((a) => a[1] === "send-keys");
+    // Exactly one send-keys call — the bare key, no trailing Enter.
+    expect(sendCalls.length).toBe(1);
+    const key = sendCalls[0]!;
+    expect(key).toContain("loom-c-1");
+    expect(key).toContain("--");
+    expect(key).toContain("Right");
+    expect(key).not.toContain("Enter");
+    // Key-name mode (no -l): "Right" must resolve as the arrow key, not be
+    // typed literally.
+    expect(key).not.toContain("-l");
   });
 
   it("interrupt: sends Escape via tmux send-keys to the loom-<chatId> target", async () => {

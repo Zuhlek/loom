@@ -11,9 +11,10 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { startServer } from "./http-ws-server.ts";
-import { resolveConfig } from "./config-loader/index.ts";
-import { initMetadataStore } from "./metadata-store/index.ts";
-import { createJsonlTailBridge } from "./process-manager/jsonl/bridge.ts";
+import { resolveConfig, type ResolvedConfig } from "./config-loader/index.ts";
+import { initMetadataStore, type MetadataStore } from "./metadata-store/index.ts";
+import { createJsonlTailBridge, type JsonlTailBridge } from "./process-manager/jsonl/bridge.ts";
+import { createImageStore, type ImageStore } from "./process-manager/jsonl/image-store.ts";
 import { createTmuxSession } from "./process-manager/tmux-session.ts";
 import {
   probeTmux,
@@ -33,6 +34,7 @@ import { mountChatsRoute } from "./routes/chats.ts";
 import { mountDiscoverRoute } from "./routes/discover.ts";
 import { mountFileSearchRoute } from "./routes/file-search.ts";
 import { mountUploadImageRoute } from "./routes/upload-image.ts";
+import { mountChatImageRoute } from "./routes/chat-image.ts";
 import { mountDiffRoute } from "./routes/diff.ts";
 import { mountGitStatusRoute } from "./routes/git-status.ts";
 import { mountGitActionsRoute } from "./routes/git-actions.ts";
@@ -41,7 +43,26 @@ import { mountFabricBoardRoute } from "./routes/fabric-board.ts";
 import { mountFabricRoute } from "./routes/fabric.ts";
 import { mountFabricArchiveRoute } from "./routes/fabric-archive.ts";
 import { mountSettingsRoute } from "./routes/settings.ts";
+import { mountChatsMetaRoute } from "./routes/chats-meta.ts";
+import { mountGitVerbsRoute } from "./routes/git-verbs.ts";
+import { mountGitWorktreeRoute } from "./routes/git-worktree.ts";
+import { mountWorktreesRoute } from "./routes/worktrees.ts";
+import { mountSourceControlRoute } from "./routes/source-control-rpc.ts";
 import { mountHooksAdminRoute, buildStatus as buildHooksStatus } from "./routes/hooks-admin.ts";
+import { createCheckpointStore, type CheckpointStore } from "./checkpointing/checkpoint-store.ts";
+import {
+  createCheckpointDiffQuery,
+  type CheckpointDiffQuery,
+} from "./checkpointing/checkpoint-diff-query.ts";
+import {
+  createCheckpointReactor,
+  type CheckpointReactor,
+} from "./checkpointing/checkpoint-reactor.ts";
+import { createHeadWatcher, type HeadWatcher } from "./git/head-watcher.ts";
+import { createTurnWatcher, type TurnWatcher } from "./process-manager/turn-watcher.ts";
+import { persistVcsKindOnAttach } from "./process-manager/persist-vcs-kind.ts";
+import { runFirstSendHook } from "./process-manager/first-send-hook.ts";
+import type { ServerFrame } from "./chat-protocol/frames.ts";
 
 function parseRootFlag(argv: string[]): string | undefined {
   const i = argv.indexOf("--root");
@@ -86,7 +107,7 @@ function compareSemverDesc(a: string, b: string): number {
  *   4. Newest VS Code extension bundle: ~/.vscode/extensions/anthropic.claude-code-*<platform>/resources/native-binary/claude
  * Falls back to bare "claude" so we still surface a clean error if nothing works.
  */
-function resolveClaudeBin(): string {
+export function resolveClaudeBin(): string {
   const env = process.env.LOOM_CLAUDE_BIN;
   if (env) {
     if (isExecutableFile(env)) return env;
@@ -106,7 +127,6 @@ function resolveClaudeBin(): string {
         .readdirSync(extDir)
         .filter((name) => name.startsWith("anthropic.claude-code-"))
         .map((name) => {
-          // anthropic.claude-code-<version>-<platform>
           const rest = name.slice("anthropic.claude-code-".length);
           const dash = rest.indexOf("-");
           const version = dash >= 0 ? rest.slice(0, dash) : rest;
@@ -123,6 +143,110 @@ function resolveClaudeBin(): string {
   return "claude";
 }
 
+export interface ChatDiffPanelSubstrate {
+  checkpointStore: CheckpointStore;
+  diffQuery: CheckpointDiffQuery;
+  reactor: CheckpointReactor;
+  headWatcher: HeadWatcher;
+  turnWatcher: TurnWatcher;
+  headWatcherSubscription: { unsubscribe(): void } | null;
+}
+
+export function createChatDiffPanelSubstrate(
+  bridge: JsonlTailBridge,
+  config: ResolvedConfig,
+): ChatDiffPanelSubstrate {
+  const broadcastAll = (frame: ServerFrame) => bridge.broadcastFrameToAll(frame);
+  const broadcastChat = (chatId: string, frame: ServerFrame) =>
+    bridge.broadcastFrameToChat(chatId, frame);
+
+  const checkpointStore = createCheckpointStore();
+  const diffQuery = createCheckpointDiffQuery(checkpointStore);
+  const reactor = createCheckpointReactor({
+    store: checkpointStore,
+    emit: (frame) => {
+      if (frame.kind === "checkpoint-captured") {
+        broadcastChat(frame["chat-id"], frame);
+      } else {
+        broadcastAll(frame);
+      }
+    },
+  });
+  const headWatcher = createHeadWatcher({
+    emit: (frame) => broadcastAll(frame),
+  });
+  const turnWatcher = createTurnWatcher({
+    onAssistantTurnComplete: (chatId, turn, cwd) =>
+      reactor.captureTurn(chatId, turn, cwd),
+  });
+
+  let headWatcherSubscription: { unsubscribe(): void } | null = null;
+  if (config.root) {
+    try {
+      headWatcherSubscription = headWatcher.watch(config.root);
+    } catch (err) {
+      console.warn(`[loom] head-watcher failed to attach to ${config.root}: ${(err as Error).message}`);
+    }
+  }
+
+  return {
+    checkpointStore,
+    diffQuery,
+    reactor,
+    headWatcher,
+    turnWatcher,
+    headWatcherSubscription,
+  };
+}
+
+export interface MountAllRoutesDeps {
+  store: MetadataStore;
+  config: ResolvedConfig;
+  bridge: JsonlTailBridge;
+  substrate: ChatDiffPanelSubstrate;
+  receiverPort: number;
+  sessionStore: ReturnType<typeof createSessionIdStore>;
+  imageStore: ImageStore;
+}
+
+export function mountAllRoutes(
+  routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
+  deps: MountAllRoutesDeps,
+): void {
+  const { store, config, bridge, substrate, receiverPort, sessionStore, imageStore } = deps;
+  const broadcastAll = (frame: ServerFrame) => bridge.broadcastFrameToAll(frame);
+
+  mountHookReceiver(routes, store, sessionStore);
+  mountConfigRoute(routes, config);
+  mountSidebarRoute(routes, store, bridge);
+  mountCwdRoute(routes, store);
+  mountCwdValidateRoute(routes);
+  mountProjectsRoute(routes, store, bridge);
+  mountChatsRoute(routes, store, bridge);
+  mountDiscoverRoute(routes);
+  mountFileSearchRoute(routes);
+  mountUploadImageRoute(routes);
+  mountChatImageRoute(routes, imageStore);
+  mountDiffRoute(routes, {
+    store,
+    diffQuery: substrate.diffQuery,
+    checkpointStore: substrate.checkpointStore,
+  });
+  mountGitStatusRoute(routes);
+  mountGitActionsRoute(routes);
+  mountFabricMockupRoute(routes);
+  mountFabricBoardRoute(routes);
+  mountFabricRoute(routes, store);
+  mountFabricArchiveRoute(routes, store);
+  mountSettingsRoute(routes, config);
+  mountHooksAdminRoute(routes, { receiverPort });
+  mountChatsMetaRoute(routes, store, broadcastAll);
+  mountGitVerbsRoute(routes, store, broadcastAll);
+  mountGitWorktreeRoute(routes, store, broadcastAll);
+  mountWorktreesRoute(routes, store, config.root ?? process.cwd(), broadcastAll);
+  mountSourceControlRoute(routes, store, broadcastAll);
+}
+
 const isEntrypoint =
   import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
 
@@ -131,6 +255,10 @@ if (isEntrypoint) {
   const cliRoot = parseRootFlag(process.argv);
   const config = resolveConfig({ cliRoot });
   const store = await initMetadataStore();
+  // Durable per-chat image store. Uses the same `~/.loom` data-dir convention
+  // as the metadata store. Injected into the bridge (staging side) and the
+  // /chat-image route + materializer resolver (read-back side).
+  const imageStore = createImageStore();
   const claudeBin = resolveClaudeBin();
   console.log(`[loom] using claude binary: ${claudeBin}`);
 
@@ -149,7 +277,6 @@ if (isEntrypoint) {
   if (!tmuxProbe.available) {
     const notice = formatTmuxUnavailableNotice(tmuxProbe);
     if (notice) {
-      // Single actionable line. No stack trace.
       console.warn(`[loom] ${notice}`);
     }
   } else if (tmuxProbe.version) {
@@ -165,39 +292,74 @@ if (isEntrypoint) {
   const pathProbe = createJsonlPathProbe({
     storagePath: path.join(os.homedir(), ".claude", "loom", "tail-root.json"),
   });
+  // Substrate-back-reference holder. The bridge needs lifecycle hooks
+  // that touch the substrate; the substrate needs the bridge for
+  // broadcast. Construct the bridge first with a deferred substrate
+  // pointer, then assign once both are alive.
+  let substrateRef: ChatDiffPanelSubstrate | null = null;
+
   const bridge = createJsonlTailBridge({
     tmux,
     sessionStore,
     pathProbe,
+    imageStore,
     paneProcess: createPaneProcessApi(),
     cwdResolver: async (chatId: string) => {
       const chat = store.chats.get(chatId);
       return chat?.cwd ?? process.cwd();
     },
+    permissionModeResolver: (chatId: string) => {
+      const chat = store.chats.get(chatId);
+      return chat?.permission_mode ?? "default";
+    },
+    onChatAttach: (chatId, cwd) => {
+      if (!substrateRef) return;
+      try {
+        persistVcsKindOnAttach(store, chatId);
+      } catch (err) {
+        console.warn(`[loom] persistVcsKindOnAttach failed for ${chatId}: ${(err as Error).message}`);
+      }
+      try {
+        substrateRef.turnWatcher.start(chatId, cwd);
+      } catch (err) {
+        console.warn(`[loom] turnWatcher.start failed for ${chatId}: ${(err as Error).message}`);
+      }
+    },
+    onFirstUserTurn: async (chatId) => {
+      if (!substrateRef) return;
+      try {
+        await runFirstSendHook({
+          store,
+          chatId,
+          defaultEnvMode: config.defaultEnvMode,
+          checkpointStore: substrateRef.checkpointStore,
+        });
+      } catch (err) {
+        console.warn(`[loom] runFirstSendHook failed for ${chatId}: ${(err as Error).message}`);
+      }
+    },
+    onAssistantTurnComplete: (chatId) => {
+      if (!substrateRef) return;
+      substrateRef.turnWatcher.observeEvent({ chatId, kind: "assistant-turn-complete" });
+    },
   });
-  // Hook-receiver ownership.
   setEnvelopeBroadcaster((env) => bridge.routeHookEnvelope(env));
+
+  const substrate = createChatDiffPanelSubstrate(bridge, config);
+  substrateRef = substrate;
+
   const routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>> = {};
-  mountHookReceiver(routes, store, sessionStore);
-  mountConfigRoute(routes, config);
-  mountSidebarRoute(routes, store, bridge);
-  mountCwdRoute(routes, store);
-  mountCwdValidateRoute(routes);
-  mountProjectsRoute(routes, store, bridge);
-  mountChatsRoute(routes, store, bridge);
-  mountDiscoverRoute(routes);
-  mountFileSearchRoute(routes);
-  mountUploadImageRoute(routes);
-  mountDiffRoute(routes);
-  mountGitStatusRoute(routes);
-  mountGitActionsRoute(routes);
-  mountFabricMockupRoute(routes);
-  mountFabricBoardRoute(routes);
-  mountFabricRoute(routes, store);
-  mountFabricArchiveRoute(routes, store);
-  mountSettingsRoute(routes, config);
   const loomPort = parseInt(process.env.LOOM_PORT ?? "3737", 10);
-  mountHooksAdminRoute(routes, { receiverPort: loomPort });
+  mountAllRoutes(routes, {
+    store,
+    config,
+    bridge,
+    substrate,
+    receiverPort: loomPort,
+    sessionStore,
+    imageStore,
+  });
+
   const server = await startServer({
     port: loomPort,
     routes,
@@ -228,6 +390,12 @@ if (isEntrypoint) {
 
   const shutdown = async (sig: string) => {
     console.log(`[loom-server] received ${sig}, shutting down...`);
+    try {
+      substrate.headWatcherSubscription?.unsubscribe();
+    } catch {}
+    try {
+      substrate.headWatcher.dispose();
+    } catch {}
     try {
       await server.stop();
     } catch {}

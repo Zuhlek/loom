@@ -104,7 +104,14 @@ function serialize(storage: InMemoryStorage): SerializedStorage {
 }
 
 function hydrate(storage: InMemoryStorage, data: SerializedStorage): void {
-  for (const c of data.chats ?? []) storage.chats.set(c.id, c);
+  for (const c of data.chats ?? []) {
+    // Legacy on-disk rows used kebab-case for permission_mode; canonicalise
+    // to the SDK shape on read so the rest of the system sees one vocabulary.
+    const legacy = (c as { permission_mode?: string }).permission_mode;
+    if (legacy === "accept-edits") (c as { permission_mode: string }).permission_mode = "acceptEdits";
+    else if (legacy === "trusted-vm") (c as { permission_mode: string }).permission_mode = "bypassPermissions";
+    storage.chats.set(c.id, c);
+  }
   for (const p of data.projects ?? []) storage.projects.set(p.id, p);
   for (const entry of data.pendingGates ?? []) {
     if (entry && entry.__key) storage.pendingGates.set(entry.__key, entry.value);

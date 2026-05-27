@@ -10,18 +10,47 @@
  * state across restarts (Design ADR-004 / ADR-007).
  */
 
+import type { WirePermissionMode } from "../chat-protocol/frames.ts";
 import { buildClaudeSpawnEnv } from "./claude-env.ts";
 import { execArgv, type ExecArgvResult } from "./exec-argv.ts";
 import { TmuxUnavailableError } from "./tmux-availability.ts";
+
+/**
+ * Translate a wire-shape permission mode into the CLI flags that put
+ * `claude` into that mode at spawn time. The default ("supervised") mode
+ * adds nothing — claude's built-in default. `plan` and `acceptEdits` ride
+ * the documented `--permission-mode <m>` flag; `bypassPermissions` is the
+ * explicit `--dangerously-skip-permissions` opt-out.
+ */
+export function permissionModeSpawnArgs(mode: WirePermissionMode): string[] {
+  switch (mode) {
+    case "bypassPermissions":
+      return ["--dangerously-skip-permissions"];
+    case "plan":
+    case "acceptEdits":
+      return ["--permission-mode", mode];
+    case "default":
+    default:
+      return [];
+  }
+}
 
 export interface TmuxSessionApi {
   /**
    * Idempotent. If `tmux has-session -t loom-<chatId>` succeeds, no-op.
    * Otherwise spawns
-   *   tmux new-session -d -s loom-<chatId> -c <cwd> -- claude --session-id <sessionId>
+   *   tmux new-session -d -s loom-<chatId> -c <cwd> -- claude --session-id <sessionId> [<permission-flags>]
    * with env built by `buildClaudeSpawnEnv(...)` from `claude-env.ts`.
+   * `permissionMode` controls the additional CLI flags appended after
+   * `--session-id` (see {@link permissionModeSpawnArgs}); defaults to
+   * `"default"` (no extra flags).
    */
-  ensure(chatId: string, cwd: string, sessionId: string): Promise<void>;
+  ensure(
+    chatId: string,
+    cwd: string,
+    sessionId: string,
+    permissionMode?: WirePermissionMode,
+  ): Promise<void>;
 
   /** `tmux kill-session -t loom-<chatId>`. Idempotent: missing session is a no-op. */
   kill(chatId: string): Promise<void>;
@@ -32,6 +61,19 @@ export interface TmuxSessionApi {
    * Literal-mode mandatory.
    */
   sendInput(chatId: string, text: string): Promise<void>;
+
+  /**
+   * `tmux send-keys -t loom-<chatId> -- <key>` with NO trailing Enter.
+   * Sends a single tmux *key name* (e.g. a digit `"1"`, `"Right"`, `"Enter"`)
+   * — NOT literal text — so it can drive claude's interactive
+   * AskUserQuestion list widget:
+   *   - single-select: the option's number key quick-selects + confirms;
+   *   - multi-select: number keys toggle checkboxes, `"Right"` opens the
+   *     Submit review tab, then `"1"` confirms.
+   * Sending a trailing Enter (as `sendInput` does) would land on the
+   * freshly-emptied composer as a stray submit.
+   */
+  sendKey(chatId: string, key: string): Promise<void>;
 
   /** `tmux send-keys -t loom-<chatId> Escape`. */
   interrupt(chatId: string): Promise<void>;
@@ -116,7 +158,7 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
   }
 
   return {
-    async ensure(chatId, cwd, sessionId) {
+    async ensure(chatId, cwd, sessionId, permissionMode = "default") {
       if (!isAvailable()) throw unavailableError("ensure session");
       if (await hasSession(chatId)) return;
       const args = [
@@ -130,6 +172,7 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
         claudeBin,
         "--session-id",
         sessionId,
+        ...permissionModeSpawnArgs(permissionMode),
       ];
       const r = await runTmux(tmuxBin, args, buildEnv());
       if (r.code !== 0) {
@@ -176,6 +219,23 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
       if (enter.code !== 0) {
         throw new Error(
           `tmux: send-keys (Enter) failed (code ${enter.code}) for chat ${chatId}.`,
+        );
+      }
+    },
+
+    async sendKey(chatId, key) {
+      if (!isAvailable()) throw unavailableError("send key");
+      // Key-name mode (NO -l): tmux resolves `key` against its key table so
+      // digits, "Right", "Enter" etc. all send the corresponding keypress.
+      // No trailing Enter — see the interface doc for the widget choreography.
+      const r = await runTmux(
+        tmuxBin,
+        ["send-keys", "-t", targetFor(chatId), "--", key],
+        buildEnv(),
+      );
+      if (r.code !== 0) {
+        throw new Error(
+          `tmux: send-keys (key) failed (code ${r.code}) for chat ${chatId}.`,
         );
       }
     },

@@ -2,6 +2,10 @@
 
 Opt-in subagent that analyzes Build-phase artifacts and reports whether a rerun would meaningfully change the result.
 
+## Reads
+
+- `methods/quality-check-protocol.md` — output format, severity definitions, and the no-AskUserQuestion rule.
+
 ## Checks
 
 The agent looks for evidence that a rerun is worth the token burn:
@@ -16,4 +20,4 @@ The agent looks for evidence that a rerun is worth the token burn:
 
 The Build quality-check agent never re-executes tests, smokes, or mutations — every row above is a read-only cross-reference against the existing reports and logs.
 
-See `weave/methods/quality-check-protocol.md` for output format, severity definitions, and the no-AskUserQuestion rule.
+Apply `methods/quality-check-protocol.md` (inlined below) for output format, severity definitions, and the no-AskUserQuestion rule.

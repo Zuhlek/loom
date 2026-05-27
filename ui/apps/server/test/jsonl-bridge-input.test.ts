@@ -15,9 +15,10 @@ import type { SessionIdStore, SessionEntry } from "../src/process-manager/sessio
 import type { JsonlPathProbe, ResolvedTailRoot } from "../src/process-manager/jsonl-path-probe.ts";
 import { makeEnvelope } from "../src/chat-protocol/envelope.ts";
 
-function mkTmuxRec(): { api: TmuxSessionApi; calls: { sendInput: { chatId: string; text: string }[]; interrupt: string[]; kill: string[]; ensure: { chatId: string; cwd: string; sessionId: string }[] } } {
+function mkTmuxRec(): { api: TmuxSessionApi; calls: { sendInput: { chatId: string; text: string }[]; sendKey: { chatId: string; key: string }[]; interrupt: string[]; kill: string[]; ensure: { chatId: string; cwd: string; sessionId: string }[] } } {
   const calls = {
     sendInput: [] as { chatId: string; text: string }[],
+    sendKey: [] as { chatId: string; key: string }[],
     interrupt: [] as string[],
     kill: [] as string[],
     ensure: [] as { chatId: string; cwd: string; sessionId: string }[],
@@ -31,6 +32,9 @@ function mkTmuxRec(): { api: TmuxSessionApi; calls: { sendInput: { chatId: strin
     },
     async sendInput(chatId, text) {
       calls.sendInput.push({ chatId, text });
+    },
+    async sendKey(chatId, key) {
+      calls.sendKey.push({ chatId, key });
     },
     async interrupt(chatId) {
       calls.interrupt.push(chatId);
@@ -237,10 +241,11 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
     }
   });
 
-  it("respondToQuestion: with pending question, maps answer id → 1-based option index", async () => {
-    // AskUserQuestion in Claude's TUI is index-driven (user types "1", "2",
-    // ...). The bridge looks up the answer-id in the pending question's
-    // options and types the corresponding 1-based index.
+  it("respondToQuestion: single-select sends the bare option-number key (no Enter)", async () => {
+    // claude's AskUserQuestion TUI is a navigable numbered list where the
+    // option's number key is a quick-select that confirms in one stroke. The
+    // bridge looks up the answer-id, then drives the widget with a bare
+    // keystroke via sendKey — NOT sendInput, which would append a stray Enter.
     const { api, calls } = mkTmuxRec();
     const { opts, cleanup } = mkOpts(api);
     try {
@@ -262,14 +267,53 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
         }),
       );
       await bridge.respondToQuestion("c-1", "q-1", { answers: ["opt-2"] });
-      expect(calls.sendInput).toEqual([{ chatId: "c-1", text: "2" }]);
+      expect(calls.sendKey).toEqual([{ chatId: "c-1", key: "2" }]);
+      expect(calls.sendInput).toEqual([]);
       await bridge.dispose("c-1");
     } finally {
       cleanup();
     }
   });
 
-  it("respondToQuestion: __freeform__ answer uses otherText", async () => {
+  it("respondToQuestion: multi-select toggles each option then navigates Right + Submit", async () => {
+    // claude's multi-select widget: number keys TOGGLE checkboxes, then
+    // "Right" opens the Submit review tab where "1" confirms. The bridge
+    // drives all of this via bare keystrokes (sendKey), never sendInput.
+    const { api, calls } = mkTmuxRec();
+    const { opts, cleanup } = mkOpts(api);
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      await bridge.attach("c-1", makeWs());
+      bridge.routeHookEnvelope(
+        makeEnvelope("gate-pending", "c-1", {
+          kind: "askuserquestion",
+          data: {
+            id: "q-1",
+            question: "Pick many?",
+            multiSelect: true,
+            options: [
+              { id: "opt-1", label: "A" },
+              { id: "opt-2", label: "B" },
+              { id: "opt-3", label: "C" },
+            ],
+          },
+        }),
+      );
+      await bridge.respondToQuestion("c-1", "q-1", { answers: ["opt-1", "opt-3"] });
+      expect(calls.sendKey).toEqual([
+        { chatId: "c-1", key: "1" },
+        { chatId: "c-1", key: "3" },
+        { chatId: "c-1", key: "Right" },
+        { chatId: "c-1", key: "1" },
+      ]);
+      expect(calls.sendInput).toEqual([]);
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("respondToQuestion: __freeform__ with no pending state types the text directly", async () => {
     const { api, calls } = mkTmuxRec();
     const { opts, cleanup } = mkOpts(api);
     try {
@@ -282,15 +326,63 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
       expect(calls.sendInput).toEqual([
         { chatId: "c-1", text: "custom answer" },
       ]);
+      expect(calls.sendKey).toEqual([]);
       await bridge.dispose("c-1");
     } finally {
       cleanup();
     }
   });
 
-  it("submitUserTurnWithPriority(images): typed not-supported error frame; text still sent", async () => {
+  it("respondToQuestion: __freeform__ with pending single-select navigates to the 'Type something' row then types", async () => {
+    // claude appends a "Type something" row after the parsed options; its
+    // number key (options.length + 1) only moves the cursor there, then the
+    // typed text fills it inline and Enter (from sendInput) submits.
     const { api, calls } = mkTmuxRec();
     const { opts, cleanup } = mkOpts(api);
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      await bridge.attach("c-1", makeWs());
+      bridge.routeHookEnvelope(
+        makeEnvelope("gate-pending", "c-1", {
+          kind: "askuserquestion",
+          data: {
+            id: "q-1",
+            question: "Pick?",
+            options: [
+              { id: "opt-1", label: "A" },
+              { id: "opt-2", label: "B" },
+              { id: "opt-3", label: "C" },
+            ],
+          },
+        }),
+      );
+      await bridge.respondToQuestion("c-1", "q-1", {
+        answers: ["__freeform__"],
+        otherText: "custom answer",
+      });
+      // 3 options → "Type something" is row 4.
+      expect(calls.sendKey).toEqual([{ chatId: "c-1", key: "4" }]);
+      expect(calls.sendInput).toEqual([{ chatId: "c-1", text: "custom answer" }]);
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("submitUserTurnWithPriority(images): stages via the image store and appends @<path> to the text", async () => {
+    // Replaces the prior "not supported by the JSONL bridge" contract — image
+    // turns are now wired through (T-003). With an injected image store the
+    // bridge stages each image and appends an @<absPath> token to the send.
+    const { api, calls } = mkTmuxRec();
+    const { opts, cleanup } = mkOpts(api);
+    opts.imageStore = {
+      async stageTurnImages() {
+        return [{ absPath: "/abs/img.png", mediaType: "image/png" }];
+      },
+      lookupByPath() {
+        return undefined;
+      },
+    };
     try {
       const bridge = createJsonlTailBridge(opts);
       const ws = makeWs();
@@ -299,11 +391,11 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
       await bridge.submitUserTurnWithPriority("c-1", "with image", "now", [
         { mediaType: "image/png", dataB64: "abcd" },
       ]);
-      expect(calls.sendInput).toEqual([{ chatId: "c-1", text: "with image" }]);
+      expect(calls.sendInput).toEqual([
+        { chatId: "c-1", text: "with image @/abs/img.png" },
+      ]);
       const frames = ws.sent.map((s) => JSON.parse(s));
-      const err = frames.find((f) => f.kind === "error");
-      expect(err).toBeDefined();
-      expect(err.body.message).toMatch(/image attachments are not supported/i);
+      expect(frames.find((f) => f.kind === "error")).toBeUndefined();
       await bridge.dispose("c-1");
     } finally {
       cleanup();

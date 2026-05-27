@@ -103,7 +103,7 @@ The procedures the Build agent applies live in `phases/build/methods/`:
 | `methods/mutation.md` | Per task after `green`, only when `tests.md` opts in | Test-strength check on the just-implemented task |
 | `methods/smoke.md` | Once before returning, only when project is runnable | Whole-project runnable verification |
 
-These are procedure files the Build agent reads from disk at the relevant step. They are not dispatched as subagents (which is structurally impossible — see 1.1).
+These are procedure files declared in the Build body's `## Reads`; the orchestrator inlines their content into the dispatch prompt (see `SKILL.md § Dispatch concatenation`), so the Build agent applies them from the inlined head, not from a disk read. They are not dispatched as subagents (which is structurally impossible — see 1.1).
 
 ### 3.2 Why one session for all tasks
 

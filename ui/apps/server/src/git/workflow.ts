@@ -7,7 +7,7 @@
  */
 
 import { commit, push, getRemoteUrl, currentBranch, hasUncommittedChanges } from "./manager";
-import { getProvider, type SourceControlProvider } from "../source-control";
+import { getProvider, type SourceControlProviderShape } from "../source-control";
 
 export interface CommitArgs {
   cwd: string;
@@ -64,7 +64,10 @@ export async function createPullRequest(args: CreatePrArgs): Promise<PrResult> {
   if (!remoteUrl) {
     throw new Error(`No remote URL configured for "${args.remote ?? "origin"}".`);
   }
-  const provider: SourceControlProvider = getProvider(remoteUrl);
+  const provider: SourceControlProviderShape | null = getProvider(remoteUrl);
+  if (!provider) {
+    throw new Error(`No source-control provider matches remote URL: ${remoteUrl}`);
+  }
   const pr = await provider.createPr({
     cwd: args.cwd,
     remoteUrl,
@@ -73,5 +76,5 @@ export async function createPullRequest(args: CreatePrArgs): Promise<PrResult> {
     title: args.title ?? args.message.split("\n")[0]!,
     body: args.body,
   });
-  return { ...pr, provider: provider.name };
+  return { ...pr, provider: provider.kind };
 }

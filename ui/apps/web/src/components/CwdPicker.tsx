@@ -131,7 +131,7 @@ export function CwdPicker({ value, onChange, onClose }: Props) {
         ) : null}
       </div>
 
-      <div className="grid grid-cols-[140px_1fr] max-h-[280px]">
+      <div className="grid grid-cols-[140px_1fr] h-[min(420px,55vh)]">
         {/* Roots column */}
         <div
           className="overflow-y-auto border-r py-1"

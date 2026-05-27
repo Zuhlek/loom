@@ -38,8 +38,8 @@ interface ContextMenuState {
 const DOT_FOR_MODE: Record<ApiChat["permission_mode"], string> = {
   default: "bg-emerald-500",
   plan: "bg-blue-500",
-  "accept-edits": "bg-amber-500",
-  "trusted-vm": "bg-red-500",
+  acceptEdits: "bg-amber-500",
+  bypassPermissions: "bg-red-500",
 };
 
 /**

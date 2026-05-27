@@ -1,6 +1,4 @@
-/**
- * Chat repository.
- */
+// Chat repository.
 import * as crypto from "node:crypto";
 import type { InMemoryStorage } from "../index.ts";
 import type { WireModelSettings } from "../../chat-protocol/messages.ts";
@@ -15,8 +13,15 @@ export interface ChatRow {
   id: string;
   project_id: string | null;
   cwd: string;
-  permission_mode: "default" | "plan" | "accept-edits" | "trusted-vm";
-  worktree_mode: "local" | "worktree";
+  permission_mode: "default" | "plan" | "acceptEdits" | "bypassPermissions";
+  /**
+   * `null` until the first-send hook commits the chat's mode using the
+   * resolved `defaultEnvMode` from settings. Once committed, the field
+   * is permanent for the chat's lifetime — production code MUST NOT
+   * reset it back to `null`. The hook short-circuits when the field is
+   * `"local"` or `"worktree"`, treating a present value as committed.
+   */
+  worktree_mode: "local" | "worktree" | null;
   worktree_path: string | null;
   session_id: string | null;
   pid: number | null;
@@ -33,6 +38,20 @@ export interface ChatRow {
    * typed object; `update()` merge-patches over the current row JSON.
    */
   model_settings: WireModelSettings | null;
+  /**
+   * Current branch checked out for this chat. `null` when no branch is
+   * known yet (legacy rows pre-widening, or chats whose `vcs_kind` is
+   * `"unknown"`). Mutable mid-chat via `update()`.
+   */
+  branch: string | null;
+  /**
+   * VCS kind cached for the chat's `cwd`. `"git"` when a `.git` lookup
+   * resolved, `"unknown"` when no VCS root was detected, `null` for
+   * legacy rows that pre-date the field (read paths normalise the
+   * absent key to `null`). Cache invalidation belongs to the attach
+   * hook and the worktree CRUD verbs.
+   */
+  vcs_kind: "git" | "unknown" | null;
 }
 
 export interface ChatCreate {
@@ -96,7 +115,10 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
         project_id: c.project_id ?? null,
         cwd: c.cwd,
         permission_mode: c.permission_mode ?? "default",
-        worktree_mode: c.worktree_mode ?? "local",
+        // Stays `null` until the first-send hook commits the resolved
+        // env mode. The hook treats present values as already-committed
+        // and short-circuits; defaulting here would defeat that contract.
+        worktree_mode: c.worktree_mode === undefined ? null : c.worktree_mode,
         worktree_path: c.worktree_path ?? null,
         session_id: sessionId,
         pid: null,
@@ -107,6 +129,8 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
         created_at: now,
         custom_name: null,
         model_settings: null,
+        branch: null,
+        vcs_kind: null,
       };
       // Persist the JSON column as text-at-rest; parse on the way out.
       storage.chats.set(c.id, { ...row, model_settings: null });
@@ -115,7 +139,17 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
     get(id) {
       const raw = storage.chats.get(id);
       if (!raw) return null;
-      return { ...raw, model_settings: parseModelSettings(raw.model_settings) } as ChatRow;
+      // Legacy rows pre-widening lack `branch` / `vcs_kind` keys; the
+      // on-disk shape may omit them entirely. Normalise the absent
+      // keys to `null` so callers see a stable shape regardless of
+      // when the row was first written. Use `??` rather than spread
+      // ordering so a present-but-null value also reads as `null`.
+      return {
+        ...raw,
+        branch: raw.branch ?? null,
+        vcs_kind: raw.vcs_kind ?? null,
+        model_settings: parseModelSettings(raw.model_settings),
+      } as ChatRow;
     },
     list() {
       return Array.from(storage.chats.values());

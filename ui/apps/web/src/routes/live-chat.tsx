@@ -17,13 +17,14 @@ import { AppLayout } from "../components/layout/AppLayout";
 import { LiveSidebar } from "../components/LiveSidebar";
 import { TasksPanel, type Task } from "../components/TasksPanel";
 import { DiffPanelContainer } from "../components/diff/DiffPanelContainer";
+import { ProjectWorktreesPanel } from "../components/worktrees/ProjectWorktreesPanel";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { PermissionRequestInline } from "../components/chat/PermissionRequestInline";
 import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker";
 import { useSnackbar } from "../components/ui/Snackbar";
 import { SessionRecoveryBanner } from "../components/chat/SessionRecoveryBanner";
-import { getChat, wsUrl, type ApiChat } from "../lib/api";
+import { getChat, getSettings, listCheckpointTurns, wsUrl, type ApiChat } from "../lib/api";
 import { useChatBridge } from "../lib/use-chat-bridge";
 import type {
   ChatItem,
@@ -308,7 +309,15 @@ export function LiveChatRoute({ chatId }: Props) {
    * conditionally renders the Diff button so the user never reaches
    * `rightPane === "diff"` in local mode).
    */
-  const [rightPane, setRightPane] = useState<"tasks" | "diff" | null>(null);
+  const [rightPane, setRightPane] = useState<"tasks" | "diff" | "worktrees" | null>(null);
+  // Resolved server default working-tree mode. Drives the pre-commit
+  // copy of {@link ModeIndicatorPill} when `chat.worktree_mode === null`.
+  const [defaultEnvMode, setDefaultEnvMode] = useState<"local" | "worktree">("local");
+  // Checkpoint refs recorded for this chat. Drives the timeline-strip
+  // marker rendering inside the diff panel. Sourced from
+  // `GET /checkpoints/list` on chatId change and incrementally
+  // maintained via the `checkpoint-captured` WS frame.
+  const [checkpointTurns, setCheckpointTurns] = useState<number[]>([]);
   // Connection-status popover open state. The websocket pill in the
   // top-right of the top bar collapses to a coloured dot; clicking it
   // toggles a small info card with the state name and reconnect detail.
@@ -318,7 +327,7 @@ export function LiveChatRoute({ chatId }: Props) {
   // guard (inside the ws-attach effect closure, which captures
   // `rightPane` once per `chatId`) can read the current value
   // without re-subscribing the WebSocket on every pane toggle.
-  const rightPaneRef = useRef<"tasks" | "diff" | null>(null);
+  const rightPaneRef = useRef<"tasks" | "diff" | "worktrees" | null>(null);
   useEffect(() => {
     rightPaneRef.current = rightPane;
   }, [rightPane]);
@@ -332,6 +341,8 @@ export function LiveChatRoute({ chatId }: Props) {
     setRightPane((p) => (p === "tasks" ? null : "tasks"));
   const onToggleDiff = () =>
     setRightPane((p) => (p === "diff" ? null : "diff"));
+  const onToggleWorktrees = () =>
+    setRightPane((p) => (p === "worktrees" ? null : "worktrees"));
   const snackbar = useSnackbar();
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -346,6 +357,38 @@ export function LiveChatRoute({ chatId }: Props) {
       .catch((err) => { if (alive) setChatErr(err?.message ?? "load failed"); });
     return () => { alive = false; };
   }, [chatId]);
+
+  // Fetch the per-chat checkpoint refs. Drives the diff panel's
+  // timeline-strip + empty-state badge. The `checkpoint-captured`
+  // WS frame incrementally extends the list while the route is open.
+  useEffect(() => {
+    let alive = true;
+    setCheckpointTurns([]);
+    listCheckpointTurns(chatId)
+      .then((r) => { if (alive) setCheckpointTurns(r.turns); })
+      .catch(() => { /* legacy / non-git chats fall through with []. */ });
+    return () => { alive = false; };
+  }, [chatId]);
+
+  // Fetch resolved server settings so the composer's mode-indicator can
+  // show the right "(pending first-send)" label.
+  useEffect(() => {
+    let alive = true;
+    getSettings()
+      .then((s) => {
+        if (!alive) return;
+        if (s.workspace?.defaultEnvMode === "worktree") {
+          setDefaultEnvMode("worktree");
+        } else {
+          setDefaultEnvMode("local");
+        }
+      })
+      .catch(() => {
+        // Settings fetch failures are non-fatal; the pill still renders
+        // with the "local" default.
+      });
+    return () => { alive = false; };
+  }, []);
 
   // (Re)connect the WebSocket on chatId change.
   useEffect(() => {
@@ -424,6 +467,47 @@ export function LiveChatRoute({ chatId }: Props) {
           case "context-usage-update":
             bridge.handleServerFrame(frame);
             break;
+          case "chat-meta-changed": {
+            // Verb routes (switchRef / createRef / createWorktree / etc.)
+            // PATCH the row server-side then broadcast this frame so the
+            // composer pills + diff panel re-render without a refetch.
+            const patch = frame.body ?? { branch: null, worktreePath: null };
+            setChat((c) =>
+              c
+                ? {
+                    ...c,
+                    branch: patch.branch ?? null,
+                    worktree_path: patch.worktreePath ?? null,
+                  }
+                : c,
+            );
+            break;
+          }
+          case "checkpoint-captured": {
+            // Reactor wrote a new checkpoint ref for this chat. Append
+            // the turn to the local list so the diff-panel timeline-
+            // strip renders the new marker without a refetch.
+            const turn = frame.body?.turn;
+            if (typeof turn === "number") {
+              setCheckpointTurns((prev) =>
+                prev.includes(turn) ? prev : [...prev, turn].sort((a, b) => a - b),
+              );
+            }
+            break;
+          }
+          case "ref-change": {
+            // Project-scoped HEAD watcher emitting an out-of-band branch
+            // change. Local-mode chats whose cwd matches the watcher's
+            // root update their attached-ref pill; worktree-mode chats
+            // ignore the frame (their branch is owned by the worktree).
+            setChat((c) => {
+              if (!c) return c;
+              if (c.worktree_mode === "worktree") return c;
+              if (frame.body?.cwd !== c.cwd) return c;
+              return { ...c, branch: frame.body.branch ?? c.branch };
+            });
+            break;
+          }
           case "tasks-update": {
             const incoming = frame.body?.tasks ?? null;
             if (incoming) {
@@ -754,28 +838,47 @@ export function LiveChatRoute({ chatId }: Props) {
           </span>
         ) : null}
       </button>
-      {chat?.worktree_mode === "worktree" && (
-        <button
-          type="button"
-          data-testid="diff-toggle"
-          onClick={onToggleDiff}
-          className={clsx(
-            "size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]",
-            rightPane === "diff"
-              ? "bg-blue-500/10 text-blue-600"
-              : "text-[var(--muted-foreground)]",
-          )}
-          title={rightPane === "diff" ? "Hide diff" : "Show diff"}
-          aria-pressed={rightPane === "diff"}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-            <circle cx="6" cy="6" r="2" />
-            <circle cx="18" cy="18" r="2" />
-            <path d="M6 8v8a2 2 0 002 2h6" />
-            <path d="M18 16V8a2 2 0 00-2-2h-6" />
-          </svg>
-        </button>
-      )}
+      <button
+        type="button"
+        data-testid="diff-toggle"
+        onClick={onToggleDiff}
+        className={clsx(
+          "size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]",
+          rightPane === "diff"
+            ? "bg-blue-500/10 text-blue-600"
+            : "text-[var(--muted-foreground)]",
+        )}
+        title={rightPane === "diff" ? "Hide diff" : "Show diff"}
+        aria-pressed={rightPane === "diff"}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+          <circle cx="6" cy="6" r="2" />
+          <circle cx="18" cy="18" r="2" />
+          <path d="M6 8v8a2 2 0 002 2h6" />
+          <path d="M18 16V8a2 2 0 00-2-2h-6" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        data-testid="worktrees-toggle"
+        onClick={onToggleWorktrees}
+        className={clsx(
+          "size-7 rounded-md grid place-items-center hover:bg-[var(--accent)]",
+          rightPane === "worktrees"
+            ? "bg-blue-500/10 text-blue-600"
+            : "text-[var(--muted-foreground)]",
+        )}
+        title={rightPane === "worktrees" ? "Hide worktrees" : "Show worktrees"}
+        aria-pressed={rightPane === "worktrees"}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="6" cy="6" r="2" />
+          <circle cx="6" cy="18" r="2" />
+          <circle cx="18" cy="12" r="2" />
+          <path d="M8 6h6a2 2 0 012 2v2" />
+          <path d="M8 18h6a2 2 0 002-2v-2" />
+        </svg>
+      </button>
       {/* WebSocket status dot — pinned to the bottom of the rail with
           `mt-auto`. Click reveals an info card that opens upward so it
           doesn't escape the viewport. */}
@@ -825,11 +928,15 @@ export function LiveChatRoute({ chatId }: Props) {
             onToggle={onToggleTasks}
             lastUpdatedAt={tasksUpdatedAt}
           />
-        ) : rightPane === "diff" && chat?.worktree_mode === "worktree" ? (
+        ) : rightPane === "diff" && chat ? (
           <DiffPanelContainer
             worktreePath={chat.worktree_path}
             chatId={chat.id}
+            vcsKind={chat.vcs_kind ?? null}
+            checkpointTurns={checkpointTurns}
           />
+        ) : rightPane === "worktrees" ? (
+          <ProjectWorktreesPanel vcsKind={chat?.vcs_kind ?? null} />
         ) : undefined
       }
       rightRail={rightRail}
@@ -838,6 +945,7 @@ export function LiveChatRoute({ chatId }: Props) {
           key={chatId}
           items={state.items}
           turnState={state.turnState}
+          chatId={chatId}
           activeTurnStartedAt={state.activeTurnStartedAt}
           onPlanAccept={acceptPlanProposal}
           onPlanReject={rejectPlanProposal}
@@ -898,6 +1006,10 @@ export function LiveChatRoute({ chatId }: Props) {
           contextUsage={bridge.contextUsage}
           modelSettings={chat?.model_settings ?? null}
           onModelSettingsSet={setModelSettings}
+          worktreeMode={chat?.worktree_mode ?? null}
+          defaultEnvMode={defaultEnvMode}
+          branch={chat?.branch ?? null}
+          vcsKind={chat?.vcs_kind ?? null}
         />
     </AppLayout>
   );

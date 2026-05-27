@@ -14,7 +14,6 @@ import { useSidebarState } from "../lib/sidebar-state";
 import { CwdPicker } from "../components/CwdPicker";
 import type { ApiChat } from "../lib/api";
 import {
-  ClipboardListIcon,
   LockOpenIcon,
   type ModeIconProps,
   PenLineIcon,
@@ -22,31 +21,29 @@ import {
 } from "../components/chat/composer-pill-icons";
 
 type PermissionMode = ApiChat["permission_mode"];
+type SpawnModeId = Exclude<PermissionMode, "plan">;
 
 /**
  * Permission-mode catalog for the spawn-chat dialog. The `id` values
- * are loom's API-layer slugs (kebab-case) — they map server-side onto
- * the SDK's PermissionMode literals (the composer's catalog mirrors
- * the SDK side directly; this catalog mirrors the wire shape that
- * `createChat` accepts). Friendly labels + icons are intentionally
- * kept in sync with the composer's `PERMISSION_MODES` so the user
- * sees the same vocabulary throughout the app:
+ * match the SDK's `PermissionMode` literals (camelCase) — same vocabulary
+ * the composer's `PermissionLevelPill` uses, so the user sees one
+ * naming scheme everywhere.
  *
- *   default     → Supervised        (ShieldIcon)
- *   plan        → Plan              (ClipboardListIcon)
- *   accept-edits → Auto-accept edits (PenLineIcon)
- *   trusted-vm  → Full access       (LockOpenIcon)
+ *   default            → Supervised        (ShieldIcon)
+ *   acceptEdits        → Auto-accept edits (PenLineIcon)
+ *   bypassPermissions  → Full access       (LockOpenIcon)
  *
- * The subtitle is a one-line description — same wording the composer's
- * dropdown shows in its `<option>` text so the two UIs stay aligned.
+ * `plan` is deliberately absent: the composer treats it as a
+ * mid-session toggle (see `BuildPlanTogglePill`), not a per-chat
+ * permission preset.
  */
 interface SpawnMode {
-  id: PermissionMode;
+  id: SpawnModeId;
   label: string;
   subtitle: string;
   Icon: (props: ModeIconProps) => JSX.Element;
   /** Accent colour for the icon halo — preserves the original
-   *  green/blue/amber/red signalling so the cards stay visually
+   *  green/amber/red signalling so the cards stay visually
    *  distinct at a glance. */
   accent: string;
 }
@@ -60,21 +57,14 @@ const MODES: ReadonlyArray<SpawnMode> = [
     accent: "var(--success)",
   },
   {
-    id: "plan",
-    label: "Plan",
-    subtitle: "Draft a plan without executing anything.",
-    Icon: ClipboardListIcon,
-    accent: "var(--info)",
-  },
-  {
-    id: "accept-edits",
+    id: "acceptEdits",
     label: "Auto-accept edits",
     subtitle: "Auto-approve edits, ask before other actions.",
     Icon: PenLineIcon,
     accent: "var(--warning)",
   },
   {
-    id: "trusted-vm",
+    id: "bypassPermissions",
     label: "Full access",
     subtitle:
       "Allow commands and edits without prompts. Runs with --dangerously-skip-permissions — assumes the local environment (typically a developer VM) as the trust boundary.",
@@ -91,7 +81,7 @@ interface Props {
 
 export function SpawnChatModalLive({ onClose, project = null }: Props) {
   const [cwd, setCwd] = useState(project?.paths[0] ?? "");
-  const [mode, setMode] = useState<PermissionMode>("default");
+  const [mode, setMode] = useState<SpawnModeId>("default");
   const [worktree, setWorktree] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -144,14 +134,21 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recents, project]);
 
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") onClose();
-  };
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Escape closes the picker first; only the next press closes the
+      // whole dialog. Same footgun-prevention as NewProjectDialog.
+      if (pickerOpen) {
+        setPickerOpen(false);
+        return;
+      }
+      onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pickerOpen]);
 
   const submit = async () => {
     if (!cwd.trim()) {
@@ -184,7 +181,11 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-xl rounded-2xl bg-white shadow-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+      <div
+        className="w-full max-w-xl rounded-2xl bg-white shadow-xl border overflow-hidden"
+        style={{ borderColor: "var(--border)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: "var(--border)" }}>
           <div className="size-8 rounded-lg grid place-items-center" style={{ background: "var(--muted)" }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">

@@ -1,1 +1,7 @@
-export { resolveConfig, writeConfig, type ResolvedConfig, type ConfigSource } from "./resolve.ts";
+export {
+  resolveConfig,
+  writeConfig,
+  type ResolvedConfig,
+  type ConfigSource,
+  type DefaultEnvMode,
+} from "./resolve.ts";

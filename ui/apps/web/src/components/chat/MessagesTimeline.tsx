@@ -28,12 +28,19 @@ import type {
   PlanProposedItem,
   SystemNoticeItem,
   TurnState,
+  UserMessageImage,
   UserMessageItem,
 } from "../../lib/chat-types";
 
 interface Props {
   items: ChatItem[];
   turnState: TurnState;
+  /**
+   * Chat id of the timeline being rendered. Threaded into `UserRow` so
+   * past-turn images (which carry no inline `dataB64` on reattach) can build
+   * their `GET /chat-image?chatId=&id=` read-back URL (ADR-002).
+   */
+  chatId: string;
   /**
    * Millisecond epoch when the active turn entered `running`. Owned
    * by `live-chat.tsx`'s reducer (`activeTurnStartedAt` field). When
@@ -55,6 +62,7 @@ interface Props {
 export function MessagesTimeline({
   items,
   turnState,
+  chatId,
   activeTurnStartedAt,
   onPlanAccept,
   onPlanReject,
@@ -168,6 +176,7 @@ export function MessagesTimeline({
             <TimelineRowView
               key={row.id}
               row={row}
+              chatId={chatId}
               onPlanAccept={onPlanAccept}
               onPlanReject={onPlanReject}
             />
@@ -236,16 +245,18 @@ function JumpToBottomButton({
 
 function TimelineRowView({
   row,
+  chatId,
   onPlanAccept,
   onPlanReject,
 }: {
   row: TimelineRow;
+  chatId: string;
   onPlanAccept?: (planId: string) => void;
   onPlanReject?: (planId: string) => void;
 }) {
   switch (row.kind) {
     case "user":
-      return <UserRow item={row.item} />;
+      return <UserRow item={row.item} chatId={chatId} />;
     case "assistant":
       return <AssistantRow item={row.item} />;
     case "work-group":
@@ -263,19 +274,33 @@ function TimelineRowView({
   }
 }
 
-function UserRow({ item }: { item: UserMessageItem }) {
+function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
   // Right-aligned chat bubble. No avatar — the alignment alone signals
   // role (mirrors t3code's UserTimelineRow). The asymmetric corner
   // radius (`rounded-br-sm`) is the visual tail pointing at the user.
   // The bubble's background is the loom-blue-tinted user token so it
   // visually distinguishes the user's turn from the agent's bubble.
   //
-  // When `item.images?.length` is non-zero render a thumbnail row
-  // above the text. Each thumbnail is an inline `data:` URL —
-  // mirrors `ToolResultMedia.tsx`'s transport (no blob URLs, no
-  // server route).
-  const images = item.images ?? [];
-  const hasImages = images.length > 0;
+  // When `item.images?.length` is non-zero render a thumbnail row above the
+  // text. Live-turn thumbnails are inline `data:` URLs; past-turn thumbnails
+  // (reattach, no inline bytes) point at the `/chat-image` read-back route
+  // keyed by chatId + the staged image id (ADR-002). Images that resolve to
+  // neither source are skipped so no broken `<img>` is emitted.
+  // Live turns carry inline `dataB64` (a `data:` URI). Past-turn images on
+  // reattach carry only `mediaType` + the staged `id` and are fetched via the
+  // `/chat-image` read-back route (ADR-002). Images with neither source are
+  // skipped so no broken `<img>` is emitted.
+  const renderImages =
+    item.images?.map((img): { img: UserMessageImage; src: string | undefined } => ({
+      img,
+      src: img.dataB64
+        ? `data:${img.mediaType};base64,${img.dataB64}`
+        : img.id
+          ? `/chat-image?chatId=${encodeURIComponent(chatId)}&id=${encodeURIComponent(img.id)}`
+          : undefined,
+    }))
+    .filter((e): e is { img: UserMessageImage; src: string } => e.src !== undefined) ?? [];
+  const hasImages = renderImages.length > 0;
   return (
     <div className="flex justify-end">
       <div
@@ -292,10 +317,10 @@ function UserRow({ item }: { item: UserMessageItem }) {
             className="mb-2 flex flex-wrap gap-1.5"
             data-testid="user-message-images"
           >
-            {item.images?.map((img, idx) => (
+            {renderImages.map(({ img, src }, idx) => (
               <img
                 key={idx}
-                src={`data:${img.mediaType};base64,${img.dataB64}`}
+                src={src}
                 alt={img.filename ?? ""}
                 title={img.filename ?? ""}
                 className="h-24 w-24 rounded-md object-cover"

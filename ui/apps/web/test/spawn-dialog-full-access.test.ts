@@ -1,13 +1,13 @@
 /**
- * T-005 — Trusted-VM subtitle copy + /spawn dev-note removal.
+ * T-005 — Full-access subtitle copy + /spawn dev-note removal.
  *
  * Static-source scan style (matches the existing apps/web/test/*.test.ts
  * harness — Vitest include glob is `*.test.ts` only, runtime is `node`).
  *
  * Covers US-006 AC1 (subtitle names --dangerously-skip-permissions
- * and the trust boundary), US-006 AC2 (the persisted enum value
- * "trusted-vm" is unchanged), and US-002 AC4 (the dev-note copy is
- * absent).
+ * and the trust boundary), US-006 AC2 (the persisted enum value is
+ * the SDK-canonical `bypassPermissions`), and US-002 AC4 (the
+ * dev-note copy is absent).
  */
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
@@ -16,14 +16,11 @@ import { fileURLToPath } from "node:url";
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const dialogPath = webRoot + "src/routes/spawn-chat-dialog-live.tsx";
 
-describe("T-005 Trusted-VM preset subtitle (US-006 AC1, AC2)", () => {
+describe("T-005 Full-access preset subtitle (US-006 AC1, AC2)", () => {
   test("subtitle names --dangerously-skip-permissions", () => {
     const src = readFileSync(dialogPath, "utf8");
-    // Locate the Trusted-VM mode entry and assert its subtitle field
-    // names the CLI flag. The MODES array is a compact literal; we
-    // grab the line range that starts with id: "trusted-vm".
     const re =
-      /id:\s*"trusted-vm"[\s\S]{0,200}subtitle:\s*"([^"]+)"/;
+      /id:\s*"bypassPermissions"[\s\S]{0,400}subtitle:\s*"([^"]+)"/;
     const m = re.exec(src);
     expect(m).toBeTruthy();
     expect(m![1]).toContain("--dangerously-skip-permissions");
@@ -32,19 +29,19 @@ describe("T-005 Trusted-VM preset subtitle (US-006 AC1, AC2)", () => {
   test("subtitle names the local-environment / trust-boundary semantics", () => {
     const src = readFileSync(dialogPath, "utf8");
     const re =
-      /id:\s*"trusted-vm"[\s\S]{0,200}subtitle:\s*"([^"]+)"/;
+      /id:\s*"bypassPermissions"[\s\S]{0,400}subtitle:\s*"([^"]+)"/;
     const m = re.exec(src);
     expect(m).toBeTruthy();
-    // Per US-006 the subtitle names the trust boundary — "trust"
-    // appears in the canonical copy from the spec.
     expect(m![1].toLowerCase()).toContain("trust");
   });
 
-  test("permission_mode enum value \"trusted-vm\" is preserved (US-006 AC2)", () => {
+  test("permission_mode enum value uses the SDK-canonical \"bypassPermissions\"", () => {
     const src = readFileSync(dialogPath, "utf8");
-    // The literal `"trusted-vm"` must still appear in the MODES table
-    // so the persisted enum value is unchanged.
-    expect(src).toMatch(/id:\s*"trusted-vm"/);
+    // The literal `"bypassPermissions"` must appear in the MODES table
+    // so the persisted enum value matches the SDK shape used elsewhere.
+    expect(src).toMatch(/id:\s*"bypassPermissions"/);
+    // The legacy kebab-case slug must not linger in the source.
+    expect(src).not.toMatch(/"trusted-vm"/);
   });
 });
 

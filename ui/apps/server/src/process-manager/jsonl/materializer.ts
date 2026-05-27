@@ -36,6 +36,7 @@
  */
 
 import type { ClaudeEvent } from "./schema.ts";
+import type { StagedImageMeta } from "./image-store.ts";
 import type {
   AssistantBlock,
   AssistantMessageItem,
@@ -43,6 +44,7 @@ import type {
   AssistantToolUseBlock,
   ChatItem,
   Task,
+  UserMessageImage,
   UserMessageItem,
 } from "../../chat-protocol/messages.ts";
 import type {
@@ -54,6 +56,14 @@ import type {
 export interface MaterializerOptions {
   /** Chat id stamped on every emitted frame. Defaults to the first event's chatId. */
   chatId?: string;
+  /**
+   * Path → image metadata read-back (the image store's `lookupByPath`,
+   * curried by chatId in the bridge). When present, user-`text` events have
+   * their `@<path>` tokens resolved into `UserMessageItem.images` and the
+   * recognised tokens stripped from the displayed text. Kept injected so the
+   * materializer fold stays pure / I/O-free in unit tests (ADR-002/ADR-003).
+   */
+  resolveImage?: (absPath: string) => StagedImageMeta | undefined;
 }
 
 export interface MaterializerSnapshot {
@@ -99,6 +109,34 @@ export function createMaterializer(opts: MaterializerOptions = {}): Materializer
     itemOrder.push(item.id);
   }
 
+  /**
+   * Extract `@<path>` tokens from a user-turn's text, resolve each against the
+   * injected image resolver, and return the prose with recognised tokens
+   * stripped plus the resolved `UserMessageImage[]`. Tokens the resolver does
+   * not recognise (a literal `@something` in prose) are left untouched.
+   */
+  function resolveUserImages(text: string): {
+    text: string;
+    images: UserMessageImage[];
+  } {
+    if (!opts.resolveImage) return { text, images: [] };
+    const images: UserMessageImage[] = [];
+    let stripped = text.replace(/@(\S+)/g, (match, path: string) => {
+      const meta = opts.resolveImage!(path);
+      if (!meta) return match; // tolerant: leave unrecognised tokens in place
+      images.push({
+        mediaType: meta.mediaType,
+        ...(meta.filename !== undefined ? { filename: meta.filename } : {}),
+        id: meta.id,
+      });
+      return ""; // strip the recognised token
+    });
+    if (images.length > 0) {
+      stripped = stripped.replace(/\s+/g, " ").trim();
+    }
+    return { text: stripped, images };
+  }
+
   function items(): ChatItem[] {
     const out: ChatItem[] = [];
     for (const id of itemOrder) {
@@ -116,12 +154,14 @@ export function createMaterializer(opts: MaterializerOptions = {}): Materializer
     switch (event.kind) {
       case "text": {
         if (event.role === "user") {
+          const { text, images } = resolveUserImages(event.text);
           const item: UserMessageItem = {
             kind: "user-message",
             id: event.id,
             turnId: event.id,
-            text: event.text,
+            text,
             createdAt: event.tsIso,
+            ...(images.length > 0 ? { images } : {}),
           };
           appendItem(item);
           return [appendFrame(item)];
