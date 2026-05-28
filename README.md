@@ -4,9 +4,9 @@ Phase-based development framework for AI-agent software work. Three subsystems:
 
 | Path | What it is |
 | --- | --- |
-| `orchestrator/` | Claude Code skill that drives the lifecycle (`/weave` — Spec → Design → Plan → Build → Review). See `orchestrator/README.md`. |
-| `ui/` | Dev stack — Fastify server + Vite/React web app for browsing `.loom/` projects. See `ui/README.md`. |
-| `orchestrator/evaluation/` | Eval harness — drives baseline `/weave` runs and produces `analysis.html` from session transcripts. See `orchestrator/evaluation/README.md`. |
+| `orchestrator/` | Claude Code skill that drives the lifecycle (`/weave` — Spec → Design → Plan → Build → Review). |
+| `ui/` | Dev stack — Fastify server + Vite/React web app for browsing `.loom/` projects. |
+| `orchestrator/evaluation/` | Eval harness — drives baseline `/weave` runs and produces `analysis.html` from session transcripts. |
 
 ## Verbs
 

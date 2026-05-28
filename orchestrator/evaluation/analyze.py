@@ -244,8 +244,8 @@ RATE_METRICS = [
 ]
 
 # Rate thresholds for dashboard cell colouring. >= GOOD is green,
-# >= WARN is amber, below is red. 60% matches the "prefix drift" alarm
-# threshold cited in lifecycle-optimizations-research.md item 3.1.
+# >= WARN is amber, below is red. 60% matches the prefix-drift alarm
+# threshold.
 RATE_THRESHOLD_GOOD = 0.80
 RATE_THRESHOLD_WARN = 0.60
 

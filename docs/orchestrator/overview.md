@@ -22,30 +22,30 @@ After every phase the orchestrator surfaces a rerun-or-continue decision to the 
 
 ## Dispatch hierarchy
 
-Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatches phase agents and quality-check agents directly — phase agents never dispatch their own children (Claude Code forbids sub-subagent dispatch). The Build phase agent walks the dependency graph in `board.md` within a single session, applying its three procedure files (`methods/task.md`, `methods/smoke.md`, `methods/mutation.md`) inline as it works. The single-injection-site property is what makes the cached-prefix contract in `weave/SKILL.md` § Dispatch concatenation enforceable: one place dispatches, one place owns the dispatch shape. See `weave/lifecycle-architecture.md` for the full mechanical reference.
+Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatches phase agents and quality-check agents directly — phase agents never dispatch their own children (Claude Code forbids sub-subagent dispatch). The Build phase agent walks the dependency graph in `board.md` within a single session, applying its three procedure files (`methods/task.md`, `methods/smoke.md`, `methods/mutation.md`) inline as it works. The single-injection-site property is what makes the cached-prefix contract in `orchestrator/weave/SKILL.md` § Dispatch concatenation enforceable: one place dispatches, one place owns the dispatch shape.
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
-| `weave/SKILL.md` | `/weave` entrypoint |
-| `weave/signature.md` | `/weave` orchestrator I/O signature |
-| `weave/methods/` | Orchestrator-internal methods (`find-project`, `create-project`, `recovery`) |
-| `weave/phases/<phase>/phase.md` | Phase agent body — role, work loop, methodology, rerun behaviour |
-| `weave/phases/<phase>/phase.signature.md` | Phase agent signature — trigger, params, returns (embedded RETURN-block YAML schema and on-disk writes), throws |
-| `weave/phases/<phase>/methods/` | Phase-internal procedure files (when present) — read inline by the phase agent, not dispatched as subagents (e.g. Build's `task`, `smoke`, `mutation`) |
-| `weave/phases/<phase>/quality-check.md` | Opt-in phase Quality Check agent body — present for `spec`, `design`, `plan`, `build`; `review` has none (Review is itself the project-level quality check) |
-| `weave/phases/<phase>/quality-check.signature.md` | Quality Check agent signature (spec/design/plan/build only) |
-| `tune/SKILL.md` | `/tune` meta-skill (feedback, review, insights) |
-| `lib/` | Workspace helpers (pipeline parser, events, artifacts, locks, atomic write) |
-| `hooks/` | Claude Code hooks |
-| `types/` | Domain guidance keyed by Type hint; the active type is materialized into each workspace as `.loom/<project>/type-guidance.md` at project creation |
-| `templates/` | Project templates (seed) |
-| `weave/methods/principles.md` | Engineering principles P1–P7 (inlined into Build/Review dispatch heads) |
+| `orchestrator/weave/SKILL.md` | `/weave` entrypoint |
+| `orchestrator/weave/signature.md` | `/weave` orchestrator I/O signature |
+| `orchestrator/weave/methods/` | Orchestrator-internal methods (`find-project`, `create-project`, `recovery`) |
+| `orchestrator/weave/phases/<phase>/phase.md` | Phase agent body — role, work loop, methodology, rerun behaviour |
+| `orchestrator/weave/phases/<phase>/phase.signature.md` | Phase agent signature — trigger, params, returns (embedded RETURN-block YAML schema and on-disk writes), throws |
+| `orchestrator/weave/phases/<phase>/methods/` | Phase-internal procedure files (when present) — read inline by the phase agent, not dispatched as subagents (e.g. Build's `task`, `smoke`, `mutation`) |
+| `orchestrator/weave/phases/<phase>/quality-check.md` | Opt-in phase Quality Check agent body — present for `spec`, `design`, `plan`, `build`; `review` has none (Review is itself the project-level quality check) |
+| `orchestrator/weave/phases/<phase>/quality-check.signature.md` | Quality Check agent signature (spec/design/plan/build only) |
+| `orchestrator/tune/SKILL.md` | `/tune` meta-skill (feedback, review, insights) |
+| `orchestrator/lib/` | Workspace helpers (pipeline parser, events, artifacts, locks, atomic write) |
+| `orchestrator/hooks/` | Claude Code hooks |
+| `orchestrator/types/` | Domain guidance keyed by Type hint; the active type is materialized into each workspace as `.loom/<project>/type-guidance.md` at project creation |
+| `orchestrator/templates/` | Project templates (seed) |
+| `orchestrator/weave/methods/principles.md` | Engineering principles P1–P7 (inlined into Build/Review dispatch heads) |
 
 ## Phase folder convention
 
-Every callable under `weave/phases/<name>/` follows the same two-files-per-callable shape so the orchestrator can dispatch each callable identically and a reader can navigate any phase without learning a new layout:
+Every callable under `orchestrator/weave/phases/<name>/` follows the same two-files-per-callable shape so the orchestrator can dispatch each callable identically and a reader can navigate any phase without learning a new layout:
 
 | File | Required | Purpose |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ Every callable under `weave/phases/<name>/` follows the same two-files-per-calla
 | `quality-check.signature.md` | with `quality-check.md` | Quality Check agent signature; `## Params` includes every file from `phase.signature.md`'s `## Returns.Writes` (param-validation interface) |
 | `methods/` | when needed | Phase-internal files read inline by the phase agent. Build's `methods/` holds `task.md`, `smoke.md`, `mutation.md` as procedures the Build session applies at the relevant work-loop steps (not dispatched as subagents). Spec's `methods/` holds reference docs the Spec agent loads at the relevant question-shaping step. |
 
-The two halves of a callable — body and signature — are concatenated at dispatch time into a single system prompt for the producing agent. The concatenation order (body first, then `\n\n---\n\n`, then signature) is specified in `weave/SKILL.md` Phase Cycle 3.
+The two halves of a callable — body and signature — are concatenated at dispatch time into a single system prompt for the producing agent. The concatenation order (body first, then `\n\n---\n\n`, then signature) is specified in `orchestrator/weave/SKILL.md` Phase Cycle 3.
 
 The formal RETURN-block schema lives inline in the signature, under `## Returns` › `### Return block`, as a fenced `yaml` block. The orchestrator's silent schema-compliance check extracts it from there.
 

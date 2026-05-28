@@ -296,7 +296,7 @@ function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
       src: img.dataB64
         ? `data:${img.mediaType};base64,${img.dataB64}`
         : img.id
-          ? `/chat-image?chatId=${encodeURIComponent(chatId)}&id=${encodeURIComponent(img.id)}`
+          ? `/api/chat-image?chatId=${encodeURIComponent(chatId)}&id=${encodeURIComponent(img.id)}`
           : undefined,
     }))
     .filter((e): e is { img: UserMessageImage; src: string } => e.src !== undefined) ?? [];

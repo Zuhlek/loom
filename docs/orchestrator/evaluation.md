@@ -27,7 +27,6 @@ Between them: you strip `.loom/<project>/app/` if you want (~99 MB of build arti
 
 ```
 orchestrator/evaluation/
-├── README.md
 ├── setup.sh                    ← prerequisite check
 ├── run-baseline.sh             ← just /weave; no harvest, no aggregate
 ├── analyze.py                  ← harvest pending + render dashboard
@@ -79,8 +78,7 @@ For pooled runs (`--n 5` or whatever), call `bash orchestrator/evaluation/run-ba
 
 ## Row schema
 
-The canonical `usage.jsonl` row shape is defined in `SCHEMA.md` (next to
-this README). One row per direct subagent dispatched by `/weave`; rows
+The canonical `usage.jsonl` row shape is defined in `orchestrator/evaluation/SCHEMA.md`. One row per direct subagent dispatched by `/weave`; rows
 group on `phase`. Validate any `usage.jsonl` with:
 
 ```bash
@@ -102,7 +100,7 @@ pooling.
 ## Known limitations
 
 - **Subagent rows only.** Orchestrator-side inference (mostly Spec's inline answers-queue consumption) is not captured. Roughly constant across runs of the same seed + answers file, so comparison signal is preserved.
-- **Build is one row per phase entry.** The Build phase agent runs as a single session and walks the dependency graph itself within that session (see `weave/lifecycle-architecture.md` §3). `usage.jsonl` therefore carries one Build row per dispatch, not one row per task. Per-task attribution is not extractable from the harvest; aggregate Build cost is.
+- **Build is one row per phase entry.** The Build phase agent runs as a single session and walks the dependency graph itself within that session. `usage.jsonl` therefore carries one Build row per dispatch, not one row per task. Per-task attribution is not extractable from the harvest; aggregate Build cost is.
 - **`duration_autonomous_ms` can exceed `duration_wall_ms`** by a few percent on multi-tool-call turns (timestamp-delta over-count). Treat autonomous as comparison-relative, not absolute.
 - **No spread / CI.** Means only. A single tail-latency run in a small pool can move a phase mean noticeably.
 

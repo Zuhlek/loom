@@ -39,10 +39,22 @@ export interface TmuxSessionApi {
   /**
    * Idempotent. If `tmux has-session -t loom-<chatId>` succeeds, no-op.
    * Otherwise spawns
-   *   tmux new-session -d -s loom-<chatId> -c <cwd> -- claude --session-id <sessionId> [<permission-flags>]
+   *   tmux new-session -d -s loom-<chatId> -c <cwd> -- claude <session-selector> [<permission-flags>]
    * with env built by `buildClaudeSpawnEnv(...)` from `claude-env.ts`.
-   * `permissionMode` controls the additional CLI flags appended after
-   * `--session-id` (see {@link permissionModeSpawnArgs}); defaults to
+   *
+   * The session selector depends on `resume`:
+   *   - `resume === false` (default): `--session-id <sessionId>` — claude
+   *     mints a NEW conversation bound to that UUID. This is correct only
+   *     the first time; re-running it against a UUID that already has an
+   *     on-disk session makes claude exit with "session ID already in use",
+   *     which collapses the freshly-spawned tmux pane.
+   *   - `resume === true`: `--resume <sessionId>` — claude RESUMES the
+   *     existing conversation. The caller passes this when the bound
+   *     `<sessionId>.jsonl` already exists (server restart / cold tmux),
+   *     which is what makes resuming a past chat actually work.
+   *
+   * `permissionMode` controls the additional CLI flags appended after the
+   * session selector (see {@link permissionModeSpawnArgs}); defaults to
    * `"default"` (no extra flags).
    */
   ensure(
@@ -50,6 +62,7 @@ export interface TmuxSessionApi {
     cwd: string,
     sessionId: string,
     permissionMode?: WirePermissionMode,
+    resume?: boolean,
   ): Promise<void>;
 
   /** `tmux kill-session -t loom-<chatId>`. Idempotent: missing session is a no-op. */
@@ -158,9 +171,16 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
   }
 
   return {
-    async ensure(chatId, cwd, sessionId, permissionMode = "default") {
+    async ensure(chatId, cwd, sessionId, permissionMode = "default", resume = false) {
       if (!isAvailable()) throw unavailableError("ensure session");
       if (await hasSession(chatId)) return;
+      // Resume an existing conversation with `--resume <id>`; start a fresh
+      // one with `--session-id <id>`. Picking `--session-id` for an id that
+      // already has an on-disk session is the resume crash (claude exits
+      // "session ID already in use", the pane dies, send-keys then fails).
+      const sessionSelector = resume
+        ? ["--resume", sessionId]
+        : ["--session-id", sessionId];
       const args = [
         "new-session",
         "-d",
@@ -170,8 +190,7 @@ export function createTmuxSession(opts: TmuxSessionOptions = {}): TmuxSessionApi
         cwd,
         "--",
         claudeBin,
-        "--session-id",
-        sessionId,
+        ...sessionSelector,
         ...permissionModeSpawnArgs(permissionMode),
       ];
       const r = await runTmux(tmuxBin, args, buildEnv());

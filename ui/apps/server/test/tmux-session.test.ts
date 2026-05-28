@@ -84,6 +84,23 @@ describe("tmux-session", () => {
     expect(call).toContain("sess-uuid");
   });
 
+  it("ensure: resume=true spawns claude --resume <id> instead of --session-id (the resume fix)", async () => {
+    capture.rcByCmd.set("has-session", 1); // not present → must spawn
+    capture.rcByCmd.set("new-session", 0);
+    const tmux = createTmuxSession();
+    await tmux.ensure("c-1", "/tmp/cwd", "sess-uuid", "default", true);
+    const call = capture.argv.find((a) => a[1] === "new-session")!;
+    // Resume selector replaces --session-id so claude does not reject the
+    // already-in-use id and exit (which collapses the pane).
+    expect(call).toContain("--resume");
+    expect(call).not.toContain("--session-id");
+    // selector sits inside the claude arg tail, after the `--` separator.
+    const dashDash = call.indexOf("--");
+    expect(call.indexOf("--resume")).toBeGreaterThan(dashDash);
+    // session id immediately follows --resume.
+    expect(call[call.indexOf("--resume") + 1]).toBe("sess-uuid");
+  });
+
   it("ensure: bypassPermissions appends --dangerously-skip-permissions to the claude argv", async () => {
     capture.rcByCmd.set("has-session", 1);
     capture.rcByCmd.set("new-session", 0);

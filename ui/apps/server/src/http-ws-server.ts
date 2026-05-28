@@ -251,7 +251,15 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
           // Defence-in-depth: filter malformed `body.images` before
           // forwarding to the bridge.
           const images = sanitizeUserTurnImages(body?.images);
-          opts.bridge.submitUserTurnWithPriority(chatId, text, priority, images);
+          // Await + catch: a rejected submit (e.g. tmux `send-keys` failing
+          // because the chat's session is no longer alive) must surface as an
+          // error frame, not escape as an unhandled rejection that crashes the
+          // whole server process.
+          try {
+            await opts.bridge.submitUserTurnWithPriority(chatId, text, priority, images);
+          } catch (err: any) {
+            send(makeError(chatId, err?.message ?? "user-turn failed"));
+          }
           return;
         }
         if (envelope.kind === "interrupt") {
@@ -260,7 +268,14 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             send(makeError(undefined, "interrupt: missing chat-id"));
             return;
           }
-          opts.bridge.interrupt(chatId);
+          // Same crash class as user-turn: interrupt shells out to tmux and
+          // re-throws on failure, so catch the rejection rather than let it
+          // bubble to an unhandled rejection.
+          try {
+            await opts.bridge.interrupt(chatId);
+          } catch (err: any) {
+            send(makeError(chatId, err?.message ?? "interrupt failed"));
+          }
           return;
         }
         if (envelope.kind === "plan-accept") {
@@ -407,7 +422,14 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
   app.setNotFoundHandler(async (request, reply) => {
     const base = `http://${hostname}`;
     const url = new URL(request.url, base);
-    const handler = routes[url.pathname] ?? matchPatternRoute(routes, url.pathname);
+    // Routes are mounted at bare paths (e.g. `/chat-image`). The web client
+    // always addresses them under an `/api` base; in dev the vite proxy
+    // rewrites `/api`→`/`. Strip the same prefix here so the routes resolve
+    // identically when the SPA is served on the API server's own origin
+    // (no proxy) — otherwise every `/api/*` request, including image
+    // thumbnails, 404s.
+    const pathname = url.pathname.replace(/^\/api(?=\/|$)/, "");
+    const handler = routes[pathname] ?? matchPatternRoute(routes, pathname);
     if (!handler) {
       reply.code(404).type("text/plain").send("not found");
       return;

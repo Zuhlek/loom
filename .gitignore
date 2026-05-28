@@ -1,7 +1,6 @@
 .loom
 .loom-worktrees
 .scratch
-docs
 __pycache__/
 *.pyc
 

@@ -17,6 +17,7 @@
  * (chat delete) or the user explicitly kills the chat through retry.
  */
 
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { createJsonlTail, type JsonlTail } from "./tail.ts";
@@ -300,7 +301,26 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       ? await Promise.resolve(opts.permissionModeResolver(chatId))
       : "default";
 
-    await opts.tmux.ensure(chatId, cwd, sessionId, resolvedPermissionMode);
+    // Bystander-resistance: BIND the tail to `<sessionId>.jsonl`. The
+    // persisted sessionId is the UUID we pass to claude via tmux; that is
+    // the file claude SHOULD be writing to. No directory-scan at attach — a
+    // bystander claude session (the user's `/weave` session, a developer's
+    // direct `claude` invocation) writing in the same cwd must NOT be
+    // adopted just because it is the most-recently-modified entry.
+    //
+    // Resolve the bound path BEFORE spawning so we can tell claude whether to
+    // resume. If `<sessionId>.jsonl` already exists this chat has prior
+    // history (server restart, cold tmux) and must be spawned with
+    // `--resume`; spawning `--session-id` against an existing id makes claude
+    // exit "session ID already in use" and the pane dies (the resume bug).
+    const resolved = await opts.pathProbe.resolve();
+    const encodedCwd = opts.pathProbe.encodeCwd(cwd);
+    const sessionDir = join(resolved.tailRoot, encodedCwd);
+    const jsonlPath = join(sessionDir, `${sessionId}.jsonl`);
+    const tailStrategy = "bound";
+    const isResume = existsSync(jsonlPath);
+
+    await opts.tmux.ensure(chatId, cwd, sessionId, resolvedPermissionMode, isResume);
 
     const tail = createJsonlTail({ pollingIntervalMs: opts.tailPollingMs });
     const materializer = createMaterializer({
@@ -309,19 +329,6 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
         ? (absPath) => opts.imageStore!.lookupByPath(chatId, absPath)
         : undefined,
     });
-
-    // Bystander-resistance: BIND the tail to `<sessionId>.jsonl`. The
-    // persisted sessionId is the UUID we just passed to
-    // `claude --session-id` via tmux; that is the file claude SHOULD
-    // be writing to. No directory-scan at attach — a bystander claude
-    // session (the user's `/weave` session, a developer's direct
-    // `claude` invocation) writing in the same cwd must NOT be
-    // adopted just because it is the most-recently-modified entry.
-    const resolved = await opts.pathProbe.resolve();
-    const encodedCwd = opts.pathProbe.encodeCwd(cwd);
-    const sessionDir = join(resolved.tailRoot, encodedCwd);
-    const jsonlPath = join(sessionDir, `${sessionId}.jsonl`);
-    const tailStrategy = "bound";
 
     state = {
       chatId,
@@ -783,10 +790,9 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       // Emit /model slash-command literal — the slash-command path is
       // the only model toggle.
       //
-      // TODO(m3): `/model` argument grammar is unconfirmed by the JSONL
-      // event catalog (`docs/jsonl-event-catalog.md` §"/model switch").
-      // The catalog captured only the
-      // `<command-name>/model</command-name>` form typed alone, after
+      // TODO(m3): `/model` argument grammar is unconfirmed. Only the
+      // `<command-name>/model</command-name>` form typed alone has been
+      // observed in JSONL, after
       // which `claude` renders an interactive picker — there is no
       // recorded evidence that `claude` accepts `--effort=` /
       // `--context=` flags here. The current best-effort grammar below

@@ -2,12 +2,9 @@
 
 > **Resolved.** The Build phase is restored to a single-session dispatch
 > shape (one `/weave` dispatch per Build phase entry; per-task work runs
-> inline within that session). The mechanical rationale and the platform
-> constraints that make this the only legal shape with within-session
-> amortization are captured in `orchestrator/weave/lifecycle-architecture.md`.
-> Sub-subagent dispatch — the path this analysis still considers in places
-> below — is forbidden by Claude Code. Read this file as historical record;
-> the source-of-truth for the current contract is `lifecycle-architecture.md`.
+> inline within that session). Sub-subagent dispatch — the path this
+> analysis still considers in places below — is forbidden by Claude Code.
+> Read this file as historical record.
 
 Investigation triggered by the observation that `490c8af` ("cache improvement")
 appeared to **increase** `cache_create` and `cache_read` instead of reducing
@@ -195,7 +192,7 @@ metric cannot answer.
 ## 7. Open questions
 
 - Whether Claude Code's `Task` tool inserts `cache_control` at the
-  body+signature boundary that `weave/SKILL.md` §Conventions describes,
+  body+signature boundary that the skill's §Conventions describes,
   or somewhere else. The SKILL.md text saying "the closing
   `</system-reminder>` line of the dynamic tail is the cached-prefix
   boundary" is ambiguous — that boundary location would put the

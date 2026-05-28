@@ -1,5 +1,153 @@
 # Develop Log
 
+## [2026-05-28] — aper-pnpm-migration — Phase: spec (Q6 → distillation)
+**Skill:** craft
+**Track:** spec
+**Type:** story-distillation
+**Worked well:** Q6's YES answer was the cleanest of the six — the briefing
+had already pre-verified that both canonical baselines (cinnamon and
+crs-sgkb) ship no committed `.npmrc`, so the answer slot was a straight
+copy of the recommendation's "why" with the existing common.sh ladder
+named explicitly. Story distillation collapsed cleanly into six
+outcome-shaped US-NNN stories (one per resolved decision: US-001 single
+install ↔ Q1, US-002 catalog pinning ↔ Q1+Q3+Q4, US-003 build-all.sh ↔
+Q2, US-004 supply-chain quarantine ↔ Q1, US-005 bmpi-scripts via
+Verdaccio ↔ Q5, US-006 no committed .npmrc ↔ Q6). The persona-vs-outcome
+choice in the prompt was load-bearing — going outcome-shaped meant every
+EARS clause names a concrete file or command (`pnpm-workspace.yaml`,
+`build-all.sh`, `~/.npmrc`, `minimumReleaseAge: 1440`) that Build can
+grep for, rather than a fuzzy "the developer feels productive" outcome.
+The universal-acceptance demotion rule (`methods/stories.md §6`) caught
+two would-be stories ("no node_modules committed", "all package-lock.json
+removed") and pushed them under Constraints where they belong, since
+neither has a user-action-shaped triple. The revisit pass at the start
+was a no-op — Q6's answer is orthogonal to Q1/Q2/Q3/Q4/Q5 (auth surface
+vs workspace shape vs build orchestration vs catalog vs bmpi-scripts
+location), so no prior decision needed re-opening.
+**Problems:** The Scope section still carries operational detail
+("`pnpm install --frozen-lockfile` at the root", "per-package
+`patchPackage` → `pnpm pack` → `unpatchPackage` loop", exact env-var
+names) that overlaps with the stories' acceptance criteria. Now that
+the stories carry the testable per-clause acceptance, Scope's
+implementation-flavoured bullets are partially redundant — a Build-phase
+reader has to cross-check Scope-bullet-vs-AC to make sure they agree on
+the cardinality of `--workspace-concurrency`, the exact tarball name
+pattern, etc. There's no contradiction today, but it's a drift hazard
+on rerun. The `methods/stories.md` doc doesn't address Scope-vs-Story
+duplication explicitly.
+**Proposed change:** Add a one-paragraph note to `methods/stories.md`
+or `phase.md` clarifying the Scope-vs-Story boundary post-distillation:
+"Once stories carry the per-clause acceptance criteria, prune Scope
+bullets to the shape ('what files / scripts / config blocks change')
+rather than the procedure ('which exact commands run in what order') —
+the procedure belongs in story ACs. Scope becomes a one-line-per-thing
+inventory; stories carry the SHALL clauses Build verifies." That would
+remove the drift hazard and make Scope a fast skim instead of a second
+copy of the ACs.
+
+## [2026-05-28] — aper-pnpm-migration — Phase: spec (Q5 → Q6)
+**Skill:** craft
+**Track:** spec
+**Type:** grilling-turn
+**Worked well:** The Q5 briefing's option (C) flagged "drop the local
+copy, rely on Verdaccio + curl-fallback" as the cleanest long-term
+shape but warned about losing dev-edit-in-place — that warning let the
+user pick (C) with eyes open, and verifying the answer surfaced a fact
+the briefing didn't carry: aper's root `.gitignore` line 81 already
+ignores `**/bmpi-scripts/`, AND `git ls-files | grep bmpi` returns
+empty. So the "delete committed copy" action collapsed to "delete the
+working-tree download" (no `git rm` needed) and the ".gitignore entry"
+action collapsed to "no edit needed" (the rule is already there with a
+broader glob than crs-sgkb's `scripts/bmpi-scripts/*`). Surfacing those
+two collapses in the answer slot kept the spec from carrying actions
+that wouldn't actually run. Pre-grounding Q6 with three `ls` checks
+(aper/crs-sgkb/cinnamon for committed `.npmrc`) hardened the
+recommendation: "both canonical baselines ship no committed `.npmrc`"
+is a verified fact, not a hunch.
+**Problems:** The prompt described the Q5 action as a "four-part
+action" (delete dir, gitignore entry, workspace exclusion, no script
+changes) but two of those four parts were no-ops once the ignore rule
+was inspected. The risk is that downstream phases (Design / Build)
+might still take the prompt-phrased "four-part action" literally and
+try to add a redundant gitignore line or `git rm` a non-tracked path.
+The answer slot now spells out that parts 1 and 2 collapse, but a
+reader who skims only the bullet list could still miss it.
+**Proposed change:** When a prompt-supplied action list contains
+no-ops discovered during verification, restate the no-ops with the
+verification command output in the answer slot (`git check-ignore -v`,
+`git ls-files`) rather than just narrating that they collapse. The
+inline command-output is what a Design-phase reader can grep for to
+double-check, and it documents the "why" of the collapse for anyone
+re-running this phase later.
+
+## [2026-05-28] — aper-pnpm-migration — Phase: spec (Q2 → Q4)
+**Skill:** craft
+**Track:** spec
+**Type:** grilling-turn
+**Worked well:** Q2's YES answer (consolidate the six `build-*.sh` scripts
+into one `build-all.sh`) collapsed cleanly into the Scope section — two
+existing bullets ("Convert pipelines/scripts/build-*.sh…" and "Add a pnpm
+cache definition…") merged into a single consolidated bullet describing
+the new shape, and the Open ambiguity entry for Q2 was simply dropped. The
+revisit pass was a fast read: Q4 (jest types), Q5 (bmpi-scripts path), Q6
+(.npmrc strategy) are all orthogonal to the build-script count — the
+trigger ("would have flipped a prior recommendation") didn't fire and the
+agent moved straight to Q4 without burning a turn on a spurious revisit.
+Pre-grounding Q4 with two `grep` calls against the seven `aper-*/package.json`
+files surfaced the load-bearing asymmetry — `aper-renderer` is already on
+`@types/jest@^29.5.13`, only `aper-interfaces` / `aper-reporting` are on
+27.4.0 — which turned a vague "should we bump?" into a sharp Y/N where NO
+visibly drags renderer backwards. Briefing G6 ("decidable now") cost two
+shell commands; the alternative was asking the user to recall the spread.
+**Problems:** Spec's `## Scope` section is now eight bullets long and
+several end with "— pending Q5" / "— pending Q6" hedges that mirror the
+`## Open ambiguity` section verbatim. The hedges are useful while grilling
+is live (they tell a reader scanning Scope which lines are still soft) but
+they create double-bookkeeping: every Qn answer requires editing the Scope
+bullet AND the Open ambiguity bullet, and the two can drift if one of
+them is missed. There is no rule in `methods/grilling.md` saying Scope
+must mirror Open ambiguity — it emerged organically while answering Q1/Q2.
+**Proposed change:** Add a one-line convention to `methods/grilling.md`
+or `phase.md`: "When a Branching question is open, its placeholder belongs
+in `## Open ambiguity` only — Scope bullets describe the resolved shape
+or the option-independent surface, not the open question." That removes
+the double-write, makes Scope a stable read-out, and makes the Open
+ambiguity section the single canonical 'still pending' list.
+
+## [2026-05-28] — aper-pnpm-migration — Phase: spec
+**Skill:** craft
+**Track:** spec
+**Type:** grilling-turn
+**Worked well:** Q1's "single pnpm workspace" answer came with a piece of
+load-bearing context the seed didn't carry: the user pointed at a SECOND
+canonical baseline (`../crs-sgkb`) that is structurally closer to aper than
+the seed's reference (`../cinnamon`). crs-sgkb's root `package.json` is 10
+lines (lean, just `packageManager` + one script, no devDeps); its
+`pnpm-workspace.yaml` uses an explicit `packages:` list, security-focused
+`overrides`, and a `catalog` scoped to exactly the deps its three packages
+declare. That shape transparently pre-resolved Q3 (catalog scope —
+scoped, not exhaustive) without needing a separate question. Foundation
+was updated to record both baselines explicitly, with crs-sgkb named as
+the closer match and cinnamon retained for the pnpm-11 supply-chain
+features (`allowBuilds`, `minimumReleaseAge`, `minimumReleaseAgeExclude`)
+that crs-sgkb lacks (still on pnpm 10).
+**Problems:** The original seed framed cinnamon as THE canonical baseline
+and the original Q1 briefing inherited that framing — "mirrors cinnamon"
+appeared in the recommendation text. The user's answer effectively
+rewrote the canonical-baseline definition mid-grilling. The revisit
+mechanic doesn't fire on a recommendation FLIP for Q1 itself (the user
+picked option A, just with a different shape underneath), so the spec /
+foundation update was a "refresh the recommendation's underlying frame"
+rather than a Qn' prime — a category the revisit mechanic doesn't have an
+explicit name for. The agent absorbed it as a Foundation-section
+amendment + an inline note in Q1's answer slot.
+**Proposed change:** When a user picks the recommended option BUT
+supplies a structural reframing ("yes, but mirror X instead of Y"),
+record the reframing as an explicit Foundation amendment rather than only
+inside the answer slot — downstream phases (Design especially) read the
+Foundation section first and need the reframed baseline visible there to
+avoid quietly reverting to the seed's original framing.
+
 ## [2026-05-27] — image-paste-tmux-pty — Phase: review
 **Skill:** weave
 **Track:** review
@@ -8468,3 +8616,79 @@ dispatch where all decisions are pre-answered, the work is purely (1) revisit pa
 finalize the ACs whose text was contingent on the answers, (3) flip Open-ambiguity to none
 — not re-grilling; the stop rule is "decision tree exhausted" which the answered slots
 already satisfy.
+
+## [2026-05-27] — csd-720-followups-ubs-bekb-swift — Task: T-001
+**Skill:** weave
+Lifted requireField/requireNonZeroQuantity from ZKBTransactionMapper to AbstractAityMapper
+as protected methods with a bank-agnostic message (dropped ' on ZKB transaction'). Added a
+behaviour unit test (test/AbstractAityMapper.guards.test.ts) that exercises the guards
+against a minimal stand-in host — the full mapper cannot be constructed without a DB because
+its model-object field initializers (new Security('SECURITY')) eager-load enumeration data.
+7/7 green; npm run compile exits 0.
+Learning: the dispatch (and design) assumed "ZKB at HEAD predates the lift" so ZKB's private
+copies should be left alone — but the concurrent working-tree HEAD already carried ZKB's
+private requireField/requireNonZeroQuantity. Adding the protected base versions then breaks
+typecheck (TS2415: a subclass cannot narrow an inherited member's visibility from protected
+to private; plus TS2322 at the ExCustodyWorkflow factory). The mandatory typecheck gate forced
+deleting ZKB's redundant copies (the exact change ADR-3 said ZKB's branch makes independently).
+Recorded as an out-of-scope edit and surfaced for human confirmation rather than silently
+overriding the explicit instruction. Lesson: when a dispatch instruction rests on a stated
+assumption about repo state, verify that assumption against the actual working tree first — a
+"do not touch X" rule can become incompatible with a "gate must pass" rule when the assumption
+is stale.
+
+## [2026-05-27] — csd-720-followups-ubs-bekb-swift — Task: T-002
+**Skill:** weave
+Switched Swift transaction externalId to the raw source reference across the §1 lockstep: AbstractAitySwiftMapper.cancelSwiftTransaction now looks up by raw PREV originalReference (params kept per OA-1 (a)), emitStubTransaction uses getMessageReference(message), and UBS/BEKB transaction mappers inline buildMT5xxExternalId to message.externalReference (dropping the composite + Date.now() fallback and the now-dead builder methods/imports). Position-mapper buildExternalId(idPath,id) keys left intact (AC4). npm run compile clean; jest 14/14. Note: branch base was ahead of plan assumption (T-001 already committed, not uncommitted) and the referenced test/{UBS,BEKB}/ integration suites were deleted on this branch — wrote a prototype-host behaviour test mirroring AbstractAityMapper.guards.test.ts instead.
+
+CLEANUP RE-DISPATCH (same day): reversed OA-1's param-preservation. Once externalId is the raw PREV reference, the fallback branch in cancelSwiftTransaction called cancelTransactionByExternalId a second time with the IDENTICAL originalReference — dead duplicate code with no message-type component left to vary. Removed the branch, dropped the now-unused sourceMessageTypeKey/fallbackMessageTypeKey params (new signature cancelSwiftTransaction(message)), collapsed `let cancelled` to a single `const`, braced the if/else, and updated all 4 UBS/BEKB call sites. Deleted the prototype-host test file (NO TESTS override for this project). npm run compile exits 0. Lesson: a "behaviour-preserving, keep the params" default (OA-1 (a)) can quietly leave dead code when the very change it guards (composite -> raw) erases the dimension those params varied — the fallback became a verbatim re-run of the primary lookup. When a refactor removes a value's only varying component, audit any retry/fallback keyed on it.
+
+## [2026-05-27] — csd-720-followups-ubs-bekb-swift — Task: T-003
+**Skill:** weave
+REWORK of the first attempt: dropped the `?? 0` from the three UBS quantity reads (transformBuy/transformSell/transformExerciseOfRights 1010 legs). They now read `const quantity = this.requireNonZeroQuantity(this.requireField(message.quantity, 'quantity'));`, mirroring ZKBTransactionMapper exactly — a missing quantity surfaces via requireField instead of being shadowed by a fake 0, and a zero quantity raises a non-zero-quantity issue but still emits (no throw). The defensive `quantity !== 0` priceCmp guards stay. Deliberately deferred the `getAmountByQualifier`/`getSignedAmountByQualifier` `?? 0` removal (line ~430) to T-004/T-005, since dropping it is coupled to reworking the fee/cash-leg callers to handle `undefined`. `npm run compile` green. Lesson: the original `?? 0` inside the guard call defeated requireField's purpose — feeding a coerced 0 into requireNonZeroQuantity means a genuinely-missing source field reports as "zero quantity" rather than "missing field", collapsing two distinct data-gap signals into one. The XML side (ZKB) never coerces; mirror that to keep the missing-vs-zero distinction.
+
+## [2026-05-27] — csd-720-followups-ubs-bekb-swift — Phase: review
+**Skill:** weave
+PASS (0 blockers / 0 major / 0 minor / 4 notes). Reviewed `git diff eae7e93 -- aper-interfaces/src/Mapping/` (8 commits + working tree) for the ZKB→UBS/BEKB SWIFT pattern-alignment refactor. All eight active stories (US-001..US-008) satisfied: raw external IDs with cancel/stub lockstep (§1), requireField/requireNonZeroQuantity lifted to AbstractAityMapper with bank-agnostic message and no `?? 0` silent-zeroing left (§2/§2a), cash-leg SETT/DEAL split with UBS stub cleared + BEKB setMT515CashLeg helper (§4), keyed-Map dispatch with ClassificationRegistry + enums + initializeRules deleted and per-mapper addUnclassifiedIssue (§5/§5a), BEKB prologue/MT566 de-dup into private class-local helpers (§5b), BEKB position getCurrency alignment (§5c). `npm run compile` exits 0; AbstractAityMapper.guards.test.ts passes 7/7 (behaviour-focused, P6-compliant). Notes: (1) OA-1 resolved as option (b) — params dropped from cancelSwiftTransaction — which is behaviour-equivalent to the plan's literal (a) because the fallback retry became a verbatim re-run once the lookup key dropped its message-type component; sound, leaner (P1/P4). (2) Missing test-report/smoke/done for most tasks + no new Swift tests is expected (suites live on CSD-994, typecheck-only here). (3) User's parallel defaultDepot/defaultPortfolio/configure removals bundled into a7635ae — noted, not attributed. (4) BEKB 1010 gross leg left in SETT while trxCurrency=DEAL is the user-approved T-009 limitation. Lesson for review: when a plan's "behaviour-preserving default" keeps params/retries, verify the refactor it guards hasn't erased the dimension those params varied — a "keep it" default can quietly preserve dead code, and removing it (option b) is the correct, leaner call.
+
+## [2026-05-28] — aper-pnpm-migration — Phase: spec (continuation, Q4→Q5)
+**Skill:** craft
+
+Continuation dispatch resolving Q4 (`@types/jest` catalog pin). User answered YES — pin
+`^29.5.14` in the catalog, bumping `aper-interfaces` and `aper-reporting` from `^27.4.0`
+and aligning with `aper-renderer`'s existing `^29.5.13` and cinnamon's catalog value.
+Mirrored into Q4's answer slot, status flipped to `answered`, and `spec.md` `## Scope`
+updated to spell out the bump (removed the "pending Q4" carve-out). Ran the
+revisit/consistency pass: no flip triggered — Q1 (workspace shape), Q2 (build-script
+consolidation), Q3 (scoped catalog) are all orthogonal to a single catalog value; Q4
+just confirms one slot within the already-decided scoped catalog. The parent agent
+hinted at "__test__ patches in renderer that depend on jest 29 types" but inspection
+showed `aper-renderer/test/` is the live test dir and the package is already on
+`@types/jest@^29.5.13` — no patch surface there; the type-bump risk lives in the two
+laggard packages, and "refactor application code inside aper-*" is already in `Out of
+scope`. No new branch opened.
+
+Drafted Q5 (`scripts/bmpi-scripts` placement) as a Choice with three viable options:
+(A) move to repo root mirroring cinnamon, (B) keep at `scripts/bmpi-scripts` and just
+declare it in the workspace, (C) drop the local copy entirely and consume from
+Verdaccio (crs-sgkb's shape). Inline investigation surfaced the deciding fact:
+`scripts/compile-all.sh` and `scripts/update-dependencies.sh` hard-code
+`scripts/bmpi-scripts/src/...` and the per-package `compile-all`/`updateDependencies`
+package.json scripts invoke them via `bash ../scripts/compile-all.sh <pkg>` — moving
+the package re-paths those wrappers AND every per-package call site. CI doesn't use
+the local copy (common.sh fetches via `npm install -g bmpi-scripts@latest` or
+curl-tarball fallback), so the local copy is purely a dev-time edit-in-place artifact.
+Recommended (B): one-line workspace addition (`- scripts/bmpi-scripts`), zero wrapper
+edits, cinnamon's repo-root placement is cosmetic for a leaf package with no internal
+consumers. Returned `blocked` with Q5 in `pending-user-input`. Q6 (committed `.npmrc`
+vs env-var ladder) stays queued.
+
+Learning: the consistency-pass strict trigger ("would have flipped the prior
+recommendation, not merely enriched its reasoning") cleanly disposes of catalog-value
+questions like Q4 against architectural questions like Q1/Q2/Q3 — different dimensions
+of the decision tree, so no revisit even though every answered Q now technically
+informs every later one. Also: when a seed says "X may or may not stay in the
+workspace" and three sibling repos disagree on X's placement (cinnamon root /
+scripts/ subdir / no local copy), the deciding question is usually "who *consumes*
+X's path today" — common.sh's curl/npm ladder answered "not CI", which made the
+dev-time wrapper paths the only constraint and demoted A→B as the cheaper move.

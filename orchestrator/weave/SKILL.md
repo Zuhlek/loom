@@ -125,7 +125,7 @@ These constraints are why a first pass should cost tens of tool uses, not hundre
 2. If pipeline.md.Lifecycle state == complete: report the lifecycle as done and exit.
 3. Loop:
    a. Select the current phase.
-   b. Dispatch the matching phase agent in a fresh Task session. The user-turn prompt is the two-band concatenation (stable head + dynamic tail) defined in `### Dispatch concatenation` below; the cached-prefix boundary contract in `## Conventions` is binding on every dispatch. Every phase, Build included, is one dispatch per phase entry; the Build agent runs its per-task work loop inline within that single session (see `phases/build/phase.md` and `lifecycle-architecture.md` §3).
+   b. Dispatch the matching phase agent in a fresh Task session. The user-turn prompt is the two-band concatenation (stable head + dynamic tail) defined in `### Dispatch concatenation` below; the cached-prefix boundary contract in `## Conventions` is binding on every dispatch. Every phase, Build included, is one dispatch per phase entry; the Build agent runs its per-task work loop inline within that single session (see `phases/build/phase.md`).
    c. Surface the rerun-or-continue decision (see below) via AskUserQuestion. RETURN-block schema compliance is enforced by `hooks/validate-subagent-output.py` as a `SubagentStop` hook — malformed returns surface as visible hook blocks; the orchestrator does not run a parallel extractor.
    d. On continue: update pipeline.md, advance phase, loop to (a). No
       live evaluation-row emit happens during the run; cost/usage figures
