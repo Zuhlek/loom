@@ -18,7 +18,7 @@ I/O signature for the top-level Loom orchestrator. The orchestrator coordinates 
 | Phase agent body | `phases/<current-phase>/phase.md` | required at dispatch | Body half of the phase agent's system prompt |
 | Phase agent signature | `phases/<current-phase>/phase.signature.md` | required at dispatch | Signature half of the phase agent's system prompt, carrying trigger, params, returns (including the embedded RETURN-block YAML schema), and throws |
 | Orchestrator methods | `methods/find-project.md`, `methods/create-project.md` | conditional | Orchestrator-internal skills loaded per Load Order in `SKILL.md` |
-| Phase quality-check agent | `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` | opt-in only | Loaded when user picks `Run quality check` (available for Spec, Design, Plan, Build — 4 of 5 phases; Review has no quality-check agent because Review is itself the project-level quality check) |
+| Pre-Build quality-check agent | `phases/plan/quality-check.md` + `phases/plan/quality-check.signature.md` | opt-in only | Loaded when user picks `Run quality check` at the Plan→Build gate. This is the only QC agent in the lifecycle — it audits the full pre-Build artifact set (Spec + Design + Plan). Spec, Design, and Build gates offer no QC option; Review has none because Review is itself the project-level quality check. |
 
 ### State preconditions
 
@@ -47,7 +47,7 @@ type: null
 | Artifact | Target path | Description |
 | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | Updated sections: `Current phase`, `Phase status`, `Lifecycle state`, `Produced artifacts`, `Pending user input`, `Quality findings`, `Next valid action`, `Resume point`, `History` |
-| `quality-review.md` | `.loom/<project>/quality-review.md` | Written by the phase quality-check agent when QC is invoked; orchestrator does not author it |
+| `quality-review.md` | `.loom/<project>/quality-review.md` | Written by the Pre-Build quality-check agent when QC is invoked at the Plan→Build gate; orchestrator does not author it |
 
 After a successful continue:
 
@@ -76,7 +76,7 @@ Each per-phase rerun-or-continue gate is a regular `AskUserQuestion` surfaced by
 | Phase RETURN block fails schema-compliance check | `SubagentStop` hook (`hooks/validate-subagent-output.py`) blocks the dispatch with a `decision: block` reason; the user sees the failure and decides whether to rerun |
 | User cancels at a gate `AskUserQuestion` | Pause: exit cleanly with pipeline state preserved at the current phase; a later `/weave` invocation resumes from there |
 | Workspace cannot be resolved or created | Dispatch `methods/find-project.md` or `methods/create-project.md` per Load Order; if both fail, report to user and exit |
-| Phase quality-check agent returns `findings` | Surface findings in chat; ask the user to choose `Continue` or `Rerun phase`; do not act unilaterally |
+| Pre-Build quality-check agent returns `findings` | Surface findings in chat; ask the user to choose `Continue → start autonomous Build`, `Rerun Plan`, `Go back to Design`, or `Go back to Spec` per the finding's `Owner phase` |
 | Phase agent returns `blocked` with `Pending user input` | Surface the relay question; write the answer back into the phase artifact on next dispatch |
 | User picks `Go back to <prior-phase>` at a gate | Set `Current phase` to the target; move current and downstream phase artifacts to `superseded/<timestamp>/`; re-dispatch the prior phase agent |
 | `phase.md` or `phase.signature.md` missing at dispatch | Fail dispatch with `missing-file: phases/<phase>/<role>.md|<role>.signature.md` before any Task is started |

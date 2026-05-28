@@ -1,23 +1,25 @@
 # Quality Check Protocol
 
-Shared shell for every phase's opt-in quality-check agent (Spec, Design, Plan, Build). The per-phase `quality-check.md` file carries only the phase name, a one-line purpose, the phase-specific `## Checks` table, and a cross-reference back to this protocol.
+Shared shell for the lifecycle's single opt-in quality-check agent (Pre-Build QC at the Plan→Build gate). The `phases/plan/quality-check.md` file carries the agent body, the `## Checks` table covering Spec + Design + Plan layers, and a cross-reference back to this protocol.
+
+There is no Spec, Design, or Build quality-check agent — issues that survive into Plan are caught here, at the last gate before repository changes land.
 
 ## Opener
 
-Opt-in subagent that analyzes the phase's artifacts and reports whether a rerun would meaningfully change the result.
+Opt-in subagent that analyzes the full pre-Build artifact set (Spec + Design + Plan) and reports whether a rerun (or a go-back to an earlier phase) would meaningfully change the result.
 
-The orchestrator dispatches this agent **only** when the user picks `Run quality check` at the rerun-or-continue surface. It is not part of the mandatory phase cycle; its purpose is to inform the user's rerun decision.
+The orchestrator dispatches this agent **only** when the user picks `Run quality check` at the Plan rerun-or-continue surface. It is not part of the mandatory phase cycle; its purpose is to inform the user's decision before launching the irreversible Build phase.
 
-The agent looks for evidence that a rerun is worth the token burn — see each phase's `## Checks` table.
+The agent looks for evidence that proceeding to Build would either burn tokens on the wrong work or surface contradictions Build cannot resolve — see `phases/plan/quality-check.md` › `## Checks`.
 
-If no finding lands in any category, status is `passed` and the agent recommends `Continue`.
+If no finding lands in any category, status is `passed` and the agent recommends `Continue → start autonomous Build`.
 
 ## Output: `quality-review.md`
 
 ```markdown
-# Quality Review — <phase>
+# Pre-Build Quality Review
 **Run at:** <iso-timestamp>
-**Phase artifacts:** <artifact list>
+**Audited artifacts:** spec.md, decisions.md, design.md, plan.md, board.md, task.md, tests.md, tasks/T-*.md
 
 ## Summary
 <one-paragraph verdict + rerun-worthiness signal>
@@ -25,20 +27,23 @@ If no finding lands in any category, status is `passed` and the agent recommends
 ## Findings
 
 ### <severity>: <one-line title>
+- **Owner phase:** <spec | design | plan>
 - **Evidence:** <file:section or quote>
 - **Why it matters:** <one-line impact>
-- **Suggested rerun focus:** <what the rerun should refine>
+- **Suggested action:** <Continue | Rerun Plan | Go back to Design | Go back to Spec> — <what the action should address>
 
 (repeat per finding)
 
 ## Recommendation
-<Continue | Rerun phase> — <one-line reason>
+<Continue | Rerun Plan | Go back to Design | Go back to Spec> — <one-line reason>
 ```
+
+The `Owner phase` field lets the user route the action to whichever phase the finding actually owns; the orchestrator's gate surfaces all four follow-up options after the QC returns.
 
 ## Severity vocabulary
 
-Severities: `blocker`, `major`, `minor`, `note`. A `blocker` finding implies the next phase cannot consume the output; major implies a likely regression; minor / note are polish.
+Severities: `blocker`, `major`, `minor`, `note`. A `blocker` finding implies Build cannot consume the pre-Build artifacts without producing the wrong thing; `major` implies a likely Build regression or wasted task work; `minor` / `note` are polish.
 
 ## User-Facing Decision
 
-The agent does NOT call `AskUserQuestion`. It writes `quality-review.md` and returns. The orchestrator surfaces the rerun-or-continue decision using the findings preview (see `orchestrator/weave/SKILL.md`).
+The agent does NOT call `AskUserQuestion`. It writes `quality-review.md` and returns. The orchestrator surfaces the four-option rerun-or-continue decision (Continue / Rerun Plan / Go back to Design / Go back to Spec) using the findings preview (see `orchestrator/weave/SKILL.md`).

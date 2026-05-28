@@ -182,7 +182,7 @@ Write the structured analysis to `.loom/<project>/prototype-analysis.md` using t
 
 When the prototype analysis is complete, the user typically wants to start a `/weave` project from it. Two options:
 
-1. **Reference:** Run `/weave` with a seed like *"Build the app described in `.loom/<project>/prototype-analysis.md`"*. The Spec phase agent's repository pre-flight will pick up `prototype-analysis.md` alongside the repo surface.
+1. **Reference:** Run `/weave` with a seed like *"Build the app described in `.loom/<project>/prototype-analysis.md`"*. The Spec phase agent will read `prototype-analysis.md` from the workspace cwd alongside `repo-context.md` (if present) during Foundation.
 2. **Inline:** Copy the analysis content into `.loom/<project>/seed.md` before starting `/weave`.
 
 Either path keeps the prototype analysis as the canonical source of *what* to build without adopting prototype code.

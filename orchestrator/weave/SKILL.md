@@ -23,7 +23,7 @@ Do not produce phase artifacts yourself. Phase agents own their artifacts.
    - `phases/plan/phase.md` + `phases/plan/phase.signature.md`
    - `phases/build/phase.md` + `phases/build/phase.signature.md`
    - `phases/review/phase.md` + `phases/review/phase.signature.md`
-4. Read `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` (available for `spec`, `design`, `plan`, `build`) only when the user opts into a quality check before deciding on a rerun. Review has no `quality-check.md` because Review is itself the project-level quality check.
+4. Read `phases/plan/quality-check.md` + `phases/plan/quality-check.signature.md` only when the user opts into the pre-Build quality check at the Plan→Build gate. This is the **only** quality-check agent in the lifecycle — it audits the full pre-Build artifact set (Spec + Design + Plan together) because Build is the irreversible-action boundary. Spec, Design, and Build gates do not offer a quality-check option; Review has none because Review is itself the project-level quality check.
 
 The RETURN schema is the fenced `yaml` block under `### Return block` inside `phase.signature.md` / `quality-check.signature.md`. Phase RETURN-block schema is enforced solely by `hooks/validate-subagent-output.py`; failures surface as visible hook blocks rather than silent re-dispatch.
 
@@ -36,6 +36,7 @@ The `--answers` flag is no longer accepted by `/weave`; the eval harness stages 
 - Project name
 - Ticket ID
 - Type hint
+- Spec depth
 - Current phase
 - Phase status
 - Lifecycle state
@@ -48,6 +49,7 @@ The `--answers` flag is no longer accepted by `/weave`; the eval harness stages 
 
 `Phase status` values are exactly `Pending`, `blocked`, `failed`, and `complete`.
 `Lifecycle state` values are exactly `active` and `complete`. `active` covers every state from project creation through the Review phase completing; `complete` is set by the orchestrator on the Review→done transition and is the terminal marker for the project lifecycle.
+`Spec depth` values are exactly `pending`, `light`, `standard`, and `deep`. `pending` is the initial state written by `pipeline-parser.py init`; the orchestrator runs the Spec depth gate (see below) before the first Spec dispatch and replaces `pending` with one of `light` / `standard` / `deep`.
 
 ## Conventions
 
@@ -75,47 +77,32 @@ Lists in prompt files come in two flavours:
 
 The policy lives here so future authors keep both kinds of list deterministic across re-renders.
 
-## Repo pre-flight
+## Spec depth gate
 
-Runs on every `/weave` entry before the Phase Cycle. Validates the shared repo digest cache and, on miss, dispatches a single `Explore` Task that produces all three pre-flight artifacts. The cache files themselves are the only persistence layer.
+Runs once per project, before the first Spec dispatch. Skipped on every subsequent `/weave` invocation for the same workspace.
 
-Procedure (procedure-ordered list — preserve step order on any future edit):
+1. Read `pipeline.md.Spec depth`. If the value is anything other than `pending` (i.e. `light` / `standard` / `deep`), the gate is already settled — skip to the Phase Cycle.
+2. If the value is `pending`, surface the depth choice via a single `AskUserQuestion`:
 
-1. Read `.loom/.cache/repo-digest.manifest.json`. Treat absent file or JSON parse error as a cache miss.
-2. Run `git rev-parse HEAD` to capture the current repo head. A non-zero exit fails pre-flight with a clear `git-rev-parse-failed` error before any Task is started; the orchestrator does not enter the Phase Cycle.
-3. Evaluate the cache-valid predicate. The cache is valid when ALL of the following hold:
-   - `manifest.schema_version == 1`.
-   - `manifest.git_head` equals the captured `git rev-parse HEAD`.
-   - For every `(path, sha256)` pair in `manifest.tracked_files`: the file exists on disk AND its current sha256 equals the recorded sha256. A missing tracked file is drift, not a hit.
-4. Branch on the predicate:
-   - **Full match → skip Explore.** Proceed directly to the Phase Cycle. The cached digest is trusted verbatim.
-   - **Any mismatch → dispatch a single `Explore` Task.** One Task call, one briefing covering both the cross-fabric digest and the per-project context, scoped per the **Briefing scope** below. The briefing requires the Task to produce all three artifacts in the same run:
-     - `.loom/.cache/repo-digest.md`
-     - `.loom/.cache/repo-digest.manifest.json`
-     - `.loom/<project>/repo-context.md`
-5. After the Task returns, verify each of the three artifact paths exists. A missing artifact fails pre-flight with a clear error naming the absent path; the orchestrator does not enter the Phase Cycle.
-6. Proceed to the Phase Cycle.
+   ```
+   How thorough should the Spec phase be for this project?
 
-Failure modes:
+     Standard (Recommended)   Full Foundation + Branching traversal per the
+                              grilling discipline. Right for most projects.
+     Light                    Minimal grilling — at most one Foundation
+                              question, cap of three Branching questions.
+                              Right for tight, well-scoped seeds (bug fixes,
+                              small features, single-story work).
+     Deep                     Extended Foundation, bias toward Background
+                              category for unfamiliar terms, traverse every
+                              branch. Right for greenfield or genuinely
+                              ambiguous projects.
+   ```
 
-| Failure | Detection | Handling |
-| --- | --- | --- |
-| Manifest JSON malformed | Parse error during step 1 | Treat as cache miss; dispatch full Explore (overwrites manifest). |
-| `git rev-parse HEAD` fails | Non-zero exit in step 2 | Fail pre-flight before any Task is started. |
-| Tracked file missing on disk | Read fails during step 3's sha256 recomputation | Treat as drift; full Explore rebuild. |
-| Explore Task returns without all three artifacts | Step 5 artifact check | Fail pre-flight with the missing artifact path; do not enter Phase Cycle. |
+   `Standard` carries the `(Recommended)` suffix; the agent strips the suffix and writes one of `light` / `standard` / `deep` (lowercase) to `pipeline.md.Spec depth`.
+3. The Spec agent reads `pipeline.md.Spec depth` from its `pipeline.md` input and modulates the §0 mandate in `phases/spec/methods/grilling.md` per the depth-modulated mandate subsection there. The orchestrator does not pass the value through the dynamic tail — `pipeline.md` is already in Spec's Params and is the single source of truth for project-wide configuration.
 
-The pre-flight signal IS the cache. Every `/weave` entry re-evaluates the predicate; in steady state the work is two file reads plus one `git rev-parse`.
-
-### Briefing scope
-
-The digest captures productive program code only — the stack, topology, chokepoints, and conventions a fabric run would re-derive. The Explore Task briefing MUST pin the following so the pass stays bounded and never analyzes the orchestrator's own workspace:
-
-- **Enumerate the file universe with `git ls-files`, then drop every path under `.loom/`.** `git ls-files` already excludes `.gitignore`'d output (build artifacts, `node_modules`, etc.); the explicit `.loom/` filter removes the orchestrator's workspace — its project artifacts, caches, and prior digests are NOT productive code and must never enter the digest or the manifest's `tracked_files`. Treat the resulting list as the only files in scope; do not read, cite, or sha256 anything outside it.
-- **Breadth `medium`, not exhaustive.** The goal is the architectural skeleton, not a file-by-file census. Sample representative files per area; stop once the stack, topology, and "where X lives" are answerable. Do not open every file in a large directory to confirm a pattern already established by the first few.
-- **The manifest cites only what the digest actually relies on.** `tracked_files` holds the sha256 of each file a digest section is derived from — a small, load-bearing set — not the whole `git ls-files` output.
-
-These constraints are why a first pass should cost tens of tool uses, not hundreds: an unbounded free-roam over the full tree (including `.loom/`) is the failure this section exists to prevent.
+The gate runs at orchestrator entry, after project resolution and before the Phase Cycle's first iteration. A user cancelling the gate (no option picked) is treated as a pause: `Spec depth` remains `pending`, the orchestrator exits, and a later `/weave` re-runs the gate.
 
 ## Phase Cycle
 
@@ -229,19 +216,30 @@ A packager producing a slim loom profile can `rm -rf orchestrator/lib/telemetry/
 
 ## Rerun-or-Continue Decision (Human-In-The-Loop)
 
-Reruns are user-driven, never automatic. Quality Check is opt-in and exists only to help the user decide whether a rerun is worth the token burn.
+Reruns are user-driven, never automatic. The lifecycle has **one** opt-in Quality Check, at the Plan→Build gate; it audits the full Spec + Design + Plan artifact set so the user can decide whether to launch the irreversible Build phase.
 
 The gate summary leads with the phase's purpose — the first sentence of `phases/<phase>/phase.md` (e.g. "Clarify the seed into specified intent." for Spec, "Convert specified intent into solution structure." for Design). Read that line at gate time and prepend it so the user knows what the phase was responsible for.
 
-For phases that support Quality Check (**Spec, Design, Plan, Build** — i.e. 4 of the 5 phases), surface a three- or four-option `AskUserQuestion`. The `Continue` label is phase-aware so the user sees what continuing actually triggers. `Go back to <prior-phase>` is shown for every phase except Spec (Spec is first; nothing to go back to).
+**Spec, Design, Build** gates surface a two- or three-option `AskUserQuestion` (no QC option):
 
 ```
 Phase <phase> returned (<phase purpose>). <one-line summary of produced artifacts>.
 
   Continue → <next-phase-verb>   accept the artifacts; advance to the next phase
-  Run quality check              dispatch the Quality Check subagent for holes / blind spots / contradictions
   Rerun phase                    re-dispatch <phase> with prior artifacts as additional context
-  Go back to <prior-phase>       re-open <prior-phase>; move current + downstream artifacts to `superseded/<timestamp>/` (shown for Design, Plan, Build, Review)
+  Go back to <prior-phase>       re-open <prior-phase>; move current + downstream artifacts to `superseded/<timestamp>/` (shown for Design and Build; Spec is first — nothing to go back to)
+```
+
+**Plan** gate surfaces the four-option `AskUserQuestion` (QC + Go-back-to-Design + Rerun + Continue). This is the only gate where Quality Check is offered:
+
+```
+Phase plan returned (convert solution structure into an executable work graph). <one-line summary>.
+
+  Continue → start autonomous Build (modifies repository)   accept and launch Build
+  Run quality check                                         dispatch the Pre-Build Quality Check agent
+                                                            (audits Spec + Design + Plan together)
+  Rerun phase                                               re-dispatch Plan with prior artifacts
+  Go back to Design                                         re-open Design; move Plan artifacts to `superseded/<timestamp>/`
 ```
 
 Per-phase `Continue` labels:
@@ -265,19 +263,23 @@ Phase review returned (audit the built result against intent, design, plan, and 
   Go back to Build                     re-open Build; move review artifacts to `superseded/<timestamp>/`
 ```
 
-### When the user picks `Run quality check`
+### When the user picks `Run quality check` (Plan gate only)
 
-1. Dispatch the phase's quality-check agent (e.g. `phases/spec/quality-check.md` + `phases/spec/quality-check.signature.md`) against the just-completed phase's artifacts, using the same body+signature concatenation rule.
-2. The quality-check agent writes `quality-review.md` (per-phase scoped) and updates `pipeline.md` "Quality findings".
+1. Dispatch the Pre-Build Quality Check agent (`phases/plan/quality-check.md` + `phases/plan/quality-check.signature.md`) against the full pre-Build artifact set (Spec + Design + Plan), using the same body+signature concatenation rule.
+2. The agent writes `quality-review.md` covering findings across all three phases and updates `pipeline.md` "Quality findings".
 3. Surface the findings preview in chat and re-ask:
 
    ```
-   Quality Check findings for <phase>:
-   <preview of holes, blind spots, contradictions, missing assumptions>
+   Pre-Build Quality Check findings:
+   <preview of holes, blind spots, contradictions, missing assumptions across Spec / Design / Plan>
 
-     Continue     accept the findings as known; advance
-     Rerun phase  re-dispatch <phase> with prior artifacts + the findings as additional context
+     Continue → start autonomous Build  accept the findings as known; advance
+     Rerun Plan                         re-dispatch Plan with prior artifacts + the findings as additional context
+     Go back to Design                  re-open Design with the findings as additional context
+     Go back to Spec                    re-open Spec with the findings as additional context
    ```
+
+   The Go-back options exist because findings frequently point at upstream phases (e.g. a Spec story with no realisation in Design); the user picks the phase the finding actually owns.
 
 ### When the user picks `Rerun phase`
 

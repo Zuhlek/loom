@@ -14,13 +14,11 @@ The `methods/*` rows below are skill-resident procedures: the orchestrator reads
 
 | Name | Source path | Required | Description |
 | --- | --- | --- | --- |
-| `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
+| `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state. Carries `Spec depth` (`light` / `standard` / `deep`) — read it and modulate the §0 mandate per `methods/grilling.md § Depth-modulated mandate`. |
 | `seed.md` | `.loom/<project>/seed.md` | yes | Raw user input to clarify |
 | `spec.md` | `.loom/<project>/spec.md` | on rerun | Prior run's output (starting point, not blank slate) |
 | `decisions.md` | `.loom/<project>/decisions.md` | on rerun | Prior decision slots |
-| `repo-digest.md` | `.loom/.cache/repo-digest.md` | yes | Cross-fabric stable repo facts; reused across fabrics |
-| `repo-digest.manifest.json` | `.loom/.cache/repo-digest.manifest.json` | yes | Versioning surface for the digest (`schema_version`, `git_head`, `tracked_files` sha256) |
-| `repo-context.md` | `.loom/<project>/repo-context.md` | yes | Seed-relevant slice produced by `/weave`'s repo pre-flight |
+| `repo-context.md` | `.loom/<project>/repo-context.md` | optional | User-maintained hand-curated context (see `methods/repo-context.md`); read if present, agentic search via Read/Grep/Bash otherwise |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | when present | Quality Check findings to address |
 | `phases/spec/methods/grilling.md` | `orchestrator/weave/phases/spec/methods/grilling.md` | yes | Six-rule question discipline, dispatch flow, slot conventions, revisit mechanic |
 | `phases/spec/methods/categories.md` | `orchestrator/weave/phases/spec/methods/categories.md` | yes | Per-category briefing templates and validation |

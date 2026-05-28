@@ -861,7 +861,7 @@ Build is the only phase whose tool grant includes implementation tools, and even
 
 ### What it does
 
-At every gate except Review, the user can opt into a Quality Check pass *before* deciding whether to rerun the phase. Quality Check is a separate, narrower subagent (`phases/<phase>/quality-check.md` + signature) that reads the just-completed phase's artifacts and emits a `quality-review.md` plus a `Quality findings` update on `pipeline.md` — holes, blind spots, contradictions, missing assumptions. The orchestrator surfaces a findings preview and re-asks the gate: `Continue` (accept findings as known and advance), or `Rerun phase` (re-dispatch the phase with prior artifacts *plus* the findings as additional context). Review has no Quality Check because Review **is** the project-level quality check.
+At the Plan→Build gate, the user can opt into a Pre-Build Quality Check pass *before* launching the irreversible Build phase. Quality Check is a single, narrower subagent (`phases/plan/quality-check.md` + signature) that audits the full pre-Build artifact set — `spec.md`, `decisions.md`, `design.md`, `plan.md`, `board.md`, `task.md`, `tests.md`, `tasks/T-*.md` — and emits a `quality-review.md` plus a `Quality findings` update on `pipeline.md` covering holes, blind spots, contradictions, missing assumptions across all three pre-Build phases. The orchestrator surfaces a findings preview and re-asks the gate: `Continue → start autonomous Build` (accept findings as known and advance), `Rerun Plan`, `Go back to Design`, or `Go back to Spec` (each option re-opens the phase the finding's `Owner phase` field points at). Spec, Design, and Build gates have no Quality Check option — issues that survive into Plan are caught at this single gate, and Build issues are caught by Review. Review has no Quality Check because Review **is** the project-level quality check.
 
 ```mermaid
 flowchart LR
@@ -887,7 +887,7 @@ flowchart LR
 - **Decision support without rerun cost.** A full phase rerun spends an entire phase's tokens; Quality Check spends a small fraction of that to tell the user whether the rerun is worth running. The rerun decision becomes informed rather than blind.
 - **Structured input to reruns.** When the user *does* rerun, the agent re-enters with `quality-review.md` as additional context — every `blocker` and `major` finding must be addressed before the agent returns. The phase rerun is not a blank-slate re-roll; it's a targeted patch.
 - **User-driven, never automatic.** Quality Check is opt-in at every gate. Loom does not auto-loop on phase output — the only way more tokens get burned is the user picking the option.
-- **Per-phase scope.** A Spec-level Quality Check looks at intent ambiguity and story coverage; a Plan-level one looks at DAG holes and harness fit; a Build-level one looks at evidence sufficiency. Each phase's quality-check signature targets the failure modes that phase actually has, instead of a one-size-fits-all critic.
+- **Layered scope in a single gate.** The Pre-Build Quality Check has a single layered `## Checks` table covering Spec layer (intent gaps, open ambiguity, decision drift), Design layer (realisation gaps, ADR completeness), and Plan layer (DAG holes, story coverage, harness fit). Each finding carries an `Owner phase` field so the gate can route the user to whichever phase the finding actually owns — instead of forcing one critic per phase or a one-size-fits-all critic.
 - **Cheap by construction.** The Quality Check agent ships with its own body + signature pair, so it inherits the §8 cached-prefix property — repeated invocations of the same Quality Check are cache-warm.
 
 ### Anchors
@@ -902,58 +902,6 @@ flowchart LR
 
 ---
 
-## 11. Repository pre-flight + cached architectural digest
-
-### What it does
-
-On the first Spec dispatch in a workspace, the Spec agent dispatches an Explore subagent and persists its findings into two artifacts:
-
-- **`.loom/.cache/repo-digest.md`** — stable architectural facts that any fabric run against this repo would re-derive: stack, topology, protocol/frame chokepoints, conventions, "where X lives".
-- **`.loom/<project>/repo-context.md`** — the seed-relevant slice: prior art for what *this* seed touches, integration points, files likely to be edited, out-of-repo facts grilling will need to ask. Cross-references digest sections rather than restating them.
-
-The digest is guarded by a manifest (`.loom/.cache/repo-digest.manifest.json`) recording `schema_version`, `git_head`, and the sha256 of every file the digest cites. The cached digest is trusted verbatim when `schema_version == 1` AND `git_head` matches `git rev-parse HEAD`. Otherwise the agent verifies tracked-file sha256s and re-explores only the mismatched files (and anything they cross-reference), replacing the affected sections and rewriting the manifest. Build from scratch only if either file is absent. Subsequent Spec dispatches in this workspace — and the first Spec dispatch of any *other* workspace against the same repo — read both files rather than re-exploring.
-
-```mermaid
-flowchart TB
-  Seed[Seed + first Spec dispatch] --> Cache{Cache hit?}
-  Cache -->|schema_version=1<br/>AND git_head matches| Trust[Trust digest verbatim]
-  Cache -->|head mismatch OR<br/>file sha256 mismatch| Verify[Re-verify tracked-file sha256s]
-  Cache -->|either file missing| Scratch[Explore from scratch]
-  Verify --> Patch[Re-explore mismatched files<br/>+ their cross-references only]
-  Patch --> Rewrite[Rewrite affected digest sections<br/>+ manifest]
-  Scratch --> Build[Full Explore pass<br/>write digest + manifest]
-  Trust --> Slice[Write project-scoped<br/>repo-context.md]
-  Rewrite --> Slice
-  Build --> Slice
-  Slice --> Foundation[Foundation grilling<br/>asks user only what repo cannot answer]
-  classDef cached fill:#dff0d8,stroke:#3c763d
-  classDef partial fill:#fff7d6,stroke:#aa9900
-  classDef scratch fill:#ffe9c2,stroke:#cc7a00
-  class Trust cached
-  class Verify,Patch,Rewrite partial
-  class Scratch,Build scratch
-```
-
-### What it buys
-
-- **Cross-fabric amortisation.** A second project against the same repo pays for the slice-specific `repo-context.md` only — the architectural digest is already on disk and cited by reference.
-- **Bounded staleness, not blind trust.** The manifest's per-file sha256s mean a refactor invalidates exactly the files that changed, not the whole digest. The agent re-explores the minimum slice the diff demands.
-- **Foundation grilling stops asking the user for facts the repo already states.** Spec's grilling rules forbid asking for anything the digest or context file already names — the repo speaks for itself, and the user is asked only for facts no file can answer (team context, value bar, constraints not in code).
-- **Grilling round-trip cost drops.** Without a digest, Foundation questions burn user turns to re-establish architectural context; with one, those turns go to genuine ambiguity.
-- **First-pass cost is paid once per repo.** The expensive Explore happens on first contact; every subsequent fabric pays only verification + delta.
-
-### Anchors
-
-- **Bazel / Nix content-addressed caches** with hermetic re-execution on mismatch: the same invalidation discipline applied to a markdown digest.
-- **Git's object model**: content-hashed storage with cheap invalidation on diff — the model the manifest's per-file sha256s mirror.
-- **Anthropic — Effective Context Engineering** (Sept 2025): "context as a finite resource with diminishing marginal returns" — the digest is the cheapest path to the architectural context the model needs.
-- **Augment Code — AI Agent Loop Token Costs**: re-establishing repo context per session is the dominant compounded cost in naive loops; a cached digest is the structural fix.
-
-### Theory linkage
-
-**Principle A** across two axes at once. Within a project: the digest is read by reference rather than re-derived, shrinking every Foundation question's effective context. Across projects: a second fabric against the same repo skips the costly first-pass exploration entirely. The sha256 manifest is **Principle B** applied to a context cache — the cache is *typed* by the file set it depends on, so invalidation is structural rather than vibes-based. Without this mechanism, every new project (and every Spec rerun) pays full freight for architectural understanding the prior runs already produced.
-
----
 
 # Part III — Performance evidence
 

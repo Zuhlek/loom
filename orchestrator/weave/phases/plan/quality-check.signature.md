@@ -1,30 +1,30 @@
-# Plan Quality Check Agent — Signature
+# Pre-Build Quality Check Agent — Signature
 
-I/O signature between `/weave` and the Plan Quality Check Agent.
+I/O signature between `/weave` and the Pre-Build Quality Check Agent (the single quality-check gate in the lifecycle).
 
 ## Trigger
 
 **Caller:** `/weave` orchestrator.
 
-**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Plan rerun-or-continue surface. Not part of the mandatory phase cycle. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`.
+**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Plan rerun-or-continue surface. Not part of the mandatory phase cycle. There is no Spec, Design, or Build quality-check agent — this single agent audits the full pre-Build artifact set at the Plan→Build gate. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`.
 
 ## Params
 
-Includes every file from the producer phase's `phase.signature.md` › `## Returns.Writes` (the param-validation interface).
+The agent audits every artifact produced by Spec, Design, and Plan — they are all "the pre-Build state" and all in scope.
 
 | Name | Source path | Required | Description |
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
 | Plan RETURN block | passed by orchestrator | yes | The just-completed Plan RETURN block |
-| `plan.md` | `.loom/<project>/plan.md` | yes | Producer's write — drawn from Plan's `phase.signature.md.Returns.Writes` |
-| `board.md` | `.loom/<project>/board.md` | yes | Producer's write |
-| `task.md` | `.loom/<project>/task.md` | yes | Producer's write |
-| `tests.md` | `.loom/<project>/tests.md` | yes | Producer's write |
-| `tasks/T-*.md` | `.loom/<project>/tasks/T-*.md` | yes | Producer's writes (all per-task files) |
-| `ticket.md` | `.loom/<project>/ticket.md` | optional | Producer's optional write |
-| `spec.md` | `.loom/<project>/spec.md` | yes | Read-only cross-reference for story coverage |
-| `decisions.md` | `.loom/<project>/decisions.md` | yes | Read-only cross-reference |
-| `design.md` | `.loom/<project>/design.md` | yes | Read-only cross-reference |
+| `spec.md` | `.loom/<project>/spec.md` | yes | Spec-phase intent (audited for gaps, open ambiguity, decision drift) |
+| `decisions.md` | `.loom/<project>/decisions.md` | yes | Spec-phase decisions (audited for slot/story consistency) |
+| `design.md` | `.loom/<project>/design.md` | yes | Design-phase structure (audited for realisation gaps and ADR completeness) |
+| `plan.md` | `.loom/<project>/plan.md` | yes | Plan-phase narrative (incl. `Verification environment`) |
+| `board.md` | `.loom/<project>/board.md` | yes | Plan-phase board |
+| `task.md` | `.loom/<project>/task.md` | yes | Plan-phase task index |
+| `tests.md` | `.loom/<project>/tests.md` | yes | Plan-phase test strategy + mutation opt-in |
+| `tasks/T-*.md` | `.loom/<project>/tasks/T-*.md` | yes | Per-task definitions |
+| `ticket.md` | `.loom/<project>/ticket.md` | optional | Plan-phase optional write |
 
 ## Returns
 

@@ -15,6 +15,7 @@ SECTION_ORDER = [
     "Project name",
     "Ticket ID",
     "Type hint",
+    "Spec depth",
     "Current phase",
     "Phase status",
     "Lifecycle state",
@@ -30,6 +31,7 @@ FENCED_FIELDS = {
     "Project name",
     "Ticket ID",
     "Type hint",
+    "Spec depth",
     "Current phase",
     "Phase status",
     "Lifecycle state",
@@ -40,6 +42,7 @@ FENCED_FIELDS = {
 VALID_PHASES = {"spec", "design", "plan", "build", "review"}
 VALID_STATUSES = {"Pending", "blocked", "failed", "complete"}
 VALID_LIFECYCLE_STATES = {"active", "complete"}
+VALID_SPEC_DEPTHS = {"pending", "light", "standard", "deep"}
 
 
 @dataclass
@@ -184,6 +187,11 @@ def initial_pipeline(project: str, ticket: str, type_hint: str) -> str:
 {type_hint}
 ```
 
+## Spec depth
+```text
+pending
+```
+
 ## Current phase
 ```text
 spec
@@ -261,12 +269,15 @@ def validate_record(record: dict[str, object]) -> list[str]:
     phase = str(record.get("Current phase", ""))
     status = str(record.get("Phase status", ""))
     lifecycle = str(record.get("Lifecycle state", ""))
+    spec_depth = str(record.get("Spec depth", ""))
     if phase and phase not in VALID_PHASES:
         errors.append(f"invalid phase: {phase}")
     if status and status not in VALID_STATUSES:
         errors.append(f"invalid status: {status}")
     if lifecycle and lifecycle not in VALID_LIFECYCLE_STATES:
         errors.append(f"invalid lifecycle state: {lifecycle}")
+    if spec_depth and spec_depth not in VALID_SPEC_DEPTHS:
+        errors.append(f"invalid spec depth: {spec_depth}")
     missing = [name for name in SECTION_ORDER if name not in record]
     for name in missing:
         errors.append(f"missing section: {name}")

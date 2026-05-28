@@ -19,6 +19,20 @@ The six G-rules (§1) still apply — relentless does not mean asking bad questi
 
 *Framing follows Mat Peacock's principle that a spec phase must traverse every branch of the decision tree, not stop at the first plausible understanding.*
 
+### Depth-modulated mandate
+
+`pipeline.md.Spec depth` is one of `light`, `standard`, or `deep` (the orchestrator's Spec depth gate captures it before the first dispatch — see `orchestrator/weave/SKILL.md § Spec depth gate`). The mandate above is the **standard** baseline. Light and deep modulate it:
+
+| Depth | Foundation budget | Branching budget | §0 "relentless" mandate | When to pick it |
+|---|---|---|---|---|
+| `light` | At most 1 question, often skipped entirely when the seed + `repo-context.md` (when present) + a quick agentic search already pin context | Cap of 3 decision-relevant questions; the triage in §3 may exit at step 4 as soon as no clearly-decision-relevant question remains | **Softened.** The agent MAY exit when no question would change the next phase's plan, even if hypothetical branches remain. "Decision-relevance" (G1) is the only gate. | Tight, well-scoped seeds: bug fixes, single-story features, small config changes. The user has signalled the work is bounded; don't expand it. |
+| `standard` | Per §2: exit when two consecutive questions add nothing new to the understanding model | Per §3 triage: exit when Foundation, revisit, and Branching queues are all empty | **As written above.** Traverse every branch; only the user declares "enough". | Default. Right for most projects. |
+| `deep` | Extended: ensure every constraint envelope (performance, compliance, compatibility, regulatory) and value-bar fact has been surfaced explicitly, even when `repo-context.md` or an agentic-search pass hints at them | Per §3 triage **plus** bias toward Background category for unfamiliar terms; treat ambiguity that "feels stable" as a signal to re-enter Foundation for one more pass | **As written above, with extension.** A branch that looks decidable-now but rests on an unsurfaced foundational fact is re-opened, not closed. | Greenfield or genuinely ambiguous projects; cross-cutting work where the team's mental model isn't yet shared. |
+
+The depth choice never relaxes G2–G6 (self-contained, briefed, opinionated, singular, decidable-now) — those are quality gates on every question regardless of depth. Light only loosens G1's enforcement *direction*: a Light run asks fewer questions because more branches collapse as "not decision-relevant" given the small scope, not because the agent is allowed to ship lazy questions.
+
+A Light run that surfaces a contradiction the user can't resolve in three questions still returns `status: blocked` with a `Pending user input` — Light does not mean "guess and move on".
+
 ---
 
 ## 1. Six "good question" criteria
@@ -66,7 +80,7 @@ Grilling is **staged** — a direct application of the Double Diamond framework.
 
 Gather context. **No decisions yet.**
 
-Read `.loom/.cache/repo-digest.md` AND `repo-context.md` (both produced by the `/weave` orchestrator's repo pre-flight — see `orchestrator/weave/SKILL.md § Repo pre-flight`) before generating Foundation questions. The digest carries stable cross-fabric facts; `repo-context.md` carries the seed-relevant slice. Never ask the user for a fact either file states directly — treat them as established. Foundation questions fill the gaps the repo cannot answer (team context, value bar, constraints not in code).
+Read `.loom/<project>/repo-context.md` if present (user-maintained — see `weave/methods/repo-context.md`) before generating Foundation questions; treat every fact it states as established and never ask the user for it. For repo facts `repo-context.md` does not cover, use the agent's own Read / Grep / Bash tools inline during Foundation (agentic search) — there is no pre-computed digest. Foundation questions fill the gaps neither the file nor the live codebase can answer (team context, value bar, constraints not in code).
 
 - Existing situation — current architecture, team, prior choices, integration points.
 - Value bar — what does "done" mean? what is the success criterion?
