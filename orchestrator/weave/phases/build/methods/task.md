@@ -18,8 +18,6 @@ For task `T-NNN`:
 
 4. **Done report.** Write `tasks/T-NNN.done.md` per the schema below.
 
-5. **Log.** Append one entry to `~/.claude/skills/develop-log.md` under the header `## [YYYY-MM-DD] — <project> — Task: <task-number>` with a `**Skill:** weave` body line.
-
 ## Hard rules
 
 - **Red is runtime assertion failure**, not compile failure. A test that fails because the symbol does not exist is not red — stub the symbol first.
@@ -57,14 +55,13 @@ notes: <optional one-paragraph remarks>
 | `failed` | Three implementation attempts exhausted | Card stays `In Progress` with `[failed]` annotation |
 | `hitl-block` | Test contract itself is wrong (contradiction with spec/design) — do not silently edit | `In Progress` → `Backlog` with `[HITL-blocked: <reason>]` |
 
-## "Done" means all four
+## "Done" means all three
 
-A task is done only when all four of these have happened — partial completion is not done:
+A task is done only when all three of these have happened — partial completion is not done:
 
 1. Green phase: every test in the task scope passes.
 2. `tasks/T-NNN.test-log.txt` contains both the red and the green output.
 3. `tasks/T-NNN.done.md` exists with `status: green` (or `failed` / `hitl-block` for terminal non-green states).
-4. `~/.claude/skills/develop-log.md` has a `## [YYYY-MM-DD] — <project> — Task: <task-number>` entry for this task.
 
 ## Writes
 
@@ -73,4 +70,3 @@ A task is done only when all four of these have happened — partial completion 
 | `<repo>/...` | task scope | Implementation files needed to satisfy the task's acceptance criteria. Smallest scoped diff per `principles.md` P1. |
 | `.loom/<project>/tasks/T-NNN.test-log.txt` | task | Red + green output, tail-sized. |
 | `.loom/<project>/tasks/T-NNN.done.md` | task | Done report per the schema above. |
-| `~/.claude/skills/develop-log.md` | task | One `Task: <task-number>` entry with `**Skill:** weave`. |

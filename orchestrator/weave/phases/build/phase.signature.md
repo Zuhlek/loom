@@ -110,12 +110,6 @@ Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a
 - Path: `.loom/<project>/smoke-report.md`.
 - Produced when the project is runnable; required for any task to transition to `Done` in that case.
 
-#### `develop-log.md`
-
-- Path: `~/.claude/skills/develop-log.md`.
-- One append per Build task entry (`## [YYYY-MM-DD] — <project> — Task: <task-number>`) and one append per smoke / mutation step (`## [YYYY-MM-DD] — <project> — Phase: build`). Single write target; no project-local shadow.
-- Entry body carries a `**Skill:** weave` line as the grouping key read by `/tune review`.
-
 ### State postconditions
 
 - Every implemented task's card has transitioned correctly per the board rules.

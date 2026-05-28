@@ -117,7 +117,6 @@ flowchart LR
     M4[Append-only state + supersede]
     M5[Typed phase signatures]
     M6[Capability-minimised phase agents]
-    M7["/tune learning loop"]
   end
   P1 --> A
   P2 --> B
@@ -126,7 +125,6 @@ flowchart LR
   A --> M1
   A --> M2
   A --> M3
-  A --> M7
   B --> M3
   B --> M4
   B --> M5
@@ -136,7 +134,7 @@ flowchart LR
 ### How to read the rest of this document
 
 - **Part I** explores the four phase-level decisions: dedicated Plan, Spec/Design split, dedicated Review, vertical slicing executed in a single Build phase session. Each section closes with a *Theory linkage* paragraph showing which principle is at work.
-- **Part II** covers the cross-cutting mechanisms that make the principles operational across all phases: the traceability spine, append-only state, typed phase signatures, capability minimization, and the `/tune` learning loop.
+- **Part II** covers the cross-cutting mechanisms that make the principles operational across all phases: the traceability spine, append-only state, typed phase signatures, and capability minimization.
 - **Part III** quantifies the expected impact: a unit-and-baseline reading guide, per-concept evidence in plain English, the diminishing-returns curves these concepts are calibrated against, and a directional cost projection for a representative project.
 
 The TL;DR numbers at the top are the empirical price tag attached to violating these principles. Every percentage point is the cost of *not* doing what Loom does.
@@ -722,7 +720,6 @@ flowchart TB
 
 - **Cheap rollback.** A go-back is one append, not a destructive overwrite. The build-system analogue: invalidating a cache entry doesn't *destroy* it, it marks it stale.
 - **Resumption is mechanical.** A crashed or context-compacted session reconstructs state from the append-only log alone. There is no "what was the agent thinking 4 hours ago?" problem — the log *is* the thinking.
-- **Learn-from-rejected.** A rejected design isn't gone — `/tune` mines "what didn't work and why" from supersede chains. Destructive in-place edits, by contrast, throw away the information needed to learn from rework.
 - **Concurrency safety.** With one Task dispatch per phase entry, there is never more than one writer per workspace — append-only semantics need no lock helper.
 
 ### Anchors
@@ -958,47 +955,6 @@ flowchart TB
 
 ---
 
-## 12. The `/tune` learning loop — preventive process learning
-
-### What it does
-
-`/tune` curates feedback from Review findings and user corrections into edits to the SKILL prompts themselves. Loom **learns from each project** by updating its own behaviour rules — not by training, but by **curated prompt-engineering against an audit trail** of structured findings.
-
-```mermaid
-flowchart LR
-  Review[Review findings<br/>structured: severity + owner-phase + recommendation] --> Tune
-  UserFB[User corrections<br/>memory: feedback_*.md] --> Tune
-  Tune{{/tune curation}}
-  Tune --> Skill1[Spec SKILL]
-  Tune --> Skill2[Design SKILL]
-  Tune --> Skill3[Plan SKILL]
-  Tune --> Skill4[Build SKILL]
-  Tune --> Skill5[Review SKILL]
-  Skill1 -.next project.-> NextProject[Next project<br/>improved behaviour]
-  Skill2 -.next project.-> NextProject
-  Skill3 -.next project.-> NextProject
-  Skill4 -.next project.-> NextProject
-  Skill5 -.next project.-> NextProject
-```
-
-### What it buys
-
-- **Compound improvement across projects.** A mistake corrected in a SKILL won't recur — unlike a mistake corrected in a single conversation, which dies with the conversation's context.
-- **Auditable rule changes.** Each SKILL edit ties back to a Review finding or `feedback_*.md` memory — every behaviour change has a citation. Post-hoc transcript-mining approaches can produce similar insights, but they are reactive and harder to audit because the input is unstructured.
-- **Preventive vs. reactive learning.** Review emits structured findings *during* the lifecycle; `/tune` consumes them between projects. The feedback loop's input is structured, so its output can be too.
-
-### Anchors
-
-- **Toyota Production System** — *jidoka* (stop-the-line) + *kaizen* (small-batch continuous improvement): the canonical reference for "fix the process, not the instance".
-- **Constitutional AI** (Bai et al. 2022) — [arxiv](https://arxiv.org/abs/2212.08073): the same pattern at model-training scale — curated principles shape future behaviour.
-- **Anthropic's own published practice** of iterating on system prompts based on observed failure modes.
-
-### Theory linkage
-
-Meta-level **Principle A**: the more correct behaviour is distilled into stable SKILL rules, the less per-project context the agent has to re-derive on every run. `/tune` is the mechanism by which Loom's *own* context budget shrinks over time — the framework gets cheaper to run as it ages. Without a structured curation loop, the same correction has to be re-discovered on every project.
-
----
-
 # Part III — Performance evidence
 
 ## 13. How to read this part — the essential caveat, and the legend
@@ -1100,7 +1056,7 @@ Adopting an architectural concept is a *trade*: it buys some properties and pays
 
 **What we lose.**
 - The Build session's own context grows monotonically across tasks. The growth is by design — earlier tasks' decisions stay visible to keep later tasks consistent — but it does mean the last task in a long graph reads from a larger working context than the first.
-- No cross-project learning *within* a single build. A later task does not see anything earlier tasks figured out unless the earlier task wrote it to disk. (The `/tune` loop captures learning *across* projects, not *within* one phase.)
+- No cross-project learning *within* a single build. A later task does not see anything earlier tasks figured out unless the earlier task wrote it to disk.
 - Phase-to-phase handoff has to go through artifacts on disk. Ad-hoc inter-agent chat is not an option, which removes a debugging affordance available in chat-broadcast frameworks.
 
 **What the evidence weighs in with.** On a long-context benchmark, 11 of 13 frontier models drop below 50 % of their own short-context accuracy by 32 thousand tokens; a leading model falls from 99.3 % to 69.7 % on the same task [31]. Information placed mid-context attracts more than 30 percentage points less accuracy than the same information at the edges [30]. A 2025 follow-up reports that *every* frontier model tested degrades monotonically with input length, even far below stated window limits [32]. *Direction of the trade*: each phase's input list is bounded by its signature, and per-task file scope further bounds what Build reads on any given task — keeping every phase well to the left of the cliff that a single accumulating session across the whole lifecycle would slide down.
@@ -1288,10 +1244,9 @@ The shape is the whole argument: without the concepts, cost compounds super-line
 
 ### What this does not include
 
-Two further effects sit on top, both pushing the trade further in the same direction:
+One further effect sits on top, pushing the trade further in the same direction:
 
 - **The cost-of-defect curve** (section 14.F): every defect Review catches before release saves between 5 and 100 units on the curve. With even one such defect per project, the gain widens substantially.
-- **Cross-project learning via `/tune`**: behaviour corrections become SKILL edits rather than per-project context burn. Compounds over time; not modelled in the per-project view above.
 
 ### Confidence
 

@@ -24,7 +24,6 @@ Do not produce phase artifacts yourself. Phase agents own their artifacts.
    - `phases/build/phase.md` + `phases/build/phase.signature.md`
    - `phases/review/phase.md` + `phases/review/phase.signature.md`
 4. Read `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` (available for `spec`, `design`, `plan`, `build`) only when the user opts into a quality check before deciding on a rerun. Review has no `quality-check.md` because Review is itself the project-level quality check.
-5. Inline `methods/develop-log.md` into every phase agent dispatch (it is the universal method appended to the head per `### Dispatch concatenation` step 1.4); the agent then appends a phase entry to `~/.claude/skills/develop-log.md` at end-of-loop from that inlined procedure, and Build's per-task procedure additionally appends a task entry per task. `~/.claude/skills/develop-log.md` is a write target (a real symlink at a fixed absolute path), not a method the subagent fetches.
 
 The RETURN schema is the fenced `yaml` block under `### Return block` inside `phase.signature.md` / `quality-check.signature.md`. Phase RETURN-block schema is enforced solely by `hooks/validate-subagent-output.py`; failures surface as visible hook blocks rather than silent re-dispatch.
 
@@ -112,7 +111,7 @@ The pre-flight signal IS the cache. Every `/weave` entry re-evaluates the predic
 
 The digest captures productive program code only — the stack, topology, chokepoints, and conventions a fabric run would re-derive. The Explore Task briefing MUST pin the following so the pass stays bounded and never analyzes the orchestrator's own workspace:
 
-- **Enumerate the file universe with `git ls-files`, then drop every path under `.loom/`.** `git ls-files` already excludes `.gitignore`'d output (build artifacts, `node_modules`, etc.); the explicit `.loom/` filter removes the orchestrator's workspace — its project artifacts, caches, develop-logs, and prior digests are NOT productive code and must never enter the digest or the manifest's `tracked_files`. Treat the resulting list as the only files in scope; do not read, cite, or sha256 anything outside it.
+- **Enumerate the file universe with `git ls-files`, then drop every path under `.loom/`.** `git ls-files` already excludes `.gitignore`'d output (build artifacts, `node_modules`, etc.); the explicit `.loom/` filter removes the orchestrator's workspace — its project artifacts, caches, and prior digests are NOT productive code and must never enter the digest or the manifest's `tracked_files`. Treat the resulting list as the only files in scope; do not read, cite, or sha256 anything outside it.
 - **Breadth `medium`, not exhaustive.** The goal is the architectural skeleton, not a file-by-file census. Sample representative files per area; stop once the stack, topology, and "where X lives" are answerable. Do not open every file in a large directory to confirm a pattern already established by the first few.
 - **The manifest cites only what the digest actually relies on.** `tracked_files` holds the sha256 of each file a digest section is derived from — a small, load-bearing set — not the whole `git ls-files` output.
 
@@ -148,7 +147,7 @@ Every Task dispatch — phase agent, quality-check agent, or any callable that f
 \n\n
 ---
 \n\n
-<stable head: ## Inlined methods — content of every file the body's `## Reads` lists (omitted if none)>
+<stable head: ## Inlined methods — content of every file the body's `## Reads` lists (band omitted entirely if `## Reads` is empty or absent)>
 \n\n
 <dynamic tail: <system-reminder> block>
 ```
@@ -159,7 +158,7 @@ Operationalised:
    1. Read the body file (`phases/<phase>/phase.md` or `phases/<phase>/quality-check.md`).
    2. Append exactly two newlines, then `---` on its own line (a markdown thematic break), then two more newlines.
    3. Append the signature file's contents (`phases/<phase>/phase.signature.md`, etc.).
-   4. **Inline the methods the body needs.** The inline set is: every file listed in the body's `## Reads` (or `## Reads first`) section, **plus** the universal develop-log method `methods/develop-log.md` (every phase appends a log entry at end-of-loop — see Load Order item 5), each resolved relative to the skill base. For each file, `## Reads` entries in listed order followed by `methods/develop-log.md` last, append two newlines, `---`, two newlines, then `## Inlined methods` (once, before the first), then `### <path-as-listed>` on its own line, then the file's verbatim content. A phase with an empty or absent `## Reads` (e.g. Design, Plan) still gets the develop-log method. The subagent reads no method file from disk — it has the content inline. The orchestrator already reads these files the same way it reads the body, so this needs no path knowledge the orchestrator lacks and no filesystem access the subagent has.
+   4. **Inline the methods the body needs.** The inline set is every file listed in the body's `## Reads` (or `## Reads first`) section, resolved relative to the skill base. For each file in listed order, append two newlines, `---`, two newlines, then `## Inlined methods` (once, before the first), then `### <path-as-listed>` on its own line, then the file's verbatim content. A phase with an empty or absent `## Reads` (e.g. Design, Plan) skips this band entirely — no `## Inlined methods` block is appended. The subagent reads no method file from disk — it has the content inline. The orchestrator already reads these files the same way it reads the body, so this needs no path knowledge the orchestrator lacks and no filesystem access the subagent has.
    5. The body and signature carry their `<project>`, `<phase>`, `<task>` placeholder tokens **literally** — do NOT substitute real values into the head. The body is what makes the prefix cacheable across projects.
    6. The head is the entirety of the cacheable region — body, signature, and inlined methods are all stable per callable, so the whole head caches. The RETURN-block schema, what to write, what to skip, and now the method procedures themselves all live in the head. The orchestrator adds **no wrapper text** around them and **no path for the subagent to resolve**.
 2. **Dynamic tail — single `<system-reminder>` block.** Append the substituted identifiers in exactly this shape, at the very end of the user turn:

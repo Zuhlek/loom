@@ -9,9 +9,7 @@
 #   2. Symlink every subdirectory of orchestrator/ that contains a
 #      SKILL.md into ~/.claude/skills/. The types/ directory is also
 #      symlinked (shared knowledge, no SKILL.md by design).
-#   3. Create / refresh the shared develop-log symlink at
-#      ~/.claude/skills/develop-log.md -> orchestrator/develop-log.md.
-#   4. Symlink ~/.claude/loom-hooks -> orchestrator/hooks and merge the
+#   3. Symlink ~/.claude/loom-hooks -> orchestrator/hooks and merge the
 #      loom hook wiring into ~/.claude/settings.json. Pre-existing
 #      loom-hooks entries are scrubbed before merge so re-runs converge
 #      on one entry. Entries from other packages (e.g. forge-hooks) are
@@ -101,15 +99,6 @@ for entry in "$SKILLS_DIR"/*; do
             ;;
     esac
 done
-if [ -L "$SKILLS_DIR/develop-log.md" ]; then
-    target="$(readlink "$SKILLS_DIR/develop-log.md")"
-    case "$target" in
-        "$ROOT"/*)
-            rm "$SKILLS_DIR/develop-log.md"
-            swept=$((swept + 1))
-            ;;
-    esac
-fi
 [ "$swept" -gt 0 ] && echo ""
 
 # -----------------------------------------------------------------------------
@@ -137,33 +126,7 @@ for sub in "$ROOT"/*/; do
 done
 
 # -----------------------------------------------------------------------------
-# 3. Develop-log — create the file if absent (or replace a dangling
-#    symlink at the source path), then expose it via a symlink.
-# -----------------------------------------------------------------------------
-log="$ROOT/develop-log.md"
-if [ -L "$log" ] && [ ! -e "$log" ]; then
-    rm "$log"
-fi
-if [ ! -f "$log" ]; then
-    cat > "$log" << 'EOF'
-# Loom Development Log
-
-Unified observations from /weave and /tune sessions. Curated by /tune review.
-
----
-EOF
-    echo "created    $log"
-fi
-log_link="$SKILLS_DIR/develop-log.md"
-if [ -e "$log_link" ] && [ ! -L "$log_link" ]; then
-    echo "skip       $log_link: exists and is not a symlink (refusing to clobber)" >&2
-else
-    ln -s "$log" "$log_link"
-    echo "linked     $log_link -> $log"
-fi
-
-# -----------------------------------------------------------------------------
-# 4. Hook wiring — ~/.claude/loom-hooks symlink + settings.json merge of
+# 3. Hook wiring — ~/.claude/loom-hooks symlink + settings.json merge of
 #    the loom hook entries.
 # -----------------------------------------------------------------------------
 echo ""

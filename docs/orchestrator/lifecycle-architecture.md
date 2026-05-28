@@ -74,8 +74,7 @@ Loom is five phases — **Spec → Design → Plan → Build → Review** — ea
    │         apply the inlined methods/mutation.md procedure when tests.md opts in
    │       apply the inlined methods/smoke.md procedure (once, when project is runnable)
    │     writes: repository files, tasks/T-*.done.md, tasks/T-*.test-log.txt,
-   │             smoke-report.md, test-report.md, board.md transitions,
-   │             ~/.claude/skills/develop-log.md (task / smoke / mutation entries)
+   │             smoke-report.md, test-report.md, board.md transitions
    │
    ├─► HITL gate
    │
@@ -131,7 +130,7 @@ A `/weave`-initiated rerun (from the rerun-or-continue gate) re-dispatches a fre
 
 ## 4. Dispatch contract
 
-`SKILL.md` § Dispatch concatenation defines the wire shape: every dispatch is a stable head (body file + `---` + signature file + the `## Inlined methods` band — every file in the body's `## Reads` plus the universal `methods/develop-log.md`, appended verbatim) followed by a dynamic tail (one `<system-reminder>` block with substituted identifiers). The closing `</system-reminder>` is the cached-prefix boundary. The subagent fetches no method or skill file from disk; everything it needs arrives inlined in the head.
+`SKILL.md` § Dispatch concatenation defines the wire shape: every dispatch is a stable head (body file + `---` + signature file + the `## Inlined methods` band — every file in the body's `## Reads`, appended verbatim; band omitted when `## Reads` is empty) followed by a dynamic tail (one `<system-reminder>` block with substituted identifiers). The closing `</system-reminder>` is the cached-prefix boundary. The subagent fetches no method or skill file from disk; everything it needs arrives inlined in the head.
 
 Every phase agent has the same two-file pair:
 

@@ -312,6 +312,9 @@ if (isEntrypoint) {
       const chat = store.chats.get(chatId);
       return chat?.permission_mode ?? "default";
     },
+    persistPermissionMode: (chatId, mode) => {
+      return store.chats.update(chatId, { permission_mode: mode });
+    },
     onChatAttach: (chatId, cwd) => {
       if (!substrateRef) return;
       try {

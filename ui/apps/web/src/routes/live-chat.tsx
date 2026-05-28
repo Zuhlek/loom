@@ -26,6 +26,7 @@ import { useSnackbar } from "../components/ui/Snackbar";
 import { SessionRecoveryBanner } from "../components/chat/SessionRecoveryBanner";
 import { getChat, getSettings, listCheckpointTurns, wsUrl, type ApiChat } from "../lib/api";
 import { useChatBridge } from "../lib/use-chat-bridge";
+import { useSidebarState } from "../lib/sidebar-state";
 import type {
   ChatItem,
   ClientFrame,
@@ -308,6 +309,17 @@ export function LiveChatRoute({ chatId }: Props) {
   // `slash-commands-update` frame lands, at which point the composer
   // flips its menu out of the "Loading commands…" state.
   const bridge = useChatBridge();
+  // Sidebar polls /api/sidebar/state every 5 s. When a chat-update frame
+  // lands on the active chat's WS, kick the sidebar to refresh now so its
+  // per-row indicators (notably the permission-mode dot) reflect the
+  // change immediately instead of waiting up to a full poll interval.
+  // Routed through a ref so the WS-attach effect's dep array stays
+  // `[chatId]` and we don't reset the socket on provider re-renders.
+  const sidebar = useSidebarState();
+  const sidebarRefreshRef = useRef(sidebar.refresh);
+  useEffect(() => {
+    sidebarRefreshRef.current = sidebar.refresh;
+  }, [sidebar.refresh]);
   /**
    * Right-pane state is a discriminated union: at most one of Tasks
    * / Diff is mounted at a time, with `null` collapsing the drawer.
@@ -365,7 +377,13 @@ export function LiveChatRoute({ chatId }: Props) {
   useEffect(() => {
     let alive = true;
     getChat(chatId)
-      .then((r) => { if (alive) setChat(r.chat); })
+      .then((r) => {
+        if (!alive) return;
+        setChat(r.chat);
+        if (r.chat?.permission_mode) {
+          dispatch({ type: "permission-mode", mode: r.chat.permission_mode });
+        }
+      })
       .catch((err) => { if (alive) setChatErr(err?.message ?? "load failed"); });
     return () => { alive = false; };
   }, [chatId]);
@@ -463,6 +481,11 @@ export function LiveChatRoute({ chatId }: Props) {
             // emitted right after the bridge's attach handler completes
             // its spawn-time resolution.
             if (frame.body?.chat) setChat(frame.body.chat);
+            // Fire-and-forget so the sidebar's permission-mode dot (and
+            // any other per-row fields) reflect this change immediately
+            // instead of waiting for the next 5 s poll. The poll stays
+            // as the safety net for non-WS-mediated changes.
+            void sidebarRefreshRef.current();
             break;
           case "snapshot":
             if (snapshotTimerRef.current !== null) {
@@ -493,6 +516,11 @@ export function LiveChatRoute({ chatId }: Props) {
               recoveryAttempt: frame.body.recoveryAttempt,
               lastError: frame.body.lastError,
             });
+            break;
+          case "permission-mode-set":
+            if (frame.body?.mode) {
+              dispatch({ type: "permission-mode", mode: frame.body.mode });
+            }
             break;
           case "slash-commands-update":
             bridge.handleServerFrame(frame);

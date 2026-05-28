@@ -21,7 +21,6 @@ _kind_for_path() {
         smoke-report.md) echo "smoke-report markdown false" ;;
         review.md) echo "review markdown true" ;;
         feedback.md) echo "feedback markdown false" ;;
-        develop-log.md) echo "develop-log markdown false" ;;
         tasks/T-*.done.md) echo "done markdown false" ;;
         tasks/T-*.test-log.txt) echo "test-log text false" ;;
         tasks/T-*.md) echo "task markdown false" ;;

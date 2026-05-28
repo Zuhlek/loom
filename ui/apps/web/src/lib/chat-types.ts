@@ -223,6 +223,7 @@ export type ServerFrame =
   | { kind: "turn-state"; "chat-id": string; body: { state: TurnState; lastError?: string } }
   | { kind: "pending-permission"; "chat-id": string; body: PendingPermission | null }
   | { kind: "pending-question"; "chat-id": string; body: PendingQuestion | null }
+  | { kind: "permission-mode-set"; "chat-id": string; body: { mode: PermissionMode } }
   | {
       /**
        * Bridge acknowledgement that a permission prompt has been resolved

@@ -136,7 +136,7 @@ Inspecting one build subagent transcript
 
 Within a single subagent, cache mechanics work as designed. The
 problem is **across** subagents: each fresh Coordinator dispatch
-re-reads `board.md`, `plan.md`, `tasks/T-NNN.md`, `develop-log.md` etc.
+re-reads `board.md`, `plan.md`, `tasks/T-NNN.md` etc.
 into its private context. Anthropic's cache is keyed on **workspace +
 prompt-prefix hash** — the body+signature prefix matches across
 dispatches, so its ~6.7k cache should be reused, but the file-reads

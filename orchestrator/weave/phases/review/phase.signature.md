@@ -92,13 +92,6 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 
 Counts are non-negative integers. `verdict` is `FAIL` whenever `blockers > 0`; otherwise `PASS`. Values must equal the counts in the RETURN block (`blockers`, `major`, `minor`) and the count of `## Note` findings in `review.md` (`note`).
 
-#### `develop-log.md`
-
-- Path: `~/.claude/skills/develop-log.md`.
-- One append per Review process observation worth later curation. Single write target; no project-local shadow.
-- Entry header: `## [YYYY-MM-DD] — <project> — Phase: review`.
-- Entry body carries a `**Skill:** weave` line as the grouping key read by `/tune review`.
-
 ## Throws
 
 | Return status | Meaning | Orchestrator action |

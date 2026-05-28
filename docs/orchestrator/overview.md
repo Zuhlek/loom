@@ -36,7 +36,6 @@ Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatche
 | `orchestrator/weave/phases/<phase>/methods/` | Phase-internal procedure files (when present) — read inline by the phase agent, not dispatched as subagents (e.g. Build's `task`, `smoke`, `mutation`) |
 | `orchestrator/weave/phases/<phase>/quality-check.md` | Opt-in phase Quality Check agent body — present for `spec`, `design`, `plan`, `build`; `review` has none (Review is itself the project-level quality check) |
 | `orchestrator/weave/phases/<phase>/quality-check.signature.md` | Quality Check agent signature (spec/design/plan/build only) |
-| `orchestrator/tune/SKILL.md` | `/tune` meta-skill (feedback, review, insights) |
 | `orchestrator/lib/` | Workspace helpers (pipeline parser, events, artifacts, locks, atomic write) |
 | `orchestrator/hooks/` | Claude Code hooks |
 | `orchestrator/types/` | Domain guidance keyed by Type hint; the active type is materialized into each workspace as `.loom/<project>/type-guidance.md` at project creation |

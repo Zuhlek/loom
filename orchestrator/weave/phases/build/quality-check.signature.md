@@ -21,7 +21,6 @@ Includes every file from the producer phase's `phase.signature.md` › `## Retur
 | `tasks/T-*.done.md` | `.loom/<project>/tasks/T-*.done.md` | yes | Producer's per-task done reports |
 | `test-report.md` | `.loom/<project>/test-report.md` | yes | Producer's aggregated verification |
 | `smoke-report.md` | `.loom/<project>/smoke-report.md` | conditional | Producer's conditional write (when runnable) |
-| `develop-log.md` | `~/.claude/skills/develop-log.md` | yes | Producer's single write target — Build task / smoke / mutation appends |
 | `tasks/T-*.md` | `.loom/<project>/tasks/T-*.md` | yes | Plan-produced task specs (read-only cross-reference for scope integrity) |
 | `design.md` | `.loom/<project>/design.md` | yes | Read-only cross-reference (runnability) |
 | `plan.md` | `.loom/<project>/plan.md` | yes | Read-only cross-reference |

@@ -33,4 +33,3 @@ For task `T-NNN`:
 | --- | --- |
 | `.loom/<project>/tasks/T-NNN.test-log.txt` | Mutation section appended to the existing red+green log: one entry per mutant (`KILLED` / `SURVIVED` / `SURVIVED->KILLED` / `UNKILLABLE`). |
 | `<repo>/...` (test files) | New behaviour tests that kill surviving mutants. Existing tests must NOT be modified during this procedure. |
-| `~/.claude/skills/develop-log.md` | One `## [YYYY-MM-DD] — <project> — Phase: build` entry summarising the mutation pass, with `**Skill:** weave`. |

@@ -50,6 +50,7 @@ import {
   type SnapshotFrame,
 } from "../../chat-protocol/frames.ts";
 import type { ChatEnvelope } from "../../chat-protocol/envelope.ts";
+import type { ChatRow } from "../../metadata-store/repos/chat.ts";
 
 export interface WsClient {
   send(text: string): void;
@@ -82,6 +83,17 @@ export interface JsonlTailBridgeOptions {
   permissionModeResolver?(
     chatId: string,
   ): Promise<WirePermissionMode> | WirePermissionMode;
+  /**
+   * Persist a composer-driven mode change to the chat row. Called from
+   * `setPermissionMode` before the keystroke fan-out so the row is the
+   * authoritative source of truth even if the in-pane cycle fails.
+   * Returning the updated row lets the bridge fan it out as a
+   * `chat-update` frame for instant sidebar refresh.
+   */
+  persistPermissionMode?(
+    chatId: string,
+    mode: WirePermissionMode,
+  ): Promise<unknown> | unknown;
   /** Tail polling interval — small in tests, default 250ms in production. */
   tailPollingMs?: number;
   /**
@@ -202,10 +214,32 @@ export interface JsonlTailBridge {
   broadcastFrameToAll(frame: ServerFrame): void;
 }
 
+// Cycle order Claude's TUI follows for Shift-Tab. `bypassPermissions`
+// is intentionally absent — claude only enters it via the spawn-time
+// `--dangerously-skip-permissions` flag and exposes no in-pane keystroke.
+const CYCLE_ORDER: ReadonlyArray<WirePermissionMode> = [
+  "default",
+  "acceptEdits",
+  "plan",
+];
+
+function cycleStepsToReach(
+  from: WirePermissionMode,
+  to: WirePermissionMode,
+): number | null {
+  const i = CYCLE_ORDER.indexOf(from);
+  const j = CYCLE_ORDER.indexOf(to);
+  if (i < 0 || j < 0) return null;
+  return (j - i + CYCLE_ORDER.length) % CYCLE_ORDER.length;
+}
+
 export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBridge {
   const chats = new Map<string, ChatState>();
   const tasksListeners = new Set<TasksUpdateListener>();
   const log: BridgeLog = opts.log ?? createBridgeLog();
+  // Serialize per-chat keystroke dispatch so rapid pill clicks don't
+  // interleave Shift-Tabs in the wrong order — last queued click wins.
+  const permissionModeQueue = new Map<string, Promise<void>>();
 
   function sendTo(client: WsClient, frame: ServerFrame): void {
     try {
@@ -769,12 +803,121 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     // ─── Control surface ─────────────────────────────────────────────────────
     async setPermissionMode(chatId, mode) {
       const state = await ensureChatState(chatId);
+      const prev = state.permissionMode;
+      // No reverse channel exists from claude's TUI back into bridge state:
+      // a user pressing Shift-Tab inside an attached real terminal will
+      // drift `state.permissionMode` from what claude is actually showing
+      // and subsequent cycle-step counts will be off.
       state.permissionMode = mode;
+
+      let updatedRow: unknown = null;
+      if (opts.persistPermissionMode) {
+        try {
+          updatedRow = await Promise.resolve(
+            opts.persistPermissionMode(chatId, mode),
+          );
+        } catch (err) {
+          console.warn(
+            `[loom] persistPermissionMode failed for ${chatId}: ${(err as Error).message}`,
+          );
+        }
+      }
+
+      const prior = permissionModeQueue.get(chatId) ?? Promise.resolve();
+      const next = prior
+        .catch(() => {})
+        .then(async () => {
+          if (mode === "bypassPermissions") {
+            broadcast(state, {
+              kind: "error",
+              "chat-id": chatId,
+              body: {
+                message:
+                  "Bypass permissions can only be enabled when starting a new session; the choice is saved and will apply next time.",
+              },
+            });
+            return;
+          }
+          if (prev === "bypassPermissions") {
+            // Bypass mode is set via a spawn-time CLI flag and has no
+            // in-pane keystroke to leave it; row is already updated so
+            // the next session honours the new choice.
+            broadcast(state, {
+              kind: "error",
+              "chat-id": chatId,
+              body: {
+                message:
+                  "This session was started in bypass-permissions mode and cannot switch out without restart; the choice is saved and will apply next time.",
+              },
+            });
+            return;
+          }
+          const steps = cycleStepsToReach(prev, mode);
+          if (steps != null && steps > CYCLE_ORDER.length - 1) {
+            // Tripwire: mod-wraparound math caps `steps` at
+            // `CYCLE_ORDER.length - 1`. Crossing that bound means
+            // claude's TUI cycle order has drifted from the version
+            // CYCLE_ORDER was measured against (v2.1.153).
+            console.warn(
+              `[loom] permission-mode cycle miscount for ${chatId} (${prev} -> ${mode}): steps=${steps} exceeds CYCLE_ORDER bound; claude TUI cycle may have changed`,
+            );
+          }
+          if (steps == null || steps === 0) return;
+          for (let i = 0; i < steps; i++) {
+            try {
+              await opts.tmux.sendKey(chatId, "BTab");
+            } catch (err) {
+              // Mid-cycle failure leaves the running pane on an
+              // intermediate mode. Roll back in-memory + persisted
+              // state and broadcast a corrective frame so the pill
+              // reflects what claude is actually running.
+              console.warn(
+                `[loom] permission-mode keystroke failed mid-cycle for ${chatId}: ${(err as Error).message}`,
+              );
+              state.permissionMode = prev;
+              if (opts.persistPermissionMode) {
+                try {
+                  await Promise.resolve(opts.persistPermissionMode(chatId, prev));
+                } catch {
+                  /* best-effort rollback */
+                }
+              }
+              broadcast(state, {
+                kind: "permission-mode-set",
+                "chat-id": chatId,
+                body: { mode: prev },
+              });
+              broadcast(state, {
+                kind: "error",
+                "chat-id": chatId,
+                body: {
+                  message: `Failed to switch permission mode; reverted to ${prev}.`,
+                },
+              });
+              return;
+            }
+          }
+        });
+      permissionModeQueue.set(chatId, next);
+      next.finally(() => {
+        if (permissionModeQueue.get(chatId) === next) {
+          permissionModeQueue.delete(chatId);
+        }
+      });
+
       broadcast(state, {
         kind: "permission-mode-set",
         "chat-id": chatId,
         body: { mode },
       });
+      if (updatedRow && typeof updatedRow === "object") {
+        broadcast(state, {
+          kind: "chat-update",
+          "chat-id": chatId,
+          body: { chat: updatedRow as ChatRow },
+        });
+      }
+      await next;
     },
 
     async acceptPlanProposal(chatId, _planId) {

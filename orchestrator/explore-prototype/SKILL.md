@@ -187,22 +187,6 @@ When the prototype analysis is complete, the user typically wants to start a `/w
 
 Either path keeps the prototype analysis as the canonical source of *what* to build without adopting prototype code.
 
-## Logging
-
-After completing the exploration, append one entry to `~/.claude/skills/develop-log.md`:
-
-```markdown
-## [YYYY-MM-DD] — <project-name> — Phase: spec
-**Skill:** explore-prototype
-**URL:** [prototype URL]
-**Source scan:** [yes/no]
-**Pages discovered:** [count]
-**User-guided additions:** [count of pages added in Phase 2]
-**What worked:** [brief]
-**Problems:** [brief]
-**Proposed change:** [exact edit or "none"]
-```
-
 ## Rules
 
 - **Visual-first.** The primary discovery channel is Puppeteer screenshots and interaction. Code reading is supplementary and optional.

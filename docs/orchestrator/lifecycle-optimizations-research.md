@@ -1,6 +1,6 @@
 # Loom — Performance Optimization Research
 
-**Purpose.** Catalogue of additional techniques to drastically reduce token cost, latency, and wasted caching for the Loom orchestration framework — going *beyond* what Loom already does (5-phase pipeline, fresh-context subagents, kanban shared state, typed RETURN schemas, capability minimization, /tune).
+**Purpose.** Catalogue of additional techniques to drastically reduce token cost, latency, and wasted caching for the Loom orchestration framework — going *beyond* what Loom already does (5-phase pipeline, fresh-context subagents, kanban shared state, typed RETURN schemas, capability minimization).
 
 **Status.** Temporary research file. Sources cited inline by short code; full URL list at the bottom.
 
