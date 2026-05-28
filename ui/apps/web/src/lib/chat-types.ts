@@ -333,17 +333,9 @@ export type ClientFrame =
       body: {
         text: string;
         /**
-         * SDK priority hint. Mirrors `SDKUserMessage.priority`. Server
-         * defaults to "now" when omitted; the composer sends "next"
-         * when the queue-priority toggle is on (running turn).
-         */
-        priority?: "now" | "next" | "later";
-        /**
          * Optional image attachments captured by the composer (paste,
-         * paperclip, or drag-drop). Mirrors the server-side
-         * `UserTurnFrame.body.images` field byte-for-byte; the bridge
-         * fans these out into SDK `ImageBlockParam` content blocks.
-         * Absent on legacy text-only submits.
+         * paperclip, or drag-drop). The server stages these to disk and
+         * appends `@<absPath>` tokens to the tmux text payload.
          */
         images?: UserTurnImage[];
       };

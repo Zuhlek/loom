@@ -67,6 +67,9 @@ function mkBridgeOpts() {
     async paneOwnsFile() {
       return true;
     },
+    gateDegraded() {
+      return false;
+    },
   };
   return {
     cleanup: () => rmSync(root, { recursive: true, force: true }),
@@ -90,7 +93,7 @@ describe("T-016 — JsonlTailBridge implements the http-ws-server surface", () =
       const surface: (keyof typeof bridge)[] = [
         "attach",
         "detach",
-        "submitUserTurnWithPriority",
+        "submitUserTurn",
         "interrupt",
         "acceptPlanProposal",
         "rejectPlanProposal",

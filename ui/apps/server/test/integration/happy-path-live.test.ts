@@ -133,7 +133,7 @@ describeIfLive("happy-path-live (M7) — user submit → assistant reply round-t
 
         const prompt =
           "Reply with exactly the word HELLO and nothing else, no punctuation.";
-        await bridge.submitUserTurnWithPriority(chatId, prompt);
+        await bridge.submitUserTurn(chatId, prompt);
 
         // Wait for both a user-text and an assistant-text frame.
         const start = Date.now();

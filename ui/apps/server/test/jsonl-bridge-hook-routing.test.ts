@@ -72,6 +72,9 @@ function mkOpts(): { opts: JsonlTailBridgeOptions; cleanup: () => void } {
         async paneOwnsFile() {
           return true;
         },
+        gateDegraded() {
+          return false;
+        },
       },
       cwdResolver: async (c) => `/tmp/${c}`,
       tailPollingMs: 25,

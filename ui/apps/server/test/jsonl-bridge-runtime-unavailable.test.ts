@@ -119,6 +119,9 @@ function freshOpts(): { opts: JsonlTailBridgeOptions; cleanup: () => void } {
       async paneOwnsFile() {
         return true;
       },
+      gateDegraded() {
+        return false;
+      },
     },
     cwdResolver: async (chatId) => `/tmp/cwd-${chatId}`,
     tailPollingMs: 25,
@@ -183,7 +186,7 @@ describe("JsonlTailBridge — runtime-unavailable behaviour (T-023)", () => {
     }
   });
 
-  it("submitUserTurnWithPriority: swallows TmuxUnavailableError (no unhandled rejection past the bridge)", async () => {
+  it("submitUserTurn: swallows TmuxUnavailableError (no unhandled rejection past the bridge)", async () => {
     // Real-world flow: a user can't `user-turn` for a chat that has not
     // been successfully attached. The HTTP-WS handler fires user-turn
     // as fire-and-forget (no await, no catch), so any throw past the
@@ -196,7 +199,7 @@ describe("JsonlTailBridge — runtime-unavailable behaviour (T-023)", () => {
       const bridge = createJsonlTailBridge(opts);
       // No attach. user-turn arrives standalone (defensive contract).
       await expect(
-        bridge.submitUserTurnWithPriority("chat-1", "hello"),
+        bridge.submitUserTurn("chat-1", "hello"),
       ).resolves.toBeUndefined();
     } finally {
       cleanup();

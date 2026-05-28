@@ -38,20 +38,10 @@ export interface UserTurnFrame {
   body: {
     text: string;
     /**
-     * SDK priority hint for the queued user message. Mirrors the SDK's
-     * `SDKUserMessage.priority` enum exactly per Design `## Wire
-     * protocol additions` — no translation table. Server defaults the
-     * value to `"now"` when omitted so legacy `{ text }`-only submits
-     * keep working.
-     */
-    priority?: "now" | "next" | "later";
-    /**
      * Optional image attachments captured by the composer (paste from
      * clipboard, paperclip file picker, or drag-drop). Each entry is a
-     * base64 payload + MIME type. The bridge fans these out into
-     * `ImageBlockParam` content blocks on the `SDKUserMessage`. Absent
-     * on legacy text-only submits — back-compat with pre-attachment
-     * clients is preserved by the optional marker.
+     * base64 payload + MIME type. The bridge stages these to disk and
+     * appends `@<absPath>` references to the tmux text payload.
      */
     images?: UserTurnImage[];
   };

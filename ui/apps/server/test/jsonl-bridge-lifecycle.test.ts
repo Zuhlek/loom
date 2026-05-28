@@ -126,6 +126,9 @@ function freshOpts(): { opts: JsonlTailBridgeOptions; cleanup: () => void; tailR
       async paneOwnsFile() {
         return true;
       },
+      gateDegraded() {
+        return false;
+      },
     },
     cwdResolver: async (chatId) => `/tmp/cwd-${chatId}`,
     // Faster polling for tests.

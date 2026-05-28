@@ -114,6 +114,9 @@ describe("T-007 — production-wiring smoke (real store + bridge + materializer)
         async paneOwnsFile() {
           return true;
         },
+        gateDegraded() {
+          return false;
+        },
       },
       cwdResolver: async (chatId) => `/tmp/${chatId}`,
       tailPollingMs: 25,
@@ -122,7 +125,7 @@ describe("T-007 — production-wiring smoke (real store + bridge + materializer)
     try {
       const bridge = createJsonlTailBridge(opts);
       await bridge.attach("c-1", makeWs());
-      await bridge.submitUserTurnWithPriority("c-1", "what is in this image", "now", [
+      await bridge.submitUserTurn("c-1", "what is in this image", [
         { mediaType: "image/png", dataB64: PNG_B64, filename: "shot.png" },
       ]);
 

@@ -78,12 +78,10 @@ describe("T-004 ChatComposer — permission-mode selector (US-004 AC1/AC2)", () 
   });
 });
 
-// Queue-priority describe block intentionally removed: the composer no
-// longer exposes a priority toggle (the chip was confusing and the
-// "send now / send-next" distinction was not required — every submit
-// now lands on the SDK's default queue placement). The wire still
-// accepts an optional `priority` field (server-side ADR-004) for
-// future use, but the web no longer emits it.
+// Queue-priority block intentionally removed: the priority field was
+// stripped from the wire when the SDK-era queue plumbing was retired.
+// Every user-turn submit reaches the bridge unconditionally and rides
+// the tmux pane's input order.
 
 describe("T-004 chat-types mirror — PermissionMode + frame variants", () => {
   test("chat-types exports a `PermissionMode` union with the four SDK values", () => {
@@ -100,11 +98,11 @@ describe("T-004 chat-types mirror — PermissionMode + frame variants", () => {
     expect(src).toMatch(/permission-mode-set/);
   });
 
-  test("chat-types `user-turn` body declares an optional `priority` field", () => {
+  test("chat-types `user-turn` body does not declare a `priority` field", () => {
     const src = readFileSync(typesPath, "utf8");
-    // Loose: the field name appears in the user-turn body section.
-    // Strict shape is enforced by tsc-noEmit at the server↔web mirror.
-    expect(src).toMatch(/priority\?\s*:/);
+    // Regression tripwire: the dead priority field was stripped from
+    // the wire. If it ever returns, this test surfaces the relapse.
+    expect(src).not.toMatch(/priority\?\s*:\s*["'`]now["'`]/);
   });
 });
 

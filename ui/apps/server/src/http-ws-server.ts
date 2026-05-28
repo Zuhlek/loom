@@ -234,7 +234,6 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
           const body = envelope.body as
             | {
                 text?: string;
-                priority?: "now" | "next" | "later";
                 images?: unknown;
               }
             | undefined;
@@ -243,11 +242,6 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             send(makeError(chatId, "user-turn: missing chat-id or body.text"));
             return;
           }
-          const rawPriority = body?.priority;
-          const priority: "now" | "next" | "later" =
-            rawPriority === "now" || rawPriority === "next" || rawPriority === "later"
-              ? rawPriority
-              : "now";
           // Defence-in-depth: filter malformed `body.images` before
           // forwarding to the bridge.
           const images = sanitizeUserTurnImages(body?.images);
@@ -256,7 +250,7 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
           // error frame, not escape as an unhandled rejection that crashes the
           // whole server process.
           try {
-            await opts.bridge.submitUserTurnWithPriority(chatId, text, priority, images);
+            await opts.bridge.submitUserTurn(chatId, text, images);
           } catch (err: any) {
             send(makeError(chatId, err?.message ?? "user-turn failed"));
           }

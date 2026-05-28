@@ -54,6 +54,9 @@ function mkPaneStub(): PaneStub {
     async paneOwnsFile(_pid, path) {
       return stub.ownedPaths.has(path);
     },
+    gateDegraded() {
+      return false;
+    },
   };
   return stub;
 }

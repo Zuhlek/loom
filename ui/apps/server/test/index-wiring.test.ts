@@ -57,6 +57,9 @@ function fakeDeps() {
     async pidsInPane() {
       return [];
     },
+    gateDegraded() {
+      return false;
+    },
   };
   return { root, tmux, sessionStore, pathProbe, paneProcess };
 }

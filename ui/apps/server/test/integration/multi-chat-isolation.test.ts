@@ -181,8 +181,8 @@ describeIfLive(
           const promptB =
             "Reply with exactly the word BRAVO and nothing else, no punctuation.";
 
-          await bridge.submitUserTurnWithPriority(chatA, promptA);
-          await bridge.submitUserTurnWithPriority(chatB, promptB);
+          await bridge.submitUserTurn(chatA, promptA);
+          await bridge.submitUserTurn(chatB, promptB);
 
           const start = Date.now();
           let aUserSeen = false;

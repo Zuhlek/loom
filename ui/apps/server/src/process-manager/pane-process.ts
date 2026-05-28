@@ -35,6 +35,14 @@ export interface PaneProcessApi {
    * (or IS `ancestorPid`). False on lsof absence, ENOENT, or any error — fail-closed.
    */
   paneOwnsFile(ancestorPid: number, path: string): Promise<boolean>;
+  /**
+   * True if the gate has degraded to allow-all at any point during this
+   * run — either because `LOOM_DISABLE_PANE_PID_GATE=1` is set, or because
+   * `lsof` was found missing on a previous probe. Callers that adopt JSONL
+   * rotations use this to surface "bystander-resistance is off" in their
+   * logs so silent cross-session mixing is at least observable.
+   */
+  gateDegraded(): boolean;
 }
 
 export interface PaneProcessOptions {
@@ -110,6 +118,10 @@ export function createPaneProcessApi(opts: PaneProcessOptions = {}): PaneProcess
         if (await chainHas(pid, ancestorPid, ppidCache, psBin)) return true;
       }
       return false;
+    },
+
+    gateDegraded() {
+      return disabledByEnv() || lsofMissingLogged;
     },
   };
 }

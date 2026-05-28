@@ -88,6 +88,9 @@ function fakeBridgeDeps() {
     async pidsInPane() {
       return [];
     },
+    gateDegraded() {
+      return false;
+    },
   };
   return { tmux, sessionStore, pathProbe, paneProcess, tailRoot: fakeTailRoot };
 }

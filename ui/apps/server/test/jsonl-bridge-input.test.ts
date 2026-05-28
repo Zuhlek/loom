@@ -93,6 +93,9 @@ function mkOpts(tmux: TmuxSessionApi): { opts: JsonlTailBridgeOptions; cleanup: 
         async paneOwnsFile() {
           return true;
         },
+        gateDegraded() {
+          return false;
+        },
       },
       cwdResolver: async (chatId) => `/tmp/${chatId}`,
       tailPollingMs: 25,
@@ -112,13 +115,13 @@ function makeWs(): WsClient & { sent: string[] } {
 }
 
 describe("JsonlTailBridge — user-input surface (T-010)", () => {
-  it("submitUserTurnWithPriority calls tmux.sendInput exactly once with the text", async () => {
+  it("submitUserTurn calls tmux.sendInput exactly once with the text", async () => {
     const { api, calls } = mkTmuxRec();
     const { opts, cleanup } = mkOpts(api);
     try {
       const bridge = createJsonlTailBridge(opts);
       await bridge.attach("c-1", makeWs());
-      await bridge.submitUserTurnWithPriority("c-1", "hello", "now");
+      await bridge.submitUserTurn("c-1", "hello");
       expect(calls.sendInput).toEqual([{ chatId: "c-1", text: "hello" }]);
       await bridge.dispose("c-1");
     } finally {
@@ -369,7 +372,7 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
     }
   });
 
-  it("submitUserTurnWithPriority(images): stages via the image store and appends @<path> to the text", async () => {
+  it("submitUserTurn(images): stages via the image store and appends @<path> to the text", async () => {
     // Replaces the prior "not supported by the JSONL bridge" contract — image
     // turns are now wired through (T-003). With an injected image store the
     // bridge stages each image and appends an @<absPath> token to the send.
@@ -388,7 +391,7 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
       const ws = makeWs();
       await bridge.attach("c-1", ws);
       ws.sent.length = 0;
-      await bridge.submitUserTurnWithPriority("c-1", "with image", "now", [
+      await bridge.submitUserTurn("c-1", "with image", [
         { mediaType: "image/png", dataB64: "abcd" },
       ]);
       expect(calls.sendInput).toEqual([

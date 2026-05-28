@@ -102,7 +102,7 @@ export interface JsonlTailBridgeOptions {
    * Lifecycle hooks for chat-diff-panel substrate wiring.
    *  - `onChatAttach` runs once per `attach()` call. Used by
    *    `persistVcsKindOnAttach` and `turnWatcher.start`.
-   *  - `onFirstUserTurn` runs before the first `submitUserTurnWithPriority`
+   *  - `onFirstUserTurn` runs before the first `submitUserTurn`
    *    for a chat. Used by `runFirstSendHook`. The bridge awaits the
    *    returned promise before forwarding the turn input.
    *  - `onAssistantTurnComplete` runs after the bridge's materializer
@@ -165,10 +165,9 @@ export interface JsonlTailBridge {
   dispose(chatId: string): Promise<void>;
 
   // User input
-  submitUserTurnWithPriority(
+  submitUserTurn(
     chatId: string,
     text: string,
-    priority?: "now" | "next" | "later",
     images?: unknown,
   ): Promise<void>;
   interrupt(chatId: string): Promise<void>;
@@ -438,6 +437,11 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       sessionId: state.sessionId,
       jsonlPath: state.jsonlPath,
       strategy: "rotated",
+      // Flag rotations adopted while the pane-pid gate was degraded
+      // (no lsof or kill-switch on). The gate's startup warning fires
+      // once; without this per-adoption field, every subsequent
+      // bystander adoption looks identical to a legitimate one.
+      gateDegraded: opts.paneProcess.gateDegraded(),
     });
   }
 
@@ -575,7 +579,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     },
 
     // ─── User input ──────────────────────────────────────────────────────────
-    async submitUserTurnWithPriority(chatId, text, _priority, images) {
+    async submitUserTurn(chatId, text, images) {
       let state: ChatState;
       try {
         state = await ensureChatState(chatId);

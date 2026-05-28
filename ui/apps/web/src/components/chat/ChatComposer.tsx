@@ -63,8 +63,7 @@ export interface ChatComposerProps {
   compact?: boolean;
   /**
    * Submit handler. Always receives `images` as an array (empty when
-   * no attachments are held). Every submit is the default "now"
-   * priority on the wire.
+   * no attachments are held).
    */
   onSubmit?: (text: string, images: UserTurnImage[]) => void;
   /** When true, the running turn is interruptable — shows a stop button. */

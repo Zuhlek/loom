@@ -8692,3 +8692,113 @@ workspace" and three sibling repos disagree on X's placement (cinnamon root /
 scripts/ subdir / no local copy), the deciding question is usually "who *consumes*
 X's path today" — common.sh's curl/npm ladder answered "not CI", which made the
 dev-time wrapper paths the only constraint and demoted A→B as the cheaper move.
+
+## [2026-05-28] — aper-pnpm-migration — Phase: design
+**Skill:** craft
+
+Converted Spec's Q1–Q6 + accepted-as-known QC findings into design.md (9 required
+sections, 8 ADRs, 2 deferred Open ambiguities). Two blockers from Spec QC closed
+explicitly: (ADR-02) the `patch/pack/unpatch` loop in `build-all.sh` stays — but
+framed as an aper-specific extension on top of the crs-sgkb skeleton, NOT a mirror,
+because aper publishes tarballs to Verdaccio while crs-sgkb publishes Docker
+images; (ADR-03) `ngr-ui` added as a fifth entry to `minimumReleaseAgeExclude`
+(the other two URL deps `cinnamon-reporting-adminui` and `cinnamon-typescript-rest`
+already match `cinnamon-*` by name; pnpm 11's quarantine is name-based even for
+direct-tarball-URL specifiers, so a name-based carve-out suffices). Remaining 5
+major QC findings absorbed: ADR-05 `npm get userconfig` → `npm config get
+userconfig` (keep `npm` binary, modernise the syntax — both managers agree on the
+path so no behavioural swap needed); ADR-06 keep aper's unpack-then-publish loop
+(don't switch to `pnpm -r publish` — preserves bit-for-bit reproducibility against
+the build step's artifacts, swap only the two inner `npm version`/`npm publish`
+calls); ADR-07 dev wrappers `scripts/update-dependencies.sh:18` `npm run
+compile-all` → `pnpm run`; ADR-08 postgres attaches to the whole consolidated step
+(service binding is step-scoped, not script-line-scoped, so US-003 AC#4's "that
+step" honestly means the only build step). Plus ADR-01 (crs-sgkb shape + cinnamon
+pnpm-11 layer), ADR-04 (`@types/jest: ^29.5.14` catalog pin).
+
+Two deferred Open ambiguities recorded as design-OA-N (not blocking): catalog-
+promote the three URL deps (would let `ngr-ui` carve-out drop, but requires
+verifying Verdaccio publishes them under those names), and split aper-reporting
+test step (postgres scope optimisation, not worth doing now).
+
+Learning: when a spec-QC finding is "accepted as known" rather than triggering a
+rerun, Design owns it as an ADR question. The blockers in particular needed
+proper ADR treatment, not just an Open-ambiguity entry — they were structure-
+critical and Plan/Build would have had to re-decide them otherwise. Also: the
+QC's framing of Blocker 2 as "does `minimumReleaseAge` even apply to
+direct-tarball-URLs" is the right question — and the answer (yes, because the
+gate is name-based) is what makes the simple name-glob carve-out work without
+having to reshape the dep declarations themselves. Saved a wider refactor by
+recognising the gate's resolution model.
+
+Also: spec.md's claim that build-all.sh "mirrors crs-sgkb" was the kind of
+load-bearing fiction that survives review precisely because every other adjective
+in the sentence is true. The migration *is* crs-sgkb-shaped; the build script's
+*tail* (the pack loop) just isn't, because the publish contract differs. Naming
+the divergence explicitly in ADR-02 is what keeps the spec-QC accepted-as-known
+honest — pretending the mirror was perfect would have made Plan re-grill it.
+
+---
+
+## Phase entry: aper-pnpm-migration · plan · 2026-05-28
+
+Plan phase complete. Twelve tasks, ten AFK and two HITL (T-008
+publish-packages.sh, T-009 publish-docker.sh — their *edits* are
+mechanical but their acceptance gate requires a CI manual trigger
+against Verdaccio / Docker registry, which Build cannot drive). DAG is
+strictly layered: T-001 (root skeleton) fans out to T-002 (catalog),
+T-004 (supply-chain features), T-006 (common.sh + build-all.sh), and
+T-010 (dev wrappers); T-003 (per-pkg pkg.json rewrites) sits on T-002
+and feeds T-005 (Jest types verification) and T-011 (lockfile cleanup);
+T-006 fans to T-007 (yml + delete build-*.sh), T-008, T-009; everything
+converges on T-012 (end-to-end smoke gate). Verification env declared
+as `cli-shell` + `node-test` with explicit pre-flight requirements
+(pnpm 11, Node 20+, Verdaccio reachability or pre-warmed `~/.npmrc`,
+postgres for aper-reporting's Jest leg).
+
+All six US-NNN stories covered. Coverage matrix in task.md:
+US-001 (T-001, T-003, T-011, T-012), US-002 (T-002, T-003, T-005,
+T-012), US-003 (T-006, T-007, T-012), US-004 (T-004, T-012), US-005
+(T-010, T-012), US-006 (T-001, T-006, T-008, T-009, T-012). T-012 is
+the convergence node and explicitly carries all six story IDs so a
+single behavioural-test sketch enumerates every US-NNN acceptance
+criterion's verifiable shape.
+
+Mutation testing declared `no` in tests.md — this is a
+package-manager / build-script migration, no application logic
+touched. The smoke gate `pnpm install --frozen-lockfile && pnpm -r run
+compile && pnpm -r run test` is the canonical verification ladder; per-
+task gates are subsets.
+
+Two design-deferred Open ambiguities (OA-Design-1 promote URL deps to
+catalog, OA-Design-2 split aper-reporting test step) remain noted in
+design.md as out-of-scope for the migration. Plan does not re-open
+them — they're explicit future-optimisations, not blockers.
+
+Learning: when a Design phase produces ADRs that absorb spec-QC
+blockers (rather than triggering a Spec rerun), Plan's job is to make
+those ADR decisions executable, not to re-litigate them. ADR-02's
+"keep the patch/pack loop as an aper-specific extension on the
+crs-sgkb skeleton" maps directly to T-006's `build-all.sh` body; the
+plan task can quote the script body verbatim from the ADR without
+re-deciding. Saves a round of grilling and keeps the ADR as the single
+source of truth for that decision.
+
+Learning: HITL is the right marker for tasks whose *edits* are AFK
+but whose *acceptance gate* requires a runtime humans must oversee
+(production registry pushes, in this case). Marking them HITL is more
+honest than marking them AFK with a deferred gate — Build's behaviour
+contract is to refuse silent harness substitution, and a manual-CI-
+trigger gate fits that "human required" semantics cleanly. The
+alternative (split each into "edit AFK" + "validate HITL") would
+double the task count for no DAG benefit.
+
+Learning: the layered DAG shape (skeleton → catalog → per-pkg → ...
+→ verification) means T-001 is the single root of the graph and T-012
+is the single sink. That makes the build order trivially parallelisable
+where the DAG allows (T-002+T-004+T-006+T-010 can all proceed after
+T-001 lands, on independent runners). Worth noting because the
+migration's "green-master invariant" depends on landing all 12 tasks
+in one commit at cutover — the DAG is a build-order, not a commit-
+sequence. Build should produce intermediate states that compile but
+land them atomically.

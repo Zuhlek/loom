@@ -89,6 +89,9 @@ function mkOpts(tmux: TmuxSessionApi): { opts: JsonlTailBridgeOptions; cleanup: 
         async paneOwnsFile() {
           return true;
         },
+        gateDegraded() {
+          return false;
+        },
       },
       cwdResolver: async (c) => `/tmp/${c}`,
       tailPollingMs: 25,

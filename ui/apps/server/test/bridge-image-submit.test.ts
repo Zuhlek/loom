@@ -92,6 +92,9 @@ function mkOpts(
         async paneOwnsFile() {
           return true;
         },
+        gateDegraded() {
+          return false;
+        },
       },
       cwdResolver: async (chatId) => `/tmp/${chatId}`,
       tailPollingMs: 25,
@@ -145,7 +148,7 @@ describe("JsonlTailBridge — image submit (T-003)", () => {
     try {
       const bridge = createJsonlTailBridge(opts);
       await bridge.attach("c-1", makeWs());
-      await bridge.submitUserTurnWithPriority("c-1", "hello", "now", [
+      await bridge.submitUserTurn("c-1", "hello", [
         { mediaType: "image/png", dataB64: "x" },
         { mediaType: "image/jpeg", dataB64: "y" },
       ]);
@@ -174,7 +177,7 @@ describe("JsonlTailBridge — image submit (T-003)", () => {
     try {
       const bridge = createJsonlTailBridge(opts);
       await bridge.attach("c-1", makeWs());
-      await bridge.submitUserTurnWithPriority("c-1", "plain text", "now");
+      await bridge.submitUserTurn("c-1", "plain text");
       expect(calls.sendInput).toEqual([{ chatId: "c-1", text: "plain text" }]);
       expect(staged).toBe(false);
       await bridge.dispose("c-1");
@@ -191,7 +194,7 @@ describe("JsonlTailBridge — image submit (T-003)", () => {
       const ws = makeWs();
       await bridge.attach("c-1", ws);
       ws.sent.length = 0;
-      await bridge.submitUserTurnWithPriority("c-1", "look at this", "now", [
+      await bridge.submitUserTurn("c-1", "look at this", [
         { mediaType: "image/png", dataB64: "broken" },
       ]);
       // Text is never lost — sent without any @<path> token.
@@ -216,7 +219,7 @@ describe("JsonlTailBridge — image submit (T-003)", () => {
       const ws = makeWs();
       await bridge.attach("c-1", ws);
       ws.sent.length = 0;
-      await bridge.submitUserTurnWithPriority("c-1", "hi", "now", [
+      await bridge.submitUserTurn("c-1", "hi", [
         { mediaType: "image/png", dataB64: "x" },
       ]);
       const joined = ws.sent.join("\n");

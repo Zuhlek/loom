@@ -3,7 +3,7 @@
  * field.
  *
  * Runs in `http-ws-server.ts`'s `user-turn` handler before forwarding
- * to `bridge.submitUserTurnWithPriority`. A misbehaving / malicious
+ * to `bridge.submitUserTurn`. A misbehaving / malicious
  * client must not be able to crash the turn pipeline with malformed
  * image payloads. The sanitiser is intentionally permissive about
  * extra fields (it only validates the two required strings) — Anthropic

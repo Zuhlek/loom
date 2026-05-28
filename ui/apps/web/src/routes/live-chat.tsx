@@ -50,14 +50,14 @@ type ConnState = "idle" | "connecting" | "open" | "closed";
  * uses to distinguish "queued while running" from "hard-blocked by a
  * pending tool gate":
  *
- *   - `"ready"`   : composer enabled; submit goes through as
- *                   priority `"now"`. Includes `idle`, `interrupted`,
- *                   `error` — the `"interrupted"` case relies on the
- *                   SDK's implicit re-prime.
+ *   - `"ready"`   : composer enabled; submit goes through immediately.
+ *                   Includes `idle`, `interrupted`, `error` — the
+ *                   `"interrupted"` case relies on claude's implicit
+ *                   re-prime when the next input arrives.
  *   - `"queue"`   : composer enabled but a turn is in flight. Send
- *                   button surfaces as "Queue"; submits land in the
- *                   SDK's user-message queue and the server treats
- *                   missing-priority as the default "now" placement.
+ *                   button surfaces as "Queue"; submits are appended
+ *                   to the tmux input stream so claude consumes them
+ *                   after the active turn settles.
  *   - `"blocked"` : a pending permission or AskUserQuestion is open;
  *                   the composer hard-disables until the user
  *                   resolves the inline picker / permission card.
@@ -67,6 +67,14 @@ type ConnState = "idle" | "connecting" | "open" | "closed";
  * state fields).
  */
 export type ComposerMode = "ready" | "queue" | "blocked";
+
+/**
+ * Maximum wait between the `attached` and `snapshot` frames. If the
+ * server accepts our attach but never delivers a snapshot — e.g. the
+ * tmux pane was spawned but JSONL discovery is wedged — we surface a
+ * diagnostic banner instead of silently rendering an empty timeline.
+ */
+const SNAPSHOT_TIMEOUT_MS = 15_000;
 
 export function composerMode(state: {
   pendingPermission: PendingPermission | null;
@@ -348,6 +356,10 @@ export function LiveChatRoute({ chatId }: Props) {
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(0);
   const closedByUserRef = useRef(false);
+  // Diagnostic: if `attached` arrives but `snapshot` never does within
+  // SNAPSHOT_TIMEOUT_MS, the bridge has accepted us but is wedged.
+  // Without this the route silently renders an empty timeline.
+  const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch the chat row for the header.
   useEffect(() => {
@@ -418,15 +430,32 @@ export function LiveChatRoute({ chatId }: Props) {
       ws.onmessage = (ev) => {
         if (cancelled) return;
         let frame: ServerFrame;
+        const raw = typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data);
         try {
-          frame = JSON.parse(typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data));
-        } catch {
+          frame = JSON.parse(raw);
+        } catch (err) {
+          // A malformed frame is a protocol bug, not a recoverable event.
+          // Surface it so the user sees a banner and the console keeps the
+          // payload for diagnosis — silent return masked this class of bug
+          // before.
+          console.error("[loom] failed to parse server frame", err, raw);
+          dispatch({ type: "error-frame", message: "Received malformed frame from server" });
           return;
         }
         if (frame["chat-id"] && frame["chat-id"] !== chatId) return;
         switch (frame.kind) {
           case "attached":
-            // No-op — snapshot follows.
+            // Start the snapshot watchdog. Cleared on `snapshot`,
+            // unmount, and any subsequent `attached` (reconnects).
+            if (snapshotTimerRef.current !== null) clearTimeout(snapshotTimerRef.current);
+            snapshotTimerRef.current = setTimeout(() => {
+              snapshotTimerRef.current = null;
+              dispatch({
+                type: "error-frame",
+                message:
+                  "Chat attach succeeded but no snapshot arrived in 15s — bridge may be wedged. Try reloading.",
+              });
+            }, SNAPSHOT_TIMEOUT_MS);
             break;
           case "chat-update":
             // Patch in bridge-owned fields (notably `worktree_path`) that
@@ -436,6 +465,10 @@ export function LiveChatRoute({ chatId }: Props) {
             if (frame.body?.chat) setChat(frame.body.chat);
             break;
           case "snapshot":
+            if (snapshotTimerRef.current !== null) {
+              clearTimeout(snapshotTimerRef.current);
+              snapshotTimerRef.current = null;
+            }
             dispatch({ type: "snapshot", payload: frame });
             break;
           case "item-append":
@@ -562,6 +595,10 @@ export function LiveChatRoute({ chatId }: Props) {
     return () => {
       cancelled = true;
       closedByUserRef.current = true;
+      if (snapshotTimerRef.current !== null) {
+        clearTimeout(snapshotTimerRef.current);
+        snapshotTimerRef.current = null;
+      }
       try {
         const ws = wsRef.current;
         if (ws && ws.readyState === ws.OPEN) {
@@ -577,11 +614,8 @@ export function LiveChatRoute({ chatId }: Props) {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== ws.OPEN) return;
       // Construct the wire body incrementally so optional fields are
-      // absent (not undefined) when not in use — the server treats
-      // missing fields as their defaults (priority → "now", images →
-      // empty array). The composer no longer exposes a priority
-      // toggle, so every submit relies on the default "now"
-      // placement.
+      // absent (not undefined) when not in use — the server treats a
+      // missing `images` field as the empty array.
       //
       // The body shape is the `user-turn` variant of the discriminated
       // `ClientFrame` union (chat-types.ts). We use `Extract<...>`

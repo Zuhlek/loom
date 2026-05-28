@@ -2,7 +2,7 @@
  * T-003 — http-ws-server `sanitizeUserTurnImages` (US-006 AC1).
  *
  * Verifies the defensive sanitiser that the WS `user-turn` handler runs
- * over `body.images` before forwarding to `bridge.submitUserTurnWithPriority`.
+ * over `body.images` before forwarding to `bridge.submitUserTurn`.
  *
  * Per `tests.md` Gate G4:
  *   - undefined / non-array / empty array ⇒ undefined out
