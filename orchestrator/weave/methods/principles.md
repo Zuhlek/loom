@@ -31,7 +31,7 @@ Concrete rules:
 **Before writing new code, find the prior art.**
 
 Concrete rules:
-- **Search before writing.** When implementing a task, dispatch an `Explore` subagent with the prompt: *"Find the closest prior art in this codebase for [pattern]. Return file paths and a one-paragraph summary of the pattern, ≤300 words."* Read the summary; match the pattern.
+- **Search before writing.** Before introducing a pattern, grep / read the codebase for the closest prior art and match it. Use the agent's own Read / Grep / Bash tools inline — do not dispatch a subagent for this. The pre-flight repo digest (`.loom/.cache/repo-digest.md` + the per-project `repo-context.md`) is the first stop; only fall back to ad-hoc search when the digest doesn't cover the area.
 - **Naming conventions are non-negotiable.** Match the existing repo: snake_case vs camelCase, `getUser` vs `fetch_user` vs `find_user`, `User` vs `UserDto` vs `UserModel`. If the repo is inconsistent, match the closest neighbor (the file you're modifying, or the nearest sibling module).
 - **Use libraries already on the manifest.** Don't add new dependencies (`package.json`, `requirements.txt`, `Cargo.toml`, `go.mod`, etc.) without explicit justification in the task spec. New deps require a HITL approval, not an autonomous agent decision.
 - **Match existing test style.** If the repo uses pytest fixtures, don't introduce unittest classes. If tests are integration-style hitting real DB, don't introduce mocked unit tests. If the repo uses BDD (`describe/it`), don't switch to `test_xxx`.
