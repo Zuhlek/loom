@@ -16,7 +16,7 @@ Includes every file from the producer phase's `phase.signature.md` › `## Retur
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
 | Build RETURN block | passed by orchestrator | yes | The just-completed Build RETURN block |
-| `board.md` | `.loom/<project>/board.md` | yes | Producer's write — current task transitions |
+| `board.md` | `.loom/<project>/board.md` | yes | Orchestrator-applied from Build's `task-outcomes` + `smoke` — current task transitions |
 | `tasks/T-*.test-log.txt` | `.loom/<project>/tasks/T-*.test-log.txt` | yes | Producer's per-task red+green logs |
 | `tasks/T-*.done.md` | `.loom/<project>/tasks/T-*.done.md` | yes | Producer's per-task done reports |
 | `test-report.md` | `.loom/<project>/test-report.md` | yes | Producer's aggregated verification |

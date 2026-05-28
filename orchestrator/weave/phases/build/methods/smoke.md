@@ -32,9 +32,9 @@ Inline procedure the Build phase agent applies once near the end of its session,
 
 | All checks | Board action |
 | --- | --- |
-| PASS or SKIPPED (no FAIL) | Promote tasks from `Review` to `Done` |
-| One or more FAIL | Keep affected tasks in `Review`; record the failure in the smoke report and in `test-report.md` |
-| Project not runnable (no deliverable to smoke) | Document the skip reason; no task promotion required |
+| PASS or SKIPPED (no FAIL) | Report `smoke: {ran: true, passed: true}` in the Build RETURN block. The orchestrator promotes Review→Done. |
+| One or more FAIL | Report `smoke: {ran: true, passed: false}` in the Build RETURN block. The orchestrator leaves cards in `Review`; record the failure in the smoke report and in `test-report.md`. |
+| Project not runnable (no deliverable to smoke) | Report `smoke: {ran: false}` in the Build RETURN block. Document the skip reason in `smoke-report.md` if produced. |
 
 ## Writes
 

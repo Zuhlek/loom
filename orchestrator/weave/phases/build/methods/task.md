@@ -49,7 +49,7 @@ notes: <optional one-paragraph remarks>
 
 `status` semantics:
 
-| Value | Meaning | Board transition |
+| Value | Meaning | Maps to (orchestrator transitions per SKILL.md) |
 | --- | --- | --- |
 | `green` | All tests in the task scope pass; done report written | `In Progress` → `Review` |
 | `failed` | Three implementation attempts exhausted | Card stays `In Progress` with `[failed]` annotation |

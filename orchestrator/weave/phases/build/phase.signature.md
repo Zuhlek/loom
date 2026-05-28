@@ -33,7 +33,7 @@ I/O signature between `/weave` and the Build Phase Agent.
 
 ```yaml
 type: object
-required: [phase, status, artifacts, summary, open-ambiguity, completed, failed, hitl-pending]
+required: [phase, status, artifacts, summary, open-ambiguity, completed, failed, hitl-pending, task-outcomes, smoke]
 properties:
   phase:
     enum: [build]
@@ -55,6 +55,22 @@ properties:
     type: integer
   hitl-pending:
     type: integer
+  task-outcomes:                  # required, can be empty array (means Build did no work this session)
+    type: array
+    items:
+      type: object
+      required: [id, status]
+      properties:
+        id: {type: string}        # T-NNN format
+        status: {enum: [green, failed, hitl-block]}
+        attempts: {type: integer}
+        hitl-reason: {type: string}   # required when status: hitl-block
+  smoke:                          # required: present even when Build didn't run smoke (ran: false)
+    type: object
+    required: [ran]
+    properties:
+      ran: {type: boolean}
+      passed: {type: boolean}     # required when ran=true
 ```
 
 Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a clear blocker list is surfaced with `failed` / `hitl-pending` counts.
@@ -65,19 +81,6 @@ Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a
 
 - Path: `<repo>/...`.
 - Implementation per ready tasks. The Build agent owns all repository writes within this session.
-
-#### `board.md`
-
-- Path: `.loom/<project>/board.md`.
-- Card transitions per the rules in `phase.md` › "## `board.md` Transition Rules".
-- The four `## ` headers `Backlog`, `In Progress`, `Review`, `Done` still exist, in order.
-- Every task that existed in the prior Plan `board.md` still exists in exactly one column (no cards lost).
-- A task's column is consistent with its `done.md` status:
-  - `status: green` → card in `Review` or `Done`.
-  - `status: failed` → card in `In Progress` with the `[failed]` annotation.
-  - `status: hitl-block` → card in `Backlog` with the `[HITL-blocked: ...]` annotation.
-- No task is in `In Progress` without a `tasks/T-*.test-log.txt` recording at least one red attempt.
-- No task is in `Done` without `smoke-report.md` evidence when the project is runnable.
 
 #### `tasks/T-*.test-log.txt`
 
@@ -112,7 +115,7 @@ Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a
 
 ### State postconditions
 
-- Every implemented task's card has transitioned correctly per the board rules.
+- Every implemented task is represented in the RETURN block's `task-outcomes` array with a terminal status (`green` | `failed` | `hitl-block`). The orchestrator translates these into board transitions per `SKILL.md § Board transition mapping`.
 - No commits / pushes / deploys / destructive commands have been run.
 
 ## Throws

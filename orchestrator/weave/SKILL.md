@@ -126,13 +126,40 @@ These constraints are why a first pass should cost tens of tool uses, not hundre
    a. Select the current phase.
    b. Dispatch the matching phase agent in a fresh Task session. The user-turn prompt is the two-band concatenation (stable head + dynamic tail) defined in `### Dispatch concatenation` below; the cached-prefix boundary contract in `## Conventions` is binding on every dispatch. Every phase, Build included, is one dispatch per phase entry; the Build agent runs its per-task work loop inline within that single session (see `phases/build/phase.md`).
    c. Surface the rerun-or-continue decision (see below) via AskUserQuestion. RETURN-block schema compliance is enforced by `hooks/validate-subagent-output.py` as a `SubagentStop` hook — malformed returns surface as visible hook blocks; the orchestrator does not run a parallel extractor.
-   d. On continue: update pipeline.md, advance phase, loop to (a). No
+   d. If the just-completed phase is Build: apply board transitions from the RETURN block's `task-outcomes` + `smoke` fields per `### Board transition mapping` below, then surface the rerun-or-continue gate. The transition application only runs when the just-completed phase is Build.
+   e. On continue: update pipeline.md, advance phase, loop to (a). No
       live evaluation-row emit happens during the run; cost/usage figures
       are produced post-hoc by the telemetry harvester reading the session
       transcripts on disk after /weave finishes (see "Telemetry hooks" below).
-   e. On rerun: re-dispatch the same phase agent with prior artifacts (+ optional Quality Check findings), loop to (b).
+   f. On rerun: re-dispatch the same phase agent with prior artifacts (+ optional Quality Check findings), loop to (b).
 4. On Review continue: set Lifecycle state = complete, report and exit.
 ```
+
+### Board transition mapping
+
+Build no longer writes `board.md`; the orchestrator applies transitions from the RETURN block's `task-outcomes` + `smoke` fields after a Build return clears the SubagentStop hook.
+
+| task-outcomes entry | smoke | Resulting column | Annotation |
+| --- | --- | --- | --- |
+| `status: green` | `passed: true` | `Done` | none |
+| `status: green` | `passed: false` OR `ran: false` | `Review` | none |
+| `status: failed` | any | `In Progress` | `[failed]` immediately after the ID |
+| `status: hitl-block` | any | `Backlog` | `[HITL-blocked: <hitl-reason>]` immediately after the ID |
+| Task IDs **not** in `task-outcomes` | any | unchanged | unchanged |
+
+Tasks not mentioned in `task-outcomes` are untouched — this preserves partial Build runs cleanly. A RETURN block carrying `task-outcomes: []` together with `smoke.ran: false` is a valid (no-op) return: Build did no work this session and the orchestrator applies no transitions.
+
+### Live mirror via hook
+
+The orchestrator additionally runs a PostToolUse hook (`hooks/board-transition.py`) that applies the same mapping live during Build, driven by the per-task file writes Build performs:
+
+- `tasks/T-NNN.test-log.txt` first write → card to `In Progress` (live mirror of "task started").
+- `tasks/T-NNN.done.md` write → card transitioned per the table above using the `status:` field.
+- `smoke-report.md` with no FAIL lines → all cards in `Review` promoted to `Done`.
+
+The hook is best-effort. The orchestrator's end-of-Build reconciliation from the RETURN block (`task-outcomes` + `smoke`) remains authoritative — any drift between the hook-applied state and the RETURN block is corrected at end-of-Build. The hook exists solely so the Loom UI sees board.md mutate during a Build session instead of in one batch at the end.
+
+The hook is idempotent: it does not rewrite `board.md` if the card is already in the target column with the correct annotation.
 
 ### Dispatch concatenation
 

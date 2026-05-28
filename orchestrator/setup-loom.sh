@@ -66,7 +66,8 @@ LOOM_HOOKS_JSON="$(cat <<JSON
       {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "\"\$HOME/.claude/loom-hooks/refresh-artifacts.sh\"" }
+          { "type": "command", "command": "\"\$HOME/.claude/loom-hooks/refresh-artifacts.sh\"" },
+          { "type": "command", "command": "python3 \"\$HOME/.claude/loom-hooks/board-transition.py\"" }
         ]
       },
       {

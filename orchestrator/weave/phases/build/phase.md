@@ -22,49 +22,41 @@ Implement every ready task on the board, verify the runnable result, and aggrega
    For each ready task:
 
    a. Read `tasks/T-NNN.md`.
-   b. Transition the card in `board.md` from `Backlog` to `In Progress` (atomic-write discipline below).
+   b. Note that this task is `In Progress` for purposes of reporting in the RETURN block; do NOT mutate `board.md`.
    c. Apply `task` — the Lock → Red → Implement → Green → Done procedure for this single task. The procedure is inline within this session; do not dispatch it as a subagent.
-   d. Transition the card per the outcome (table below).
+   d. Record the task outcome (`green` / `failed` / `hitl-block` plus attempt count and hitl-reason if applicable) for inclusion in the final RETURN block's `task-outcomes` array.
    e. When `tests.md` declares `**Mutation Testing:** yes` at the top AND the task reached `green`, apply `mutation` for this task. Inline within this session.
    f. Continue to the next ready task. As earlier tasks reach `Done`, previously-blocked tasks may become ready — re-read `board.md` between iterations to pick them up.
 
 3. **Smoke.** When the project is runnable (per `design.md` / `plan.md`), apply `smoke` once after the per-task loop is exhausted. Whole-project verification; produces `smoke-report.md`. Inline within this session.
 
-4. Transition any cards from `Review` to `Done` per the smoke evidence.
+4. Record the smoke outcome (`ran: true|false`, `passed: true|false`) for inclusion in the final RETURN block's `smoke` field.
 
 5. Write `test-report.md` aggregating per-task evidence with the smoke and (when applicable) mutation results.
 
 6. Return the RETURN block defined in `phase.signature.md` › `## Returns` › `### Return block`.
 
+## Reporting outcomes
+
+This agent does NOT mutate `board.md`. The orchestrator owns the board: it reads the `task-outcomes` and `smoke` fields from this agent's RETURN block and applies the column transitions itself (see `orchestrator/weave/SKILL.md § Board transition mapping`).
+
+Track task results in memory across the work loop. When this agent returns:
+
+- `task-outcomes` must include one entry per task this session addressed (started, finished, failed, or HITL-blocked). Entries for tasks NOT addressed in this session are omitted — the orchestrator preserves their cards untouched.
+- `smoke` reflects the smoke pass: `{ran: true, passed: true|false}` when smoke ran, or `{ran: false}` when the project was not runnable or smoke was deliberately skipped.
+
+`tasks/T-NNN.done.md` remains the authoritative per-task record on disk; `task-outcomes` is its wire equivalent for the orchestrator's transition mapping.
+
+Note: the orchestrator runs a PostToolUse hook that watches Build's per-task file writes (`tasks/T-NNN.test-log.txt`, `tasks/T-NNN.done.md`, `smoke-report.md`) and applies the corresponding board transitions live so the UI updates during the session. Build itself still does not write `board.md`. See `orchestrator/weave/SKILL.md § Board transition mapping § Live mirror via hook`.
+
 ## Rerun Behavior
 
 When the orchestrator re-dispatches this agent after a user-initiated rerun:
 
-- Treat the existing `board.md` as the starting point, not a blank slate. The Build phase does NOT reset the board on rerun.
-- Preserve cards already in `In Progress`, `Review`, and `Done` — they stay where they are. Pick the next eligible `Backlog` cards.
+- Read the existing `board.md` (orchestrator-maintained) to identify ready Backlog cards. The Build phase does NOT mutate `board.md`.
+- Cards already in `In Progress`, `Review`, and `Done` are orchestrator-maintained from prior runs — read but do not modify.
 - If `quality-review.md` is present, every `blocker` and `major` finding in it must be addressed before this agent returns.
 - Preserve previously-completed task work unless a finding explicitly invalidates it; an invalidated task is re-opened by moving its card back to `Backlog` with a `[stale]` tag in the rerun instruction.
-
-## `board.md` Transition Rules
-
-| Trigger | Source column | Target column | Card annotation |
-| --- | --- | --- | --- |
-| Picking up a ready task | `Backlog` | `In Progress` | (none) |
-| `task` reaches green | `In Progress` | `Review` | (none) |
-| Smoke evidence (and mutation when enabled) passes for the task | `Review` | `Done` | (none) |
-| `task` exhausts the three-attempt cap | `In Progress` | `In Progress` | `[failed]` immediately after the ID |
-| `task` surfaces a contradiction (hitl-block) | `In Progress` | `Backlog` | `[HITL-blocked: <one-line reason>]` immediately after the ID |
-| Blocker for a backlog task moves to `Done` and unblocks it | `Backlog` | `Backlog` | Remove `(blocked by ...)` segment |
-
-### Direct write
-
-The Build agent mutates `board.md` and `tasks/T-NNN.*` files with direct `Write` / `Edit` tool calls. One Task dispatch per phase entry (see `orchestrator/weave/SKILL.md` Phase Cycle 3b) guarantees a single writer per workspace within a Build session; no lock or atomic-write wrapper is required.
-
-If a future project introduces parallel `/weave` sessions on one workspace, re-introduce locks + atomic-write helpers in that project's scope.
-
-### Rerun-or-continue surface
-
-When this agent returns, the orchestrator surfaces the rerun-or-continue decision. A Build rerun re-dispatches this agent with the current `board.md` state — `In Progress` and `Done` cards stay where they are; pick the next eligible `Backlog` cards.
 
 ## Safety
 
