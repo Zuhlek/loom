@@ -13,7 +13,7 @@ These arrive inlined (see `## Inlined methods` appended below) — apply them be
 - Intent satisfaction
 - Design conformance
 - Plan completion
-- Test evidence
+- Test evidence — read `test-report.md` as the canonical aggregated summary. Open individual `tasks/T-NNN.done.md` or `tasks/T-NNN.test-log.txt` files **only** when a specific finding requires drilling into that task's evidence; do not open them upfront. `smoke-report.md` is read when present.
 - Code quality
 - **Principle compliance** — walk P1–P7 from `principles.md` against the diff, applying each principle's "Review check" rule. Severity mapping per `principles.md` §"Review checklist":
   - **Blocker:** P1 with a clear scope violation; P3 duplication at 3+ instances; P4 `legacy*` naming or commented-out code that landed.

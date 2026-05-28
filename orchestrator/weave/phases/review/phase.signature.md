@@ -14,10 +14,10 @@ I/O signature between `/weave` and the Review Audit Agent.
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
 | All phase artifacts | `.loom/<project>/{spec,design,plan,board,task,tests}.md` | yes | Read-only |
-| `tasks/T-*.done.md` | `.loom/<project>/tasks/T-NNN.done.md` | yes | Per-task done reports |
-| `tasks/T-*.test-log.txt` | `.loom/<project>/tasks/T-NNN.test-log.txt` | yes | Per-task test logs |
-| `test-report.md` | `.loom/<project>/test-report.md` | yes | Aggregated verification |
+| `test-report.md` | `.loom/<project>/test-report.md` | yes | Aggregated verification — canonical Build-evidence summary; the primary source the agent reads for test-evidence findings |
 | `smoke-report.md` | `.loom/<project>/smoke-report.md` | conditional | When Build ran smoke-test |
+| `tasks/T-*.done.md` | `.loom/<project>/tasks/T-NNN.done.md` | on-demand | Per-task done reports — open only when a finding references a specific task |
+| `tasks/T-*.test-log.txt` | `.loom/<project>/tasks/T-NNN.test-log.txt` | on-demand | Per-task test logs — open only when a finding references a specific task |
 | Repository diff | working tree | yes | Code under review |
 | `principles.md` | `methods/principles.md` (inlined into dispatch head) | yes | Engineering principles |
 | `type-guidance.md` | `.loom/<project>/type-guidance.md` | when typed | Domain guidance (materialized at project creation from the active `types/<type>.md`) |
