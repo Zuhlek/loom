@@ -23,7 +23,7 @@ Do not produce phase artifacts yourself. Phase agents own their artifacts.
    - `phases/plan/phase.md` + `phases/plan/phase.signature.md`
    - `phases/build/phase.md` + `phases/build/phase.signature.md`
    - `phases/review/phase.md` + `phases/review/phase.signature.md`
-4. Read `phases/plan/quality-check.md` + `phases/plan/quality-check.signature.md` only when the user opts into the pre-Build quality check at the Plan→Build gate. This is the **only** quality-check agent in the lifecycle — it audits the full pre-Build artifact set (Spec + Design + Plan together) because Build is the irreversible-action boundary. Spec, Design, and Build gates do not offer a quality-check option; Review has none because Review is itself the project-level quality check.
+4. Read `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` (available for `spec`, `design`, `plan`, `build`) only when the user picks `Run quality check` at the current phase's gate. Spec, Design, and Build QCs have narrow in-phase scope (audit only that phase's own artifacts); the Plan QC has comprehensive cross-phase scope (audits Spec + Design + Plan together — see `phases/plan/quality-check.md`). Review has no QC agent because Review is itself the project-level quality check.
 
 The RETURN schema is the fenced `yaml` block under `### Return block` inside `phase.signature.md` / `quality-check.signature.md`. Phase RETURN-block schema is enforced solely by `hooks/validate-subagent-output.py`; failures surface as visible hook blocks rather than silent re-dispatch.
 
@@ -112,13 +112,13 @@ The gate runs at orchestrator entry, after project resolution and before the Pha
 3. Loop:
    a. Select the current phase.
    b. Dispatch the matching phase agent in a fresh Task session. The user-turn prompt is the two-band concatenation (stable head + dynamic tail) defined in `### Dispatch concatenation` below; the cached-prefix boundary contract in `## Conventions` is binding on every dispatch. Every phase, Build included, is one dispatch per phase entry; the Build agent runs its per-task work loop inline within that single session (see `phases/build/phase.md`).
-   c. Surface the rerun-or-continue decision (see below) via AskUserQuestion. RETURN-block schema compliance is enforced by `hooks/validate-subagent-output.py` as a `SubagentStop` hook — malformed returns surface as visible hook blocks; the orchestrator does not run a parallel extractor.
+   c. Surface the Refine-or-Continue decision (see below) via AskUserQuestion. RETURN-block schema compliance is enforced by `hooks/validate-subagent-output.py` as a `SubagentStop` hook — malformed returns surface as visible hook blocks; the orchestrator does not run a parallel extractor.
    d. If the just-completed phase is Build: apply board transitions from the RETURN block's `task-outcomes` + `smoke` fields per `### Board transition mapping` below, then surface the rerun-or-continue gate. The transition application only runs when the just-completed phase is Build.
    e. On continue: update pipeline.md, advance phase, loop to (a). No
       live evaluation-row emit happens during the run; cost/usage figures
       are produced post-hoc by the telemetry harvester reading the session
       transcripts on disk after /weave finishes (see "Telemetry hooks" below).
-   f. On rerun: re-dispatch the same phase agent with prior artifacts (+ optional Quality Check findings), loop to (b).
+   f. On Refine: re-dispatch the same phase agent in a fresh Task session per the Refine-or-Continue Decision section.
 4. On Review continue: set Lifecycle state = complete, report and exit.
 ```
 
@@ -214,82 +214,38 @@ Only relevant if running with the evaluation harness. Loom's telemetry / eval su
 
 A packager producing a slim loom profile can `rm -rf orchestrator/lib/telemetry/` and every `/weave` operation that does not run analysis continues to function.
 
-## Rerun-or-Continue Decision (Human-In-The-Loop)
+## Refine-or-Continue Decision (Human-In-The-Loop)
 
-Reruns are user-driven, never automatic. The lifecycle has **one** opt-in Quality Check, at the Plan→Build gate; it audits the full Spec + Design + Plan artifact set so the user can decide whether to launch the irreversible Build phase.
+Reruns are user-driven, never automatic. The gate is a single `AskUserQuestion` with **up to 4 options** per phase. The `Refine` option replaces the prior rerun-phase option — it preserves user-confirmed content and applies any pending Quality Check findings, rather than re-deriving from scratch.
 
-The gate summary leads with the phase's purpose — the first sentence of `phases/<phase>/phase.md` (e.g. "Clarify the seed into specified intent." for Spec, "Convert specified intent into solution structure." for Design). Read that line at gate time and prepend it so the user knows what the phase was responsible for.
+The gate summary leads with the phase's purpose — the first sentence of `phases/<phase>/phase.md` (e.g. "Clarify the seed into specified intent." for Spec). Read that line at gate time and prepend it so the user knows what the phase was responsible for.
 
-**Spec, Design, Build** gates surface a two- or three-option `AskUserQuestion` (no QC option):
+### Gate options by phase
 
-```
-Phase <phase> returned (<phase purpose>). <one-line summary of produced artifacts>.
-
-  Continue → <next-phase-verb>   accept the artifacts; advance to the next phase
-  Rerun phase                    re-dispatch <phase> with prior artifacts as additional context
-  Go back to <prior-phase>       re-open <prior-phase>; move current + downstream artifacts to `superseded/<timestamp>/` (shown for Design and Build; Spec is first — nothing to go back to)
-```
-
-**Plan** gate surfaces the four-option `AskUserQuestion` (QC + Go-back-to-Design + Rerun + Continue). This is the only gate where Quality Check is offered:
-
-```
-Phase plan returned (convert solution structure into an executable work graph). <one-line summary>.
-
-  Continue → start autonomous Build (modifies repository)   accept and launch Build
-  Run quality check                                         dispatch the Pre-Build Quality Check agent
-                                                            (audits Spec + Design + Plan together)
-  Rerun phase                                               re-dispatch Plan with prior artifacts
-  Go back to Design                                         re-open Design; move Plan artifacts to `superseded/<timestamp>/`
-```
-
-Per-phase `Continue` labels:
-
-| Phase gate | `Continue` label |
+| Phase gate | Options surfaced (in order) |
 | --- | --- |
-| Spec | `Continue → enter Design` |
-| Design | `Continue → enter Plan` |
-| Plan | `Continue → start autonomous Build (modifies repository)` |
-| Build | `Continue → enter Review` |
+| Spec | Continue → enter Design / Refine / Run quality check |
+| Design | Continue → enter Plan / Refine / Run quality check / Go back to Spec |
+| Plan | Continue → start autonomous Build (modifies repository) / Refine / Run quality check (cross-phase Pre-Build audit) / Go back to Design |
+| Build | Continue → enter Review / Refine / Run quality check / Go back to Plan |
+| Review | Continue → mark lifecycle complete / Refine / Go back to Build |
 
-The Plan gate's label spells out `modifies repository` so the user cannot continue into Build without seeing the consequence. Free-text user input is never auto-interpreted as `Continue` — the user must pick the option.
+`Continue` labels are phase-aware (the table above). Free-text user input is never auto-interpreted as `Continue` — the user must pick the option. The Plan gate's label spells out `modifies repository` so the user cannot continue into Build without seeing the consequence.
 
-For Review, surface (Review is itself the project-level quality check; no opt-in QC):
+### When the user picks `Refine`
 
-```
-Phase review returned (audit the built result against intent, design, plan, and evidence). <one-line summary>.
+Re-dispatch the same phase agent in a fresh Task session. The agent's `## Refine scope` section in its `phase.md` defines what it preserves and what it re-derives. Implicit scope rules (no user input required beyond picking `Refine`):
 
-  Continue → mark lifecycle complete   accept and finalize
-  Rerun phase                          re-dispatch Review with prior artifacts
-  Go back to Build                     re-open Build; move review artifacts to `superseded/<timestamp>/`
-```
+- **If `quality-review.md` exists in the workspace** (because the user just ran QC, or QC findings persist from a prior gate): treat it as a Targeted refine — re-derive only the artifacts the findings flag; pin everything else.
+- **Otherwise:** Light refine — preserve user-confirmed content (`Status: answered` slots in `decisions.md`, accepted `Architecture decisions` blocks in `design.md`, `In Progress` / `Review` / `Done` cards in `board.md`); re-derive the agent-drafted parts.
 
-### When the user picks `Run quality check` (Plan gate only)
+There is no "Full rerun" option. The user achieves a full re-derivation by picking `Go back to <prior phase>` and then `Continue` back through. Refine is the smallest-diff option; full re-derivation is the gesture of "the prior phase needs to be reconsidered, not just this one".
 
-1. Dispatch the Pre-Build Quality Check agent (`phases/plan/quality-check.md` + `phases/plan/quality-check.signature.md`) against the full pre-Build artifact set (Spec + Design + Plan), using the same body+signature concatenation rule.
-2. The agent writes `quality-review.md` covering findings across all three phases and updates `pipeline.md` "Quality findings".
-3. Surface the findings preview in chat and re-ask:
+### When the user picks `Run quality check`
 
-   ```
-   Pre-Build Quality Check findings:
-   <preview of holes, blind spots, contradictions, missing assumptions across Spec / Design / Plan>
-
-     Continue → start autonomous Build  accept the findings as known; advance
-     Rerun Plan                         re-dispatch Plan with prior artifacts + the findings as additional context
-     Go back to Design                  re-open Design with the findings as additional context
-     Go back to Spec                    re-open Spec with the findings as additional context
-   ```
-
-   The Go-back options exist because findings frequently point at upstream phases (e.g. a Spec story with no realisation in Design); the user picks the phase the finding actually owns.
-
-### When the user picks `Rerun phase`
-
-Re-dispatch the same phase agent in a fresh Task session. The new dispatch reads:
-
-- The original `seed.md` and prior phase inputs.
-- The artifacts the prior run produced (read-only — for "what I already wrote, what to refine").
-- The latest `quality-review.md` if Quality Check was run (read as additional context — "what to address").
-
-The agent overwrites its owned artifacts in place.
+1. Dispatch the matching `phases/<phase>/quality-check.md` + `quality-check.signature.md` against the just-completed phase's artifacts. Spec, Design, and Build QCs have narrow in-phase scope; Plan QC has cross-phase scope (audits Spec + Design + Plan together).
+2. The QC agent writes `quality-review.md` and updates `pipeline.md` "Quality findings".
+3. Surface the findings preview in chat and re-ask the gate. The Refine option in the re-asked gate now auto-applies the findings (Targeted scope, per the rule above).
 
 ### When the user picks `Go back to <prior-phase>`
 

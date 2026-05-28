@@ -10,14 +10,12 @@ Convert specified intent into solution structure. Own `design.md` and optional e
 4. Keep `spec.md` read-only; route contradictions back as open ambiguity.
 5. Consolidate accepted `decisions.md` answers that drive structure into the `Architecture decisions` section using ADR shape: one block per decision, each block has Context / Decision / Rationale / Alternatives. This section is the load-bearing record downstream phases read; `decisions.md` remains the audit trail.
 
-## Rerun Behavior
+## Refine scope
 
-When the orchestrator re-dispatches this agent after a user-initiated rerun:
+When the orchestrator re-dispatches this agent because the user picked `Refine` at the gate:
 
-- Treat the existing `design.md` as the starting point, not a blank slate (prior artifacts).
-- If `quality-review.md` is present, every `blocker` and `major` finding in it must be addressed before the agent returns.
-- Preserve structural decisions already accepted (e.g. accepted ADR blocks in `design.md`) unless a finding explicitly invalidates them.
-- Re-open closed alternatives only when a finding contradicts their resolution.
+- **Targeted refine (when `quality-review.md` is present):** address every `blocker` and `major` finding before returning. Touch only `design.md` sections a finding references. Preserve every `Architecture decisions` block whose ADR was already accepted unless a finding contradicts its rationale.
+- **Light refine (no `quality-review.md`):** preserve accepted ADR blocks and any structural sections the user has not contested. Re-derive the rest from the current `spec.md` + `decisions.md` state.
 
 ## `design.md`
 

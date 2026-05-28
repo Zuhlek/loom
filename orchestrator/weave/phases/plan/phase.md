@@ -16,15 +16,14 @@ Convert solution structure into an executable work graph. Own Plan artifacts.
 10. Write `board.md` in the kanban shape below.
 11. Declare `Verification environment` in `plan.md` (see section below). Build reads this to pre-flight its capability before dispatching tasks.
 
-## Rerun Behavior
+## Refine scope
 
-When the orchestrator re-dispatches this agent after a user-initiated rerun:
+When the orchestrator re-dispatches this agent because the user picked `Refine` at the gate:
 
-- Treat the existing `plan.md`, `board.md`, and `tasks/T-*.md` as the starting point, not a blank slate (prior artifacts).
-- Preserve existing `T-NNN` task IDs. Do not renumber.
-- Preserve the `In Progress`, `Review`, and `Done` columns of `board.md` — invalidated tasks are moved back to `Backlog` with a `[stale]` tag, not silently dropped.
-- If `quality-review.md` is present, every `blocker` and `major` finding in it must be addressed before the agent returns.
-- Preserve previously-resolved planning decisions unless a finding explicitly invalidates them.
+- **Targeted refine (when `quality-review.md` is present):** address every `blocker` and `major` finding before returning. Touch only the `plan.md` / `tasks/T-*.md` artifacts a finding references. Preserve existing `T-NNN` task IDs and any `In Progress` / `Review` / `Done` cards in `board.md`.
+- **Light refine (no `quality-review.md`):** preserve `T-NNN` IDs and non-Backlog cards. Re-derive the Backlog slicing, the test sketches, and the `Verification environment` declaration if any of those were agent-drafted but not user-confirmed.
+
+Invalidated tasks move back to `Backlog` with a `[stale]` tag rather than being silently dropped; the orchestrator's Refine handling preserves the audit trail through `board.md` transitions.
 
 ## `plan.md` Verification environment
 

@@ -861,19 +861,19 @@ Build is the only phase whose tool grant includes implementation tools, and even
 
 ### What it does
 
-At the Plan→Build gate, the user can opt into a Pre-Build Quality Check pass *before* launching the irreversible Build phase. Quality Check is a single, narrower subagent (`phases/plan/quality-check.md` + signature) that audits the full pre-Build artifact set — `spec.md`, `decisions.md`, `design.md`, `plan.md`, `board.md`, `task.md`, `tests.md`, `tasks/T-*.md` — and emits a `quality-review.md` plus a `Quality findings` update on `pipeline.md` covering holes, blind spots, contradictions, missing assumptions across all three pre-Build phases. The orchestrator surfaces a findings preview and re-asks the gate: `Continue → start autonomous Build` (accept findings as known and advance), `Rerun Plan`, `Go back to Design`, or `Go back to Spec` (each option re-opens the phase the finding's `Owner phase` field points at). Spec, Design, and Build gates have no Quality Check option — issues that survive into Plan are caught at this single gate, and Build issues are caught by Review. Review has no Quality Check because Review **is** the project-level quality check.
+At every gate except Review, the user can opt into a Quality Check pass before deciding whether to Refine the phase. Quality Check is a separate subagent (`phases/<phase>/quality-check.md` + signature) dispatched in a fresh session that reads the just-completed phase's artifacts and emits a `quality-review.md` plus a `Quality findings` update on `pipeline.md`. Spec, Design, and Build QCs have narrow in-phase scope; the Plan QC has comprehensive cross-phase scope (audits Spec + Design + Plan together) because Build is the irreversible-action boundary. The orchestrator surfaces a findings preview and re-asks the gate: `Continue` (accept findings as known and advance) or `Refine` (re-dispatch the phase with the findings as the implicit scope filter). Review has no Quality Check because Review **is** the project-level quality check.
 
 ```mermaid
 flowchart LR
-  PhaseRet[Phase agent returns] --> Gate{{Rerun-or-continue gate}}
+  PhaseRet[Phase agent returns] --> Gate{{Refine-or-continue gate}}
   Gate -->|Continue| Advance[advance to next phase]
   Gate -->|Run quality check| QC[Quality Check subagent<br/>scoped to this phase]
-  Gate -->|Rerun phase| Rerun[re-dispatch phase agent<br/>with prior artifacts]
+  Gate -->|Refine| Rerun[re-dispatch phase agent<br/>with prior artifacts]
   Gate -->|Go back to prior| Goback[supersede downstream artifacts<br/>re-open prior phase]
   QC --> QCReport[quality-review.md<br/>holes / blind spots / contradictions]
   QCReport --> Gate2{{Re-ask the gate<br/>with findings preview}}
   Gate2 -->|Continue| Advance
-  Gate2 -->|Rerun phase + address findings| RerunF[re-dispatch with<br/>quality-review.md as input]
+  Gate2 -->|Refine + address findings| RerunF[re-dispatch with<br/>quality-review.md as input]
   classDef phase fill:#e6f0ff,stroke:#3366cc
   classDef qc fill:#fff7d6,stroke:#aa9900
   classDef rerun fill:#ffe9c2,stroke:#cc7a00
@@ -887,7 +887,7 @@ flowchart LR
 - **Decision support without rerun cost.** A full phase rerun spends an entire phase's tokens; Quality Check spends a small fraction of that to tell the user whether the rerun is worth running. The rerun decision becomes informed rather than blind.
 - **Structured input to reruns.** When the user *does* rerun, the agent re-enters with `quality-review.md` as additional context — every `blocker` and `major` finding must be addressed before the agent returns. The phase rerun is not a blank-slate re-roll; it's a targeted patch.
 - **User-driven, never automatic.** Quality Check is opt-in at every gate. Loom does not auto-loop on phase output — the only way more tokens get burned is the user picking the option.
-- **Layered scope in a single gate.** The Pre-Build Quality Check has a single layered `## Checks` table covering Spec layer (intent gaps, open ambiguity, decision drift), Design layer (realisation gaps, ADR completeness), and Plan layer (DAG holes, story coverage, harness fit). Each finding carries an `Owner phase` field so the gate can route the user to whichever phase the finding actually owns — instead of forcing one critic per phase or a one-size-fits-all critic.
+- **Layered scope where it matters.** The Pre-Build (Plan) Quality Check has a layered `## Checks` table covering Spec layer (intent gaps, open ambiguity, decision drift), Design layer (realisation gaps, ADR completeness), and Plan layer (DAG holes, story coverage, harness fit), with each finding carrying an `Owner phase` field. The narrower in-phase QCs (Spec, Design, Build) audit only their own phase's artifacts — they exist so the user can probe each phase as it completes, without paying for a cross-phase audit until the Plan→Build boundary.
 - **Cheap by construction.** The Quality Check agent ships with its own body + signature pair, so it inherits the §8 cached-prefix property — repeated invocations of the same Quality Check are cache-warm.
 
 ### Anchors

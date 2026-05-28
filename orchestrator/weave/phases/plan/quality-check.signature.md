@@ -1,12 +1,12 @@
 # Pre-Build Quality Check Agent — Signature
 
-I/O signature between `/weave` and the Pre-Build Quality Check Agent (the single quality-check gate in the lifecycle).
+I/O signature between `/weave` and the Pre-Build Quality Check Agent (the lifecycle's cross-phase comprehensive quality gate; complements the narrower in-phase QCs at Spec, Design, and Build).
 
 ## Trigger
 
 **Caller:** `/weave` orchestrator.
 
-**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Plan rerun-or-continue surface. Not part of the mandatory phase cycle. There is no Spec, Design, or Build quality-check agent — this single agent audits the full pre-Build artifact set at the Plan→Build gate. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`.
+**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Plan rerun-or-continue surface. Not part of the mandatory phase cycle. Complements the narrower in-phase QCs at `phases/spec/quality-check.md`, `phases/design/quality-check.md`, and `phases/build/quality-check.md` — this Plan QC is the only one that audits across phase boundaries. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`.
 
 ## Params
 
@@ -41,7 +41,7 @@ properties:
   summary:
     type: string
   recommendation:
-    enum: [continue, rerun]
+    enum: [continue, refine]
   findings:
     type: array
     items:
@@ -78,5 +78,5 @@ properties:
 | Return status | Meaning | Orchestrator action |
 | --- | --- | --- |
 | `passed` | No findings; the agent recommends `Continue` | Surface `Continue` recommendation alongside the findings preview |
-| `findings` | One or more findings of varying severity | Surface the findings preview; let the user pick `Continue` or `Rerun phase` |
+| `findings` | One or more findings of varying severity | Surface the findings preview; let the user pick `Continue` or `Refine` |
 | Param missing on disk | Producer's declared write is absent or shape-failed | Orchestrator surfaces a param-validation failure without invoking the audit body |

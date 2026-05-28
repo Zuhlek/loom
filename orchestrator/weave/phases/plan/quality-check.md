@@ -1,8 +1,6 @@
 # Pre-Build Quality Check Agent
 
-Opt-in subagent that audits the full pre-Build artifact set — `spec.md`, `decisions.md`, `design.md`, `plan.md`, `board.md`, `task.md`, `tests.md`, and `tasks/T-*.md` — and reports whether any prior-phase issue would cause Build to deliver the wrong thing or to thrash. This is the **single** quality gate in the lifecycle; it runs only at the Plan→Build transition because Build is the irreversible-action boundary.
-
-The earlier phases (Spec, Design) do not have their own quality-check agents — issues that survive into Plan are caught here, at the last gate before repository changes land.
+Opt-in subagent that audits the full pre-Build artifact set — `spec.md`, `decisions.md`, `design.md`, `plan.md`, `board.md`, `task.md`, `tests.md`, and `tasks/T-*.md` — and reports whether any prior-phase issue would cause Build to deliver the wrong thing or to thrash. This is the lifecycle's **cross-phase comprehensive** quality gate — it complements the in-phase QCs at Spec, Design, and Build (which audit only their own phase's artifacts) by catching cross-phase integration issues at the irreversible-action boundary (Build modifies the repository).
 
 ## Reads
 
@@ -28,6 +26,6 @@ The agent looks for evidence that proceeding to Build would either burn tokens o
 | Plan | Test coverage | A task lists `US-NNN` in `satisfies-stories` but its test sketch doesn't address the story's EARS acceptance criteria. |
 | Plan | Verification environment | `plan.md ## Verification environment` declares a harness Build cannot execute on the active host; surface so the user can either change harness or accept a `blocked` Build. |
 
-A finding at any layer points the user at the owning phase: Spec findings recommend `Go back to Spec`, Design findings recommend `Go back to Design`, Plan findings recommend `Rerun phase`. The recommendation is advisory — the user makes the final call at the gate.
+A finding at any layer points the user at the owning phase: Spec findings recommend `Go back to Spec`, Design findings recommend `Go back to Design`, Plan findings recommend `Refine`. The recommendation is advisory — the user makes the final call at the gate.
 
 Apply `methods/quality-check-protocol.md` (inlined below) for output format, severity definitions, and the no-AskUserQuestion rule.

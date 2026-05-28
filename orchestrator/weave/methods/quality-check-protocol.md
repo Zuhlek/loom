@@ -1,49 +1,47 @@
 # Quality Check Protocol
 
-Shared shell for the lifecycle's single opt-in quality-check agent (Pre-Build QC at the Plan→Build gate). The `phases/plan/quality-check.md` file carries the agent body, the `## Checks` table covering Spec + Design + Plan layers, and a cross-reference back to this protocol.
+Shared shell for the four opt-in quality-check agents (Spec, Design, Plan, Build). Each `phases/<phase>/quality-check.md` carries only the phase name, a one-line purpose, the phase-specific `## Checks` table, and a cross-reference back to this protocol.
 
-There is no Spec, Design, or Build quality-check agent — issues that survive into Plan are caught here, at the last gate before repository changes land.
+Spec, Design, and Build QCs have **narrow in-phase scope** — they audit only their own phase's artifacts. The Plan QC has **comprehensive cross-phase scope** — it audits the full pre-Build artifact set (Spec + Design + Plan together) because Build is the irreversible-action boundary. Review has no QC agent because Review is itself the project-level quality check.
 
 ## Opener
 
-Opt-in subagent that analyzes the full pre-Build artifact set (Spec + Design + Plan) and reports whether a rerun (or a go-back to an earlier phase) would meaningfully change the result.
+Opt-in subagent that analyzes the phase's artifacts and reports whether a Refine would meaningfully change the result.
 
-The orchestrator dispatches this agent **only** when the user picks `Run quality check` at the Plan rerun-or-continue surface. It is not part of the mandatory phase cycle; its purpose is to inform the user's decision before launching the irreversible Build phase.
+The orchestrator dispatches the matching QC agent **only** when the user picks `Run quality check` at the gate. It is not part of the mandatory phase cycle; its purpose is to inform the user's Refine decision.
 
-The agent looks for evidence that proceeding to Build would either burn tokens on the wrong work or surface contradictions Build cannot resolve — see `phases/plan/quality-check.md` › `## Checks`.
+The agent looks for evidence that proceeding to the next phase would surface contradictions the next phase cannot resolve — see each phase's `## Checks` table.
 
-If no finding lands in any category, status is `passed` and the agent recommends `Continue → start autonomous Build`.
+If no finding lands in any category, status is `passed` and the agent recommends `Continue`.
 
 ## Output: `quality-review.md`
 
 ```markdown
-# Pre-Build Quality Review
+# Quality Review — <phase>
 **Run at:** <iso-timestamp>
-**Audited artifacts:** spec.md, decisions.md, design.md, plan.md, board.md, task.md, tests.md, tasks/T-*.md
+**Phase artifacts:** <artifact list>
 
 ## Summary
-<one-paragraph verdict + rerun-worthiness signal>
+<one-paragraph verdict + refine-worthiness signal>
 
 ## Findings
 
 ### <severity>: <one-line title>
-- **Owner phase:** <spec | design | plan>
+- **Owner phase:** <phase>  (for cross-phase QCs only; in-phase QCs omit)
 - **Evidence:** <file:section or quote>
 - **Why it matters:** <one-line impact>
-- **Suggested action:** <Continue | Rerun Plan | Go back to Design | Go back to Spec> — <what the action should address>
+- **Suggested refine focus:** <what the refine should address>
 
 (repeat per finding)
 
 ## Recommendation
-<Continue | Rerun Plan | Go back to Design | Go back to Spec> — <one-line reason>
+<Continue | Refine> — <one-line reason>
 ```
-
-The `Owner phase` field lets the user route the action to whichever phase the finding actually owns; the orchestrator's gate surfaces all four follow-up options after the QC returns.
 
 ## Severity vocabulary
 
-Severities: `blocker`, `major`, `minor`, `note`. A `blocker` finding implies Build cannot consume the pre-Build artifacts without producing the wrong thing; `major` implies a likely Build regression or wasted task work; `minor` / `note` are polish.
+Severities: `blocker`, `major`, `minor`, `note`. A `blocker` finding implies the next phase cannot consume the output; `major` implies a likely regression; `minor` / `note` are polish.
 
 ## User-Facing Decision
 
-The agent does NOT call `AskUserQuestion`. It writes `quality-review.md` and returns. The orchestrator surfaces the four-option rerun-or-continue decision (Continue / Rerun Plan / Go back to Design / Go back to Spec) using the findings preview (see `orchestrator/weave/SKILL.md`).
+The agent does NOT call `AskUserQuestion`. It writes `quality-review.md` and returns. The orchestrator surfaces the gate with the findings preview (see `orchestrator/weave/SKILL.md § Refine-or-Continue Decision`). The Refine option in the re-asked gate automatically scopes itself to the findings (Targeted refine, per `SKILL.md`).

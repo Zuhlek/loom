@@ -37,3 +37,7 @@ These arrive inlined (see `## Inlined methods` appended below) — apply them be
 ## On completion
 
 Write two artifacts before returning: `review.md` (human-facing finding-by-finding narrative) and `review-verdict.json` (machine-readable verdict — single-object schema in `phase.signature.md ## Writes`). `verdict` is `FAIL` iff `blockers > 0`. Counts in `review-verdict.json` must equal `blockers`/`major`/`minor` in the RETURN block and the count of `## Note` findings in `review.md`. Then return `status: complete`. No live usage capture happens during the run; cost/usage data is produced post-hoc by `orchestrator/lib/telemetry/transcript-harvest.py` reading the session transcripts on disk after /weave finishes.
+
+## Refine scope
+
+When the orchestrator re-dispatches this agent because the user picked `Refine` at the gate, the agent re-audits the same artifact set with any prior `review.md` + `review-verdict.json` as additional input context (treating them as "what I already found; what might I have missed"). Review is the project-level audit; there is no in-phase QC for Review and no Targeted/Light distinction — every refine re-walks the Review Targets.

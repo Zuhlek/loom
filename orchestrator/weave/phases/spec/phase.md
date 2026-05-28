@@ -18,14 +18,14 @@ Clarify the seed into specified intent. Own `spec.md` and `decisions.md`.
 6. Apply `stories` — when grilling has resolved enough scope, sweep the seed + answered decisions + foundation context and emit `US-NNN` user stories with EARS-format acceptance criteria into `spec.md` `## User stories`. Stories are agent-produced distillations — they are NOT user-answered questions. Cross-reference supporting Q-IDs when non-obvious. Universal acceptance conditions go under `## Constraints`, not Stories.
 7. Return when Design can proceed without redefining intent (the `grilling` stop rules) AND `spec.md` `## User stories` contains at least one valid story (or the project genuinely has none — rare; document in `## Open ambiguity`).
 
-## Rerun Behavior
+## Refine scope
 
-When the orchestrator re-dispatches this agent after a user-initiated rerun:
+When the orchestrator re-dispatches this agent because the user picked `Refine` at the gate, the dispatch shape is the same; what changes is what the agent treats as already-settled:
 
-- Treat the existing `spec.md` and `decisions.md` as the starting point, not a blank slate.
-- If `quality-review.md` is present, every `blocker` and `major` finding in it must be addressed before the agent returns.
-- Preserve `Status: answered` slots untouched unless a finding explicitly invalidates them.
-- Re-open superseded questions only when a finding contradicts their resolution.
+- **Targeted refine (when `quality-review.md` is present in the workspace):** address every `blocker` and `major` finding before returning. Touch only the artifacts a finding references. Preserve `Status: answered` slots in `decisions.md` and `Status: answered` / `Status: active` user stories in `spec.md` unless a finding explicitly invalidates them.
+- **Light refine (no `quality-review.md`):** preserve `Status: answered` decision slots and `Status: answered` stories untouched. Re-derive the next batch of questions and any agent-drafted (not user-confirmed) sections.
+
+No "Full rerun" option exists; if the prior output is fundamentally wrong, the user picks `Go back to ⟨prior-phase⟩` at a later gate.
 
 ## `spec.md`
 
