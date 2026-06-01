@@ -1,5 +1,18 @@
 # User Stories + EARS Acceptance Criteria
 
+## Contents
+
+- 1. Why stories + EARS
+- 2. Story format
+- 3. EARS acceptance-criteria patterns
+- 4. Story IDs
+- 5. Story status
+- 6. Universal acceptance — not a story
+- 7. Story distillation in the work loop
+- 8. Relating stories to decisions
+- 9. Spec-layer assertions audited by the Pre-Build Quality Check
+- 10. Parser invariant
+
 Spec-phase distillation discipline. The Spec agent writes user stories with EARS-format acceptance criteria into `spec.md` under `## User stories`. Stories are produced by the agent — they are NOT user-answered questions. The agent distills them from the seed plus grilling answers.
 
 This file specifies the story shape, the EARS notation patterns, the markers, IDs, and how stories relate to decisions.

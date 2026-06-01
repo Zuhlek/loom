@@ -28,7 +28,7 @@ I/O signature between `/weave` and the Work Graph Agent.
 
 ## Returns
 
-### Return block
+### RETURN block
 
 ```yaml
 type: object

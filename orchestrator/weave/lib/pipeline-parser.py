@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""Read and update the canonical `pipeline.md` state file for a Loom workspace.
+
+CLI subcommands: read, field, update, append-history, init, validate. All
+reads/writes of `pipeline.md` fields by `/weave` go through this script."""
 from __future__ import annotations
 
 import argparse
@@ -57,6 +61,15 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def read_pipeline(path: Path) -> str:
+    """Read `pipeline.md`, raising a clean SystemExit on a missing/unreadable
+    file instead of a raw traceback (mirrors the init_workspace guard idiom)."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise SystemExit(f"cannot read {path}: {e}")
+
+
 def atomic_write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
@@ -109,7 +122,7 @@ def read_history(body: str) -> list[dict[str, str]]:
 
 
 def parse(path: Path) -> dict[str, object]:
-    text = path.read_text(encoding="utf-8")
+    text = read_pipeline(path)
     sections = split_sections(text)
     result: dict[str, object] = {}
     for name in SECTION_ORDER:
@@ -138,7 +151,7 @@ def render_field(name: str, value: str | list[str]) -> str:
 
 
 def replace_field(path: Path, name: str, value: str | list[str]) -> None:
-    text = path.read_text(encoding="utf-8")
+    text = read_pipeline(path)
     sections = split_sections(text)
     replacement = f"## {name}\n{render_field(name, value)}"
     section = sections.get(name)
@@ -151,7 +164,7 @@ def replace_field(path: Path, name: str, value: str | list[str]) -> None:
 
 def append_history(path: Path, phase: str, status: str, note: str, timestamp: str | None = None) -> None:
     timestamp = timestamp or now_iso()
-    text = path.read_text(encoding="utf-8")
+    text = read_pipeline(path)
     sections = split_sections(text)
     row = f"| {timestamp} | {phase} | {status} | {note.replace('|', '/')} |\n"
     section = sections.get("History")
@@ -288,34 +301,34 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_read = sub.add_parser("read")
+    p_read = sub.add_parser("read", help="print the whole pipeline.md as JSON")
     p_read.add_argument("path")
 
-    p_field = sub.add_parser("field")
+    p_field = sub.add_parser("field", help="print a single pipeline.md field value")
     p_field.add_argument("path")
     p_field.add_argument("name")
 
-    p_update = sub.add_parser("update")
+    p_update = sub.add_parser("update", help="set a single pipeline.md field value")
     p_update.add_argument("path")
     p_update.add_argument("name")
     p_update.add_argument("value", nargs="?")
     p_update.add_argument("--stdin", action="store_true")
 
-    p_history = sub.add_parser("append-history")
+    p_history = sub.add_parser("append-history", help="append a row to the History table")
     p_history.add_argument("path")
     p_history.add_argument("phase")
     p_history.add_argument("status")
     p_history.add_argument("note")
     p_history.add_argument("--timestamp")
 
-    p_init = sub.add_parser("init")
+    p_init = sub.add_parser("init", help="bootstrap a new workspace (pipeline.md + seed.md)")
     p_init.add_argument("parent_dir")
     p_init.add_argument("project")
     p_init.add_argument("--seed", default="")
     p_init.add_argument("--ticket", default="")
     p_init.add_argument("--type-hint", default="")
 
-    p_validate = sub.add_parser("validate")
+    p_validate = sub.add_parser("validate", help="check pipeline.md for schema errors")
     p_validate.add_argument("path")
 
     args = parser.parse_args()

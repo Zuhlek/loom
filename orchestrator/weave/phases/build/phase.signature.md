@@ -29,7 +29,7 @@ I/O signature between `/weave` and the Build Phase Agent.
 
 ## Returns
 
-### Return block
+### RETURN block
 
 ```yaml
 type: object

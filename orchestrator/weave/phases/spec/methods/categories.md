@@ -1,5 +1,16 @@
 # Question Categories
 
+## Contents
+
+- Briefing block (required on every question)
+- Category — Y/N
+- Category — Choice
+- Category — Architecture
+- Category — Background
+- Category — Open
+- Triage — picking a category
+- Validation summary
+
 Five categories. Pick one per question by inspecting what the question requires of the user. Each category has a strict template; the Spec agent self-validates each question block against that template before presenting it. The `validate-subagent-output` hook validates the agent's final RETURN block (phase, status, artifacts, summary, open-ambiguity shape) but does NOT validate per-category briefing fields — briefing-quality enforcement is the Spec agent's own responsibility.
 
 Bias toward cheaper categories. **Y/N** is preferred when it fits; demote richer categories when possible.

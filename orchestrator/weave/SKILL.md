@@ -1,15 +1,25 @@
 ---
 name: weave
-description: Loom lifecycle orchestrator. Runs Spec, Design, Plan, Build, Review with human-in-the-loop transitions after each phase.
+description: Loom lifecycle orchestrator. Runs Spec, Design, Plan, Build, Review with human-in-the-loop transitions after each phase. Use when starting a new Loom project from a seed, or resuming an existing .loom/<project> workspace from its current phase.
 user-invocable: true
 disable-model-invocation: true
 argument-hint: [project-name | ticket-id | command | free text]
-allowed-tools: AskUserQuestion, Bash, Edit, Read, Task, Write
+allowed-tools: AskUserQuestion, Bash, Edit, Grep, Read, Task, Write
 ---
 
 # Weave
 
-You are the `/weave` orchestrator. Keep the session thin: resolve or create a `.loom/<project>/` workspace, read `pipeline.md`, and drive the lifecycle phase-by-phase, dispatching each phase agent in turn, ensuring its RETURN block complies with the phase's return schema, and surfacing the rerun-or-continue decision to the user between phases. Stay running until the lifecycle reaches `complete`, the user cancels at a gate, or a hard failure forces an exit.
+## Contents
+
+- Load Order
+- State Contract
+- Conventions
+- Spec depth gate
+- Phase Cycle
+- Refine-or-Continue Decision (Human-In-The-Loop)
+- Completion
+
+You are the `/weave` orchestrator. Keep the session thin: resolve or create a `.loom/<project>/` workspace, read `pipeline.md`, and drive the lifecycle phase-by-phase, dispatching each phase agent in turn, ensuring its RETURN block complies with the phase's return schema, and surfacing the Refine-or-Continue decision to the user between phases. Stay running until the lifecycle reaches `complete`, the user cancels at a gate, or a hard failure forces an exit.
 
 Do not produce phase artifacts yourself. Phase agents own their artifacts.
 
@@ -25,13 +35,13 @@ Do not produce phase artifacts yourself. Phase agents own their artifacts.
    - `phases/review/phase.md` + `phases/review/phase.signature.md`
 4. Read `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` (available for `spec`, `design`, `plan`, `build`) only when the user picks `Run quality check` at the current phase's gate. Spec, Design, and Build QCs have narrow in-phase scope (audit only that phase's own artifacts); the Plan QC has comprehensive cross-phase scope (audits Spec + Design + Plan together — see `phases/plan/quality-check.md`). Review has no QC agent because Review is itself the project-level quality check.
 
-The RETURN schema is the fenced `yaml` block under `### Return block` inside `phase.signature.md` / `quality-check.signature.md`. Phase RETURN-block schema is enforced solely by `hooks/validate-subagent-output.py`; failures surface as visible hook blocks rather than silent re-dispatch.
+The RETURN schema is the fenced `yaml` block under `### RETURN block` inside `phase.signature.md` / `quality-check.signature.md`. Phase RETURN-block schema is enforced solely by `hooks/validate-subagent-output.py`; failures surface as visible hook blocks rather than silent re-dispatch.
 
 The `--answers` flag is no longer accepted by `/weave`; the eval harness stages `.answers.yaml` directly under `.loom/<project>/` before invoking `/weave`. Unknown flags are silently ignored. The Spec grilling agent's existing read-if-present behaviour on `.loom/<project>/.answers.yaml` is preserved, so a harness-staged file is consumed as before.
 
 ## State Contract
 
-`pipeline.md` is canonical. It contains stable Markdown sections:
+`pipeline.md` is canonical. All reads and writes of `pipeline.md` fields go through the `weave/lib/pipeline-parser.py` subcommands — `field <path> "<Field>"` to read, `update <path> "<Field>" <value>` to write, `append-history <path> <phase> <status> <note>` to log a transition, and `read` / `validate <path>` for the whole file — never by hand-editing the markdown. It contains stable Markdown sections:
 
 - Project name
 - Ticket ID
@@ -55,27 +65,7 @@ The `--answers` flag is no longer accepted by `/weave`; the eval harness stages 
 
 ### Cached-prefix boundary
 
-Every Task dispatch is a stable head + dynamic tail (see `### Dispatch concatenation`). The closing `</system-reminder>` line of the dynamic tail is the **cached-prefix boundary**: everything before that line is byte-stable across dispatches of the same callable and is therefore cacheable; the tail itself is not.
-
-Rules the orchestrator enforces on every dispatch:
-
-- The body and signature files (`phase.md`, `phase.signature.md`, `quality-check.md`, `quality-check.signature.md`) carry literal placeholder tokens — `<project>`, `<phase>`, `<task>` — and the orchestrator does NOT substitute real values into the head when constructing the dispatch.
-- The head is the *only* stable region. Everything the agent needs to know about its job — the method procedures (inlined from the body's `## Reads` list, see `### Dispatch concatenation` step 1.4), the RETURN-block schema, what to write, what to skip — lives in the head. The orchestrator never paraphrases, summarises, restates, or extends that content into a wrapper around the body; it inlines the method files verbatim and otherwise adds nothing.
-- The dynamic tail carries the substituted identifiers in the fixed `<system-reminder>` shape and nothing else. Two dispatches of the same callable differ only in the contents of this block (project name, current task, date).
-- The agent resolves placeholder tokens it encounters in the head by reading the tail block. The agent's own work loop never expects the orchestrator to have pre-substituted the placeholders.
-
-A dispatch that interleaves dynamic identifiers into the head, or that paraphrases the body file's instructions into wrapper boilerplate, is malformed and re-issued. The orchestrator never inlines seed content, never recites the answer queue, and never embeds the user's absolute filesystem path. Method files are the one thing the orchestrator *does* inline (verbatim, per the body's `## Reads` list) — the subagent fetches no method or skill file from disk itself; everything it needs arrives in the prompt. The subagent's `cwd` (inherited from the orchestrator) is used only for the project workspace it operates on, never for locating skill-resident method files.
-
-> Note: this contract assumes the API-level prompt cache spans separate Task subagent dispatches sharing identical prefixes. The premise is asserted (working in practice per user observation) but not instrumented; a follow-up `/weave` rerun + transcript inspection for `cache_read_input_tokens > 0` is welcome but not blocking.
-
-### List-ordering policy
-
-Lists in prompt files come in two flavours:
-
-- **Procedure-ordered.** The order is part of the instruction (phase-cycle steps, "Reads first" file lists, work-loop steps). Preserve the order. Re-arranging changes the instruction.
-- **Incidental-ordered.** The order is not part of the instruction (parameter tables sorted by source path, file-scope lists, capability tables). Sort alphabetically by the leftmost stable token (file path / parameter name / capability label).
-
-The policy lives here so future authors keep both kinds of list deterministic across re-renders.
+Every Task dispatch is a stable head + dynamic tail (see `### Dispatch concatenation`). The closing `</system-reminder>` line of the dynamic tail is the **cached-prefix boundary**: everything before that line is byte-stable across dispatches of the same callable and is therefore cacheable; the tail itself is not. The operational rules that keep the head byte-stable — verbatim body/signature/methods, no wrapper, no placeholder substitution, dynamic identifiers confined to the tail — are stated once in `### Dispatch concatenation`; that section is binding on every dispatch.
 
 ## Spec depth gate
 
@@ -113,7 +103,7 @@ The gate runs at orchestrator entry, after project resolution and before the Pha
    a. Select the current phase.
    b. Dispatch the matching phase agent in a fresh Task session. The user-turn prompt is the two-band concatenation (stable head + dynamic tail) defined in `### Dispatch concatenation` below; the cached-prefix boundary contract in `## Conventions` is binding on every dispatch. Every phase, Build included, is one dispatch per phase entry; the Build agent runs its per-task work loop inline within that single session (see `phases/build/phase.md`).
    c. Surface the Refine-or-Continue decision (see below) via AskUserQuestion. RETURN-block schema compliance is enforced by `hooks/validate-subagent-output.py` as a `SubagentStop` hook — malformed returns surface as visible hook blocks; the orchestrator does not run a parallel extractor.
-   d. If the just-completed phase is Build: apply board transitions from the RETURN block's `task-outcomes` + `smoke` fields per `### Board transition mapping` below, then surface the rerun-or-continue gate. The transition application only runs when the just-completed phase is Build.
+   d. If the just-completed phase is Build: apply board transitions from the RETURN block's `task-outcomes` + `smoke` fields per `### Board transition mapping` below, then surface the Refine-or-Continue gate. The transition application only runs when the just-completed phase is Build.
    e. On continue: update pipeline.md, advance phase, loop to (a). No
       live evaluation-row emit happens during the run; cost/usage figures
       are produced post-hoc by the telemetry harvester reading the session
@@ -189,13 +179,13 @@ Operationalised:
    Nothing dynamic appears above the opening `<system-reminder>` line. The closing `</system-reminder>` is the cached-prefix boundary; the tail itself is not cached.
 3. Pass the result as the user turn to a fresh `Task` session.
 
-The order — body, `\n\n---\n\n`, signature, tail — is fixed. Body first establishes identity and primary work loop before the agent reads the wire contract. The `---` separator renders as a markdown thematic break (visible to a human reading the merged prompt) and is unambiguously parseable back out into its two halves.
+The order — body, `\n\n---\n\n`, signature, tail — is fixed. Body first establishes identity and primary work loop before the agent reads the wire contract.
 
 If either `<role>.md` or `<role>.signature.md` is missing for a callable about to be dispatched, the orchestrator fails dispatch with a clear `missing-file: phases/<phase>/<role>.md|<role>.signature.md` error before any Task is started. There is no partial dispatch and no fallback to a default.
 
 The merged prompt is the dispatched Task's user turn only. The orchestrator never inlines it into its own context — the Task-isolation property is preserved.
 
-The orchestrator runs the lifecycle to completion in one `/weave` invocation. It does not exit between phases — the rerun-or-continue gate is a regular `AskUserQuestion`, not a session boundary. The orchestrator exits only when:
+The orchestrator runs the lifecycle to completion in one `/weave` invocation. It does not exit between phases — the Refine-or-Continue gate is a regular `AskUserQuestion`, not a session boundary. The orchestrator exits only when:
 
 - `Lifecycle state` becomes `complete` (Review→done).
 - The user cancels at a gate `AskUserQuestion` (treat as "pause"; `pipeline.md` is preserved and a later `/weave` resumes from the current phase).
@@ -261,4 +251,4 @@ Going back is destructive to downstream artifacts but non-destructive to history
 
 Drive every project through Review in a single `/weave` invocation. Stops are explicit user interrupts (cancel at a gate). Deferred scope is recorded by Review, not by ending the lifecycle early.
 
-When Review returns `complete` and the user picks `Continue` at its rerun-or-continue gate, the orchestrator sets `pipeline.md.Lifecycle state` to `complete` (in addition to leaving `Current phase` at `review` and `Phase status` at `complete`) and exits. `Lifecycle state = complete` is the canonical terminal marker; subsequent `/weave` invocations on the project detect it at step 2 of the Phase Cycle and report the lifecycle as done rather than redispatching Review.
+When Review returns `complete` and the user picks `Continue` at its Refine-or-Continue gate, the orchestrator sets `pipeline.md.Lifecycle state` to `complete` (in addition to leaving `Current phase` at `review` and `Phase status` at `complete`) and exits. `Lifecycle state = complete` is the canonical terminal marker; subsequent `/weave` invocations on the project detect it at step 2 of the Phase Cycle and report the lifecycle as done rather than redispatching Review.

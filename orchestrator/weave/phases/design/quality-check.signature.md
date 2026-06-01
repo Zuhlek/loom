@@ -6,7 +6,7 @@ I/O signature between `/weave` and the Design Quality Check Agent (in-phase, nar
 
 **Caller:** `/weave` orchestrator.
 
-**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Design rerun-or-continue surface. Not part of the mandatory phase cycle. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`. Design QC is narrower than the cross-phase Pre-Build QC (Plan→Build gate); this agent audits only `design.md` (+ optional `mockup/`).
+**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Design Refine-or-Continue surface. Not part of the mandatory phase cycle. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`. Design QC is narrower than the cross-phase Pre-Build QC (Plan→Build gate); this agent audits only `design.md` (+ optional `mockup/`).
 
 ## Params
 
@@ -19,7 +19,7 @@ I/O signature between `/weave` and the Design Quality Check Agent (in-phase, nar
 
 ## Returns
 
-### Return block
+### RETURN block
 
 ```yaml
 type: object

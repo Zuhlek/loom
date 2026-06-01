@@ -29,16 +29,16 @@ I/O signature for the top-level Loom orchestrator. The orchestrator coordinates 
 
 ## Returns
 
-The orchestrator does not own phase artifacts. It owns state transitions and the rerun-or-continue surface.
+The orchestrator does not own phase artifacts. It owns state transitions and the Refine-or-Continue surface.
 
-### Return block
+### RETURN block
 
 The `/weave` orchestrator does not itself return a structured block to a caller — it is a user-invoked slash command. The phase agents it dispatches each return their own RETURN block conforming to the schema embedded in their `phase.signature.md`. RETURN-block schema enforcement is the responsibility of the `SubagentStop` hook (`hooks/validate-subagent-output.py`), which blocks malformed returns visibly rather than via an orchestrator-side extractor.
 
 ```yaml
 # /weave is a slash-command entrypoint, not a Task callable.
 # It returns no structured block of its own.
-# Phase agents return blocks conforming to their phase.signature.md schemas.
+# Phase agents return RETURN blocks conforming to their phase.signature.md schemas.
 type: null
 ```
 

@@ -1,5 +1,20 @@
 # Grilling Rules
 
+## Contents
+
+- 0. Mandate
+- 1. Six "good question" criteria
+- 1.5. Briefing block discipline
+- 2. Two sub-phases: Foundation, then Branching
+- 3. Triage logic — what to ask next
+- 4. `AskUserQuestion` dispatch
+- 5. The revisit mechanic
+- 6. Answer slots in `decisions.md`
+- 7. Hard caps — when to stop grilling
+- 8. Required output of a grilling session
+- Stop Rules (summary)
+- Revisit Rules (summary)
+
 Spec-phase grilling discipline. Every question is a structured artifact validated against the schema in [`categories.md`](categories.md). This file specifies the rules around HOW questions get generated, sequenced, answered, and revisited.
 
 ---
@@ -13,7 +28,7 @@ The decision tree is whatever the seed + Foundation answers + prior Branching an
 Two consequences for the rules that follow:
 
 1. **Agent-initiated early bail is forbidden while branches remain.** The triage logic (§3) exits only at step 4 — when Foundation, revisit, and Branching queues are all empty. Ambiguity that "feels stable" is not a stop condition; an empty decision tree is.
-2. **Only the user declares "enough"** (§7 user-initiated stop, or the rerun-or-continue gate). The agent does not decide on the user's behalf that further questioning is futile.
+2. **Only the user declares "enough"** (§7 user-initiated stop, or the Refine-or-Continue gate). The agent does not decide on the user's behalf that further questioning is futile.
 
 The six G-rules (§1) still apply — relentless does not mean asking bad questions, leading questions, or asking the same thing twice. It means: every decision-relevant, self-contained, briefed, opinionated, singular, decidable-now branch gets a question, and every question gets an answer.
 
@@ -298,7 +313,7 @@ Design phase reads only `Status: active` and `Status: answered` entries (and cha
 
 | Trigger | Action |
 |---|---|
-| Triage (§3) returns "otherwise" — Foundation, revisit, and Branching queues all empty (decision tree exhausted, per §0) | Return artifacts; orchestrator surfaces the rerun-or-continue decision. |
+| Triage (§3) returns "otherwise" — Foundation, revisit, and Branching queues all empty (decision tree exhausted, per §0) | Return artifacts; orchestrator surfaces the Refine-or-Continue decision. |
 | User says `stop`, `enough`, `let's move on`, `go` | Write current state, return artifacts. |
 | Ambiguity still surfacing after many turns | RETURN `STATUS: needs_more_grilling` to the orchestrator; let the user decide whether to extend. |
 | User clicks `Stop` before answering N≥3 questions in a row | Force-end Spec: write the resolved Qs to decisions.md, capture the unanswered ones in the "Deferred clarifications" section (these become `[NEEDS CLARIFICATION]` markers when plan.md is generated), return artifacts. |

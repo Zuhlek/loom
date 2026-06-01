@@ -6,6 +6,18 @@ Inline procedure the Build phase agent applies once per ready task. Not dispatch
 
 `methods/principles.md` (engineering principles P1–P7) is also inlined in the Build dispatch head — see the Build body's `## Reads`. Keep it in context across every task and apply each principle's **Self-check during implementation** rule while writing code. The project-level invariants live in `spec.md ## Constraints` (a workspace artifact already read at session start); that section overrides any principle conflict for this project.
 
+## Per-task checklist
+
+Copy this into your working notes for each task and tick as you go:
+
+```
+- [ ] RED logged (a runtime assertion failure, not a compile error)
+- [ ] IMPLEMENT (smallest scoped diff; only files in files-likely-touched)
+- [ ] GREEN logged (test now passes)
+- [ ] done.md written with status: green | failed | hitl-block
+- [ ] attempts <= 3 (else status: failed)
+```
+
 ## Procedure
 
 For task `T-NNN`:

@@ -1,0 +1,121 @@
+{
+  "seed": "baseline-seed.md",
+  "answers": "baseline-answers.yaml",
+  "description": "Rubric for the Bookmarks baseline seed. Concrete, checkable assertions about what a correct /weave run should and should not produce, given the seed text and the canned answer queue (flat list, reject duplicates, no search, immutable, newest-first). Authored as a documented stub; no automated grader consumes it yet.",
+  "expected_behavior": [
+    {
+      "id": "feature-save-url",
+      "category": "core-feature",
+      "assertion": "A bookmark can be saved with a URL and a title.",
+      "source": "seed: 'I can save a URL with a title.'"
+    },
+    {
+      "id": "feature-list",
+      "category": "core-feature",
+      "assertion": "All saved bookmarks are shown in one list.",
+      "source": "seed: 'I can see all my saved bookmarks in one list.'"
+    },
+    {
+      "id": "feature-open-new-tab",
+      "category": "core-feature",
+      "assertion": "A saved bookmark can be opened in a new tab.",
+      "source": "seed: 'I can open a saved bookmark in a new tab.'"
+    },
+    {
+      "id": "feature-delete",
+      "category": "core-feature",
+      "assertion": "A bookmark can be deleted.",
+      "source": "seed: 'I can delete a bookmark I no longer want.'"
+    },
+    {
+      "id": "decision-flat-list",
+      "category": "deferred-decision",
+      "assertion": "Bookmarks are a flat list with no tags and no categories.",
+      "source": "answers Q01: 'Flat list (no tags / no categories)'"
+    },
+    {
+      "id": "decision-reject-duplicates",
+      "category": "deferred-decision",
+      "assertion": "Saving a URL that already exists is rejected with an inline error; duplicates are neither merged nor silently allowed.",
+      "source": "answers Q02: 'Reject duplicate URLs with an inline error'"
+    },
+    {
+      "id": "decision-no-search",
+      "category": "deferred-decision",
+      "assertion": "There is no search box; the UI is a chronological list only.",
+      "source": "answers Q03: 'Chronological list only (no search)'"
+    },
+    {
+      "id": "decision-immutable",
+      "category": "deferred-decision",
+      "assertion": "Bookmarks are immutable once added; there is no edit-title or edit-URL capability.",
+      "source": "answers Q04: 'Immutable once added (no edit)'"
+    },
+    {
+      "id": "decision-newest-first",
+      "category": "deferred-decision",
+      "assertion": "Bookmarks are sorted newest-first only; no alternate sort order is offered.",
+      "source": "answers Q05: 'Newest-first only'"
+    },
+    {
+      "id": "decisions-were-asked",
+      "category": "process",
+      "assertion": "The five deferred decisions were surfaced as Spec questions (consumed from the canned answer queue), not silently chosen by the agent.",
+      "source": "seed: 'Things I have not decided yet and want you to actually ask me about, not silently choose'"
+    },
+    {
+      "id": "stack-typescript",
+      "category": "stack-constraint",
+      "assertion": "TypeScript is used everywhere; no substitutions.",
+      "source": "seed stack: 'TypeScript everywhere.'"
+    },
+    {
+      "id": "stack-backend-express",
+      "category": "stack-constraint",
+      "assertion": "Backend is Node + Express, single process.",
+      "source": "seed stack: 'Backend: Node + Express, single process.'"
+    },
+    {
+      "id": "stack-sqlite",
+      "category": "stack-constraint",
+      "assertion": "Storage is SQLite via better-sqlite3, a file on disk next to the server.",
+      "source": "seed stack: 'Storage: SQLite via better-sqlite3, file on disk next to the server.'"
+    },
+    {
+      "id": "stack-frontend-vanilla",
+      "category": "stack-constraint",
+      "assertion": "Frontend is plain HTML + CSS + vanilla TypeScript bundled with esbuild; no React, Vue, or any framework.",
+      "source": "seed stack: 'plain HTML + CSS + vanilla TypeScript (compiled to one JS bundle via esbuild). No React, no Vue, no framework.'"
+    },
+    {
+      "id": "stack-vitest",
+      "category": "stack-constraint",
+      "assertion": "Tests use Vitest.",
+      "source": "seed stack: 'Tests: Vitest.'"
+    },
+    {
+      "id": "run-commands",
+      "category": "stack-constraint",
+      "assertion": "npm start boots the server on http://localhost:3000 and serves the UI from the same origin; npm test runs the tests. Both runnable from ./app/.",
+      "source": "seed stack + harness directive"
+    },
+    {
+      "id": "workspace-isolation",
+      "category": "harness-constraint",
+      "assertion": "All deliverable files (package.json, tsconfig.json, source, tests, build output, node_modules, the SQLite file) are created inside ./app/ within the .loom/<project>/ workspace; nothing is written to the repo root, orchestrator/, or a sibling workspace.",
+      "source": "harness directive at top of baseline-seed.md; spec.md ## Constraints must surface it"
+    },
+    {
+      "id": "no-extra-features",
+      "category": "scope-discipline",
+      "assertion": "No nice-to-haves beyond the four requested features. Specifically no telemetry, no analytics, no service worker, no PWA manifest, and no dark-mode toggle (unless dark mode falls out of CSS for free).",
+      "source": "seed: 'Keep the surface small ... No nice-to-haves I did not ask for. No telemetry, no analytics, no service worker, no PWA manifest, no dark mode toggle unless it falls out of CSS for free.'"
+    },
+    {
+      "id": "no-auth-no-deploy",
+      "category": "scope-discipline",
+      "assertion": "Single user, local-only, no authentication, no deploy machinery.",
+      "source": "seed: 'Single user, runs on my laptop, no auth, no deploy.'"
+    }
+  ]
+}

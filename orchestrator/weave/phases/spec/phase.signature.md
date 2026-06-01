@@ -32,7 +32,7 @@ The `methods/*` rows below are skill-resident procedures: the orchestrator reads
 
 ## Returns
 
-### Return block
+### RETURN block
 
 The Spec agent returns a single fenced YAML block tagged `RETURN` conforming to the schema below. Schema enforcement runs as a `SubagentStop` hook (`hooks/validate-subagent-output.py`); malformed returns surface as visible hook blocks.
 

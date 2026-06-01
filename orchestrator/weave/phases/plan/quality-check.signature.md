@@ -6,7 +6,7 @@ I/O signature between `/weave` and the Pre-Build Quality Check Agent (the lifecy
 
 **Caller:** `/weave` orchestrator.
 
-**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Plan rerun-or-continue surface. Not part of the mandatory phase cycle. Complements the narrower in-phase QCs at `phases/spec/quality-check.md`, `phases/design/quality-check.md`, and `phases/build/quality-check.md` — this Plan QC is the only one that audits across phase boundaries. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`.
+**Invocation condition:** Dispatched only when the user picks `Run quality check` at the Plan Refine-or-Continue surface. Not part of the mandatory phase cycle. Complements the narrower in-phase QCs at `phases/spec/quality-check.md`, `phases/design/quality-check.md`, and `phases/build/quality-check.md` — this Plan QC is the only one that audits across phase boundaries. Dispatched per the two-band contract in `orchestrator/weave/SKILL.md § Dispatch concatenation`.
 
 ## Params
 
@@ -28,7 +28,7 @@ The agent audits every artifact produced by Spec, Design, and Plan — they are 
 
 ## Returns
 
-### Return block
+### RETURN block
 
 ```yaml
 type: object

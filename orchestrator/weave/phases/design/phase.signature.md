@@ -27,7 +27,7 @@ I/O signature between `/weave` and the Design Structuring Agent.
 
 ## Returns
 
-### Return block
+### RETURN block
 
 ```yaml
 type: object

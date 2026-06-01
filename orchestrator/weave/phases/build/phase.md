@@ -34,7 +34,7 @@ Implement every ready task on the board, verify the runnable result, and aggrega
 
 5. Write `test-report.md` aggregating per-task evidence with the smoke and (when applicable) mutation results.
 
-6. Return the RETURN block defined in `phase.signature.md` › `## Returns` › `### Return block`.
+6. Return the RETURN block defined in `phase.signature.md` › `## Returns` › `### RETURN block`.
 
 ## Reporting outcomes
 
