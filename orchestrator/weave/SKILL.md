@@ -233,7 +233,7 @@ There is no "Full rerun" option. The user achieves a full re-derivation by picki
 
 ### When the user picks `Run quality check`
 
-1. Dispatch the matching `phases/<phase>/quality-check.md` + `quality-check.signature.md` against the just-completed phase's artifacts. Spec, Design, and Build QCs have narrow in-phase scope; Plan QC has cross-phase scope (audits Spec + Design + Plan together).
+1. Dispatch the matching `phases/<phase>/quality-check.md` + `quality-check.signature.md` against the just-completed phase's artifacts (per-phase scope per the Load Order note above).
 2. The QC agent writes `quality-review.md` and updates `pipeline.md` "Quality findings".
 3. Surface the findings preview in chat and re-ask the gate. The Refine option in the re-asked gate now auto-applies the findings (Targeted scope, per the rule above).
 

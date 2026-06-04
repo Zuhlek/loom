@@ -181,10 +181,12 @@ describe("chat-diff-panel smoke gate", () => {
     expect(git(cwd, ["show-ref", "--verify", `refs/loom-checkpoints/${chatId}/1`]).status).toBe(0);
     expect(frames.some((f) => f.kind === "checkpoint-captured")).toBe(true);
 
-    // ── 5. GET /diff?mode=checkpoint-range&from=0&to=1 ──────────────
+    // ── 5. GET /diff?worktreePath=<cwd> → total branch/workspace diff ─
+    // The agent's turn wrote feature.txt (uncommitted on main); the
+    // total diff vs `main` surfaces it.
     const diffRes = await call(
       routes["/diff"]!,
-      `http://x/diff?chatId=${chatId}&mode=checkpoint-range&from=0&to=1`,
+      `http://x/diff?worktreePath=${encodeURIComponent(cwd)}&base=main`,
     );
     expect(diffRes.status).toBe(200);
     const diffBody = (await diffRes.json()) as any;

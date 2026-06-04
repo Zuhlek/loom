@@ -55,6 +55,43 @@ export const PERMISSION_TOOLS = new Set<string>([
   "WebFetch",
 ]);
 
+/**
+ * The subset of {@link PERMISSION_TOOLS} that `acceptEdits` mode auto-accepts.
+ * In `acceptEdits` claude approves file mutations without prompting, so loom
+ * must NOT pop a gate for these (it would override the user's chosen mode);
+ * Bash / WebFetch still gate. See {@link shouldGatePreToolUse}.
+ */
+const EDIT_FAMILY_TOOLS = new Set<string>([
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "NotebookEdit",
+]);
+
+/**
+ * Whether a PreToolUse for `toolName` under `permissionMode` should hold the
+ * agent behind a loom popup. Mirrors claude's own gating so the popup never
+ * contradicts the active mode:
+ *   - `bypassPermissions` → never gate (the whole point of bypass).
+ *   - `plan`              → never gate (plan mode blocks mutations itself).
+ *   - `acceptEdits`       → gate everything EXCEPT auto-accepted file edits.
+ *   - `default` (or any   → gate every permission tool.
+ *     unknown mode)
+ * Non-permission tools never gate (handled by the PERMISSION_TOOLS check).
+ */
+export function shouldGatePreToolUse(
+  toolName: string,
+  permissionMode: string | undefined,
+): boolean {
+  if (permissionMode === "bypassPermissions" || permissionMode === "plan") {
+    return false;
+  }
+  if (permissionMode === "acceptEdits" && EDIT_FAMILY_TOOLS.has(toolName)) {
+    return false;
+  }
+  return true;
+}
+
 export interface ClaudeHookEvent {
   // Real Claude Code shape:
   hook_event_name?: string;
@@ -66,6 +103,8 @@ export interface ClaudeHookEvent {
   transcript_path?: string;
   /** Notification carries this. */
   message?: string;
+  /** Active permission mode at hook time (default/acceptEdits/plan/bypassPermissions/...). */
+  permission_mode?: string;
   // Legacy loom shape (kept for existing tests):
   channel?: string;
   chatId?: string;
@@ -87,6 +126,15 @@ export interface NormalizeResult {
     kind: "askuserquestion" | "permissionrequest";
     data: any;
   };
+  /**
+   * Set when this event must BLOCK the agent behind a loom popup. The
+   * receiver registers a {@link PermissionGate} under `{chatId, id}`, holds
+   * the hook's HTTP response open until the UI answers, then returns the
+   * resulting `permissionDecision` to claude. `id` is identical to the
+   * pre-tool-use envelope's `payload.id` so the WS `permission-response`
+   * (keyed on the same id) resolves the right gate.
+   */
+  gate?: { chatId: string; id: string };
   clearGates?: { chatId: string }; // for Stop / SubagentStop
   warning?: string;
 }
@@ -164,6 +212,7 @@ export function normalizeHookEvent(ev: ClaudeHookEvent, chatId?: string): Normal
       : (ev.payload as Record<string, unknown> | undefined);
   const resolvedChatId = chatId ?? ev.chatId ?? "";
   const sessionId = ev.session_id ?? ev.sessionId;
+  const permissionMode = ev.permission_mode;
 
   switch (channel) {
     case "SessionStart":
@@ -222,12 +271,27 @@ export function normalizeHookEvent(ev: ClaudeHookEvent, chatId?: string): Normal
           pendingGate: resolvedChatId
             ? { chatId: resolvedChatId, kind: "askuserquestion", data }
             : undefined,
+          // Hold the agent at the hook until the UI answers. Unlike a
+          // permission gate, the gate decision here is only a HOLD: the bridge
+          // resolves it with `defer` (so claude renders its question widget,
+          // which the bridge then drives via keystrokes) or it auto-denies on
+          // timeout. The chosen option itself travels via those keystrokes,
+          // keyed on this same id. Asked in every mode — even bypass — since a
+          // question is not a permission.
+          gate: resolvedChatId ? { chatId: resolvedChatId, id } : undefined,
         };
       }
       if (toolName && PERMISSION_TOOLS.has(toolName)) {
+        // Honour the active permission mode: bypass/plan/acceptEdits-edits
+        // are auto-handled by claude, so popping a gate there would contradict
+        // the user's chosen mode. Drop silently — claude proceeds on its own.
+        if (!shouldGatePreToolUse(toolName, permissionMode)) {
+          return { envelopes: [] };
+        }
         const input = (payload ?? {}) as Record<string, unknown>;
         // Preserve any legacy `id` the caller may have stuffed in; otherwise
-        // synthesise so the bridge's PendingPermission keying works.
+        // synthesise so the bridge's PendingPermission keying works. This id
+        // is also the gate key the WS `permission-response` resolves against.
         const existingId =
           typeof (input as { id?: unknown }).id === "string"
             ? ((input as { id: string }).id)
@@ -249,6 +313,7 @@ export function normalizeHookEvent(ev: ClaudeHookEvent, chatId?: string): Normal
               },
             }),
           ],
+          gate: resolvedChatId ? { chatId: resolvedChatId, id } : undefined,
         };
       }
       // Read-only / non-gated tool: drop silently to avoid popup spam.

@@ -222,13 +222,23 @@ export function uninstall(opts: HookInstallerOptions = {}): { removed: boolean }
   return { removed: true };
 }
 
+// Gated PreToolUse hooks hold their HTTP response open until the user answers
+// the loom popup (the permission-gate resolves it). curl must therefore wait,
+// and claude must not abort the hook first, so both the curl `--max-time` and
+// the hook `timeout` are raised to 1800s. The permission-gate auto-resolves
+// well before this (see permission-gate.ts), so a real request never actually
+// reaches the ceiling — it exists only to bound a wedged server. Non-gated
+// events answer instantly, so the long ceiling is invisible to them.
+const HOOK_HOLD_SECONDS = 1800;
+
 function makeLoomEntry(port: number): HookEntry {
   return {
     matcher: "*",
     hooks: [
       {
         type: "command",
-        command: `curl -s -X POST -H 'content-type: application/json' --data-binary @- http://${LOOM_HOST}:${port}${LOOM_HOOK_PATH}`,
+        command: `curl -s --max-time ${HOOK_HOLD_SECONDS} -X POST -H 'content-type: application/json' --data-binary @- http://${LOOM_HOST}:${port}${LOOM_HOOK_PATH}`,
+        timeout: HOOK_HOLD_SECONDS,
       },
     ],
   };

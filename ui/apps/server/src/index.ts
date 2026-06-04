@@ -25,6 +25,7 @@ import { createJsonlPathProbe } from "./process-manager/jsonl-path-probe.ts";
 import { createPaneProcessApi } from "./process-manager/pane-process.ts";
 import { ensureClaudeOnboarded } from "./process-manager/claude-onboarding.ts";
 import { mountHookReceiver, setEnvelopeBroadcaster } from "./hook-receiver/index.ts";
+import { createPermissionGate, type PermissionGate } from "./hook-receiver/permission-gate.ts";
 import { mountConfigRoute } from "./routes/config.ts";
 import { mountSidebarRoute } from "./routes/sidebar.ts";
 import { mountCwdRoute } from "./routes/cwd.ts";
@@ -207,16 +208,22 @@ export interface MountAllRoutesDeps {
   receiverPort: number;
   sessionStore: ReturnType<typeof createSessionIdStore>;
   imageStore: ImageStore;
+  /**
+   * Permission gate shared with the bridge. When present, gated PreToolUse
+   * hooks block on the loom popup; when omitted the receiver acks immediately
+   * (claude defers to its own permission flow).
+   */
+  permissionGate?: PermissionGate;
 }
 
 export function mountAllRoutes(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
   deps: MountAllRoutesDeps,
 ): void {
-  const { store, config, bridge, substrate, receiverPort, sessionStore, imageStore } = deps;
+  const { store, config, bridge, substrate, receiverPort, sessionStore, imageStore, permissionGate } = deps;
   const broadcastAll = (frame: ServerFrame) => bridge.broadcastFrameToAll(frame);
 
-  mountHookReceiver(routes, store, sessionStore);
+  mountHookReceiver(routes, store, sessionStore, permissionGate);
   mountConfigRoute(routes, config);
   mountSidebarRoute(routes, store, bridge);
   mountCwdRoute(routes, store);
@@ -227,11 +234,7 @@ export function mountAllRoutes(
   mountFileSearchRoute(routes);
   mountUploadImageRoute(routes);
   mountChatImageRoute(routes, imageStore);
-  mountDiffRoute(routes, {
-    store,
-    diffQuery: substrate.diffQuery,
-    checkpointStore: substrate.checkpointStore,
-  });
+  mountDiffRoute(routes);
   mountGitStatusRoute(routes);
   mountGitActionsRoute(routes);
   mountFabricMockupRoute(routes);
@@ -298,10 +301,16 @@ if (isEntrypoint) {
   // pointer, then assign once both are alive.
   let substrateRef: ChatDiffPanelSubstrate | null = null;
 
+  // Shared permission gate: the hook receiver registers + awaits gates here
+  // (holding gated PreToolUse curls open) and the bridge resolves them from
+  // WS permission-responses. One instance bridges both halves.
+  const permissionGate = createPermissionGate();
+
   const bridge = createJsonlTailBridge({
     tmux,
     sessionStore,
     pathProbe,
+    permissionGate,
     imageStore,
     paneProcess: createPaneProcessApi(),
     cwdResolver: async (chatId: string) => {
@@ -361,6 +370,7 @@ if (isEntrypoint) {
     receiverPort: loomPort,
     sessionStore,
     imageStore,
+    permissionGate,
   });
 
   const server = await startServer({

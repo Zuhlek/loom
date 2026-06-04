@@ -35,7 +35,6 @@ const NEW_CHAT_DIFF_PANEL_FILES = [
   // Web
   `${webRoot}src/components/chat/ModeIndicatorPill.tsx`,
   `${webRoot}src/components/chat/AttachedRefPill.tsx`,
-  `${webRoot}src/components/diff/TurnTimelineStrip.tsx`,
   `${webRoot}src/components/diff/vcs-verb-copy.ts`,
   `${webRoot}src/components/worktrees/ProjectWorktreesPanel.tsx`,
 ];

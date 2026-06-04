@@ -24,7 +24,7 @@ import { PermissionRequestInline } from "../components/chat/PermissionRequestInl
 import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker";
 import { useSnackbar } from "../components/ui/Snackbar";
 import { SessionRecoveryBanner } from "../components/chat/SessionRecoveryBanner";
-import { getChat, getSettings, listCheckpointTurns, wsUrl, type ApiChat } from "../lib/api";
+import { getChat, getSettings, wsUrl, type ApiChat } from "../lib/api";
 import { useChatBridge } from "../lib/use-chat-bridge";
 import { useSidebarState } from "../lib/sidebar-state";
 import type {
@@ -333,11 +333,11 @@ export function LiveChatRoute({ chatId }: Props) {
   // Resolved server default working-tree mode. Drives the pre-commit
   // copy of {@link ModeIndicatorPill} when `chat.worktree_mode === null`.
   const [defaultEnvMode, setDefaultEnvMode] = useState<"local" | "worktree">("local");
-  // Checkpoint refs recorded for this chat. Drives the timeline-strip
-  // marker rendering inside the diff panel. Sourced from
-  // `GET /checkpoints/list` on chatId change and incrementally
-  // maintained via the `checkpoint-captured` WS frame.
-  const [checkpointTurns, setCheckpointTurns] = useState<number[]>([]);
+  // Monotonic nonce bumped each time a turn's checkpoint lands
+  // (`checkpoint-captured` WS frame). Passed to the diff panel as
+  // `refreshSignal` so it re-fetches the total diff when the agent
+  // finishes a turn, without the user clicking Refresh.
+  const [diffRefreshNonce, setDiffRefreshNonce] = useState<number>(0);
   // Connection-status popover open state. The websocket pill in the
   // top-right of the top bar collapses to a coloured dot; clicking it
   // toggles a small info card with the state name and reconnect detail.
@@ -388,16 +388,10 @@ export function LiveChatRoute({ chatId }: Props) {
     return () => { alive = false; };
   }, [chatId]);
 
-  // Fetch the per-chat checkpoint refs. Drives the diff panel's
-  // timeline-strip + empty-state badge. The `checkpoint-captured`
-  // WS frame incrementally extends the list while the route is open.
+  // Reset the diff-refresh nonce when switching chats so the panel's
+  // signal effect doesn't fire spuriously on the new chat's first render.
   useEffect(() => {
-    let alive = true;
-    setCheckpointTurns([]);
-    listCheckpointTurns(chatId)
-      .then((r) => { if (alive) setCheckpointTurns(r.turns); })
-      .catch(() => { /* legacy / non-git chats fall through with []. */ });
-    return () => { alive = false; };
+    setDiffRefreshNonce(0);
   }, [chatId]);
 
   // Fetch resolved server settings so the composer's mode-indicator can
@@ -545,15 +539,10 @@ export function LiveChatRoute({ chatId }: Props) {
             break;
           }
           case "checkpoint-captured": {
-            // Reactor wrote a new checkpoint ref for this chat. Append
-            // the turn to the local list so the diff-panel timeline-
-            // strip renders the new marker without a refetch.
-            const turn = frame.body?.turn;
-            if (typeof turn === "number") {
-              setCheckpointTurns((prev) =>
-                prev.includes(turn) ? prev : [...prev, turn].sort((a, b) => a - b),
-              );
-            }
+            // Reactor wrote a new checkpoint ref for this chat — the agent
+            // just finished a turn. Bump the nonce so the diff panel
+            // re-fetches the total diff to reflect the new changes.
+            setDiffRefreshNonce((n) => n + 1);
             break;
           }
           case "ref-change": {
@@ -995,7 +984,7 @@ export function LiveChatRoute({ chatId }: Props) {
             worktreePath={chat.worktree_path}
             chatId={chat.id}
             vcsKind={chat.vcs_kind ?? null}
-            checkpointTurns={checkpointTurns}
+            refreshSignal={diffRefreshNonce}
           />
         ) : rightPane === "worktrees" ? (
           <ProjectWorktreesPanel vcsKind={chat?.vcs_kind ?? null} />

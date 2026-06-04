@@ -113,12 +113,12 @@ describe("rightDrawer slot wiring", () => {
     );
   });
 
-  test("DiffPanelContainer receives worktreePath, chatId, vcsKind, checkpointTurns", () => {
+  test("DiffPanelContainer receives worktreePath, chatId, vcsKind, refreshSignal", () => {
     const src = readFileSync(routePath, "utf8");
     expect(src).toMatch(/worktreePath=\{\s*chat\.worktree_path\s*\}/);
     expect(src).toMatch(/chatId=\{\s*chat\.id\s*\}/);
     expect(src).toMatch(/vcsKind=\{/);
-    expect(src).toMatch(/checkpointTurns=\{/);
+    expect(src).toMatch(/refreshSignal=\{/);
   });
 });
 

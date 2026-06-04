@@ -20,6 +20,7 @@ const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const componentPath =
   webRoot + "src/components/fabric/FabricMarkdown.tsx";
 const routePath = webRoot + "src/routes/fabric-view-live.tsx";
+const viewerPath = webRoot + "src/components/fabric/FabricViewer.tsx";
 
 describe("FabricMarkdown component contract", () => {
   test("FabricMarkdown.tsx exists at the documented path", () => {
@@ -51,9 +52,16 @@ describe("FabricMarkdown component contract", () => {
     expect(src).toMatch(/catch\b/);
   });
 
-  test("Route imports FabricMarkdown from the components directory", () => {
-    const src = readFileSync(routePath, "utf8");
-    expect(src).toMatch(/from\s+["']\.\.\/components\/fabric\/FabricMarkdown["']/);
-    expect(src).toMatch(/<FabricMarkdown\b/);
+  test("FabricViewer consumes FabricMarkdown (route no longer inlines marked.parse)", () => {
+    // The route renders <FabricViewer>, which delegates markdown rendering
+    // to <FabricMarkdown>. The contract — markdown is rendered via the
+    // shared component, not an inline marked.parse — now lives one boundary
+    // deeper in FabricViewer.
+    const viewerSrc = readFileSync(viewerPath, "utf8");
+    expect(viewerSrc).toMatch(/from\s+["']\.\/FabricMarkdown["']/);
+    expect(viewerSrc).toMatch(/<FabricMarkdown\b/);
+
+    const routeSrc = readFileSync(routePath, "utf8");
+    expect(routeSrc).not.toMatch(/marked\.parse/);
   });
 });

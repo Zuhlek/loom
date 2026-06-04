@@ -1,10 +1,10 @@
 # Task procedure — Red → Implement → Green → Done
 
-Inline procedure the Build phase agent applies once per ready task. Not dispatched as a subagent. This procedure arrives inlined in the Build dispatch head (it is one of the Build body's `## Reads`); the agent applies it from the inlined head within its own session — no disk read.
+Inline procedure the Build phase agent applies once per ready task. Not dispatched as a subagent.
 
 ## Principles
 
-`methods/principles.md` (engineering principles P1–P7) is also inlined in the Build dispatch head — see the Build body's `## Reads`. Keep it in context across every task and apply each principle's **Self-check during implementation** rule while writing code. The project-level invariants live in `spec.md ## Constraints` (a workspace artifact already read at session start); that section overrides any principle conflict for this project.
+Apply each principle in the inlined `methods/principles.md` (P1–P7), using its **Self-check during implementation** rule while writing code. Keep it in context across every task. `spec.md ## Constraints` (read at session start) overrides any principle conflict for this project.
 
 ## Per-task checklist
 

@@ -36,6 +36,7 @@ import type { SessionIdStore } from "../session-store.ts";
 import type { JsonlPathProbe } from "../jsonl-path-probe.ts";
 import type { PaneProcessApi } from "../pane-process.ts";
 import { traceHook } from "../../hook-receiver/trace.ts";
+import type { PermissionGate } from "../../hook-receiver/permission-gate.ts";
 import type {
   ChatItem,
   PendingPermission,
@@ -71,6 +72,14 @@ export interface JsonlTailBridgeOptions {
    * the same encoded-cwd directory.
    */
   paneProcess: PaneProcessApi;
+  /**
+   * Permission gate shared with the hook receiver. `respondToPermission`
+   * resolves the gate registered by a held PreToolUse hook, which is what
+   * actually unblocks the agent — there is no keystroke injection for
+   * permissions any more. When omitted, permission responses degrade to a
+   * UI-only acknowledgement (the held curl, if any, auto-resolves on timeout).
+   */
+  permissionGate?: PermissionGate;
   /** Resolve the cwd to spawn `claude` under for a given chat. */
   cwdResolver(chatId: string): Promise<string> | string;
   /**
@@ -534,15 +543,6 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     broadcast(state, runtimeUnavailableFrame(chatId, "tmux", err));
   }
 
-  function literalChoiceForBehavior(behavior: "allow" | "deny"): string {
-    // Permission-prompt UX in `claude` is a numbered choice list.
-    // Per the Phase 0 catalog: choice 1 = accept (allow), choice 2 = reject
-    // (deny). The bridge translates the UI verb into the literal text the
-    // user would type. Catalog field-name discipline: this string is a
-    // literal CHOICE, not a JSONL field name.
-    return behavior === "allow" ? "1" : "2";
-  }
-
   return {
     async attach(chatId, client) {
       let state: ChatState;
@@ -589,6 +589,12 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     async dispose(chatId) {
       const state = chats.get(chatId);
       if (!state) return;
+      // Release any held PreToolUse curls — the pane is going away, so a
+      // pending popup can never be answered. `deny` unblocks claude cleanly.
+      opts.permissionGate?.rejectAll(chatId, {
+        decision: "deny",
+        reason: "Loom: session disposed before the permission request was answered.",
+      });
       // Stop the rotation poller first so it cannot resurrect the
       // tail mid-dispose.
       state.state = "disposed";
@@ -688,7 +694,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       }
     },
 
-    async respondToPermission(chatId, id, behavior, _opts) {
+    async respondToPermission(chatId, id, behavior, respOpts) {
       const state = getChat(chatId);
       if (state) {
         state.pendingPermissions.delete(id);
@@ -698,11 +704,18 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
           body: null,
         });
       }
-      await opts.tmux.sendInput(chatId, literalChoiceForBehavior(behavior));
-      // Emit the resolution acknowledgement AFTER the response reaches
-      // tmux. The frame carries the original prompt-id + the user's
-      // verb so attached clients can audit the decision and clear UI
-      // affordances keyed on the id.
+      // Resolve the held PreToolUse hook. The receiver is awaiting this gate
+      // and will hand claude the matching permissionDecision — that, not any
+      // keystroke, is what unblocks the agent. No tmux send-keys here: with
+      // the hook authoritative, claude never shows its own in-pane prompt, so
+      // injecting a digit would land on the composer and corrupt the turn
+      // (the exact "answering confuses the agent" failure this replaces).
+      opts.permissionGate?.resolve(chatId, id, {
+        decision: behavior,
+        reason: respOpts?.message,
+      });
+      // Acknowledge AFTER resolving so attached clients can audit the decision
+      // and clear UI affordances keyed on the id.
       if (state) {
         broadcast(state, {
           kind: "permission-resolved",
@@ -723,6 +736,15 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
           body: null,
         });
       }
+
+      // Release the held AskUserQuestion hook with `defer` so claude proceeds
+      // to render its question widget — the keystroke sequence below then
+      // drives that widget. This preserves the original render→keystroke
+      // ordering while making the hook an authoritative hold (no fire-and-
+      // forget, no answer-before-widget race). The selected option itself is
+      // conveyed by the keystrokes, NOT by the gate decision. A no-op when no
+      // gate is wired (older callers / tests).
+      opts.permissionGate?.resolve(chatId, id, { decision: "defer" });
 
       // Single-select: claude's AskUserQuestion TUI is a navigable numbered
       // list where the option's number key is a quick-select that confirms

@@ -18,7 +18,7 @@ I/O signature for the top-level Loom orchestrator. The orchestrator coordinates 
 | Phase agent body | `phases/<current-phase>/phase.md` | required at dispatch | Body half of the phase agent's system prompt |
 | Phase agent signature | `phases/<current-phase>/phase.signature.md` | required at dispatch | Signature half of the phase agent's system prompt, carrying trigger, params, returns (including the embedded RETURN-block YAML schema), and throws |
 | Orchestrator methods | `methods/find-project.md`, `methods/create-project.md` | conditional | Orchestrator-internal skills loaded per Load Order in `SKILL.md` |
-| Phase quality-check agent | `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` | opt-in only | Loaded when user picks `Run quality check` at the current phase's gate. Available for Spec, Design, Plan, Build (4 of 5 phases). Spec/Design/Build QCs have narrow in-phase scope; the Plan QC has comprehensive cross-phase scope (audits Spec + Design + Plan together). Review has no QC because Review is itself the project-level quality check. |
+| Phase quality-check agent | `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` | opt-in only | Loaded when user picks `Run quality check` at the current phase's gate. Available for Spec, Design, Plan, Build (4 of 5 phases); per-phase scope per `methods/quality-check-protocol.md`. Review has no QC — Review is itself the project-level quality check. |
 
 ### State preconditions
 

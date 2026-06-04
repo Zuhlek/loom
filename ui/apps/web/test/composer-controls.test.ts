@@ -41,6 +41,10 @@ const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const composerPath = webRoot + "src/components/chat/ChatComposer.tsx";
 const liveChatPath = webRoot + "src/routes/live-chat.tsx";
 const typesPath = webRoot + "src/lib/chat-types.ts";
+const permissionLevelPillPath =
+  webRoot + "src/components/chat/PermissionLevelPill.tsx";
+const buildPlanTogglePillPath =
+  webRoot + "src/components/chat/BuildPlanTogglePill.tsx";
 
 // The four SDK PermissionMode values US-004 AC1 enumerates.
 const MODES = ["default", "plan", "acceptEdits", "bypassPermissions"] as const;
@@ -50,17 +54,21 @@ describe("T-004 ChatComposer — permission-mode selector (US-004 AC1/AC2)", () 
     expect(existsSync(composerPath)).toBe(true);
   });
 
-  test("ChatComposer renders a <select> populated with the four SDK PermissionMode values", () => {
-    const src = readFileSync(composerPath, "utf8");
-    // The component must emit a `<select` element. The actual JSX is
-    // verified by string-grep so the test does not depend on jsdom.
-    expect(src).toMatch(/<select\b/);
-    // Each SDK mode appears as a string literal somewhere in the
-    // source — either as an inline `value="..."` attribute or in the
-    // `<option>` list / option-config array.
+  test("the four SDK PermissionMode values are surfaced through the permission pills", () => {
+    // The permission-mode selector was refactored out of a single
+    // <select> in ChatComposer into two pill controls: the non-plan
+    // modes live in PermissionLevelPill, and `plan` toggles via
+    // BuildPlanTogglePill. ChatComposer renders both pills.
+    const composerSrc = readFileSync(composerPath, "utf8");
+    expect(composerSrc).toMatch(/<PermissionLevelPill\b/);
+    expect(composerSrc).toMatch(/<BuildPlanTogglePill\b/);
+
+    const pillSrc = readFileSync(permissionLevelPillPath, "utf8");
+    const planSrc = readFileSync(buildPlanTogglePillPath, "utf8");
+    const combined = pillSrc + planSrc;
     for (const mode of MODES) {
       const re = new RegExp(`["']${mode}["']`);
-      expect(src).toMatch(re);
+      expect(combined).toMatch(re);
     }
   });
 
@@ -70,11 +78,12 @@ describe("T-004 ChatComposer — permission-mode selector (US-004 AC1/AC2)", () 
     expect(src).toMatch(/onPermissionModeChange/);
   });
 
-  test("ChatComposer wires `onPermissionModeChange` to the <select>'s onChange", () => {
+  test("ChatComposer wires `onPermissionModeChange` to the permission pills' change handlers", () => {
     const src = readFileSync(composerPath, "utf8");
-    // Loose match: onChange handler that calls onPermissionModeChange.
-    // The narrow contract is that *something* invokes the prop.
-    expect(src).toMatch(/onPermissionModeChange\s*\(/);
+    // Loose match: a pill change handler that invokes the prop. The
+    // narrow contract is that *something* invokes onPermissionModeChange
+    // (now via optional-chaining: `onPermissionModeChange?.(...)`).
+    expect(src).toMatch(/onPermissionModeChange\??\.?\s*\(/);
   });
 });
 

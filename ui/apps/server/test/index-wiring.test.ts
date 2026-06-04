@@ -114,7 +114,6 @@ describe("index.ts wiring (T-021)", () => {
         "/git/pr",
         "/diff",
         "/settings",
-        "/checkpoints/list",
       ];
       for (const path of expected) {
         expect(typeof routes[path], `route ${path} must be mounted`).toBe(
@@ -138,15 +137,13 @@ describe("index.ts wiring (T-021)", () => {
       const prBody = (await prRes.json()) as { error: string };
       expect(prBody.error).toBe("head required");
 
-      // /diff?mode=checkpoint-range&chatId=<missing> should route through
-      // the diff handler (with the substrate wired) and return 404 with
-      // a JSON error body — proving the substrate reached the handler.
-      const url =
-        "http://x/diff?mode=checkpoint-range&chatId=nope&from=0&to=1";
+      // /diff without worktreePath returns 400 with a JSON error body —
+      // proving the (now dependency-free) diff handler is mounted.
+      const url = "http://x/diff";
       const res = await routes["/diff"]!(new Request(url), new URL(url));
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(400);
       const body = (await res.json()) as { error: string };
-      expect(body.error).toBe("chat not found");
+      expect(body.error).toBe("missing worktreePath");
 
       // Disposal — substrate's head-watcher had no cwd to watch in this
       // tmpdir (no `.git`), but disposing should be safe regardless.

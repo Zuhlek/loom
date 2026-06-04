@@ -13,9 +13,7 @@
 - 9. Spec-layer assertions audited by the Pre-Build Quality Check
 - 10. Parser invariant
 
-Spec-phase distillation discipline. The Spec agent writes user stories with EARS-format acceptance criteria into `spec.md` under `## User stories`. Stories are produced by the agent — they are NOT user-answered questions. The agent distills them from the seed plus grilling answers.
-
-This file specifies the story shape, the EARS notation patterns, the markers, IDs, and how stories relate to decisions.
+Spec-phase distillation discipline. The Spec agent writes user stories with EARS-format acceptance criteria into `spec.md` under `## User stories`. Stories are produced by the agent — they are NOT user-answered questions; the agent distills them from the seed plus grilling answers.
 
 ---
 

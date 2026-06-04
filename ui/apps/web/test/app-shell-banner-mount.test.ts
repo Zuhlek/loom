@@ -64,8 +64,8 @@ describe("T-012 routes refetch on BackendOnlineEvent (US-005 AC2)", () => {
     expect(/addEventListener\(/.test(src)).toBe(true);
   });
 
-  test("loom-view-live.tsx listens for BackendOnlineEvent and refetches", () => {
-    const src = readFileSync(webRoot + "src/routes/loom-view-live.tsx", "utf8");
+  test("fabric-view-live.tsx listens for BackendOnlineEvent and refetches", () => {
+    const src = readFileSync(webRoot + "src/routes/fabric-view-live.tsx", "utf8");
     expect(/BACKEND_ONLINE_EVENT|"loom:backend-online"/.test(src)).toBe(true);
     expect(/addEventListener\(/.test(src)).toBe(true);
   });

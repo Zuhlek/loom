@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  getCheckpointDiff,
   getDiff,
   getGitStatus,
   postGitCommit,
@@ -11,14 +10,12 @@ import {
   type ApiDiffSection,
   type ApiGitStatus,
 } from "../../lib/api";
-import { aggregateSectionsByFile } from "../../lib/diff-aggregate";
 import { parseUnifiedDiff } from "../../lib/diff-parse";
 
 import { BranchToolbar } from "./DiffPanel";
 import type { DiffFile, DiffLine } from "./DiffPanel";
 import { DiffFileCard } from "./DiffFileCard";
 import { CommitDialog, type CommitDialogIntent } from "./CommitDialog";
-import { TurnTimelineStrip, type TurnMarker } from "./TurnTimelineStrip";
 import { useSnackbar } from "../ui/Snackbar";
 
 export interface DiffPanelContainerProps {
@@ -31,11 +28,11 @@ export interface DiffPanelContainerProps {
    */
   vcsKind?: "git" | "unknown" | null;
   /**
-   * Sorted ascending list of checkpoint turn numbers for this chat
-   * (synthetic turn 0 included). Drives the timeline-strip marker
-   * rendering. Empty list → empty-state badge.
+   * Monotonic counter bumped by the route when a turn's checkpoint lands.
+   * A change re-fetches the total diff so the panel stays current without
+   * the user clicking Refresh. Identity-only; the value is never read.
    */
-  checkpointTurns?: number[];
+  refreshSignal?: number;
 }
 
 type SnackbarState =
@@ -67,23 +64,28 @@ function errMessage(err: unknown): string {
 }
 
 /**
- * Build the per-turn render list: each section becomes a contiguous
- * file-block prefixed by a synthetic `meta` line carrying the section
- * label (commit subject). Files within a section keep their order;
- * later sections render below earlier ones without dedupe.
+ * Flatten the per-repo diff sections into a single render list. A lone
+ * section (the common single-repo case) renders flat. When the workspace
+ * spans multiple repos, each section's first file is prefixed with a
+ * synthetic `meta` line carrying the repo's relative path so the user can
+ * tell which repo a block belongs to. The root repo's empty label renders
+ * as "(root)".
  */
-function buildPerTurnFiles(sections: ApiDiffSection[]): DiffFile[] {
+export function buildSectionedFiles(sections: ApiDiffSection[]): DiffFile[] {
+  const parsed = sections
+    .map((s) => ({ label: s.label, files: parseUnifiedDiff(s.diff) }))
+    .filter((s) => s.files.length > 0);
+
+  if (parsed.length <= 1) {
+    return parsed[0]?.files ?? [];
+  }
+
   const out: DiffFile[] = [];
-  for (const section of sections) {
-    const parsed = parseUnifiedDiff(section.diff);
-    if (parsed.length === 0) continue;
+  for (const section of parsed) {
     let prefixed = false;
-    for (const file of parsed) {
+    for (const file of section.files) {
       if (!prefixed) {
-        const labelMeta: DiffLine = {
-          kind: "meta",
-          text: section.label,
-        };
+        const labelMeta: DiffLine = { kind: "meta", text: section.label || "(root)" };
         const firstHunk = file.hunks[0] ?? [];
         const newHunks =
           file.hunks.length === 0
@@ -100,22 +102,11 @@ function buildPerTurnFiles(sections: ApiDiffSection[]): DiffFile[] {
 }
 
 export function DiffPanelContainer(props: DiffPanelContainerProps) {
-  const { worktreePath, chatId } = props;
+  const { worktreePath, chatId, refreshSignal } = props;
   const snackbarHost = useSnackbar();
 
   const [status, setStatus] = useState<ApiGitStatus | null>(null);
   const [sections, setSections] = useState<ApiDiffSection[]>([]);
-  // Timeline-strip selection — the single source of truth for "what
-  // am I showing". "whole" → whole-chat diff (legacy
-  // `getDiff(worktreePath)` working-tree path); a turn index N →
-  // checkpoint-range diff between refs N-1 and N. The explicit
-  // scope toggle below is a UI affordance that maps onto this one
-  // state: "whole" pill = setSelectedTurn("whole"). The legacy
-  // independent `scope` state has been removed so the two selectors
-  // can't disagree.
-  const [selectedTurn, setSelectedTurn] = useState<number | "whole">("whole");
-  const scope: "per-turn" | "whole" =
-    selectedTurn === "whole" ? "whole" : "per-turn";
   const [initialLoading, setInitialLoading] = useState<boolean>(
     worktreePath !== null,
   );
@@ -128,10 +119,8 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [snackbar, setSnackbar] = useState<SnackbarState>(null);
 
-  // Two controllers: one for the status fetch (re-fired only on
-  // mount / refresh / post-action), one for the diff fetch (also
-  // re-fired on scope change). Aborts cascade through `signal` on
-  // the underlying fetch.
+  // Two controllers: one for the status fetch, one for the diff fetch.
+  // Aborts cascade through `signal` on the underlying fetch.
   const statusCtrlRef = useRef<AbortController | null>(null);
   const diffCtrlRef = useRef<AbortController | null>(null);
 
@@ -157,12 +146,12 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
   );
 
   const fetchDiff = useCallback(
-    async (wt: string, mode: "per-turn" | "whole"): Promise<void> => {
+    async (wt: string): Promise<void> => {
       diffCtrlRef.current?.abort();
       const controller = new AbortController();
       diffCtrlRef.current = controller;
       try {
-        const result = await getDiff(wt, { mode, signal: controller.signal });
+        const result = await getDiff(wt, { signal: controller.signal });
         if (controller.signal.aborted) return;
         setSections(result.sections);
         setDiffError(null);
@@ -175,32 +164,17 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
     [],
   );
 
-  // Shared success/error handlers for the scope-change diff re-fetch.
-  // Hoisted out of the effect body so the call site stays terse and
-  // the static-source tests can locate `getDiff(...) ` adjacent to
-  // the `[scope, ...]` deps array.
-  const handleDiffOk = useCallback((r: { sections: ApiDiffSection[] }) => {
-    if (diffCtrlRef.current?.signal.aborted) return;
-    setSections(r.sections);
-    setDiffError(null);
-  }, []);
-  const handleDiffErr = useCallback((e: unknown) => {
-    if (diffCtrlRef.current?.signal.aborted) return;
-    if ((e as { name?: string })?.name === "AbortError") return;
-    setDiffError(errMessage(e));
-  }, []);
-
   const refresh = useCallback(async (): Promise<void> => {
     if (!worktreePath) return;
     setRefreshing(true);
     try {
-      await Promise.all([fetchStatus(worktreePath), fetchDiff(worktreePath, scope)]);
+      await Promise.all([fetchStatus(worktreePath), fetchDiff(worktreePath)]);
     } finally {
       setRefreshing(false);
     }
-  }, [worktreePath, scope, fetchStatus, fetchDiff]);
+  }, [worktreePath, fetchStatus, fetchDiff]);
 
-  // ---- Initial mount: parallel fetch -------------------------------------
+  // ---- Initial mount + chat switch: parallel fetch -----------------------
 
   useEffect(() => {
     if (!worktreePath) {
@@ -209,7 +183,7 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
     }
     setInitialLoading(true);
     let cancelled = false;
-    Promise.all([fetchStatus(worktreePath), fetchDiff(worktreePath, scope)])
+    Promise.all([fetchStatus(worktreePath), fetchDiff(worktreePath)])
       .finally(() => {
         if (!cancelled) setInitialLoading(false);
       });
@@ -221,13 +195,14 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worktreePath, chatId]);
 
-  // ---- Scope/selection change: abort diff + re-fetch (status unchanged) ----
+  // ---- Checkpoint-landed signal: silent re-fetch (no skeleton) -----------
 
-  // `scope` is now derived from `selectedTurn`, so the legacy
-  // "fire-on-scope-change" effect is gone — its responsibility is
-  // covered by the explicit click handlers below (onScopeChange and
-  // the timeline-strip onSelect), which both abort+refetch directly.
-  // Status is scope-independent and only refetched on mount/refresh.
+  useEffect(() => {
+    if (refreshSignal === undefined) return;
+    if (!worktreePath) return;
+    void fetchDiff(worktreePath);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   // ---- Snackbar mirroring: container state → global useSnackbar ----------
 
@@ -409,38 +384,14 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
     await refresh();
   }, [refresh]);
 
-  const onScopeChange = useCallback((next: "per-turn" | "whole") => {
-    // Single source of truth: the explicit scope toggle maps onto the
-    // timeline-strip selection. "whole" clears the marker selection;
-    // "per-turn" is a no-op when no marker is selected (the user
-    // selects a turn via the strip).
-    if (next === "whole") {
-      diffCtrlRef.current?.abort();
-      const controller = new AbortController();
-      diffCtrlRef.current = controller;
-      setSelectedTurn("whole");
-      if (worktreePath) {
-        getDiff(worktreePath, { mode: "whole", signal: controller.signal }).then(
-          handleDiffOk,
-          handleDiffErr,
-        );
-      }
-    }
-  }, [worktreePath, handleDiffOk, handleDiffErr]);
-
   // ---- Render ------------------------------------------------------------
 
   // Per ADR-009 the panel mounts for every chat, including non-git
-  // cwds. The legacy `worktreePath === null` early-return is gone;
-  // the empty-state badge below covers both the legacy-chat path
-  // (`vcs_kind === "git"` but no checkpoint refs) and the non-git
-  // path (`vcs_kind === "unknown"`).
+  // cwds. The empty-state badge below covers both the no-changes path
+  // (`vcs_kind === "git"`) and the non-git path (`vcs_kind === "unknown"`).
 
   const showError = statusError !== null || diffError !== null;
-  const renderedFiles: DiffFile[] =
-    scope === "whole"
-      ? aggregateSectionsByFile(sections)
-      : buildPerTurnFiles(sections);
+  const renderedFiles: DiffFile[] = buildSectionedFiles(sections);
   const isEmpty =
     !initialLoading && !showError && renderedFiles.length === 0;
 
@@ -477,93 +428,11 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
         onRefresh={onRefresh}
       />
 
-      {/*
-        Turn-timeline strip — one marker per checkpoint ref. Empty
-        markers + `vcsKind === "git"` ⇒ "no per-turn history"; empty
-        markers + `vcsKind === "unknown"` ⇒ "non-git project".
-        Selection wires into a checkpoint-range fetch URL of the form
-        `mode=checkpoint-range&from=<n-1>&to=<n>`.
-      */}
-      {((props.checkpointTurns ?? []).length > 0 ||
-        props.vcsKind === "unknown") && (
-        <TurnTimelineStrip
-          markers={(props.checkpointTurns ?? []).map((n): TurnMarker => ({
-            turn: n,
-            ref: `refs/loom-checkpoints/${chatId}/${n}`,
-          }))}
-          selected={selectedTurn}
-          onSelect={(sel) => {
-            setSelectedTurn(sel);
-            diffCtrlRef.current?.abort();
-            const controller = new AbortController();
-            diffCtrlRef.current = controller;
-            const promise =
-              sel === "whole"
-                ? getCheckpointDiff(chatId, 0, "latest", { signal: controller.signal })
-                : getCheckpointDiff(chatId, sel - 1, sel, { signal: controller.signal });
-            promise.then(handleDiffOk, handleDiffErr);
-          }}
-          emptyState={
-            (props.checkpointTurns ?? []).length === 0
-              ? {
-                  badgeCopy:
-                    props.vcsKind === "unknown"
-                      ? "non-git project"
-                      : "no per-turn history",
-                }
-              : undefined
-          }
-        />
-      )}
-
-      {/* Scope toggle strip + totals. */}
+      {/* Totals + refresh. */}
       <div
         className="border-b px-3 py-1.5 flex items-center gap-2"
         style={{ borderColor: "var(--border)", background: "rgba(0,0,0,0.015)" }}
       >
-        <div
-          className="inline-flex p-0.5 rounded-md border"
-          style={{ borderColor: "var(--border)", background: "var(--card)" }}
-        >
-          <button
-            onClick={() => onScopeChange("per-turn")}
-            className={
-              "px-2.5 py-0.5 rounded text-[11px] " +
-              (scope === "per-turn" ? "font-medium" : "")
-            }
-            style={
-              scope === "per-turn"
-                ? {
-                    background: "var(--background)",
-                    color: "var(--foreground)",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-                  }
-                : { color: "var(--muted-foreground)" }
-            }
-            data-testid="diff-scope-per-turn"
-          >
-            Per-turn
-          </button>
-          <button
-            onClick={() => onScopeChange("whole")}
-            className={
-              "px-2.5 py-0.5 rounded text-[11px] " +
-              (scope === "whole" ? "font-medium" : "")
-            }
-            style={
-              scope === "whole"
-                ? {
-                    background: "var(--background)",
-                    color: "var(--foreground)",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-                  }
-                : { color: "var(--muted-foreground)" }
-            }
-            data-testid="diff-scope-whole"
-          >
-            Whole conversation
-          </button>
-        </div>
         <span className="ml-auto text-[10px]" style={{ color: "var(--muted-foreground)" }}>
           {renderedFiles.length} files
         </span>
@@ -656,9 +525,7 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
             >
               {props.vcsKind === "unknown"
                 ? "non-git project"
-                : (props.checkpointTurns ?? []).length === 0
-                  ? "no per-turn history"
-                  : "No changes on this branch yet."}
+                : "No changes on this branch yet."}
             </p>
           </div>
         )}

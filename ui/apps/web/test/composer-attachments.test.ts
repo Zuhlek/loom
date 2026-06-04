@@ -100,8 +100,10 @@ describe("T-005 attachment state machine (US-001..US-005)", () => {
 
   test("auto-dismisses overCapNotice after ~3s via setTimeout", () => {
     const src = readComposer();
-    // Look for setTimeout with 3000ms used to clear the notice.
-    expect(src).toMatch(/setTimeout\s*\([^)]*,\s*3000\s*\)/);
+    // The 3000ms delay is hoisted into a named constant
+    // (OVER_CAP_NOTICE_MS) and passed to setTimeout that clears the notice.
+    expect(src).toMatch(/OVER_CAP_NOTICE_MS\s*=\s*3000/);
+    expect(src).toMatch(/setTimeout\([\s\S]*?,\s*OVER_CAP_NOTICE_MS\s*\)/);
   });
 
   test("uses URL.createObjectURL for previewUrl", () => {
@@ -128,9 +130,12 @@ describe("T-006 paste handler (US-001)", () => {
     expect(src).toMatch(/onPaste\s*=\s*\{/);
   });
 
-  test("paste handler reads clipboardData.files", () => {
+  test("paste handler reads clipboard files", () => {
     const src = readComposer();
-    expect(src).toMatch(/clipboardData\??\.files/);
+    // The handler reads e.clipboardData (aliased to `cd`) and then its
+    // `.files` list. Assert both halves of the now-two-step read.
+    expect(src).toMatch(/clipboardData/);
+    expect(src).toMatch(/cd\.files/);
   });
 
   test("paste handler calls addAttachments when images present", () => {
@@ -254,14 +259,16 @@ describe("T-009 attachment-strip render + per-thumb remove + URL revoke (US-005)
     expect(src).toMatch(/aria-live\s*=\s*["']polite["']/);
   });
 
-  test("attachment-strip renders above the textarea (DOM order)", () => {
+  test("attachment-strip renders above the editor (DOM order)", () => {
     const src = readComposer();
     const stripIdx = src.indexOf("composer-attachment-strip");
-    // Match the actual JSX site of <textarea> (not "textarea" in a comment).
-    const textareaIdx = src.indexOf("<textarea");
+    // The textarea was refactored into the <ComposerEditor> component;
+    // match its JSX site (skip the import) to assert the strip renders
+    // above the input.
+    const editorIdx = src.search(/<ComposerEditor[\s>]/);
     expect(stripIdx, "strip test-id present").toBeGreaterThan(-1);
-    expect(textareaIdx, "<textarea> JSX present").toBeGreaterThan(-1);
-    expect(stripIdx).toBeLessThan(textareaIdx);
+    expect(editorIdx, "<ComposerEditor> JSX present").toBeGreaterThan(-1);
+    expect(stripIdx).toBeLessThan(editorIdx);
   });
 });
 
@@ -345,7 +352,10 @@ describe("T-013 @-menu state + debounced /file-search + mutual-exclusion (US-008
 
   test("debounced /file-search fetch uses ~150ms setTimeout + AbortController", () => {
     const src = readComposer();
-    expect(src).toMatch(/setTimeout\s*\([^)]*,\s*150\s*\)/);
+    // The 150ms debounce is hoisted into a named constant
+    // (AT_FILE_DEBOUNCE_MS) and passed to the debounce setTimeout.
+    expect(src).toMatch(/AT_FILE_DEBOUNCE_MS\s*=\s*150/);
+    expect(src).toMatch(/setTimeout\([\s\S]*?,\s*AT_FILE_DEBOUNCE_MS\s*\)/);
     expect(src).toMatch(/AbortController/);
   });
 
@@ -357,13 +367,15 @@ describe("T-013 @-menu state + debounced /file-search + mutual-exclusion (US-008
     expect(src).toMatch(/q=/);
   });
 
-  test("Escape closes the @-menu without modifying the textarea", () => {
+  test("Escape closes the @-menu without modifying the editor", () => {
     const src = readComposer();
-    // The Escape key is handled in the existing slash menu; the at-file
-    // handler must also wire it. We assert the source mentions Escape
-    // handling at least twice (slash + atfile).
-    const escapes = src.match(/["']Escape["']/g);
-    expect(escapes?.length ?? 0).toBeGreaterThanOrEqual(2);
+    // Keyboard handling moved into <ComposerEditor>, which emits a
+    // typed `{ kind: "escape" }` ComposerKeyIntent. The composer's
+    // handleKeyIntent handles that intent and closes both menus
+    // (slash + at-file) without mutating the editor content.
+    expect(src).toMatch(/intent\.kind\s*===?\s*["']escape["']/);
+    expect(src).toMatch(/setAtFileMenuOpen\(\s*false\s*\)/);
+    expect(src).toMatch(/setSlashMenuOpen\(\s*false\s*\)/);
   });
 
   test("dev-warn fires when both slash and at-file triggers fire on same tick", () => {
@@ -394,9 +406,10 @@ describe("T-014 placeholder @-file chip removed (US-010)", () => {
     expect(src).not.toMatch(/>\s*@-file\s*</);
   });
 
-  test("/commands chip is preserved", () => {
+  test("the /commands discoverability hint is preserved", () => {
     const src = readComposer();
-    // The /commands chip renders `>commands<` inside the span; keep it.
-    expect(src).toMatch(/>\s*commands\s*</);
+    // The footer chips were folded into the editor placeholder copy;
+    // the "/ for commands" hint must survive that move.
+    expect(src).toMatch(/\/ for commands/);
   });
 });

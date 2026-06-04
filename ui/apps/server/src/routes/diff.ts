@@ -1,116 +1,101 @@
 import { spawnSync } from "node:child_process";
+import * as path from "node:path";
 
 import { jsonResponse } from "./_response.ts";
-import type { MetadataStore } from "../metadata-store/index.ts";
-import type { CheckpointDiffQuery } from "../checkpointing/checkpoint-diff-query.ts";
-import type { CheckpointStore } from "../checkpointing/checkpoint-store.ts";
+import { discoverRepos } from "../git/discover-repos.ts";
 
 export interface DiffSection {
-  kind: "per-turn" | "whole" | "checkpoint-range";
+  kind: "whole";
+  /** Repo path relative to the workspace root; "" for the root repo. */
   label: string;
   diff: string;
 }
 
-export interface DiffRouteDeps {
-  store?: MetadataStore;
-  diffQuery?: CheckpointDiffQuery;
-  checkpointStore?: CheckpointStore;
+/**
+ * Resolve the base ref to diff against for a single repo. Nested repos often
+ * lack the root repo's base branch (e.g. "main"), so fall back to HEAD —
+ * which yields the working-tree (uncommitted) diff — when `base` is absent.
+ */
+function effectiveBase(repo: string, base: string): string {
+  const probe = spawnSync(
+    "git",
+    ["-C", repo, "rev-parse", "--verify", "--quiet", `${base}^{commit}`],
+    { encoding: "utf8" },
+  );
+  return probe.status === 0 ? base : "HEAD";
 }
 
-function parseTurnArg(raw: string | null, kind: "from" | "to"): number | "start" | "latest" | null {
-  if (raw === null) return null;
-  if (kind === "from" && raw === "start") return "start";
-  if (kind === "to" && raw === "latest") return "latest";
-  const n = Number(raw);
-  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return null;
-  return n;
+/**
+ * The full diff for one repo: tracked changes vs `base` (committed +
+ * working-tree edits) plus untracked, non-ignored files rendered as
+ * add-diffs. `git diff` alone omits untracked files, but new files an
+ * agent just created are exactly what the user wants to see — so we
+ * append a synthetic `--no-index` add-diff per untracked path. This is
+ * non-mutating (no `git add -N`, so the user's index is untouched).
+ */
+function repoDiff(repo: string, base: string): string {
+  const ref = effectiveBase(repo, base);
+  const tracked =
+    spawnSync("git", ["-C", repo, "diff", ref, "--unified=3"], {
+      encoding: "utf8",
+    }).stdout ?? "";
+
+  const othersOut =
+    spawnSync(
+      "git",
+      ["-C", repo, "ls-files", "--others", "--exclude-standard", "-z"],
+      { encoding: "utf8" },
+    ).stdout ?? "";
+  const untrackedPaths = othersOut
+    .split("\0")
+    .filter(Boolean)
+    // Trailing-slash entries are embedded-repo boundaries (git won't
+    // descend into a nested repo). Those repos get their own section via
+    // `discoverRepos`, so skip them here — otherwise `--no-index` would
+    // recurse and leak the child's files into the parent's diff.
+    .filter((rel) => !rel.endsWith("/"));
+
+  let untracked = "";
+  for (const rel of untrackedPaths) {
+    // `--no-index` exits 1 when the files differ; stdout still holds the
+    // diff. The header comes out as `diff --git a/<rel> b/<rel>` with a
+    // `new file mode` line, which the unified-diff parser handles.
+    const r = spawnSync(
+      "git",
+      ["-C", repo, "diff", "--no-index", "--unified=3", "--", "/dev/null", rel],
+      { encoding: "utf8" },
+    );
+    untracked += r.stdout ?? "";
+  }
+
+  return tracked + untracked;
 }
 
 export function mountDiffRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
-  deps: DiffRouteDeps = {},
 ): void {
-  routes["/checkpoints/list"] = async (_req, url) => {
-    const chatId = url.searchParams.get("chatId");
-    if (!chatId) return jsonResponse({ error: "missing chatId" }, 400);
-    if (!deps.store || !deps.checkpointStore) {
-      return jsonResponse({ error: "checkpoint listing not configured" }, 500);
-    }
-    const chat = deps.store.chats.get(chatId);
-    if (!chat) return jsonResponse({ error: "chat not found" }, 404);
-    const cwd = chat.worktree_path ?? chat.cwd;
-    const turns = await deps.checkpointStore.listTurns(chatId, cwd);
-    return jsonResponse({ turns }, 200);
-  };
-
-  routes["/diff"] = async (req, url) => {
-    const mode = (url.searchParams.get("mode") ?? "whole") as
-      | "per-turn"
-      | "whole"
-      | "checkpoint-range";
-
-    if (mode === "checkpoint-range") {
-      const chatId = url.searchParams.get("chatId");
-      if (!chatId) {
-        return jsonResponse({ error: "missing chatId" }, 400);
-      }
-      if (!deps.store || !deps.diffQuery) {
-        return jsonResponse({ error: "checkpoint-range mode not configured" }, 500);
-      }
-      const chat = deps.store.chats.get(chatId);
-      if (!chat) {
-        return jsonResponse({ error: "chat not found" }, 404);
-      }
-      const from = parseTurnArg(url.searchParams.get("from"), "from");
-      const to = parseTurnArg(url.searchParams.get("to"), "to");
-      if (from === null || to === null) {
-        return jsonResponse({ error: "invalid from/to" }, 400);
-      }
-      const cwd = chat.worktree_path ?? chat.cwd;
-      const r = await deps.diffQuery.getTurnDiff({ chatId, cwd, from, to });
-      return jsonResponse({ sections: r.sections }, 200);
-    }
-
+  // GET /diff?worktreePath=<abs>&base=<ref>
+  //
+  // One total diff for the workspace: the root repo plus every independent
+  // nested repo beneath it, each compared against `base` (committed +
+  // uncommitted). One section per repo, labelled by its path relative to the
+  // workspace root. Empty-diff repos are omitted.
+  routes["/diff"] = async (_req, url) => {
     const worktreePath = url.searchParams.get("worktreePath") ?? "";
     const base = url.searchParams.get("base") ?? "main";
     if (!worktreePath) {
       return jsonResponse({ error: "missing worktreePath" }, 400);
     }
+
+    const repos = discoverRepos(worktreePath);
     const sections: DiffSection[] = [];
-    if (mode === "per-turn") {
-      const log = spawnSync(
-        "git",
-        ["-C", worktreePath, "log", `${base}..HEAD`, "--pretty=%H%x09%s"],
-        { encoding: "utf8" },
-      );
-      if (log.status === 0 && log.stdout.trim().length > 0) {
-        const lines = log.stdout.trim().split("\n").reverse();
-        for (const line of lines) {
-          const [sha, ...subjectParts] = line.split("\t");
-          const subject = subjectParts.join("\t");
-          const d = spawnSync(
-            "git",
-            ["-C", worktreePath, "show", sha, "--stat", "--unified=3"],
-            { encoding: "utf8" },
-          );
-          sections.push({ kind: "per-turn", label: subject, diff: d.stdout });
-        }
-        const uncommitted = spawnSync(
-          "git",
-          ["-C", worktreePath, "diff", "HEAD", "--unified=3"],
-          { encoding: "utf8" },
-        );
-        if (uncommitted.status === 0 && uncommitted.stdout.trim().length > 0) {
-          sections.push({ kind: "per-turn", label: "Uncommitted", diff: uncommitted.stdout });
-        }
-      }
+    for (const repo of repos) {
+      const diff = repoDiff(repo, base);
+      if (diff.trim().length === 0) continue;
+      const label = path.relative(worktreePath, repo);
+      sections.push({ kind: "whole", label, diff });
     }
-    if (sections.length === 0) {
-      const d = spawnSync("git", ["-C", worktreePath, "diff", base, "--unified=3"], {
-        encoding: "utf8",
-      });
-      sections.push({ kind: "whole", label: `${base}…working tree`, diff: d.stdout || "" });
-    }
+
     return jsonResponse({ sections }, 200);
   };
 }

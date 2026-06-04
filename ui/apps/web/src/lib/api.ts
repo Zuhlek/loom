@@ -326,9 +326,13 @@ export interface ApiGitStatus {
   remote?: string;
 }
 
-/** One section of `GET /diff` output (server: `routes/diff.ts`). */
+/**
+ * One section of `GET /diff` output (server: `routes/diff.ts`). One section
+ * per repo in the workspace — the root repo plus any nested repos. `label` is
+ * the repo path relative to the workspace root ("" for the root repo).
+ */
 export interface ApiDiffSection {
-  kind: "per-turn" | "whole";
+  kind: "whole";
   label: string;
   diff: string;
 }
@@ -337,9 +341,6 @@ export interface ApiDiffSection {
 export interface ApiDiffResponse {
   sections: ApiDiffSection[];
 }
-
-/** Diff scope toggle: per-commit sections vs. one whole-conversation diff. */
-export type GitDiffMode = "per-turn" | "whole";
 
 export async function getGitStatus(
   worktreePath: string,
@@ -351,13 +352,12 @@ export async function getGitStatus(
 
 export async function getDiff(
   worktreePath: string,
-  opts: { mode: GitDiffMode; base?: string; signal?: AbortSignal },
+  opts: { base?: string; signal?: AbortSignal } = {},
 ): Promise<ApiDiffResponse> {
   const base = opts.base ?? "main";
   const qs =
     `worktreePath=${encodeURIComponent(worktreePath)}` +
-    `&base=${encodeURIComponent(base)}` +
-    `&mode=${encodeURIComponent(opts.mode)}`;
+    `&base=${encodeURIComponent(base)}`;
   return apiFetch<ApiDiffResponse>(`/diff?${qs}`, { signal: opts.signal });
 }
 
@@ -398,34 +398,3 @@ export async function postGitPr(input: {
   });
 }
 
-/**
- * Fetch a per-checkpoint diff range. `to === "latest"` resolves to the
- * highest checkpoint ref on the chat; otherwise both endpoints are
- * turn indices written by `CheckpointStore`. Mirrors the server's
- * `GET /diff?mode=checkpoint-range` route.
- */
-export async function getCheckpointDiff(
-  chatId: string,
-  from: number,
-  to: number | "latest",
-  opts: { signal?: AbortSignal } = {},
-): Promise<ApiDiffResponse> {
-  const qs =
-    `chatId=${encodeURIComponent(chatId)}` +
-    `&mode=checkpoint-range` +
-    `&from=${from}` +
-    `&to=${to === "latest" ? "latest" : String(to)}`;
-  return apiFetch<ApiDiffResponse>(`/diff?${qs}`, { signal: opts.signal });
-}
-
-/**
- * List the checkpoint turn indices recorded for a chat. Returns a
- * sorted ascending list including synthetic turn 0 when written.
- * Empty list ⇒ no checkpoint refs yet (legacy / non-git / freshly
- * created chats before first-send commits).
- */
-export async function listCheckpointTurns(chatId: string): Promise<{ turns: number[] }> {
-  return apiFetch<{ turns: number[] }>(
-    `/checkpoints/list?chatId=${encodeURIComponent(chatId)}`,
-  );
-}

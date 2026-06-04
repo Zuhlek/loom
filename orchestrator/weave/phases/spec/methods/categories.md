@@ -15,7 +15,7 @@ Five categories. Pick one per question by inspecting what the question requires 
 
 Bias toward cheaper categories. **Y/N** is preferred when it fits; demote richer categories when possible.
 
-Every question — regardless of category — also wears a **Briefing block** wrapper. The briefing is the difference between "the user has to ask `[explain more]` before they can answer" and "the user reads the question once and answers." It is mandatory.
+Every question — regardless of category — also wears a mandatory **Briefing block** wrapper.
 
 ---
 

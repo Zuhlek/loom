@@ -21,7 +21,6 @@ import {
   type ApiDiffResponse,
   type ApiDiffSection,
   type ApiGitStatus,
-  type GitDiffMode,
 } from "../src/lib/api";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -106,30 +105,20 @@ describe("getGitStatus", () => {
 });
 
 describe("getDiff", () => {
-  test("mode=per-turn — URL contains mode=per-turn; response parsed", async () => {
+  test("default base=main — URL-encodes worktreePath; response parsed", async () => {
     const body: ApiDiffResponse = {
-      sections: [{ kind: "per-turn", label: "commit A", diff: "diff --git ..." }],
+      sections: [{ kind: "whole", label: "", diff: "diff --git ..." }],
     };
     fetchSpy.mockResolvedValueOnce(jsonResponse(body));
 
-    const result = await getDiff("/wt", { mode: "per-turn" });
+    const result = await getDiff("/wt");
 
     const { url } = readCall();
-    expect(url).toContain("mode=per-turn");
     expect(url).toContain("worktreePath=%2Fwt");
     expect(url).toContain("base=main");
+    // The legacy turn-scope toggle is gone — no `mode` param.
+    expect(url).not.toContain("mode=");
     expect(result).toEqual(body);
-  });
-
-  test("mode=whole — URL contains mode=whole", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({ sections: [] } satisfies ApiDiffResponse),
-    );
-
-    await getDiff("/wt", { mode: "whole" });
-
-    const { url } = readCall();
-    expect(url).toContain("mode=whole");
   });
 
   test("custom base override appears in the query string", async () => {
@@ -137,7 +126,7 @@ describe("getDiff", () => {
       jsonResponse({ sections: [] } satisfies ApiDiffResponse),
     );
 
-    await getDiff("/wt", { mode: "whole", base: "develop" });
+    await getDiff("/wt", { base: "develop" });
 
     const { url } = readCall();
     expect(url).toContain("base=develop");
@@ -156,7 +145,7 @@ describe("getDiff", () => {
           });
         }),
     );
-    const promise = getDiff("/wt", { mode: "per-turn", signal: ctrl.signal });
+    const promise = getDiff("/wt", { signal: ctrl.signal });
     ctrl.abort();
     await expect(promise).rejects.toThrow();
 
@@ -267,12 +256,6 @@ describe("postGitPr", () => {
 });
 
 describe("typecheck-only contract guard", () => {
-  test("GitDiffMode union covers per-turn and whole", () => {
-    const a: GitDiffMode = "per-turn";
-    const b: GitDiffMode = "whole";
-    expect([a, b]).toEqual(["per-turn", "whole"]);
-  });
-
   test("ApiDiffSection shape exposes kind/label/diff", () => {
     const section: ApiDiffSection = { kind: "whole", label: "main...HEAD", diff: "" };
     expect(section.kind).toBe("whole");

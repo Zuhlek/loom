@@ -1,30 +1,13 @@
 /**
- * T-008 — `DiffPanelContainer` full body (US-006, US-007, US-008).
+ * `DiffPanelContainer` static-source contract.
  *
  * Vitest runtime here is `node`; no jsdom. Static-source assertions
- * matching the precedent in `diff-panel-controlled-scope.test.ts`,
- * `proposed-plan-card.test.ts`, and `live-chat-right-pane.test.ts`.
+ * matching the precedent in the rest of the diff-panel suite.
  *
- * Contract verified:
- *   - File exists at `src/components/diff/DiffPanelContainer.tsx` and
- *     the T-007 stub is gone (no `data-stub="diff-panel-container"`).
- *   - Imports the engine + client surface owned by the prior tasks:
- *     `getGitStatus`, `getDiff`, `parseUnifiedDiff`,
- *     `aggregateSectionsByFile`, and `DiffFileCard`.
- *   - Null `worktreePath` short-circuits to the "worktree not
- *     initialized" copy with no fetch.
- *   - Mount fires `getGitStatus` + `getDiff({ mode: "per-turn" })` in
- *     parallel via `Promise.all`.
- *   - `scope` state is initialised to `"per-turn"`.
- *   - Scope toggle aborts the in-flight controller and re-fires
- *     `getDiff` with the new mode; status is NOT re-fetched.
- *   - Whole-mode rendering pipes sections through
- *     `aggregateSectionsByFile`; per-turn rendering does NOT.
- *   - Loading skeleton: three `animate-pulse` rounded divs.
- *   - Empty: "No changes on this branch yet."
- *   - Error: red callout + Retry button that re-fires both fetches.
- *   - Refresh button calls both fetchers; spinner class on the
- *     button while in flight.
+ * The panel now shows ONE thing: the total branch/workspace diff
+ * (`getDiff` → per-repo sections → `buildSectionedFiles`). The legacy
+ * turn-based UI (timeline strip, per-turn/whole scope toggle,
+ * checkpoint-range fetch) has been removed.
  */
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
@@ -33,14 +16,9 @@ import { fileURLToPath } from "node:url";
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const containerPath = webRoot + "src/components/diff/DiffPanelContainer.tsx";
 
-describe("T-008 DiffPanelContainer — file + import surface", () => {
+describe("DiffPanelContainer — file + import surface", () => {
   test("DiffPanelContainer.tsx exists at the documented path", () => {
     expect(existsSync(containerPath)).toBe(true);
-  });
-
-  test("the T-007 stub marker is gone (body has been replaced)", () => {
-    const src = readFileSync(containerPath, "utf8");
-    expect(src).not.toMatch(/data-stub=["']diff-panel-container["']/);
   });
 
   test("imports getGitStatus + getDiff from ../../lib/api", () => {
@@ -54,12 +32,6 @@ describe("T-008 DiffPanelContainer — file + import surface", () => {
     const src = readFileSync(containerPath, "utf8");
     expect(src).toMatch(/\bparseUnifiedDiff\b/);
     expect(src).toMatch(/from\s+["']\.\.\/\.\.\/lib\/diff-parse["']/);
-  });
-
-  test("imports aggregateSectionsByFile from ../../lib/diff-aggregate", () => {
-    const src = readFileSync(containerPath, "utf8");
-    expect(src).toMatch(/\baggregateSectionsByFile\b/);
-    expect(src).toMatch(/from\s+["']\.\.\/\.\.\/lib\/diff-aggregate["']/);
   });
 
   test("imports DiffFileCard from ./DiffFileCard", () => {
@@ -82,42 +54,44 @@ describe("T-008 DiffPanelContainer — file + import surface", () => {
   });
 });
 
-describe("T-008 DiffPanelContainer — props + state shape", () => {
-  test("exports DiffPanelContainerProps with worktreePath: string | null and chatId: string", () => {
+describe("DiffPanelContainer — turn-based UI is removed", () => {
+  test("does NOT import TurnTimelineStrip / getCheckpointDiff / aggregateSectionsByFile", () => {
+    const src = readFileSync(containerPath, "utf8");
+    expect(src).not.toMatch(/TurnTimelineStrip/);
+    expect(src).not.toMatch(/getCheckpointDiff/);
+    expect(src).not.toMatch(/aggregateSectionsByFile/);
+  });
+
+  test("no scope/selectedTurn state, no per-turn mode, no scope toggle", () => {
+    const src = readFileSync(containerPath, "utf8");
+    expect(src).not.toMatch(/selectedTurn/);
+    expect(src).not.toMatch(/onScopeChange/);
+    expect(src).not.toMatch(/per-turn/);
+    expect(src).not.toMatch(/Whole conversation/);
+  });
+
+  test("getDiff is called without a mode argument", () => {
+    const src = readFileSync(containerPath, "utf8");
+    expect(src).not.toMatch(/mode\s*:/);
+  });
+});
+
+describe("DiffPanelContainer — props + state shape", () => {
+  test("exports DiffPanelContainerProps with worktreePath: string | null, chatId, refreshSignal", () => {
     const src = readFileSync(containerPath, "utf8");
     expect(src).toMatch(/export\s+interface\s+DiffPanelContainerProps\b/);
     expect(src).toMatch(/worktreePath\s*:\s*string\s*\|\s*null/);
     expect(src).toMatch(/chatId\s*:\s*string/);
+    expect(src).toMatch(/refreshSignal\?\s*:\s*number/);
   });
 
   test("DiffPanelContainer is exported as a function component", () => {
     const src = readFileSync(containerPath, "utf8");
-    expect(src).toMatch(
-      /export\s+function\s+DiffPanelContainer\s*\([^)]*\)/,
-    );
-  });
-
-  test("scope is derived from selectedTurn (single source of truth)", () => {
-    const src = readFileSync(containerPath, "utf8");
-    // Follow-up 3 — the legacy independent `scope` state was removed.
-    // `selectedTurn` is the single source of truth; `scope` is a
-    // derived value: "whole" when selectedTurn === "whole", "per-turn"
-    // otherwise. We anchor on the derivation expression.
-    expect(src).toMatch(
-      /selectedTurn\s*===\s*["']whole["']\s*\?\s*["']whole["']\s*:\s*["']per-turn["']/,
-    );
-    // selectedTurn itself still seeds to "whole" so the panel default
-    // behaviour (no marker selected → whole-chat diff) is preserved.
-    expect(src).toMatch(
-      /useState<\s*number\s*\|\s*["']whole["']\s*>\s*\(\s*["']whole["']\s*\)/,
-    );
+    expect(src).toMatch(/export\s+function\s+DiffPanelContainer\s*\([^)]*\)/);
   });
 
   test("state declares the snackbar discriminated union with the four kinds", () => {
     const src = readFileSync(containerPath, "utf8");
-    // The container state types `snackbar` with kinds "commit",
-    // "push", "pr", "error". We assert each literal appears in the
-    // file (either in the state type or in the setSnackbar call site).
     expect(src).toMatch(/kind\s*:\s*["']commit["']/);
     expect(src).toMatch(/kind\s*:\s*["']push["']/);
     expect(src).toMatch(/kind\s*:\s*["']pr["']/);
@@ -125,34 +99,9 @@ describe("T-008 DiffPanelContainer — props + state shape", () => {
   });
 });
 
-describe("DiffPanelContainer — unconditional mount (replaces null-worktreePath guard)", () => {
-  // The legacy "Worktree not initialized" early-return was deliberately
-  // dropped — the panel mounts for every chat (including non-git cwds
-  // and chats whose worktree is not yet materialised). The mount-
-  // assertion + empty-state-copy assertion live in
-  // `diff-panel-container-mount.test.ts`.
-  test("legacy 'worktree not initialized' copy is no longer present", () => {
-    const src = readFileSync(containerPath, "utf8");
-    expect(src).not.toMatch(/worktree not initialized/i);
-  });
-
-  test("no top-level null-worktreePath early-return JSX guard remains", () => {
-    const src = readFileSync(containerPath, "utf8");
-    // The container still has in-effect / in-callback guards on
-    // worktreePath for the legacy fetch lifecycle — that's fine. What
-    // must be gone is the top-level "return <aside>...Worktree not
-    // initialized...</aside>" branch. Assert by the absence of the
-    // legacy copy: the deprecation marker.
-    expect(src).not.toMatch(/Worktree not initialized/);
-  });
-});
-
-describe("T-008 DiffPanelContainer — fetch lifecycle", () => {
+describe("DiffPanelContainer — fetch lifecycle", () => {
   test("mounts a useEffect with worktreePath in the deps", () => {
     const src = readFileSync(containerPath, "utf8");
-    // The deps array contains `worktreePath`. We anchor on a
-    // useEffect call that references the worktreePath identifier
-    // inside a `]` dep list.
     expect(src).toMatch(/useEffect\s*\(/);
     expect(src).toMatch(/\[\s*[^\]]*\bworktreePath\b[^\]]*\]/);
   });
@@ -160,20 +109,14 @@ describe("T-008 DiffPanelContainer — fetch lifecycle", () => {
   test("fires getGitStatus and getDiff in parallel via Promise.all", () => {
     const src = readFileSync(containerPath, "utf8");
     expect(src).toMatch(/Promise\.all\s*\(/);
-    // Both client functions are referenced inside the same fetch
-    // round; we already assert their imports above, here we anchor
-    // the parallel-call site.
     expect(src).toMatch(/getGitStatus\s*\(/);
     expect(src).toMatch(/getDiff\s*\(/);
   });
 
-  test("initial getDiff call passes mode: \"per-turn\" and a signal", () => {
+  test("re-fetches the diff when refreshSignal changes", () => {
     const src = readFileSync(containerPath, "utf8");
-    // We accept either explicit `mode: "per-turn"` or a variable
-    // reference like `mode: scope` (scope's initial value is
-    // "per-turn"); both forms are present elsewhere in the suite.
-    expect(src).toMatch(/mode\s*:\s*(?:["']per-turn["']|scope)/);
-    expect(src).toMatch(/signal\s*:/);
+    // The signal effect keys on refreshSignal and re-fires the diff fetch.
+    expect(src).toMatch(/\[\s*refreshSignal\s*\]/);
   });
 
   test("stores an AbortController in a ref for cancellation", () => {
@@ -183,54 +126,16 @@ describe("T-008 DiffPanelContainer — fetch lifecycle", () => {
   });
 });
 
-describe("T-008 DiffPanelContainer — scope toggle abort + re-fetch", () => {
-  test("scope change aborts the in-flight controller", () => {
+describe("DiffPanelContainer — total-diff rendering", () => {
+  test("renders via buildSectionedFiles", () => {
     const src = readFileSync(containerPath, "utf8");
-    // The toggle handler (or a useEffect keyed on scope) must call
-    // `.abort()` on the stored controller before firing the new
-    // request. We accept any `.abort()` invocation in the file.
-    expect(src).toMatch(/\.abort\s*\(\s*\)/);
+    expect(src).toMatch(/buildSectionedFiles\s*\(/);
   });
 
-  test("scope change re-fires getDiff via onScopeChange handler (not a useEffect)", () => {
+  test("labels multi-repo sections with a meta line (root repo shown as '(root)')", () => {
     const src = readFileSync(containerPath, "utf8");
-    // Follow-up 3 — the legacy scope-change useEffect was removed.
-    // The re-fetch lives inline in `onScopeChange("whole")` so the
-    // two selectors (scope toggle + marker click) can't race. We
-    // anchor on the getDiff call adjacent to the "whole" branch
-    // inside onScopeChange.
-    expect(src).toMatch(/onScopeChange/);
-    expect(src).toMatch(/next\s*===\s*["']whole["'][\s\S]{0,400}getDiff/);
-  });
-
-  test("scope toggle is wired (inline composition; shell abstraction was removed)", () => {
-    const src = readFileSync(containerPath, "utf8");
-    // Container inlines the scope-toggle UI (the DiffPanelShell
-    // abstraction was deleted in R-002 cleanup). The toggle's change
-    // handler must reference the scope state.
-    expect(src).toMatch(/onScopeChange|setScope/);
-  });
-});
-
-describe("T-008 DiffPanelContainer — per-turn vs whole rendering", () => {
-  test("aggregateSectionsByFile is invoked only in the whole branch", () => {
-    const src = readFileSync(containerPath, "utf8");
-    // We assert the aggregator call site sits adjacent to a "whole"
-    // literal — either a ternary discriminator or an if-branch.
-    // Tolerant: just require both tokens within ~200 chars.
-    expect(src).toMatch(
-      /(scope\s*===\s*["']whole["'][\s\S]{0,400}aggregateSectionsByFile|aggregateSectionsByFile[\s\S]{0,400}scope\s*===\s*["']whole["'])/,
-    );
-  });
-
-  test("per-turn branch prefixes each section with a meta line carrying the label", () => {
-    const src = readFileSync(containerPath, "utf8");
-    // The per-turn rendering produces a contiguous block per section
-    // headed by `{ kind: "meta", text: <commit subject> }`. The
-    // implementation must reference both `section.label` (or a
-    // destructured `label`) and `kind: "meta"` near each other.
     expect(src).toMatch(/kind\s*:\s*["']meta["']/);
-    expect(src).toMatch(/\.label\b/);
+    expect(src).toMatch(/\(root\)/);
   });
 
   test("the rendered output uses DiffFileCard for each file", () => {
@@ -239,17 +144,11 @@ describe("T-008 DiffPanelContainer — per-turn vs whole rendering", () => {
   });
 });
 
-describe("T-008 DiffPanelContainer — loading / empty / error UI", () => {
-  test("initial-load skeleton: at least three animate-pulse divs", () => {
+describe("DiffPanelContainer — loading / empty / error UI", () => {
+  test("initial-load skeleton renders three placeholders", () => {
     const src = readFileSync(containerPath, "utf8");
-    // Three rounded skeleton divs. Match either three explicit
-    // `<div ... className=\"...animate-pulse...\">` lines or a
-    // `[0,1,2].map(...)` rendering shape.
     const pulseHits = src.match(/animate-pulse/g) ?? [];
     expect(pulseHits.length).toBeGreaterThanOrEqual(1);
-    // The component must render three placeholders; we accept either
-    // a triple-static form (3+ animate-pulse hits) or a 3-element
-    // .map / Array.from(..., 3) pattern.
     const tripleStatic = pulseHits.length >= 3;
     const mappedTriple =
       /\[\s*0\s*,\s*1\s*,\s*2\s*\]\.map\b/.test(src) ||
@@ -264,32 +163,17 @@ describe("T-008 DiffPanelContainer — loading / empty / error UI", () => {
 
   test("error callout uses the destructive token + a Retry button", () => {
     const src = readFileSync(containerPath, "utf8");
-    // Retry button text.
     expect(src).toMatch(/>\s*Retry\s*</);
-    // Red callout — uses var(--destructive) or a `destructive` token
-    // somewhere in the file's JSX style attributes.
     expect(src).toMatch(/destructive/);
   });
 });
 
-describe("T-008 DiffPanelContainer — refresh button + spinner", () => {
-  test("provides an onRefresh handler that calls both fetchers", () => {
-    const src = readFileSync(containerPath, "utf8");
-    // The BranchToolbar receives `onRefresh`; the handler body must
-    // re-fire both fetches. Anchor on the prop name.
-    expect(src).toMatch(/onRefresh/);
-  });
-
+describe("DiffPanelContainer — refresh + action wiring", () => {
   test("refresh button shows a spinner class while in flight", () => {
     const src = readFileSync(containerPath, "utf8");
-    // Spinner class — accept `animate-spin` (Tailwind) somewhere in
-    // the file. The refresh button is the only spinner location per
-    // the design.
     expect(src).toMatch(/animate-spin/);
   });
-});
 
-describe("T-008 DiffPanelContainer — action wiring", () => {
   test("provides the four BranchToolbar handlers (onCommit / onCommitPush / onCreatePr / onRefresh)", () => {
     const src = readFileSync(containerPath, "utf8");
     expect(src).toMatch(/onCommit\b/);
@@ -300,9 +184,6 @@ describe("T-008 DiffPanelContainer — action wiring", () => {
 
   test("renders CommitDialog when state.dialog is non-null", () => {
     const src = readFileSync(containerPath, "utf8");
-    // The dialog renders below the toolbar / above the diff list
-    // (mirrors AskUserQuestionPicker). We assert the conditional
-    // mount.
     expect(src).toMatch(/<CommitDialog\b/);
   });
 });

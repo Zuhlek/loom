@@ -10,11 +10,7 @@ Optional, user-maintained, hand-curated context file. Loom's Spec phase reads it
 
 ## When the Spec agent reads it
 
-Foundation grilling. Spec reads `repo-context.md` before generating Foundation questions and treats every fact it states as established — Foundation questions fill gaps the file does not cover. For repo facts the file does not address, Spec uses its own Read / Grep / Bash tools inline (agentic search) rather than relying on a pre-computed digest. This is the progressive-disclosure pattern: load the small hand-curated artifact eagerly, derive everything else lazily.
-
-## Why no auto-generated digest
-
-An earlier version of Loom auto-generated a `repo-digest.md` and a sha256 manifest gating its cache. That pattern was removed because: (1) hashing tracked files detects file edits but not architectural drift (new modules, renamed files, refactors that move logic between files all validate as cache-hits while being semantically stale); (2) the eager mandatory pre-flight contradicts the progressive-disclosure pattern that has become standard across Claude Code, Aider, Cursor, Cline, and SWE-agent; (3) the Spec agent already does agentic search competently when it needs a repo fact, on fresher signal than any cache. The simpler contract — one optional hand-curated file plus agentic search — covers the same ground at lower cost and lower staleness risk.
+Foundation grilling. Spec reads `repo-context.md` before generating Foundation questions and treats every fact it states as established — Foundation questions fill gaps the file does not cover. For repo facts the file does not address, Spec searches the repo directly with Read/Grep/Bash. Load the small hand-curated artifact eagerly; derive everything else lazily — there is no pre-computed digest.
 
 ## When to add or update
 

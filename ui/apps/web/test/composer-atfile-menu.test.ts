@@ -77,12 +77,15 @@ describe("T-012 ComposerAtFileMenu — presentational contract (US-008/009)", ()
     expect(src).toMatch(/split\(["']\/["']\)/);
   });
 
-  test("returns null when items is empty and loading is false", () => {
+  test("renders a query-aware empty-state row when items is empty and not loading", () => {
     const src = readMenuSource();
-    // Idiomatic shape mirrored from slash-menu: `if (items.length === 0
-    // && !loading) return null;` (or an equivalent JSX-fragment / early-
-    // return form).
-    expect(src).toMatch(/items\.length\s*===?\s*0[\s\S]*loading[\s\S]*null/);
+    // The frame renders whenever the parent mounts the component
+    // (trigger-active). The empty branch is query-aware: a "Type to
+    // search files" / "No matching files" row keyed off the query,
+    // surfaced through the dedicated empty-state test-id.
+    expect(src).toMatch(/items\.length\s*===?\s*0/);
+    expect(src).toMatch(/data-testid=["']composer-atfile-menu-empty["']/);
+    expect(src).toMatch(/Type to search files|No matching files/);
   });
 
   test("renders a loading state row when loading && items.length === 0", () => {
