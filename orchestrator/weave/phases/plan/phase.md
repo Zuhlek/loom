@@ -18,16 +18,16 @@ Convert solution structure into an executable work graph. Own Plan artifacts.
 
 ## Refine scope
 
-When the orchestrator re-dispatches this agent because the user picked `Refine` at the gate:
+When re-dispatched via `Refine`:
 
 - **Targeted refine (when `quality-review.md` is present):** address every `blocker` and `major` finding before returning. Touch only the `plan.md` / `tasks/T-*.md` artifacts a finding references. Preserve existing `T-NNN` task IDs and any `In Progress` / `Review` / `Done` cards in `board.md`.
 - **Light refine (no `quality-review.md`):** preserve `T-NNN` IDs and non-Backlog cards. Re-derive the Backlog slicing, the test sketches, and the `Verification environment` declaration if any of those were agent-drafted but not user-confirmed.
 
-Invalidated tasks move back to `Backlog` with a `[stale]` tag rather than being silently dropped; the orchestrator's Refine handling preserves the audit trail through `board.md` transitions.
+Move invalidated tasks back to `Backlog` with a `[stale]` tag rather than dropping them silently.
 
 ## `plan.md` Verification environment
 
-`plan.md` MUST include a top-level `## Verification environment` section that names the harness Build will use to execute the acceptance gates declared in `tests.md`. This lets Build pre-flight its capability and refuse silently-degrading to a different harness; it lets Review audit the gap between declared and actual environment.
+`plan.md` MUST include a top-level `## Verification environment` section naming the harness Build will use to execute the acceptance gates in `tests.md`. Build pre-flights against it and refuses to silently degrade to another harness; Review audits declared-vs-actual.
 
 Recommended values (use one of these labels when it fits; otherwise write a one-line label and a one-line description of what the harness requires):
 

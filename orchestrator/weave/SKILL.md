@@ -65,7 +65,7 @@ The `--answers` flag is no longer accepted by `/weave`; the eval harness stages 
 
 ### Cached-prefix boundary
 
-Every Task dispatch is a stable head + dynamic tail (see `### Dispatch concatenation`). The closing `</system-reminder>` line of the dynamic tail is the **cached-prefix boundary**: everything before that line is byte-stable across dispatches of the same callable and is therefore cacheable; the tail itself is not. The operational rules that keep the head byte-stable — verbatim body/signature/methods, no wrapper, no placeholder substitution, dynamic identifiers confined to the tail — are stated once in `### Dispatch concatenation`; that section is binding on every dispatch.
+Every Task dispatch is a stable head + dynamic tail. The closing `</system-reminder>` of the tail is the **cached-prefix boundary**: everything before it is byte-stable per callable and cacheable; the tail is not. `### Dispatch concatenation` defines the rules that keep the head stable and is binding on every dispatch.
 
 ## Spec depth gate
 
@@ -160,12 +160,12 @@ Operationalised:
 
 1. **Stable head — body + signature + inlined methods, verbatim, nothing else.**
    1. Read the body file (`phases/<phase>/phase.md` or `phases/<phase>/quality-check.md`).
-   2. Append exactly two newlines, then `---` on its own line (a markdown thematic break), then two more newlines.
-   3. Append the signature file's contents (`phases/<phase>/phase.signature.md`, etc.).
-   4. **Inline the methods the body needs.** The inline set is every file listed in the body's `## Reads` (or `## Reads first`) section, resolved relative to the skill base. For each file in listed order, append two newlines, `---`, two newlines, then `## Inlined methods` (once, before the first), then `### <path-as-listed>` on its own line, then the file's verbatim content. A phase with an empty or absent `## Reads` (e.g. Design, Plan) skips this band entirely — no `## Inlined methods` block is appended. The subagent reads no method file from disk — it has the content inline. The orchestrator already reads these files the same way it reads the body, so this needs no path knowledge the orchestrator lacks and no filesystem access the subagent has.
-   5. The body and signature carry their `<project>`, `<phase>`, `<task>` placeholder tokens **literally** — do NOT substitute real values into the head. The body is what makes the prefix cacheable across projects.
-   6. The head is the entirety of the cacheable region — body, signature, and inlined methods are all stable per callable, so the whole head caches. The RETURN-block schema, what to write, what to skip, and now the method procedures themselves all live in the head. The orchestrator adds **no wrapper text** around them and **no path for the subagent to resolve**.
-2. **Dynamic tail — single `<system-reminder>` block.** Append the substituted identifiers in exactly this shape, at the very end of the user turn:
+   2. Append `\n\n---\n\n` (two newlines, a `---` thematic break, two newlines).
+   3. Append the signature file (`phases/<phase>/phase.signature.md`, etc.).
+   4. **Inline the methods the body needs.** For every file listed in the body's `## Reads` (or `## Reads first`), in listed order: append `\n\n---\n\n`, then `## Inlined methods` (once, before the first), then `### <path-as-listed>`, then the file's verbatim content. A body with no `## Reads` (e.g. Design, Plan) skips this band — no `## Inlined methods` header. The subagent never disk-reads a method file; it has the content inline.
+   5. Keep the `<project>`, `<phase>`, `<task>` placeholder tokens **literal** — never substitute real values into the head. Literal placeholders are what make the prefix cacheable across projects.
+   6. Add **no wrapper text** and **no path for the subagent to resolve**. The whole head — body, signature, inlined methods, RETURN schema — is the cacheable region.
+2. **Dynamic tail — single `<system-reminder>` block.** Append at the very end of the user turn, in exactly this shape:
 
    ```
    <system-reminder>
@@ -176,14 +176,14 @@ Operationalised:
    </system-reminder>
    ```
 
-   Nothing dynamic appears above the opening `<system-reminder>` line. The closing `</system-reminder>` is the cached-prefix boundary; the tail itself is not cached.
+   Nothing dynamic appears above the opening `<system-reminder>` line.
 3. Pass the result as the user turn to a fresh `Task` session.
 
-The order — body, `\n\n---\n\n`, signature, tail — is fixed. Body first establishes identity and primary work loop before the agent reads the wire contract.
+The order — body, `\n\n---\n\n`, signature, tail — is fixed: body first establishes identity and work loop before the agent reads the wire contract.
 
-If either `<role>.md` or `<role>.signature.md` is missing for a callable about to be dispatched, the orchestrator fails dispatch with a clear `missing-file: phases/<phase>/<role>.md|<role>.signature.md` error before any Task is started. There is no partial dispatch and no fallback to a default.
+If `<role>.md` or `<role>.signature.md` is missing, fail dispatch with `missing-file: phases/<phase>/<role>.md|<role>.signature.md` before starting any Task. No partial dispatch, no fallback.
 
-The merged prompt is the dispatched Task's user turn only. The orchestrator never inlines it into its own context — the Task-isolation property is preserved.
+The merged prompt is the dispatched Task's user turn only — never inlined into the orchestrator's own context, preserving Task isolation.
 
 The orchestrator runs the lifecycle to completion in one `/weave` invocation. It does not exit between phases — the Refine-or-Continue gate is a regular `AskUserQuestion`, not a session boundary. The orchestrator exits only when:
 

@@ -12,27 +12,21 @@
 - 6. Answer slots in `decisions.md`
 - 7. Hard caps — when to stop grilling
 - 8. Required output of a grilling session
-- Stop Rules (summary)
-- Revisit Rules (summary)
 
-Spec-phase grilling discipline. Every question is a structured artifact validated against the schema in [`categories.md`](categories.md). This file specifies the rules around HOW questions get generated, sequenced, answered, and revisited.
+Spec-phase grilling discipline. Every question is a structured artifact validated against the schema in [`categories.md`](categories.md). This file specifies HOW questions get generated, sequenced, answered, and revisited.
 
 ---
 
 ## 0. Mandate
 
-The Spec agent's posture is **relentless**: keep asking until shared understanding is established, and **traverse every branch of the decision tree** before returning. An unasked branch is an unresolved branch, and an unresolved branch ships ambiguity into Design.
+The Spec agent's posture is **relentless**: keep asking until shared understanding is established, and **traverse every branch of the decision tree** before returning. An unasked branch ships ambiguity into Design.
 
-The decision tree is whatever the seed + Foundation answers + prior Branching answers reveal as still-open scope, open architecture choices, and open trade-offs. Each branch is a question; each question gets an answer, a `[push back]`, or an explicit `[stop]` from the user — never a silent skip from the agent.
+The decision tree is whatever the seed + Foundation answers + prior Branching answers reveal as still-open scope, architecture choices, and trade-offs. Each branch is a question; each gets an answer, a `[push back]`, or an explicit `[stop]` from the user — never a silent skip from the agent. Two consequences:
 
-Two consequences for the rules that follow:
+1. **Agent-initiated early bail is forbidden while branches remain.** Triage (§3) exits only at step 4 — Foundation, revisit, and Branching queues all empty. Ambiguity that "feels stable" is not a stop condition; an empty decision tree is.
+2. **Only the user declares "enough"** (§7 user-initiated stop, or the Refine-or-Continue gate).
 
-1. **Agent-initiated early bail is forbidden while branches remain.** The triage logic (§3) exits only at step 4 — when Foundation, revisit, and Branching queues are all empty. Ambiguity that "feels stable" is not a stop condition; an empty decision tree is.
-2. **Only the user declares "enough"** (§7 user-initiated stop, or the Refine-or-Continue gate). The agent does not decide on the user's behalf that further questioning is futile.
-
-The six G-rules (§1) still apply — relentless does not mean asking bad questions, leading questions, or asking the same thing twice. It means: every decision-relevant, self-contained, briefed, opinionated, singular, decidable-now branch gets a question, and every question gets an answer.
-
-*Framing follows Mat Peacock's principle that a spec phase must traverse every branch of the decision tree, not stop at the first plausible understanding.*
+The six G-rules (§1) still apply: relentless does not mean bad, leading, or repeated questions. It means every decision-relevant, self-contained, briefed, opinionated, singular, decidable-now branch gets a question, and every question gets an answer.
 
 ### Depth-modulated mandate
 
@@ -83,7 +77,7 @@ Every question opens with a briefing block: three labelled sections (`What's the
 
 Word caps (per [`categories.md`](categories.md) §"Validation summary") are hard limits. Briefings that overflow are rewritten before being shown.
 
-The briefing is what changes Spec from "the user has to interrogate the agent to understand each question" to "the user reads the briefing once and answers." Long briefings are fine; *unstructured* briefings are the thing to avoid.
+Long briefings are fine; *unstructured* briefings are the thing to avoid.
 
 ---
 
@@ -153,7 +147,7 @@ The agent populates the picker so the user can answer without opening `decisions
 | `options[].description` | The option's one-line outcome from the Options list (the `— <result ≤120 chars>` segment). Brings the per-option trade-off into the picker without forcing the user to expand. |
 | `preview` | The Architecture diagram (mermaid or ASCII) for Architecture-category questions; the per-option implication snippet for Choice questions when it materially differs from `description`; omitted otherwise. |
 
-The picker therefore carries the full *What's the issue / Current behavior / Options / Recommendation* surface — the user does NOT need to open `decisions.md` to answer. `decisions.md` is the audit trail and recovery surface only; users are not expected to edit it by hand.
+The picker therefore carries the full *What's the issue / Current behavior / Options / Recommendation* surface — the user does NOT need to open `decisions.md` to answer.
 
 The user's response options map onto picker entries and a free-text fallback:
 
@@ -330,19 +324,3 @@ When the Spec phase agent returns, it MUST have written:
 Stories are distilled from grilling answers + seed at the end of the loop, after Branching has resolved. They are NOT user-answered questions; they are agent-produced outputs. Universal acceptance conditions go under `spec.md` `## Constraints`, not Stories.
 
 These two writes are non-negotiable. They are the contract Design inherits.
-
----
-
-## Stop Rules (summary)
-
-1. Decision tree exhausted — triage (§3) returns "otherwise". This is the only agent-initiated stop.
-2. User indicates enough context (`Stop` / `enough` / `let's move on` / `go`).
-3. Ambiguity continues to grow after many turns — RETURN `needs_more_grilling` and let the user decide whether to extend.
-4. Repeated unanswered questions — write current state, return artifacts.
-
-## Revisit Rules (summary)
-
-1. New answer flips a prior recommendation.
-2. Prior trade-off no longer applies.
-3. Prior assumption contradicted.
-4. Prior scope decision obsolete.

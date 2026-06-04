@@ -40,4 +40,4 @@ Write two artifacts before returning: `review.md` (human-facing finding-by-findi
 
 ## Refine scope
 
-When the orchestrator re-dispatches this agent because the user picked `Refine` at the gate, the agent re-audits the same artifact set with any prior `review.md` + `review-verdict.json` as additional input context (treating them as "what I already found; what might I have missed"). Review is the project-level audit; there is no in-phase QC for Review and no Targeted/Light distinction — every refine re-walks the Review Targets.
+When re-dispatched via `Refine`, re-audit the same artifact set, taking any prior `review.md` + `review-verdict.json` as input context ("what I already found; what might I have missed"). Review is the project-level audit: no in-phase QC, no Targeted/Light distinction — every refine re-walks the Review Targets.

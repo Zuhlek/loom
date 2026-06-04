@@ -47,14 +47,14 @@ Track task results in memory across the work loop. When this agent returns:
 
 `tasks/T-NNN.done.md` remains the authoritative per-task record on disk; `task-outcomes` is its wire equivalent for the orchestrator's transition mapping.
 
-Note: the orchestrator runs a PostToolUse hook that watches Build's per-task file writes (`tasks/T-NNN.test-log.txt`, `tasks/T-NNN.done.md`, `smoke-report.md`) and applies the corresponding board transitions live so the UI updates during the session. Build itself still does not write `board.md`. See `orchestrator/weave/SKILL.md § Board transition mapping § Live mirror via hook`.
+A PostToolUse hook mirrors Build's per-task file writes (`tasks/T-NNN.test-log.txt`, `tasks/T-NNN.done.md`, `smoke-report.md`) into live board transitions for the UI — Build still never writes `board.md`. See `orchestrator/weave/SKILL.md § Board transition mapping § Live mirror via hook`.
 
 ## Refine scope
 
-When the orchestrator re-dispatches this agent because the user picked `Refine` at the gate:
+When re-dispatched via `Refine`:
 
 - **Targeted refine (when `quality-review.md` is present):** address every `blocker` and `major` finding before returning. Touch only the tasks a finding references; re-open them by moving their cards back to `Backlog` with a `[stale]` tag. Preserve every `In Progress` / `Review` / `Done` card not flagged.
-- **Light refine (no `quality-review.md`):** preserve every `In Progress` / `Review` / `Done` card. Pick the next eligible `Backlog` cards. This matches the pre-existing Build rerun behaviour.
+- **Light refine (no `quality-review.md`):** preserve every `In Progress` / `Review` / `Done` card. Pick the next eligible `Backlog` cards.
 
 A "Full rerun" of Build is not exposed at the gate; achieving one requires the user to pick `Go back to Plan` first.
 

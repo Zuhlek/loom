@@ -12,7 +12,7 @@ Convert specified intent into solution structure. Own `design.md` and optional e
 
 ## Refine scope
 
-When the orchestrator re-dispatches this agent because the user picked `Refine` at the gate:
+When re-dispatched via `Refine`:
 
 - **Targeted refine (when `quality-review.md` is present):** address every `blocker` and `major` finding before returning. Touch only `design.md` sections a finding references. Preserve every `Architecture decisions` block whose ADR was already accepted unless a finding contradicts its rationale.
 - **Light refine (no `quality-review.md`):** preserve accepted ADR blocks and any structural sections the user has not contested. Re-derive the rest from the current `spec.md` + `decisions.md` state.
@@ -30,5 +30,3 @@ Required sections (technical structure only — user-facing behaviour lives in `
 - Architecture decisions — one ADR block per significant decision: Context, Decision, Rationale, Alternatives (with what was rejected and why)
 - Alternatives considered — structural options weighed and rejected at the whole-design level (not per-decision)
 - Open ambiguity — structural questions not resolved
-
-A user story or flow does **not** belong in `design.md`. The Spec phase owns user-facing behaviour via `US-NNN` stories with EARS acceptance criteria; Design's job is to specify how the system realises those stories, not to restate them.
