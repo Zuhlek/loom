@@ -301,16 +301,27 @@ function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
     }))
     .filter((e): e is { img: UserMessageImage; src: string } => e.src !== undefined) ?? [];
   const hasImages = renderImages.length > 0;
+  // F2 — optimistic-send affordance. While `item.pending === "sending"`
+  // the bubble is dimmed and its footer shows a clock + "Sending…" in
+  // place of the timestamp; on failure it shows a muted "Failed to send"
+  // instead of silently vanishing. Server-authored items omit `pending`
+  // entirely, so they render exactly as before.
+  const pending = item.pending;
   return (
     <div className="flex justify-end">
       <div
-        className="group relative max-w-[85%] rounded-2xl rounded-br-sm border px-4 py-2.5"
+        className={clsx(
+          "group relative max-w-[85%] rounded-2xl rounded-br-sm border px-4 py-2.5",
+          pending === "sending" && "opacity-60",
+          pending === "failed" && "opacity-80",
+        )}
         style={{
           borderColor: "var(--bubble-user-border)",
           background: "var(--bubble-user-bg)",
           color: "var(--bubble-user-fg)",
         }}
         data-testid="user-message-bubble"
+        data-pending={pending ?? undefined}
       >
         {hasImages && (
           <div
@@ -331,11 +342,53 @@ function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
         <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
           {item.text}
         </div>
-        <p
-          className="mt-1 text-right text-[10px] opacity-70"
-        >
-          {formatTime(item.createdAt)}
-        </p>
+        {pending === "sending" ? (
+          <p
+            className="mt-1 flex items-center justify-end gap-1 text-right text-[10px] opacity-70"
+            data-testid="user-message-sending"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-3"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            <span>Sending…</span>
+          </p>
+        ) : pending === "failed" ? (
+          <p
+            className="mt-1 flex items-center justify-end gap-1 text-right text-[10px]"
+            style={{ color: "var(--destructive)" }}
+            data-testid="user-message-failed"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-3"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v4" />
+              <path d="M12 16h.01" />
+            </svg>
+            <span>Failed to send</span>
+          </p>
+        ) : (
+          <p className="mt-1 text-right text-[10px] opacity-70">
+            {formatTime(item.createdAt)}
+          </p>
+        )}
       </div>
     </div>
   );

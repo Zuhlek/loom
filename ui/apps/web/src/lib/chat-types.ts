@@ -98,6 +98,27 @@ export interface UserMessageItem {
    * items / older snapshots.
    */
   images?: UserMessageImage[];
+  /**
+   * Client-only optimistic-send marker. ABSENT on every server-authored
+   * item — the wire never carries this field, so a `snapshot` /
+   * `item-append` from the bridge always omits it and the reconcile path
+   * relies on that to tell a real echo apart from a local placeholder.
+   *
+   *   - `"sending"` : the local bubble shown the instant `submitTurn`
+   *                   fires, before the server echoes the turn back as
+   *                   its own `item-append`. Rendered at reduced opacity
+   *                   with a "Sending…" affordance in place of the
+   *                   timestamp. Reconciled (removed) FIFO when the
+   *                   matching server `user-message` arrives.
+   *   - `"failed"`  : the turn errored / was interrupted (or the send
+   *                   sat pending past the generous timeout) before the
+   *                   server echoed it. Rendered muted with a
+   *                   "Failed to send" affordance rather than vanishing.
+   *
+   * The optimistic item's `id` uses the `optimistic:<counter>` scheme so
+   * it can never collide with a server item id.
+   */
+  pending?: "sending" | "failed";
 }
 
 export interface AssistantMessageItem {

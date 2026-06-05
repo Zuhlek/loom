@@ -36,6 +36,8 @@ import type {
   ServerFrame,
   SessionLifecycle,
   TurnState,
+  UserMessageImage,
+  UserMessageItem,
   UserTurnImage,
   WireModelSettings,
 } from "../lib/chat-types";
@@ -77,6 +79,19 @@ export type ComposerMode = "ready" | "queue" | "blocked";
  */
 const SNAPSHOT_TIMEOUT_MS = 15_000;
 
+/**
+ * F2 — how long an optimistic user bubble may stay `"sending"` before
+ * the watchdog marks it `"failed"`. Deliberately generous: with the F1
+ * server-side readiness gate a cold-start send is queued and only
+ * echoed once the bridge reaches `running` (up to ~10 s), so a tighter
+ * timer would flash a false "Failed to send" on a perfectly healthy
+ * cold start. The primary failure signal is the `turn-state`
+ * error/interrupted transition (handled in the reducer); this timer is
+ * the backstop for a send that silently never echoes at all (e.g. the
+ * socket dropped right after the frame left).
+ */
+const OPTIMISTIC_PENDING_TIMEOUT_MS = 45_000;
+
 export function composerMode(state: {
   pendingPermission: PendingPermission | null;
   pendingQuestion: PendingQuestion | null;
@@ -87,7 +102,7 @@ export function composerMode(state: {
   return "ready";
 }
 
-interface ChatState {
+export interface ChatState {
   items: ChatItem[];
   itemsById: Record<string, number>;
   turnState: TurnState;
@@ -125,7 +140,7 @@ interface ChatState {
   recoveryAttempt: number;
 }
 
-const EMPTY_STATE: ChatState = {
+export const EMPTY_STATE: ChatState = {
   items: [],
   itemsById: {},
   turnState: "idle",
@@ -142,6 +157,36 @@ const EMPTY_STATE: ChatState = {
   recoveryAttempt: 0,
 };
 
+/**
+ * Id prefix for client-side optimistic user bubbles (F2). Real server
+ * item ids never use this scheme, so `isOptimisticId` is a reliable
+ * discriminator both for reconciliation (drop the oldest optimistic on a
+ * server user-message echo) and for rebuilding `itemsById`.
+ */
+export const OPTIMISTIC_ID_PREFIX = "optimistic:";
+
+function isOptimisticId(id: string): boolean {
+  return id.startsWith(OPTIMISTIC_ID_PREFIX);
+}
+
+/**
+ * `true` for a still-on-screen optimistic placeholder (either "sending"
+ * or "failed"). Used by the reconcile path to find the oldest pending
+ * bubble and by `rebuildItemsById` callers that need to partition.
+ */
+function isPendingUserItem(it: ChatItem): it is UserMessageItem {
+  return it.kind === "user-message" && it.pending != null;
+}
+
+/** Rebuild the `id → index` map after a structural edit to `items`. */
+function rebuildItemsById(items: ChatItem[]): Record<string, number> {
+  const itemsById: Record<string, number> = {};
+  items.forEach((it, i) => {
+    itemsById[it.id] = i;
+  });
+  return itemsById;
+}
+
 type ChatAction =
   | { type: "reset" }
   | { type: "snapshot"; payload: ServerFrame & { kind: "snapshot" } }
@@ -153,6 +198,15 @@ type ChatAction =
   | { type: "permission-mode"; mode: PermissionMode }
   | { type: "error-frame"; message: string }
   | { type: "dismiss-error" }
+  // F2 — optimistic user bubble inserted synchronously on send (before
+  // any server round-trip). `item.id` is an `optimistic:<counter>` id and
+  // `item.pending === "sending"`.
+  | { type: "optimistic-user"; item: UserMessageItem }
+  // F2 — mark every still-`"sending"` optimistic bubble as `"failed"`.
+  // Fired when the turn ends in error/interruption or the generous
+  // pending-timeout elapses, so a placeholder never strands in the
+  // "sending" state forever.
+  | { type: "fail-pending" }
   | {
       type: "session-state";
       lifecycle: SessionLifecycle;
@@ -160,7 +214,7 @@ type ChatAction =
       lastError?: string;
     };
 
-function chatReducer(state: ChatState, action: ChatAction): ChatState {
+export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case "reset":
       return EMPTY_STATE;
@@ -206,12 +260,56 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
     case "item-append": {
       if (action.item.id in state.itemsById) return state;
+      // F2 reconcile: when the server echoes a `user-message`, drop the
+      // OLDEST still-pending optimistic placeholder (FIFO) so exactly one
+      // bubble survives. We deliberately do NOT match by text — the
+      // server may rewrite the text (e.g. appended `@<absPath>` image
+      // tokens), so equality would miss. The placeholder is replaced
+      // in-place (same array slot the oldest optimistic held) so the
+      // real item lands where the user already sees a bubble, avoiding a
+      // position jump / flicker.
+      if (action.item.kind === "user-message") {
+        const oldestPendingIdx = state.items.findIndex(isPendingUserItem);
+        if (oldestPendingIdx !== -1) {
+          const items = state.items.slice();
+          items[oldestPendingIdx] = action.item;
+          return { ...state, items, itemsById: rebuildItemsById(items) };
+        }
+      }
       const items = state.items.concat(action.item);
       return {
         ...state,
         items,
         itemsById: { ...state.itemsById, [action.item.id]: items.length - 1 },
       };
+    }
+    case "optimistic-user": {
+      // Synchronous local insert on send — appended like any other item
+      // so the existing timeline rendering picks it up with no plumbing
+      // changes. The `optimistic:<counter>` id can't collide with a
+      // server id, so the duplicate-id guard above never trips on it.
+      const items = state.items.concat(action.item);
+      return {
+        ...state,
+        items,
+        itemsById: { ...state.itemsById, [action.item.id]: items.length - 1 },
+      };
+    }
+    case "fail-pending": {
+      // Flip every "sending" placeholder to "failed". No structural
+      // change to `items` (ids/indices unchanged), so `itemsById` stays
+      // valid. Returns the same reference when nothing was pending so
+      // React can bail out of the re-render.
+      let changed = false;
+      const items = state.items.map((it) => {
+        if (it.kind === "user-message" && it.pending === "sending") {
+          changed = true;
+          return { ...it, pending: "failed" as const };
+        }
+        return it;
+      });
+      if (!changed) return state;
+      return { ...state, items };
     }
     case "item-update": {
       const idx = state.itemsById[action.item.id];
@@ -253,8 +351,29 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             ? Date.now()
             : state.activeTurnStartedAt
           : null;
+      // F2 failure path: a turn that ends in error/interruption can
+      // never produce the server `item-append` that would reconcile an
+      // optimistic bubble, so any still-"sending" placeholder is marked
+      // "failed" here rather than stranded. Other transitions
+      // (idle/running) leave pending items untouched — a cold-start send
+      // legitimately stays "sending" through `running` until the echo
+      // lands (F1 synergy). `items` is rebuilt in-place (same ids), so
+      // `itemsById` is unaffected.
+      let nextItems = state.items;
+      if (action.state === "error" || action.state === "interrupted") {
+        let changed = false;
+        const mapped = state.items.map((it) => {
+          if (it.kind === "user-message" && it.pending === "sending") {
+            changed = true;
+            return { ...it, pending: "failed" as const };
+          }
+          return it;
+        });
+        if (changed) nextItems = mapped;
+      }
       return {
         ...state,
+        items: nextItems,
         turnState: action.state,
         error: nextError,
         activeTurnStartedAt: nextStartedAt,
@@ -368,6 +487,18 @@ export function LiveChatRoute({ chatId }: Props) {
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(0);
   const closedByUserRef = useRef(false);
+  // F2 — monotonic counter for optimistic-bubble temp ids. A plain ref
+  // (not `Date.now()`) so two sends in the same millisecond still get
+  // distinct ids; never reset across chats (uniqueness is all that
+  // matters, and the items themselves are cleared on `reset`).
+  const optimisticSeqRef = useRef(0);
+  // F2 — pending-bubble watchdog. Mirrors `state.items` so the timeout
+  // callback (registered once) can decide whether any "sending"
+  // placeholder is still outstanding without re-subscribing per render.
+  const itemsRef = useRef<ChatItem[]>(state.items);
+  useEffect(() => {
+    itemsRef.current = state.items;
+  }, [state.items]);
   // Diagnostic: if `attached` arrives but `snapshot` never does within
   // SNAPSHOT_TIMEOUT_MS, the bridge has accepted us but is wedged.
   // Without this the route silently renders an empty timeline.
@@ -647,9 +778,63 @@ export function LiveChatRoute({ chatId }: Props) {
       const body: UserTurnBody = { text };
       if (images.length > 0) body.images = images;
       sendFrame(ws, { kind: "user-turn", "chat-id": chatId, body });
+
+      // F2 — optimistic echo. We only reach this point AFTER the
+      // `ws.OPEN` guard above passed, so a dropped send (early return)
+      // never leaves a ghost bubble. The placeholder shows instantly,
+      // bridging the dead air until the server echoes the turn as its
+      // own `item-append` (warm: ~½ s; cold: up to ~10 s behind the F1
+      // readiness gate). Map the local `UserTurnImage[]` →
+      // `UserMessageImage[]`: `dataB64` is present on the freshly-typed
+      // turn, so the thumbnails render from the inline data URL with no
+      // `/chat-image` round-trip.
+      const id = `${OPTIMISTIC_ID_PREFIX}${optimisticSeqRef.current++}`;
+      const optimistic: UserMessageItem = {
+        kind: "user-message",
+        id,
+        // The optimistic turn isn't tied to a server turn id yet; the
+        // real echo (which carries the authoritative `turnId`) replaces
+        // this item wholesale on reconcile, so a placeholder value is
+        // fine here.
+        turnId: id,
+        text,
+        createdAt: new Date().toISOString(),
+        pending: "sending",
+      };
+      if (images.length > 0) {
+        optimistic.images = images.map(
+          (img): UserMessageImage => ({
+            mediaType: img.mediaType,
+            dataB64: img.dataB64,
+            filename: img.filename,
+          }),
+        );
+      }
+      dispatch({ type: "optimistic-user", item: optimistic });
     },
     [chatId],
   );
+
+  // F2 — pending-bubble watchdog. Whenever at least one "sending"
+  // placeholder is on screen, arm a single generous timer; if it fires
+  // before the placeholder is reconciled (or already failed via a
+  // turn-state error), flip any still-"sending" items to "failed" so
+  // none strand forever. Re-arms on every items change — a fresh send
+  // resets the clock, and a reconcile that clears the last pending item
+  // tears the timer down (the guard short-circuits when nothing pends).
+  const hasPending = state.items.some(
+    (it) => it.kind === "user-message" && it.pending === "sending",
+  );
+  useEffect(() => {
+    if (!hasPending) return;
+    const t = setTimeout(() => {
+      const stillPending = itemsRef.current.some(
+        (it) => it.kind === "user-message" && it.pending === "sending",
+      );
+      if (stillPending) dispatch({ type: "fail-pending" });
+    }, OPTIMISTIC_PENDING_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [hasPending, state.items]);
 
   const changePermissionMode = useCallback(
     (mode: PermissionMode) => {
