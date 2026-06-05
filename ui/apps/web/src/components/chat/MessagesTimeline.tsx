@@ -59,6 +59,19 @@ interface Props {
   onPlanReject?: (planId: string) => void;
 }
 
+/**
+ * F4 — gate the empty-state placeholder on BOTH "no items" and "turn not
+ * running". A turn can be running with zero items (e.g. a passive second
+ * tab attached to the same chat that didn't submit: it receives the
+ * `turn-state running` broadcast but holds no optimistic item). In that
+ * state the placeholder and the WorkingChip would render together and
+ * contradict each other. When the turn is running the WorkingChip is the
+ * correct feedback, so the "Send a message…" placeholder is suppressed.
+ */
+export function shouldShowEmptyState(itemCount: number, turnState: TurnState): boolean {
+  return itemCount === 0 && turnState !== "running";
+}
+
 export function MessagesTimeline({
   items,
   turnState,
@@ -167,7 +180,7 @@ export function MessagesTimeline({
     <div className="relative flex-1 min-h-0 flex flex-col">
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div ref={innerRef} className="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-4">
-          {items.length === 0 && (
+          {shouldShowEmptyState(items.length, turnState) && (
             <p className="text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
               Send a message to start the conversation.
             </p>
