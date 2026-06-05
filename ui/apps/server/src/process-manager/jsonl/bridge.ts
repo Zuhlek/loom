@@ -113,6 +113,14 @@ export interface JsonlTailBridgeOptions {
    */
   rotationPollMs?: number;
   /**
+   * Cold-start readiness fallback (F1). Millis after a fresh spawn at
+   * which the chat is force-marked ready and its queued turns flush, in
+   * case claude's `SessionStart` hook never arrives. Defaults to
+   * {@link READY_FALLBACK_MS} (10s). Tests inject a small value to drive
+   * the fallback path deterministically.
+   */
+  readyFallbackMs?: number;
+  /**
    * Structured per-stage log. When omitted, a default log is created
    * from `process.env.LOOM_LOG_BRIDGE` so production deployments get
    * info-level visibility into attach / detach / first-emit. Tests
@@ -143,6 +151,29 @@ export interface JsonlTailBridgeOptions {
   imageStore?: ImageStore;
 }
 
+/**
+ * A user turn captured before claude's TUI was ready (F1). Holds the raw
+ * composer text and any image attachments verbatim — image STAGING is
+ * deferred to flush time so the `@<absPath>` tokens are minted against a
+ * live image store at the moment of send, identical to the warm path.
+ */
+interface PendingTurn {
+  text: string;
+  images: unknown;
+}
+
+/**
+ * Cold-start readiness fallback (F1). If claude's `SessionStart` hook
+ * never arrives (hooks degraded / uninstalled / an older claude), the
+ * chat must not hang with its first turn stuck in the queue forever.
+ * This many millis after spawn the bridge marks the chat ready anyway
+ * and flushes the queue — degrading to the historical send-immediately
+ * best-effort. 10s comfortably exceeds a healthy claude cold start
+ * (single-digit seconds) while staying well under a user's patience
+ * threshold for "nothing happened".
+ */
+const READY_FALLBACK_MS = 10_000;
+
 interface ChatState {
   chatId: string;
   sessionId: string;
@@ -169,6 +200,43 @@ interface ChatState {
   hasFirstSent: boolean;
   /** Whether the chat-attach hook has fired for this chat. */
   hasAttachHookFired: boolean;
+  /**
+   * Cold-start readiness gate (F1). `false` from the moment a fresh tmux
+   * session is spawned until claude's TUI has reached its input prompt;
+   * `true` once it has. The readiness EDGE is the `SessionStart` hook
+   * (`routeHookEnvelope` → `case "session-start"`), with a bounded
+   * fallback timer (`readyFallbackTimer`) so a degraded / absent hook
+   * never hangs the chat forever.
+   *
+   * While `ready === false`, `submitUserTurn` does NOT send — it ENQUEUES
+   * the turn onto `pendingTurns`. Sending a turn into a not-yet-prompt TUI
+   * buffers the literal text and swallows the Enter; a second pre-ready
+   * turn then concatenates onto the same buffered line and both submit as
+   * ONE merged prompt (the confirmed cold-start race). Queue-until-ready
+   * is the fix.
+   */
+  ready: boolean;
+  /**
+   * Turns submitted before `ready` flipped true, in submission order.
+   * Flushed serially (each: literal+Enter, await, then next) on the
+   * readiness edge. Never sent concurrently — see `sendChain`.
+   */
+  pendingTurns: PendingTurn[];
+  /**
+   * Per-chat send-serialization mutex. Every tmux send that represents a
+   * distinct user turn (live sends AND queue flushes) is chained through
+   * this promise so two turns can NEVER interleave their `send-keys -l`
+   * literals at the tmux layer (which would merge them before any Enter
+   * submits). This is the "never concatenate two turns" invariant.
+   */
+  sendChain: Promise<void>;
+  /**
+   * Fallback timer handle. Armed at spawn; on fire it marks the chat
+   * ready and flushes the queue so behaviour degrades to today's
+   * best-effort send-immediately when `SessionStart` never arrives.
+   * Cleared by the readiness edge (whichever wins) and on dispose.
+   */
+  readyFallbackTimer: ReturnType<typeof setTimeout> | undefined;
   /**
    * Interval handle for the rotation poller. Claude can rotate its
    * session-id mid-conversation (a new `.jsonl` file appears in the
@@ -331,6 +399,106 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     }
   }
 
+  /**
+   * Stage any image attachments and send ONE turn through tmux as a
+   * single literal+Enter pair. Shared by the warm live-send path and the
+   * pre-ready queue flush so both honour identical image-token minting
+   * and error-frame semantics (ADR-004: never drop the user's text).
+   *
+   * Image staging is performed HERE (not at enqueue time) so queued turns
+   * resolve `@<absPath>` tokens against the live image store at send
+   * time, matching the warm path exactly.
+   */
+  async function sendTurn(state: ChatState, turn: PendingTurn): Promise<void> {
+    let outboundText = turn.text;
+    const { images } = turn;
+    if (
+      images !== undefined &&
+      Array.isArray(images) &&
+      images.length > 0 &&
+      opts.imageStore
+    ) {
+      try {
+        const staged = await opts.imageStore.stageTurnImages(
+          state.chatId,
+          images as UserTurnImage[],
+        );
+        const tokens = staged.map((s) => `@${s.absPath}`).join(" ");
+        if (tokens) outboundText = `${turn.text} ${tokens}`;
+      } catch (err) {
+        // ADR-004: surface one typed error frame on staging failure, but
+        // never drop the user's text — it still sends below.
+        const message =
+          err instanceof StageImageError
+            ? err.message
+            : `failed to attach image: ${(err as Error).message}`;
+        broadcast(state, {
+          kind: "error",
+          "chat-id": state.chatId,
+          body: { message },
+        });
+      }
+    }
+    await opts.tmux.sendInput(state.chatId, outboundText);
+  }
+
+  /**
+   * Append `op` to the chat's send-serialization chain and return a
+   * promise that resolves when THIS op has run. Every distinct user turn
+   * routes through here so two turns can never interleave their literal
+   * text at the tmux layer (the "never concatenate two turns" invariant).
+   * The chain swallows prior rejections so one failed send doesn't wedge
+   * every subsequent turn; the per-op promise still rejects to its own
+   * awaiter.
+   */
+  function enqueueSend(
+    state: ChatState,
+    op: () => Promise<void>,
+  ): Promise<void> {
+    const run = state.sendChain.catch(() => {}).then(op);
+    // The stored tail must not reject (so the next link starts cleanly);
+    // the returned `run` keeps the rejection for the caller's try/catch.
+    state.sendChain = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Readiness edge (F1). Idempotent: the first call (SessionStart OR the
+   * fallback timer, whichever wins) flips `ready`, cancels the fallback,
+   * and drains `pendingTurns` SERIALLY through the send chain so queued
+   * turns submit in order as separate prompts. Subsequent calls no-op.
+   */
+  function markReadyAndFlush(
+    state: ChatState,
+    via: "session-start" | "fallback",
+  ): void {
+    if (state.state === "disposed") return;
+    if (state.ready) return;
+    state.ready = true;
+    if (state.readyFallbackTimer) {
+      clearTimeout(state.readyFallbackTimer);
+      state.readyFallbackTimer = undefined;
+    }
+    log.attach(state.chatId, {
+      sessionId: state.sessionId,
+      jsonlPath: state.jsonlPath,
+      strategy: `ready:${via}`,
+    });
+    const queued = state.pendingTurns;
+    state.pendingTurns = [];
+    for (const turn of queued) {
+      void enqueueSend(state, () => sendTurn(state, turn)).catch((err) => {
+        if (err instanceof TmuxUnavailableError) {
+          broadcastRuntimeUnavailable(state.chatId, err);
+          return;
+        }
+        console.warn(
+          `[loom] queued turn flush failed for ${state.chatId}: ${(err as Error).message}`,
+        );
+      });
+    }
+  }
+
   async function ensureChatState(chatId: string): Promise<ChatState> {
     let state = chats.get(chatId);
     if (state) return state;
@@ -393,8 +561,25 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       hasFirstSent: false,
       hasAttachHookFired: false,
       rotationPoll: undefined,
+      // Fresh spawn ⇒ not ready until SessionStart (or the fallback).
+      // A RESUMED session is treated identically: claude still has to
+      // re-hydrate and re-reach its prompt, and it fires SessionStart on
+      // resume too, so the same edge applies. Warm sessions never reach
+      // this branch — `ensureChatState` returns the existing (already-
+      // ready) state up top, so a second turn on a live chat sends now.
+      ready: false,
+      pendingTurns: [],
+      sendChain: Promise.resolve(),
+      readyFallbackTimer: undefined,
     };
     chats.set(chatId, state);
+
+    // Arm the no-hang fallback (F1). If SessionStart never lands, this
+    // marks the chat ready and flushes the queue after a bounded delay so
+    // a degraded hook pipeline degrades to best-effort, not a dead chat.
+    state.readyFallbackTimer = setTimeout(() => {
+      markReadyAndFlush(state!, "fallback");
+    }, opts.readyFallbackMs ?? READY_FALLBACK_MS);
 
     tail.onLine((line) => onTailLine(state!, line.text, line.text.length));
     tail.start({ filePath: jsonlPath });
@@ -602,6 +787,14 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
         clearInterval(state.rotationPoll);
         state.rotationPoll = undefined;
       }
+      // Cancel the cold-start fallback so it can't fire post-dispose and
+      // try to flush into a killed pane.
+      if (state.readyFallbackTimer) {
+        clearTimeout(state.readyFallbackTimer);
+        state.readyFallbackTimer = undefined;
+      }
+      // Drop any turns that never made it to claude — the pane is gone.
+      state.pendingTurns = [];
       try {
         await state.tail.stop();
       } catch {
@@ -640,39 +833,32 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
           );
         }
       }
-      let outboundText = text;
-      if (
-        images !== undefined &&
-        Array.isArray(images) &&
-        images.length > 0 &&
-        opts.imageStore
-      ) {
-        try {
-          const staged = await opts.imageStore.stageTurnImages(
-            chatId,
-            images as UserTurnImage[],
-          );
-          const tokens = staged.map((s) => `@${s.absPath}`).join(" ");
-          if (tokens) outboundText = `${text} ${tokens}`;
-        } catch (err) {
-          // ADR-004: surface one typed error frame on staging failure, but
-          // never drop the user's text — it still sends below.
-          const chatState = getChat(chatId);
-          if (chatState) {
-            const message =
-              err instanceof StageImageError
-                ? err.message
-                : `failed to attach image: ${(err as Error).message}`;
-            broadcast(chatState, {
-              kind: "error",
-              "chat-id": chatId,
-              body: { message },
-            });
-          }
-        }
+
+      const turn: PendingTurn = { text, images };
+
+      // Cold-start gate (F1). If claude's TUI has not yet reached its
+      // input prompt, ENQUEUE rather than send — a send now would buffer
+      // the literal text and swallow the Enter, and a second pre-ready
+      // turn would concatenate onto the same line so both submit as one
+      // merged prompt. The readiness edge (SessionStart or the fallback
+      // timer) flushes the queue serially. Emit a `turn-state running`
+      // affordance so the send is not silent (the existing WorkingChip
+      // shows "Working" until claude's first output flips it idle).
+      if (!state.ready) {
+        state.pendingTurns.push(turn);
+        broadcast(state, {
+          kind: "turn-state",
+          "chat-id": chatId,
+          body: { state: "running" },
+        });
+        return;
       }
+
+      // Warm / ready path: send immediately, but THROUGH the per-chat
+      // send chain so a rapid second turn can't interleave its literal
+      // text with this one at the tmux layer (never-concatenate invariant).
       try {
-        await opts.tmux.sendInput(chatId, outboundText);
+        await enqueueSend(state, () => sendTurn(state, turn));
       } catch (err) {
         if (err instanceof TmuxUnavailableError) {
           broadcastRuntimeUnavailable(chatId, err);
@@ -1058,6 +1244,11 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
           return;
         }
         case "session-start":
+          // Readiness edge (F1): claude's TUI is up and at its prompt.
+          // Flip `ready` and flush any turns the user submitted during
+          // the cold-start window, serially and in order. Idempotent on
+          // repeat SessionStarts (e.g. resume re-fires it).
+          markReadyAndFlush(state, "session-start");
           broadcast(state, {
             kind: "session-state",
             "chat-id": chatId,

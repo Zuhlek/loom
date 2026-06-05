@@ -21,6 +21,19 @@ import {
 import type { TmuxSessionApi } from "../src/process-manager/tmux-session.ts";
 import type { SessionIdStore, SessionEntry } from "../src/process-manager/session-store.ts";
 import type { JsonlPathProbe, ResolvedTailRoot } from "../src/process-manager/jsonl-path-probe.ts";
+import { makeEnvelope } from "../src/chat-protocol/envelope.ts";
+
+/**
+ * Flip a freshly-attached chat past the F1 cold-start readiness gate by
+ * routing the `SessionStart` hook envelope, so a subsequent
+ * `submitUserTurn` sends immediately instead of enqueuing.
+ */
+function markReady(
+  bridge: ReturnType<typeof createJsonlTailBridge>,
+  chatId: string,
+): void {
+  bridge.routeHookEnvelope(makeEnvelope("session-start", chatId, { sessionId: "s" }));
+}
 
 function mkTmuxRec(): {
   api: TmuxSessionApi;
@@ -148,6 +161,7 @@ describe("JsonlTailBridge — image submit (T-003)", () => {
     try {
       const bridge = createJsonlTailBridge(opts);
       await bridge.attach("c-1", makeWs());
+      markReady(bridge, "c-1");
       await bridge.submitUserTurn("c-1", "hello", [
         { mediaType: "image/png", dataB64: "x" },
         { mediaType: "image/jpeg", dataB64: "y" },
@@ -177,6 +191,7 @@ describe("JsonlTailBridge — image submit (T-003)", () => {
     try {
       const bridge = createJsonlTailBridge(opts);
       await bridge.attach("c-1", makeWs());
+      markReady(bridge, "c-1");
       await bridge.submitUserTurn("c-1", "plain text");
       expect(calls.sendInput).toEqual([{ chatId: "c-1", text: "plain text" }]);
       expect(staged).toBe(false);
@@ -193,6 +208,7 @@ describe("JsonlTailBridge — image submit (T-003)", () => {
       const bridge = createJsonlTailBridge(opts);
       const ws = makeWs();
       await bridge.attach("c-1", ws);
+      markReady(bridge, "c-1");
       ws.sent.length = 0;
       await bridge.submitUserTurn("c-1", "look at this", [
         { mediaType: "image/png", dataB64: "broken" },
@@ -218,6 +234,7 @@ describe("JsonlTailBridge — image submit (T-003)", () => {
       const bridge = createJsonlTailBridge(opts);
       const ws = makeWs();
       await bridge.attach("c-1", ws);
+      markReady(bridge, "c-1");
       ws.sent.length = 0;
       await bridge.submitUserTurn("c-1", "hi", [
         { mediaType: "image/png", dataB64: "x" },

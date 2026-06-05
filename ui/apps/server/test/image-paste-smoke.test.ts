@@ -26,6 +26,7 @@ import type { SessionIdStore, SessionEntry } from "../src/process-manager/sessio
 import type { JsonlPathProbe, ResolvedTailRoot } from "../src/process-manager/jsonl-path-probe.ts";
 import type { ClaudeEvent } from "../src/process-manager/jsonl/schema.ts";
 import type { UserMessageItem } from "../src/chat-protocol/messages.ts";
+import { makeEnvelope } from "../src/chat-protocol/envelope.ts";
 
 const PNG_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
@@ -125,6 +126,8 @@ describe("T-007 — production-wiring smoke (real store + bridge + materializer)
     try {
       const bridge = createJsonlTailBridge(opts);
       await bridge.attach("c-1", makeWs());
+      // F1 cold-start gate: signal readiness so the turn sends immediately.
+      bridge.routeHookEnvelope(makeEnvelope("session-start", "c-1", { sessionId: "s" }));
       await bridge.submitUserTurn("c-1", "what is in this image", [
         { mediaType: "image/png", dataB64: PNG_B64, filename: "shot.png" },
       ]);

@@ -20,6 +20,16 @@ import type {
 import { makeEnvelope } from "../src/chat-protocol/envelope.ts";
 
 /**
+ * Flip a freshly-attached chat to ready by routing the `SessionStart`
+ * hook envelope — the production cold-start readiness edge (F1). After
+ * attach a chat starts NOT ready (turns enqueue, not send), so input
+ * tests that assert an immediate send must signal readiness first.
+ */
+function markReady(bridge: ReturnType<typeof createJsonlTailBridge>, chatId: string): void {
+  bridge.routeHookEnvelope(makeEnvelope("session-start", chatId, { sessionId: "s" }));
+}
+
+/**
  * Recording permission gate. respondToPermission resolves the gate instead of
  * injecting tmux keystrokes, so the tests assert against `resolved` here.
  */
@@ -155,6 +165,7 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
     try {
       const bridge = createJsonlTailBridge(opts);
       await bridge.attach("c-1", makeWs());
+      markReady(bridge, "c-1");
       await bridge.submitUserTurn("c-1", "hello");
       expect(calls.sendInput).toEqual([{ chatId: "c-1", text: "hello" }]);
       await bridge.dispose("c-1");
@@ -489,6 +500,7 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
       const bridge = createJsonlTailBridge(opts);
       const ws = makeWs();
       await bridge.attach("c-1", ws);
+      markReady(bridge, "c-1");
       ws.sent.length = 0;
       await bridge.submitUserTurn("c-1", "with image", [
         { mediaType: "image/png", dataB64: "abcd" },
@@ -498,6 +510,117 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
       ]);
       const frames = ws.sent.map((s) => JSON.parse(s));
       expect(frames.find((f) => f.kind === "error")).toBeUndefined();
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe("JsonlTailBridge — cold-start readiness gate (F1)", () => {
+  it("a turn submitted before session-start is QUEUED (not sent) and emits turn-state running", async () => {
+    const { api, calls } = mkTmuxRec();
+    const { opts, cleanup } = mkOpts(api);
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      const ws = makeWs();
+      await bridge.attach("c-1", ws);
+      ws.sent.length = 0;
+      // Fresh spawn ⇒ not ready ⇒ enqueue, do not send.
+      await bridge.submitUserTurn("c-1", "first message");
+      expect(calls.sendInput).toEqual([]);
+      // The send is not silent — a running turn-state goes out so the
+      // WorkingChip shows progress while claude boots.
+      const frames = ws.sent.map((s) => JSON.parse(s));
+      const running = frames.find(
+        (f) => f.kind === "turn-state" && f.body.state === "running",
+      );
+      expect(running).toBeDefined();
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("the queued turn is sent only AFTER session-start arrives", async () => {
+    const { api, calls } = mkTmuxRec();
+    const { opts, cleanup } = mkOpts(api);
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      await bridge.attach("c-1", makeWs());
+      await bridge.submitUserTurn("c-1", "deferred message");
+      expect(calls.sendInput).toEqual([]);
+      // Readiness edge: flush.
+      markReady(bridge, "c-1");
+      // Flush is async (runs through the send chain); let microtasks drain.
+      await new Promise((r) => setTimeout(r, 0));
+      expect(calls.sendInput).toEqual([
+        { chatId: "c-1", text: "deferred message" },
+      ]);
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("two rapid pre-ready turns flush as TWO separate sendInput calls, in order, never merged", async () => {
+    const { api, calls } = mkTmuxRec();
+    const { opts, cleanup } = mkOpts(api);
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      await bridge.attach("c-1", makeWs());
+      // Submit two turns back-to-back before claude is ready.
+      await bridge.submitUserTurn("c-1", "what is this repo about?");
+      await bridge.submitUserTurn("c-1", "Run the bash command: ls");
+      expect(calls.sendInput).toEqual([]);
+      markReady(bridge, "c-1");
+      await new Promise((r) => setTimeout(r, 0));
+      // The invariant: TWO distinct sends in submission order — never the
+      // merged single bubble the live race produced.
+      expect(calls.sendInput).toEqual([
+        { chatId: "c-1", text: "what is this repo about?" },
+        { chatId: "c-1", text: "Run the bash command: ls" },
+      ]);
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("fallback timeout flushes the queue if session-start never arrives", async () => {
+    const { api, calls } = mkTmuxRec();
+    const { opts, cleanup } = mkOpts(api);
+    // Tiny fallback so the no-hang path is exercised deterministically.
+    opts.readyFallbackMs = 20;
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      await bridge.attach("c-1", makeWs());
+      await bridge.submitUserTurn("c-1", "no hooks here");
+      expect(calls.sendInput).toEqual([]);
+      // Wait past the fallback window — no session-start is ever routed.
+      await new Promise((r) => setTimeout(r, 60));
+      expect(calls.sendInput).toEqual([
+        { chatId: "c-1", text: "no hooks here" },
+      ]);
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("once ready, a subsequent turn sends immediately (warm path)", async () => {
+    const { api, calls } = mkTmuxRec();
+    const { opts, cleanup } = mkOpts(api);
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      await bridge.attach("c-1", makeWs());
+      markReady(bridge, "c-1");
+      await bridge.submitUserTurn("c-1", "warm one");
+      await bridge.submitUserTurn("c-1", "warm two");
+      expect(calls.sendInput).toEqual([
+        { chatId: "c-1", text: "warm one" },
+        { chatId: "c-1", text: "warm two" },
+      ]);
       await bridge.dispose("c-1");
     } finally {
       cleanup();
