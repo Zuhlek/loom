@@ -14,7 +14,12 @@
  * Empty-state matrix:
  *   - `slashCommands === null`, built-ins survive filter ⇒ Built-in
  *     group + "Loading commands…" italic muted row under PROVIDER
- *     header with `aria-busy="true"`.
+ *     header with `aria-busy="true"`. If the catalog never lands (cold
+ *     or stuck `claude` session — the `slash-commands-update` frame is
+ *     the only source and may never arrive) the loading row is bounded
+ *     by {@link SLASH_LOADING_TIMEOUT_MS}: past that, it swaps to a
+ *     calm "Provider commands unavailable" explainer
+ *     (`aria-busy="false"`) instead of spinning forever.
  *   - `slashCommands === null`, built-ins filtered out ⇒ "No matching
  *     command" row only.
  *   - Loaded `[]` + non-empty built-ins ⇒ Built-in group only.
@@ -26,9 +31,21 @@
  *   - Provider    → square outline (`kind: 'command'`)
  *   - Skill       → diamond outline (`kind: 'skill'`)
  */
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import type { WireSlashCommand } from "../../lib/chat-types";
+
+/**
+ * Upper bound on the "Loading commands…" affordance. The provider
+ * catalog arrives solely via the bridge `slash-commands-update` frame,
+ * sourced from the `claude` session; on a cold or stuck session that
+ * frame may never land, so an unbounded loading row would spin forever.
+ * 8s comfortably exceeds a healthy catalog load and even F1's
+ * cold-start readiness window, so the timeout only fires when the
+ * session is genuinely wedged — at which point we swap to a calm,
+ * non-alarming explainer rather than keep spinning.
+ */
+const SLASH_LOADING_TIMEOUT_MS = 8_000;
 
 /**
  * Built-in row shape. The three Loom-side commands `/model`, `/plan`,
@@ -119,6 +136,21 @@ export function ComposerSlashMenu({
   const hasBuiltins = builtins.length > 0;
   const hasProviders = providers.length > 0;
 
+  // Bound the loading affordance. While `loading`, arm a one-shot timer
+  // and flip `loadTimedOut` once it elapses; clear it on cleanup so a
+  // remount or a catalog that lands first never trips it. When loading
+  // ends we reset the flag so a later catalog clear/reload re-shows the
+  // honest "Loading…" row before the explainer can reappear.
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+  useEffect(() => {
+    if (!loading) {
+      setLoadTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setLoadTimedOut(true), SLASH_LOADING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
@@ -203,7 +235,7 @@ export function ComposerSlashMenu({
                 onSelect,
               ),
             )}
-          {loading && !hasProviders && (
+          {loading && !hasProviders && !loadTimedOut && (
             <div
               role="presentation"
               data-testid="composer-slash-menu-loading"
@@ -212,6 +244,17 @@ export function ComposerSlashMenu({
               style={{ color: "var(--muted-foreground)" }}
             >
               Loading commands…
+            </div>
+          )}
+          {loading && !hasProviders && loadTimedOut && (
+            <div
+              role="presentation"
+              data-testid="composer-slash-menu-loading-timeout"
+              aria-busy={false}
+              className="px-3 py-1.5 text-xs italic"
+              style={{ color: "var(--muted-foreground)" }}
+            >
+              Provider commands unavailable — the session may still be starting.
             </div>
           )}
         </>
