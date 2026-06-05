@@ -62,14 +62,41 @@ type ConnState = "idle" | "connecting" | "open" | "closed";
  *                   to the tmux input stream so claude consumes them
  *                   after the active turn settles.
  *   - `"blocked"` : a pending permission or AskUserQuestion is open;
- *                   the composer hard-disables until the user
- *                   resolves the inline picker / permission card.
+ *                   the composer hard-disables (textarea, attachments,
+ *                   AND send) until the user resolves the inline picker
+ *                   / permission card. The only meaningful next action
+ *                   is resolving the gate, so nothing else is editable.
+ *   - `"offline"` : the raw WebSocket is not `open` (connecting / closed
+ *                   / idle) and no tool gate is pending. The composer
+ *                   stays EDITABLE so the user can keep typing / drafting
+ *                   through a transient reconnect (the route retries
+ *                   ~1s for up to ~10s), but the SEND action is disabled
+ *                   and a connection reason is surfaced ("Connecting…" /
+ *                   "Connection lost — reconnecting…"). Without this, a
+ *                   send would be silently dropped by `submitTurn`'s
+ *                   `ws.OPEN` guard after clearing the composer. NOTE:
+ *                   this gates on the RAW SOCKET only — a session
+ *                   "recovering" while the socket stays `open` is NOT
+ *                   offline here, because F1's server-side readiness
+ *                   queue holds the turn until the session is back.
+ *
+ * Precedence (most specific first):
+ *   1. pendingPermission OR pendingQuestion → `"blocked"` (a tool gate
+ *      is open; resolving it is the only meaningful next action — this
+ *      wins even when the socket is also down).
+ *   2. else `conn !== "open"` → `"offline"` (raw socket not open;
+ *      stay editable, disable send + show reason).
+ *   3. else `turnState === "running"` → `"queue"`.
+ *   4. else → `"ready"`.
+ *
+ * `conn` is optional and treated as `"open"` when absent so pure
+ * connection-agnostic callers/tests keep their existing semantics.
  *
  * Exported so the static-source contract tests can import it directly
- * and verify the selector behaviour; pure (depends only on the three
+ * and verify the selector behaviour; pure (depends only on the supplied
  * state fields).
  */
-export type ComposerMode = "ready" | "queue" | "blocked";
+export type ComposerMode = "ready" | "queue" | "blocked" | "offline";
 
 /**
  * Maximum wait between the `attached` and `snapshot` frames. If the
@@ -96,8 +123,15 @@ export function composerMode(state: {
   pendingPermission: PendingPermission | null;
   pendingQuestion: PendingQuestion | null;
   turnState: TurnState;
+  /**
+   * Raw WebSocket connection state. Optional: absent is treated as
+   * `"open"` so connection-agnostic callers/tests retain the legacy
+   * permission/question/turn-only semantics.
+   */
+  conn?: ConnState;
 }): ComposerMode {
   if (state.pendingPermission || state.pendingQuestion) return "blocked";
+  if (state.conn !== undefined && state.conn !== "open") return "offline";
   if (state.turnState === "running") return "queue";
   return "ready";
 }
@@ -1012,13 +1046,29 @@ export function LiveChatRoute({ chatId }: Props) {
     pendingPermission: state.pendingPermission,
     pendingQuestion: state.pendingQuestion,
     turnState: state.turnState,
+    conn,
   });
+  // Only `"blocked"` (a pending tool gate) hard-disables the composer.
+  // `"offline"` deliberately stays OUT of the hard-disable so the user
+  // can keep typing / keep a draft through a transient reconnect; the
+  // send action is disabled inside ChatComposer instead, using the
+  // connection `composerReason` below as the hint.
   const composerDisabled = mode === "blocked";
+  // Send-disabled / disabled-placeholder reason. Permission/question
+  // take precedence over the connection reason — same precedence as
+  // `composerMode`'s branches — so an open tool gate explains itself
+  // even if the socket also happens to be down. The connection reason
+  // (F5) feeds the offline send-disabled hint when the composer is
+  // editable-but-unsendable purely because the raw socket is not `open`.
   const composerReason = pp
     ? "Resolve the permission request to continue"
     : state.pendingQuestion
       ? "Answer the question to continue"
-      : undefined;
+      : conn === "closed"
+        ? "Connection lost — reconnecting…"
+        : conn !== "open"
+          ? "Connecting…"
+          : undefined;
   // Top bar (right of logo). Tasks/Diff toggles live in the slim right
   // rail; the WebSocket status dot now lives at the bottom of that rail
   // too (see `rightRail` below). The Settings icon is anchored to the

@@ -39,12 +39,14 @@ import { AttachedRefPill } from "./AttachedRefPill";
 import type { ContextUsageSnapshot } from "../../lib/use-chat-bridge";
 
 /**
- * Three-state composer policy mirror — kept in sync with
- * `routes/live-chat.tsx`'s `ComposerMode` type. Splits hard-disable
- * (blocked) from queue-while-running (queue) from default-enabled
- * (ready).
+ * Composer policy mirror — kept in sync with `routes/live-chat.tsx`'s
+ * `ComposerMode` type. Splits hard-disable (blocked) from
+ * queue-while-running (queue) from editable-but-unsendable (offline)
+ * from default-enabled (ready). Only `"blocked"` hard-disables the
+ * textarea/attachments; `"offline"` keeps them editable but disables
+ * the send action with a connection reason.
  */
-export type ComposerMode = "ready" | "queue" | "blocked";
+export type ComposerMode = "ready" | "queue" | "blocked" | "offline";
 
 export interface ChatComposerProps {
   /**
@@ -203,6 +205,12 @@ export function ChatComposer({
   // boolean is the only signal.
   const isBlocked = composerMode === "blocked";
   const isQueueMode = composerMode === "queue";
+  // Offline = raw socket not open and no tool gate pending. Deliberately
+  // NOT folded into `hardDisabled`: the textarea + attachments stay
+  // editable so the user can keep a draft through a transient reconnect.
+  // Only the send action is disabled (see send buttons below) with the
+  // `disabledReason` surfaced as a title + inline footer hint.
+  const isOffline = composerMode === "offline";
   const hardDisabled = isBlocked || !!disabled;
   const [value, setValue] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -872,14 +880,18 @@ export function ChatComposer({
                   <button
                     type="button"
                     onClick={() => void submit()}
-                    disabled={!canSend}
+                    disabled={!canSend || isOffline}
                     className={clsx(
                       "ml-2 size-7 rounded-md grid place-items-center text-white shadow-sm",
-                      !canSend && "opacity-50",
+                      (!canSend || isOffline) && "opacity-50",
                     )}
                     style={{ background: "var(--primary)" }}
                     title="Send (Enter)"
-                    aria-label="Send message"
+                    aria-label={
+                      isOffline
+                        ? `Send disabled — ${disabledReason ?? "disconnected"}`
+                        : "Send message"
+                    }
                     data-testid="composer-send-button"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="size-3.5">
@@ -891,14 +903,18 @@ export function ChatComposer({
                   <button
                     type="button"
                     onClick={() => void submit()}
-                    disabled={!canSend}
+                    disabled={!canSend || isOffline}
                     className={clsx(
                       "ml-2 size-7 rounded-md grid place-items-center text-white shadow-sm",
-                      !canSend && "opacity-50",
+                      (!canSend || isOffline) && "opacity-50",
                     )}
                     style={{ background: "var(--primary)" }}
                     title="Queue (Enter) — pushes ahead of the running turn"
-                    aria-label="Queue message"
+                    aria-label={
+                      isOffline
+                        ? `Queue disabled — ${disabledReason ?? "disconnected"}`
+                        : "Queue message"
+                    }
                     data-testid="composer-queue-button"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="size-3.5">
@@ -910,6 +926,17 @@ export function ChatComposer({
             }
           />
         </div>
+        {isOffline && disabledReason && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="px-3 pb-2 text-[10px]"
+            style={{ color: "var(--muted-foreground)" }}
+            data-testid="composer-offline-hint"
+          >
+            {disabledReason}
+          </div>
+        )}
       </div>
     </div>
   );
