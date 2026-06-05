@@ -857,6 +857,24 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       // Warm / ready path: send immediately, but THROUGH the per-chat
       // send chain so a rapid second turn can't interleave its literal
       // text with this one at the tmux layer (never-concatenate invariant).
+      //
+      // F3 — broadcast `turn-state running` on warm accept, mirroring the
+      // not-ready branch above. This completes F1's running-on-send
+      // coverage: previously only the cold-start (queued) branch emitted
+      // running, so a warm send produced no authoritative running frame
+      // and short turns flashed no WorkingChip. Broadcasting here makes
+      // "running" authoritative for ALL observers — notably a second tab
+      // attached to the same chat that did NOT submit (the submitting
+      // client already client-seeds running locally, but a passive
+      // observer has no other signal). Fired once per accepted warm turn,
+      // before the send; idempotent against the client reducer (a
+      // running→running frame preserves `activeTurnStartedAt`). The
+      // `stop` hook's `turn-state idle` clears it at turn end.
+      broadcast(state, {
+        kind: "turn-state",
+        "chat-id": chatId,
+        body: { state: "running" },
+      });
       try {
         await enqueueSend(state, () => sendTurn(state, turn));
       } catch (err) {

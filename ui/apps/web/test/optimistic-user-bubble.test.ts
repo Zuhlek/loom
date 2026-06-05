@@ -231,6 +231,42 @@ describe("F2 — static render/dispatch contract", () => {
     expect(dispatchMatch!.index).toBeGreaterThan(guardIdx);
   });
 
+  test("F3 — submitTurn client-seeds a 'turn-state running' transition on send", () => {
+    const src = readFileSync(webRoot + "src/routes/live-chat.tsx", "utf8");
+    // F3: alongside the optimistic-user dispatch, submitTurn must also
+    // dispatch a running turn-state so the WorkingChip appears instantly
+    // on a warm send (no server round-trip). It reuses the EXISTING
+    // turn-state action — which seeds `activeTurnStartedAt`.
+    const runningDispatch =
+      /dispatch\(\{\s*type:\s*["']turn-state["']\s*,\s*state:\s*["']running["']\s*\}\)/.exec(
+        src,
+      );
+    expect(
+      runningDispatch,
+      "submitTurn must dispatch a turn-state running transition",
+    ).not.toBeNull();
+    // It must live after the ws.OPEN guard so a dropped send seeds nothing.
+    const guardIdx = src.indexOf("ws.readyState !== ws.OPEN) return;");
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(runningDispatch!.index).toBeGreaterThan(guardIdx);
+  });
+
+  test("F3 — turn-state running seeds activeTurnStartedAt; idle clears it", () => {
+    // The reducer logic the F3 client-seed relies on: a transition into
+    // running from a non-running state stamps `activeTurnStartedAt`, and
+    // the server `stop` → idle frame clears it back to null so the chip
+    // hides at turn end.
+    const running = chatReducer(EMPTY_STATE, {
+      type: "turn-state",
+      state: "running",
+    });
+    expect(running.turnState).toBe("running");
+    expect(running.activeTurnStartedAt).toEqual(expect.any(Number));
+    const idle = chatReducer(running, { type: "turn-state", state: "idle" });
+    expect(idle.turnState).toBe("idle");
+    expect(idle.activeTurnStartedAt).toBeNull();
+  });
+
   test("MessagesTimeline renders a 'Sending…' and 'Failed to send' affordance", () => {
     const src = readFileSync(
       webRoot + "src/components/chat/MessagesTimeline.tsx",

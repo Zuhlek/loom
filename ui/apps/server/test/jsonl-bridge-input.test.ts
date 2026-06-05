@@ -174,6 +174,33 @@ describe("JsonlTailBridge — user-input surface (T-010)", () => {
     }
   });
 
+  it("F3 — a WARM submitUserTurn broadcasts turn-state running (in addition to sending)", async () => {
+    const { api, calls } = mkTmuxRec();
+    const { opts, cleanup } = mkOpts(api);
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      const ws = makeWs();
+      await bridge.attach("c-1", ws);
+      // Warm path: mark ready so the send goes out immediately rather
+      // than enqueuing (the cold-start branch already emits running).
+      markReady(bridge, "c-1");
+      ws.sent.length = 0;
+      await bridge.submitUserTurn("c-1", "hello");
+      // The text still reaches tmux exactly once.
+      expect(calls.sendInput).toEqual([{ chatId: "c-1", text: "hello" }]);
+      // AND a running turn-state is broadcast so passive observers (a
+      // second tab) get an authoritative "Claude is thinking" signal.
+      const frames = ws.sent.map((s) => JSON.parse(s));
+      const running = frames.find(
+        (f) => f.kind === "turn-state" && f.body.state === "running",
+      );
+      expect(running).toBeDefined();
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("interrupt calls tmux.interrupt exactly once", async () => {
     const { api, calls } = mkTmuxRec();
     const { opts, cleanup } = mkOpts(api);

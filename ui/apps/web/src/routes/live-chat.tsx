@@ -811,6 +811,20 @@ export function LiveChatRoute({ chatId }: Props) {
         );
       }
       dispatch({ type: "optimistic-user", item: optimistic });
+
+      // F3 — client-seed the "running" turn state so the WorkingChip
+      // ("••• Working for Xs") appears INSTANTLY on send, with no
+      // server round-trip. On a warm session the server's `turn-state
+      // running` frame frequently never arrives for short turns
+      // (measured: 0/2 warm sends produced one), leaving the user with
+      // no "Claude is thinking" feedback between send and answer.
+      // Reusing the existing `turn-state` reducer action seeds
+      // `activeTurnStartedAt` via the same transition logic the server
+      // frame uses; the `stop` hook's `turn-state idle` still clears it
+      // at turn end (running→idle drops `activeTurnStartedAt` to null),
+      // so a short warm turn shows the chip briefly then hides it.
+      // Placed after the `ws.OPEN` guard so a dropped send seeds nothing.
+      dispatch({ type: "turn-state", state: "running" });
     },
     [chatId],
   );
