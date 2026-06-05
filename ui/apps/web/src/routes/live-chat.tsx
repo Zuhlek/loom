@@ -24,12 +24,14 @@ import { PermissionRequestInline } from "../components/chat/PermissionRequestInl
 import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker";
 import { useSnackbar } from "../components/ui/Snackbar";
 import { SessionRecoveryBanner } from "../components/chat/SessionRecoveryBanner";
+import { ConnectionBanner } from "../components/chat/ConnectionBanner";
 import { getChat, getSettings, wsUrl, type ApiChat } from "../lib/api";
 import { useChatBridge } from "../lib/use-chat-bridge";
 import { useSidebarState } from "../lib/sidebar-state";
 import type {
   ChatItem,
   ClientFrame,
+  ConnState,
   PendingPermission,
   PendingQuestion,
   PermissionMode,
@@ -45,8 +47,6 @@ import type {
 interface Props {
   chatId: string;
 }
-
-type ConnState = "idle" | "connecting" | "open" | "closed";
 
 /**
  * Composer policy selector. Returns a three-state value the composer
@@ -1260,6 +1260,11 @@ export function LiveChatRoute({ chatId }: Props) {
             onRetry={retrySession}
           />
         )}
+
+        {/* Raw transport (browser↔server WS) degradation. Self-gates:
+            renders null when conn is open OR while a session recovery is
+            in flight (SessionRecoveryBanner owns that — no stacking). */}
+        <ConnectionBanner conn={conn} lifecycle={state.lifecycle} />
 
         {/* Transient chat errors now surface via the global Snackbar
             (see the `snackbar.show` effect above). SessionRecoveryBanner

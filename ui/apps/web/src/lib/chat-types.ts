@@ -171,6 +171,23 @@ export type TurnState = "idle" | "running" | "interrupted" | "error";
  */
 export type SessionLifecycle = "active" | "recovering" | "failed";
 
+/**
+ * RAW browser↔loom-server WebSocket connection state — a DIFFERENT
+ * layer from {@link SessionLifecycle}. This tracks the transport socket
+ * the route owns (`useChatBridge` / `live-chat.tsx`), NOT the
+ * claude-session respawn machinery:
+ *
+ *   - `idle`       : no socket yet (pre-mount / pre-connect).
+ *   - `connecting` : socket opening, or a reconnect attempt in flight.
+ *   - `open`       : socket connected; frames flow.
+ *   - `closed`     : socket dropped on a non-user close; the route
+ *                    auto-retries (~1s, up to 10 attempts).
+ *
+ * Single source of truth shared by `live-chat.tsx` (the dot/popover +
+ * composer policy) and {@link ConnectionBanner}.
+ */
+export type ConnState = "idle" | "connecting" | "open" | "closed";
+
 export interface PendingPermission {
   id: string;
   toolName: string;
