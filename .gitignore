@@ -4,6 +4,12 @@
 __pycache__/
 *.pyc
 
+# Root-level dependency dir. Anchored with a leading slash so it matches ONLY
+# the repo-root node_modules — never the intentionally-tracked eval-harness
+# node_modules under orchestrator/evaluation/ (re-included below). The ui/
+# subtree is covered by ui/.gitignore.
+/node_modules/
+
 # Eval-harness analysis output and filed baseline / version runs are
 # tracked in git (per loom-eval-harness US-004 AC-3). Pin a non-ignore
 # so future top-level rules cannot accidentally shadow it.
