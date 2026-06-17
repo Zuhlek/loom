@@ -2,12 +2,14 @@
  * GET /git/status?worktreePath=<abs>&base=<ref>
  *
  * Returns { branch, base, ahead, behind, uncommitted, remote? } for a given
- * worktree. Composes existing git primitives — no new git plumbing. Default
- * base is "main". 400 on empty worktreePath; 500 on underlying git failure.
+ * worktree. Composes existing git primitives — no new git plumbing. `base`
+ * defaults to the repo's resolved trunk (origin/HEAD → main/master). 400 on
+ * empty worktreePath; 500 on underlying git failure.
  */
 import { executeGit } from "../git/worktree.ts";
 import { currentBranch, getRemoteUrl, hasUncommittedChanges } from "../git/manager.ts";
 import { jsonResponse } from "./_response.ts";
+import { getProjectDefaultBranch } from "./_route-helpers.ts";
 
 interface GitStatusResponse {
   branch: string;
@@ -23,10 +25,14 @@ export function mountGitStatusRoute(
 ): void {
   routes["/git/status"] = async (_req, url) => {
     const worktreePath = url.searchParams.get("worktreePath") ?? "";
-    const base = url.searchParams.get("base") ?? "main";
     if (!worktreePath) {
       return jsonResponse({ error: "worktreePath required" }, 400);
     }
+    // Resolve the trunk the same way `/diff` does, so the toolbar's base label
+    // and ahead/behind counts line up with the diff. An explicit `base` query
+    // param overrides.
+    const base =
+      url.searchParams.get("base") ?? (await getProjectDefaultBranch(worktreePath));
     try {
       const branch = (await currentBranch(worktreePath)) ?? "";
       const uncommitted = await hasUncommittedChanges(worktreePath);

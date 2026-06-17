@@ -71,7 +71,7 @@ describe("GET /diff — total branch/workspace diff", () => {
 
     const res = await call(
       mount()["/diff"]!,
-      `http://x/diff?worktreePath=${encodeURIComponent(root)}&base=main`,
+      `http://x/diff?worktreePath=${encodeURIComponent(root)}`,
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { sections: Array<{ label: string; diff: string; kind: string }> };
@@ -92,11 +92,13 @@ describe("GET /diff — total branch/workspace diff", () => {
     expect(rootSection!.diff).not.toMatch(/c\.txt/);
   });
 
-  test("falls back to HEAD when the base ref is absent in a repo", async () => {
+  test("falls back to HEAD when no trunk exists in a repo", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-diffroute-nobase-"));
     tmpDirs.push(root);
 
-    // Repo on a branch that is NOT "main"; commit then modify.
+    // Repo whose only branch is "trunk" — no main/master, no remote. The
+    // default-branch resolver finds no trunk, so merge-base collapses to HEAD
+    // and we still surface the uncommitted edit rather than erroring.
     fs.mkdirSync(root, { recursive: true });
     git(root, ["init", "-q", "-b", "trunk"]);
     git(root, ["config", "user.email", "t@x"]);
@@ -106,15 +108,56 @@ describe("GET /diff — total branch/workspace diff", () => {
     git(root, ["commit", "-q", "-m", "init"]);
     fs.writeFileSync(path.join(root, "a.txt"), "alpha edited\n");
 
-    // base=main does not exist → handler falls back to HEAD, surfacing
-    // the uncommitted edit rather than erroring.
     const res = await call(
       mount()["/diff"]!,
-      `http://x/diff?worktreePath=${encodeURIComponent(root)}&base=main`,
+      `http://x/diff?worktreePath=${encodeURIComponent(root)}`,
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { sections: Array<{ diff: string }> };
     expect(body.sections.length).toBe(1);
     expect(body.sections[0]!.diff).toMatch(/a\.txt/);
+  });
+
+  test("a branch diverged from the trunk shows its committed work, not just uncommitted edits", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-diffroute-diverged-"));
+    tmpDirs.push(root);
+
+    // main: baseline commit.
+    initRepo(root);
+    fs.writeFileSync(path.join(root, "a.txt"), "alpha\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "init"]);
+
+    // Fork a feature branch and COMMIT a new file there.
+    git(root, ["checkout", "-q", "-b", "feature"]);
+    fs.writeFileSync(path.join(root, "feature.txt"), "feature work\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "feature commit"]);
+
+    // Advance main past the fork point so a naive `git diff main` would show
+    // reverse noise. (Done while the tree is clean to avoid carrying edits.)
+    git(root, ["checkout", "-q", "main"]);
+    fs.writeFileSync(path.join(root, "b.txt"), "main moved on\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "main advances"]);
+
+    // Back on feature: an uncommitted edit on top of the committed work.
+    git(root, ["checkout", "-q", "feature"]);
+    fs.writeFileSync(path.join(root, "a.txt"), "alpha edited on feature\n");
+
+    const res = await call(
+      mount()["/diff"]!,
+      `http://x/diff?worktreePath=${encodeURIComponent(root)}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { sections: Array<{ diff: string }> };
+    const diff = body.sections[0]!.diff;
+    // Committed branch work surfaces…
+    expect(diff).toMatch(/feature\.txt/);
+    // …alongside the uncommitted edit…
+    expect(diff).toMatch(/alpha edited on feature/);
+    // …but main's post-fork commit must NOT appear (merge-base, not main-tip,
+    // is the base — so no reverse-diff noise).
+    expect(diff).not.toMatch(/b\.txt/);
   });
 });

@@ -203,6 +203,69 @@ describe("JsonlTailBridge — routeHookEnvelope (T-013)", () => {
     }
   });
 
+  it("SubagentStop does NOT end the turn (no turn-state idle); top-level Stop does", async () => {
+    const { opts, cleanup } = mkOpts();
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      const ws = makeWs();
+      await bridge.attach("c-1", ws);
+      ws.sent.length = 0;
+      // A subagent finishing must not flip the chat to idle — the parent
+      // agent is still running. Treating it as turn-end was the bug that
+      // vanished the WorkingChip mid-turn.
+      bridge.routeHookEnvelope(
+        makeEnvelope("stop", "c-1", { kind: "SubagentStop" }),
+      );
+      const afterSubagent = ws.sent.map((s) => JSON.parse(s));
+      expect(
+        afterSubagent.find(
+          (f) => f.kind === "turn-state" && f.body.state === "idle",
+        ),
+      ).toBeUndefined();
+      // The top-level Stop is the real turn terminus.
+      ws.sent.length = 0;
+      bridge.routeHookEnvelope(makeEnvelope("stop", "c-1", { kind: "Stop" }));
+      const afterStop = ws.sent.map((s) => JSON.parse(s));
+      expect(
+        afterStop.find(
+          (f) => f.kind === "turn-state" && f.body.state === "idle",
+        ),
+      ).toBeDefined();
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("snapshot reflects a live turn: running until the top-level Stop clears it", async () => {
+    const { opts, cleanup } = mkOpts();
+    try {
+      const bridge = createJsonlTailBridge(opts);
+      const ws = makeWs();
+      await bridge.attach("c-1", ws);
+      // Submit a turn (chat not yet ready ⇒ enqueued, but the bridge marks
+      // the turn running and records its start). A second tab attaching now
+      // must see the live turn, not a falsely-idle snapshot.
+      await bridge.submitUserTurn("c-1", "hello");
+      const ws2 = makeWs();
+      await bridge.attach("c-1", ws2);
+      const snap = ws2.sent.map((s) => JSON.parse(s)).find((f) => f.kind === "snapshot");
+      expect(snap).toBeDefined();
+      expect(snap.body.turnState).toBe("running");
+      expect(typeof snap.body.turnStartedAt).toBe("number");
+      // After the top-level Stop, a fresh attach sees idle again.
+      bridge.routeHookEnvelope(makeEnvelope("stop", "c-1", { kind: "Stop" }));
+      const ws3 = makeWs();
+      await bridge.attach("c-1", ws3);
+      const snap3 = ws3.sent.map((s) => JSON.parse(s)).find((f) => f.kind === "snapshot");
+      expect(snap3.body.turnState).toBe("idle");
+      expect(snap3.body.turnStartedAt).toBeNull();
+      await bridge.dispose("c-1");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("pre-tool-use envelope → pending-permission (T-014 gate-positive path)", async () => {
     const { opts, cleanup } = mkOpts();
     try {

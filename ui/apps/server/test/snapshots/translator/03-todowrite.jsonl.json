@@ -1,7 +1,6 @@
 [
   {
     "id": "37216950-3279-4375-9e3d-84586e556d32",
-    "schemaVersion": "v1",
     "chatId": "chat-03-todowrite.jsonl",
     "sessionId": "session-03-todowrite.jsonl",
     "tsIso": "2026-05-13T12:39:25.701Z",
@@ -15,7 +14,6 @@
   },
   {
     "id": "2b1518b2-320b-4b52-abeb-98b455c3738b",
-    "schemaVersion": "v1",
     "chatId": "chat-03-todowrite.jsonl",
     "sessionId": "session-03-todowrite.jsonl",
     "tsIso": "2026-05-13T12:39:25.706Z",
@@ -31,7 +29,6 @@
   },
   {
     "id": "d52950d0-ef05-4b78-aa0f-9e24fe1eead4",
-    "schemaVersion": "v1",
     "chatId": "chat-03-todowrite.jsonl",
     "sessionId": "session-03-todowrite.jsonl",
     "tsIso": "2026-05-13T12:39:33.753Z",
@@ -65,7 +62,6 @@
   },
   {
     "id": "f0dd74aa-0900-4dea-bf5f-b8ae37e69a81",
-    "schemaVersion": "v1",
     "chatId": "chat-03-todowrite.jsonl",
     "sessionId": "session-03-todowrite.jsonl",
     "tsIso": "2026-05-13T12:39:33.756Z",
@@ -76,7 +72,6 @@
   },
   {
     "id": "d7c900d3-2ace-4f1f-bde9-8b27cc9a03fa",
-    "schemaVersion": "v1",
     "chatId": "chat-03-todowrite.jsonl",
     "sessionId": "session-03-todowrite.jsonl",
     "tsIso": "2026-05-13T12:39:40.046Z",
@@ -91,7 +86,6 @@
   },
   {
     "id": "a6ce565f-d1f3-4375-8d4f-c765c4bad61d",
-    "schemaVersion": "v1",
     "chatId": "chat-03-todowrite.jsonl",
     "sessionId": "session-03-todowrite.jsonl",
     "tsIso": "2026-05-13T12:39:40.351Z",
@@ -102,7 +96,6 @@
   },
   {
     "id": "e08064a7-cf7f-48d1-bcf4-96bfc1b1dc35",
-    "schemaVersion": "v1",
     "chatId": "chat-03-todowrite.jsonl",
     "sessionId": "session-03-todowrite.jsonl",
     "tsIso": "2026-05-13T12:40:20.534Z",

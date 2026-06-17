@@ -1,7 +1,6 @@
 [
   {
     "id": "de92382b-b4a2-4648-8829-e68c801e9fec",
-    "schemaVersion": "v1",
     "chatId": "chat-06-slash-clear.jsonl",
     "sessionId": "session-06-slash-clear.jsonl",
     "tsIso": "2026-05-06T20:48:46.858Z",
@@ -11,7 +10,6 @@
   },
   {
     "id": "c8a83956-e48c-4a59-8c55-45e143236288",
-    "schemaVersion": "v1",
     "chatId": "chat-06-slash-clear.jsonl",
     "sessionId": "session-06-slash-clear.jsonl",
     "tsIso": "2026-05-06T20:48:45.988Z",
@@ -21,7 +19,6 @@
   },
   {
     "id": "2012915f-de02-4402-ac04-a1c105aa721d",
-    "schemaVersion": "v1",
     "chatId": "chat-06-slash-clear.jsonl",
     "sessionId": "session-06-slash-clear.jsonl",
     "tsIso": "2026-05-06T20:48:46.858Z",
@@ -30,7 +27,6 @@
   },
   {
     "id": "synthetic-b55f307782dcc850",
-    "schemaVersion": "v1",
     "chatId": "chat-06-slash-clear.jsonl",
     "sessionId": "session-06-slash-clear.jsonl",
     "tsIso": "",
@@ -39,7 +35,6 @@
   },
   {
     "id": "e18cb58c-b26b-42b7-80d0-7d7eb79a1d7e",
-    "schemaVersion": "v1",
     "chatId": "chat-06-slash-clear.jsonl",
     "sessionId": "session-06-slash-clear.jsonl",
     "tsIso": "2026-05-06T20:48:50.504Z",

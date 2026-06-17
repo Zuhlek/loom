@@ -23,6 +23,7 @@ import {
 import { createSessionIdStore } from "./process-manager/session-store.ts";
 import { createJsonlPathProbe } from "./process-manager/jsonl-path-probe.ts";
 import { createPaneProcessApi } from "./process-manager/pane-process.ts";
+import { ensureFolderTrusted } from "./process-manager/folder-trust.ts";
 import { ensureClaudeOnboarded } from "./process-manager/claude-onboarding.ts";
 import { mountHookReceiver, setEnvelopeBroadcaster } from "./hook-receiver/index.ts";
 import { createPermissionGate, type PermissionGate } from "./hook-receiver/permission-gate.ts";
@@ -316,6 +317,12 @@ if (isEntrypoint) {
     cwdResolver: async (chatId: string) => {
       const chat = store.chats.get(chatId);
       return chat?.cwd ?? process.cwd();
+    },
+    // Record folder trust before a Full-access spawn so claude's
+    // --dangerously-skip-permissions trust dialog never blocks the pane
+    // (folder-trust.ts). Bridge calls this for bypassPermissions only.
+    ensureFolderTrusted: (cwd: string) => {
+      ensureFolderTrusted(cwd);
     },
     permissionModeResolver: (chatId: string) => {
       const chat = store.chats.get(chatId);

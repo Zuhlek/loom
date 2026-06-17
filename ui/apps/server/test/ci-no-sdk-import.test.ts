@@ -92,8 +92,8 @@ describe("CI grep — no @anthropic-ai/* import anywhere in ui/", () => {
 
 describe("CI grep — JSONL field-name discipline", () => {
   // The only place JSONL field-name string literals (the values of
-  // FIELDS_V1) are allowed is the schema module itself. Other modules
-  // under `process-manager/jsonl/` may reference FIELDS_V1.<KEY> at the
+  // FIELDS) are allowed is the schema module itself. Other modules
+  // under `process-manager/jsonl/` may reference FIELDS.<KEY> at the
   // identifier level but must NOT inline the string literal.
   const FIELD_LITERALS = [
     "uuid",

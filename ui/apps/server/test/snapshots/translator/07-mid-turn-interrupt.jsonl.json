@@ -1,7 +1,6 @@
 [
   {
     "id": "synthetic-086a2ad3b18c042a",
-    "schemaVersion": "v1",
     "chatId": "chat-07-mid-turn-interrupt.jsonl",
     "sessionId": "session-07-mid-turn-interrupt.jsonl",
     "tsIso": "",
@@ -10,7 +9,6 @@
   },
   {
     "id": "synthetic-4f9aee9db6e1d255",
-    "schemaVersion": "v1",
     "chatId": "chat-07-mid-turn-interrupt.jsonl",
     "sessionId": "session-07-mid-turn-interrupt.jsonl",
     "tsIso": "",
@@ -19,7 +17,6 @@
   },
   {
     "id": "a69645cd-419c-480f-8b8e-9731fd760d25",
-    "schemaVersion": "v1",
     "chatId": "chat-07-mid-turn-interrupt.jsonl",
     "sessionId": "session-07-mid-turn-interrupt.jsonl",
     "tsIso": "2026-05-21T09:56:37.186Z",
@@ -30,7 +27,6 @@
   },
   {
     "id": "55bc02ad-0145-4731-9829-24c9a4a5e9df",
-    "schemaVersion": "v1",
     "chatId": "chat-07-mid-turn-interrupt.jsonl",
     "sessionId": "session-07-mid-turn-interrupt.jsonl",
     "tsIso": "2026-05-21T09:56:39.665Z",
@@ -40,7 +36,6 @@
   },
   {
     "id": "synthetic-d45ace2a1399aa9d",
-    "schemaVersion": "v1",
     "chatId": "chat-07-mid-turn-interrupt.jsonl",
     "sessionId": "session-07-mid-turn-interrupt.jsonl",
     "tsIso": "",
@@ -49,7 +44,6 @@
   },
   {
     "id": "5a86ab3a-2d21-4a9b-bfe5-b9f90490e263",
-    "schemaVersion": "v1",
     "chatId": "chat-07-mid-turn-interrupt.jsonl",
     "sessionId": "session-07-mid-turn-interrupt.jsonl",
     "tsIso": "2026-05-21T09:57:30.499Z",

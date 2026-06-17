@@ -1,7 +1,6 @@
 [
   {
     "id": "a1299b72-49fc-4686-90a1-d46ff25c040f",
-    "schemaVersion": "v1",
     "chatId": "chat-09-session-resume.jsonl",
     "sessionId": "session-09-session-resume.jsonl",
     "tsIso": "2026-05-09T18:12:41.168Z",
@@ -10,7 +9,6 @@
   },
   {
     "id": "a338067d-bc63-42d8-8379-d4d76bfe9380",
-    "schemaVersion": "v1",
     "chatId": "chat-09-session-resume.jsonl",
     "sessionId": "session-09-session-resume.jsonl",
     "tsIso": "2026-05-09T18:12:41.172Z",
@@ -20,7 +18,6 @@
   },
   {
     "id": "d9b48a85-b954-4331-8ddf-4f102882a0cd",
-    "schemaVersion": "v1",
     "chatId": "chat-09-session-resume.jsonl",
     "sessionId": "session-09-session-resume.jsonl",
     "tsIso": "2026-05-09T18:12:41.093Z",
@@ -29,7 +26,6 @@
   },
   {
     "id": "6325e8dd-5590-4277-a660-511b835f78eb",
-    "schemaVersion": "v1",
     "chatId": "chat-09-session-resume.jsonl",
     "sessionId": "session-09-session-resume.jsonl",
     "tsIso": "2026-05-09T18:12:41.025Z",

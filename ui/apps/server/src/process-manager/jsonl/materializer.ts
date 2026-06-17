@@ -16,6 +16,12 @@
  * Mapping summary (kept narrow to the catalog scope):
  *
  *   text (user)        → UserMessageItem            (item-append)
+ *   text (system)      → SystemNoticeItem           (item-append)
+ *                        Claude-injected non-human
+ *                        user-role turns
+ *                        (task-notification, system
+ *                        reminder) — never a blue
+ *                        user bubble.
  *   text (assistant)   → AssistantMessageItem       (item-append / item-update)
  *   tool_use           → AssistantMessageItem with
  *                        tool_use block             (item-append / item-update)
@@ -43,6 +49,7 @@ import type {
   AssistantTextBlock,
   AssistantToolUseBlock,
   ChatItem,
+  SystemNoticeItem,
   Task,
   UserMessageImage,
   UserMessageItem,
@@ -162,6 +169,21 @@ export function createMaterializer(opts: MaterializerOptions = {}): Materializer
             text,
             createdAt: event.tsIso,
             ...(images.length > 0 ? { images } : {}),
+          };
+          appendItem(item);
+          return [appendFrame(item)];
+        }
+        if (event.role === "system") {
+          // Claude-injected non-human turn (task-notification, system
+          // reminder). Render it as a muted system notice rather than a blue
+          // user bubble — the schema's `isSystemInjectedUser` already gated
+          // it away from `role:"user"`.
+          const item: SystemNoticeItem = {
+            kind: "system-notice",
+            id: event.id,
+            text: event.text,
+            level: "info",
+            createdAt: event.tsIso,
           };
           appendItem(item);
           return [appendFrame(item)];

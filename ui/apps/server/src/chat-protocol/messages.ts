@@ -285,10 +285,9 @@ export interface WireModelSettings {
 }
 
 /**
- * One row in the SDK-enumerated slash-command catalog. Mirrors the
- * SDK `SlashCommand` shape trimmed for the wire; `kind` is
- * bridge-classified. Mirror in `apps/web/src/lib/chat-types.ts`
- * must stay byte-for-byte aligned.
+ * One row in the slash-command catalog parsed from the `skill_listing`
+ * attachment in the JSONL transcript. Mirror in
+ * `apps/web/src/lib/chat-types.ts` must stay byte-for-byte aligned.
  */
 export interface WireSlashCommand {
   name: string;

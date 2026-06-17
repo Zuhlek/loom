@@ -12,29 +12,64 @@ export interface DiffSection {
 }
 
 /**
- * Resolve the base ref to diff against for a single repo. Nested repos often
- * lack the root repo's base branch (e.g. "main"), so fall back to HEAD —
- * which yields the working-tree (uncommitted) diff — when `base` is absent.
+ * The trunk this repo's branches fork from — `origin/HEAD`'s target (e.g.
+ * "main" or "master"), or a local "main"/"master" when no remote default is
+ * set. Returns "HEAD" when no trunk can be identified, which makes the
+ * merge-base below collapse to HEAD (uncommitted-only diff).
  */
-function effectiveBase(repo: string, base: string): string {
-  const probe = spawnSync(
+function resolveDefaultBranch(repo: string): string {
+  const sym = spawnSync(
     "git",
-    ["-C", repo, "rev-parse", "--verify", "--quiet", `${base}^{commit}`],
+    ["-C", repo, "symbolic-ref", "refs/remotes/origin/HEAD"],
     { encoding: "utf8" },
   );
-  return probe.status === 0 ? base : "HEAD";
+  if (sym.status === 0) {
+    const m = sym.stdout.trim().match(/refs\/remotes\/origin\/(.+)$/);
+    if (m) return m[1]!;
+  }
+  for (const cand of ["main", "master"]) {
+    const probe = spawnSync(
+      "git",
+      ["-C", repo, "rev-parse", "--verify", "--quiet", `${cand}^{commit}`],
+      { encoding: "utf8" },
+    );
+    if (probe.status === 0) return cand;
+  }
+  return "HEAD";
 }
 
 /**
- * The full diff for one repo: tracked changes vs `base` (committed +
- * working-tree edits) plus untracked, non-ignored files rendered as
- * add-diffs. `git diff` alone omits untracked files, but new files an
- * agent just created are exactly what the user wants to see — so we
- * append a synthetic `--no-index` add-diff per untracked path. This is
- * non-mutating (no `git add -N`, so the user's index is untouched).
+ * The base commit to diff this repo's working tree against: the merge-base of
+ * the trunk and HEAD — i.e. the point where this branch/worktree forked off.
+ *
+ * Diffing against the fork point (not the trunk's current tip) shows exactly
+ * what THIS branch/worktree changed — committed branch work plus uncommitted
+ * edits — and stays stable as the trunk advances (no reverse-diff noise). The
+ * result depends only on the checkout, so every chat on the same branch or
+ * worktree sees the same consolidated diff.
+ *
+ * Falls back to HEAD (uncommitted-only) when there is no merge-base: no trunk,
+ * unrelated histories, or a branch that never diverged.
  */
-function repoDiff(repo: string, base: string): string {
-  const ref = effectiveBase(repo, base);
+function diffBase(repo: string): string {
+  const trunk = resolveDefaultBranch(repo);
+  const mb = spawnSync("git", ["-C", repo, "merge-base", trunk, "HEAD"], {
+    encoding: "utf8",
+  });
+  const base = mb.status === 0 ? mb.stdout.trim() : "";
+  return base || "HEAD";
+}
+
+/**
+ * The full diff for one repo: tracked changes vs the fork-point base (committed
+ * branch work + working-tree edits) plus untracked, non-ignored files rendered
+ * as add-diffs. `git diff` alone omits untracked files, but new files an agent
+ * just created are exactly what the user wants to see — so we append a
+ * synthetic `--no-index` add-diff per untracked path. This is non-mutating (no
+ * `git add -N`, so the user's index is untouched).
+ */
+function repoDiff(repo: string): string {
+  const ref = diffBase(repo);
   const tracked =
     spawnSync("git", ["-C", repo, "diff", ref, "--unified=3"], {
       encoding: "utf8",
@@ -74,15 +109,16 @@ function repoDiff(repo: string, base: string): string {
 export function mountDiffRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
 ): void {
-  // GET /diff?worktreePath=<abs>&base=<ref>
+  // GET /diff?worktreePath=<abs>
   //
   // One total diff for the workspace: the root repo plus every independent
-  // nested repo beneath it, each compared against `base` (committed +
-  // uncommitted). One section per repo, labelled by its path relative to the
-  // workspace root. Empty-diff repos are omitted.
+  // nested repo beneath it. Each repo is diffed against its own fork point
+  // (merge-base of the trunk and HEAD) so the result is branch/worktree-scoped
+  // — every chat on the same checkout sees the same consolidated diff. One
+  // section per repo, labelled by its path relative to the workspace root.
+  // Empty-diff repos are omitted.
   routes["/diff"] = async (_req, url) => {
     const worktreePath = url.searchParams.get("worktreePath") ?? "";
-    const base = url.searchParams.get("base") ?? "main";
     if (!worktreePath) {
       return jsonResponse({ error: "missing worktreePath" }, 400);
     }
@@ -90,7 +126,7 @@ export function mountDiffRoute(
     const repos = discoverRepos(worktreePath);
     const sections: DiffSection[] = [];
     for (const repo of repos) {
-      const diff = repoDiff(repo, base);
+      const diff = repoDiff(repo);
       if (diff.trim().length === 0) continue;
       const label = path.relative(worktreePath, repo);
       sections.push({ kind: "whole", label, diff });

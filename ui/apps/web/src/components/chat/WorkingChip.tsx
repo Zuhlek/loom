@@ -41,11 +41,10 @@ export function WorkingChip({ startedAtMs }: WorkingChipProps) {
   const label = formatElapsed(startedAtMs, nowMs);
   return (
     <div
-      className="flex gap-3 text-[11px]"
+      className="flex text-[11px]"
       style={{ color: "var(--muted-foreground)" }}
       data-testid="working-chip"
     >
-      <div className="size-7" />
       <div className="flex items-center gap-1.5">
         <span className="inline-flex items-center gap-[3px]">
           <span

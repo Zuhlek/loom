@@ -1,7 +1,6 @@
 [
   {
     "id": "de9fd756-4405-47c5-882f-d1728b7ace58",
-    "schemaVersion": "v1",
     "chatId": "chat-14-task-list.jsonl",
     "sessionId": "session-14-task-list.jsonl",
     "tsIso": "2026-05-22T06:38:15.837Z",
@@ -10,7 +9,6 @@
   },
   {
     "id": "7197f0ba-3955-4b6f-8e5b-2a5888eb8d04",
-    "schemaVersion": "v1",
     "chatId": "chat-14-task-list.jsonl",
     "sessionId": "session-14-task-list.jsonl",
     "tsIso": "2026-05-22T06:38:18.680Z",
@@ -20,7 +18,6 @@
   },
   {
     "id": "520e770f-047a-4839-849b-81f0eaed556d",
-    "schemaVersion": "v1",
     "chatId": "chat-14-task-list.jsonl",
     "sessionId": "session-14-task-list.jsonl",
     "tsIso": "2026-05-22T06:38:18.680Z",
@@ -29,7 +26,6 @@
   },
   {
     "id": "9bb9abaa-141b-43a1-8161-cca2827afd65",
-    "schemaVersion": "v1",
     "chatId": "chat-14-task-list.jsonl",
     "sessionId": "session-14-task-list.jsonl",
     "tsIso": "2026-05-22T06:38:18.714Z",
@@ -40,7 +36,6 @@
   },
   {
     "id": "95028e2d-60c1-46b8-b0a0-9ccda444571d",
-    "schemaVersion": "v1",
     "chatId": "chat-14-task-list.jsonl",
     "sessionId": "session-14-task-list.jsonl",
     "tsIso": "2026-05-22T06:38:18.713Z",

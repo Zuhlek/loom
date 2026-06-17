@@ -305,7 +305,7 @@ export interface ChatUpdateFrame {
   body: { chat: ChatRow };
 }
 
-/** Push the SDK-enumerated catalog. Fired on attach and on reload. */
+/** Push the slash-command catalog. Fired on each `skill_listing` attachment. */
 export interface SlashCommandsUpdateFrame {
   kind: "slash-commands-update";
   "chat-id": string;

@@ -80,7 +80,7 @@ export type SlashMenuRow =
 export interface ComposerSlashMenuProps {
   /** Filter query — typed text AFTER the leading `/`. */
   query: string;
-  /** Bridge-supplied SDK catalog; `null` until the first frame lands. */
+  /** Bridge-supplied slash-command catalog; `null` until the first frame lands. */
   slashCommands: WireSlashCommand[] | null;
   selectedIndex: number;
   onHover: (index: number) => void;

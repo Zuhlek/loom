@@ -1,7 +1,6 @@
 [
   {
     "id": "8975c4f5-f018-40cb-b5a5-6ff52d7e9368",
-    "schemaVersion": "v1",
     "chatId": "chat-11-edit-tool.jsonl",
     "sessionId": "session-11-edit-tool.jsonl",
     "tsIso": "2026-05-23T10:58:44.696Z",
@@ -11,7 +10,6 @@
   },
   {
     "id": "c3ddd5cc-1e81-477b-99fa-67cd3519be27",
-    "schemaVersion": "v1",
     "chatId": "chat-11-edit-tool.jsonl",
     "sessionId": "session-11-edit-tool.jsonl",
     "tsIso": "2026-05-23T10:58:52.343Z",
@@ -27,7 +25,6 @@
   },
   {
     "id": "db5f3717-d66a-4fa7-a3ed-36e3d94f91ef",
-    "schemaVersion": "v1",
     "chatId": "chat-11-edit-tool.jsonl",
     "sessionId": "session-11-edit-tool.jsonl",
     "tsIso": "2026-05-23T10:58:52.358Z",
@@ -38,7 +35,6 @@
   },
   {
     "id": "49d1932f-7b2e-49c7-8dfd-735a012b6c08",
-    "schemaVersion": "v1",
     "chatId": "chat-11-edit-tool.jsonl",
     "sessionId": "session-11-edit-tool.jsonl",
     "tsIso": "2026-05-23T10:58:55.345Z",

@@ -1,7 +1,7 @@
 /**
  * React hook owning the live-chat bridge-supplied catalogs that ride
  * dedicated frames (i.e. not `ChatSnapshot` body). Covers the
- * SDK-enumerated slash-command catalog delivered via
+ * slash-command catalog delivered via
  * `slash-commands-update` and the per-turn context-window breakdown
  * delivered via `context-usage-update`. Each field holds `null` until
  * the first frame lands so consumers can render their loading

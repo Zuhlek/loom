@@ -1,13 +1,12 @@
 /**
  * jsonl/schema.ts — sole owner of JSONL on-disk field-name string literals.
  *
- * Every JSONL field-name string literal lives in `FIELDS_V1`. No other
- * module under `process-manager/jsonl/` may inline a JSONL field-name
- * literal; a CI grep test enforces this structurally.
+ * Every JSONL field-name string literal lives in `FIELDS`. No other module
+ * under `process-manager/jsonl/` may inline a JSONL field-name literal; a CI
+ * grep test enforces this structurally.
  *
- * The module exports the `ClaudeEvent` discriminated union, the
- * `CURRENT_SCHEMA_VERSION` stamp, the `parserFor` selector, and the
- * `parseLine` convenience entry point.
+ * The module exports the `ClaudeEvent` discriminated union and the `parseLine`
+ * entry point.
  */
 
 import { randomUUID } from "node:crypto";
@@ -17,17 +16,13 @@ import type {
   WireSlashCommand,
 } from "../../chat-protocol/messages.ts";
 
-/** Bumped any time the on-disk format changes in a way the parser cares about. */
-export const CURRENT_SCHEMA_VERSION = "v1" as const;
-export type SchemaVersion = "v1";
-
 /**
- * Field-name table. The only place JSONL field-name string literals
- * appear in the codebase. Other modules access JSONL fields exclusively
- * through `parseLine` / `parserFor` — never via direct
- * `JSON.parse(line).foo.bar` access (enforced by a CI grep test).
+ * Field-name table. The only place JSONL field-name string literals appear in
+ * the codebase. Other modules access JSONL fields exclusively through
+ * `parseLine` — never via direct `JSON.parse(line).foo.bar` access (enforced
+ * by a CI grep test).
  */
-export const FIELDS_V1 = {
+export const FIELDS = {
   TYPE: "type",
   UUID: "uuid",
   SESSION_ID: "sessionId",
@@ -47,12 +42,16 @@ export const FIELDS_V1 = {
   SUBJECT: "subject",
   DESCRIPTION: "description",
   TASK_ID: "taskId",
+  ATTACHMENT: "attachment",
+  NAMES: "names",
+  ORIGIN: "origin",
+  PROMPT_SOURCE: "promptSource",
 } as const;
 
-/** Pretty alias of `FIELDS_V1` values, for documentation purposes. */
-export type FieldName = (typeof FIELDS_V1)[keyof typeof FIELDS_V1];
+/** Pretty alias of `FIELDS` values, for documentation purposes. */
+export type FieldName = (typeof FIELDS)[keyof typeof FIELDS];
 
-/** Context-usage snapshot. Mirror of the existing SDK bridge payload. */
+/** Context-usage snapshot carried alongside an assistant turn. */
 export interface ContextUsageSnapshot {
   percentage: number;
   totalTokens: number;
@@ -63,7 +62,6 @@ export interface ContextUsageSnapshot {
 /**
  * The discriminated union the translator emits. Every variant carries:
  *   - `id`: the JSONL event id (dedupe key for the materializer)
- *   - `schemaVersion`: the parser version this event was parsed under
  *   - `chatId` / `sessionId`: provenance
  *   - `tsIso`: wall-clock from the JSONL record
  */
@@ -71,17 +69,18 @@ export type ClaudeEvent =
   | {
       kind: "text";
       id: string;
-      schemaVersion: SchemaVersion;
       chatId: string;
       sessionId: string;
       tsIso: string;
-      role: "user" | "assistant";
+      // `system` covers Claude-injected non-human turns (task-completion
+      // notifications, system reminders) that ride the same `type:"user"`
+      // envelope a typed turn uses — see `isSystemInjectedUser`.
+      role: "user" | "assistant" | "system";
       text: string;
     }
   | {
       kind: "tool_use";
       id: string;
-      schemaVersion: SchemaVersion;
       chatId: string;
       sessionId: string;
       tsIso: string;
@@ -92,7 +91,6 @@ export type ClaudeEvent =
   | {
       kind: "tool_result";
       id: string;
-      schemaVersion: SchemaVersion;
       chatId: string;
       sessionId: string;
       tsIso: string;
@@ -103,7 +101,6 @@ export type ClaudeEvent =
   | {
       kind: "task_update";
       id: string;
-      schemaVersion: SchemaVersion;
       chatId: string;
       sessionId: string;
       tsIso: string;
@@ -116,7 +113,6 @@ export type ClaudeEvent =
   | {
       kind: "session_meta";
       id: string;
-      schemaVersion: SchemaVersion;
       chatId: string;
       sessionId: string;
       tsIso: string;
@@ -125,7 +121,6 @@ export type ClaudeEvent =
   | {
       kind: "slash_command_set";
       id: string;
-      schemaVersion: SchemaVersion;
       chatId: string;
       sessionId: string;
       tsIso: string;
@@ -134,7 +129,6 @@ export type ClaudeEvent =
   | {
       kind: "context_usage";
       id: string;
-      schemaVersion: SchemaVersion;
       chatId: string;
       sessionId: string;
       tsIso: string;
@@ -143,7 +137,6 @@ export type ClaudeEvent =
   | {
       kind: "unknown";
       id: string;
-      schemaVersion: SchemaVersion;
       chatId: string;
       sessionId: string;
       tsIso: string;
@@ -159,8 +152,8 @@ export interface ParseCtx {
 }
 
 /**
- * Read a field by its `FIELDS_V1` name without using a literal at the
- * call site. Centralises the only place field-name strings flow.
+ * Read a field by its `FIELDS` name without using a literal at the call site.
+ * Centralises the only place field-name strings flow.
  */
 function field<T = unknown>(obj: unknown, name: FieldName): T | undefined {
   if (obj == null || typeof obj !== "object") return undefined;
@@ -178,12 +171,12 @@ function synthesiseId(): string {
 
 /** Best-effort timestamp extraction; falls back to empty string. */
 function readTs(obj: unknown): string {
-  return asString(field(obj, FIELDS_V1.TIMESTAMP)) ?? "";
+  return asString(field(obj, FIELDS.TIMESTAMP)) ?? "";
 }
 
 /** Best-effort id extraction; synthesises one if absent. */
 function readId(obj: unknown): string {
-  return asString(field(obj, FIELDS_V1.UUID)) ?? synthesiseId();
+  return asString(field(obj, FIELDS.UUID)) ?? synthesiseId();
 }
 
 /** Reduce the raw `message.content` to a plain text string. */
@@ -192,32 +185,81 @@ function reduceContentToText(content: unknown): string {
   if (!Array.isArray(content)) return "";
   const parts: string[] = [];
   for (const block of content) {
-    const t = asString(field(block, FIELDS_V1.TYPE));
+    const t = asString(field(block, FIELDS.TYPE));
     if (t === "text") {
-      const txt = asString(field(block, FIELDS_V1.TEXT));
+      const txt = asString(field(block, FIELDS.TEXT));
       if (txt) parts.push(txt);
     }
   }
   return parts.join("");
 }
 
+/**
+ * True when a `type:"user"` line is a Claude-injected (non-human) turn rather
+ * than something the user typed. Injected turns carry a positive marker that a
+ * human turn never has:
+ *   - `origin` — an object like `{ kind: "task-notification" }`, present only
+ *     on injected turns;
+ *   - `promptSource: "system"` — Claude's tag for system-injected prompts
+ *     (human turns use `"typed"` / `"queued"`).
+ *
+ * Conservative by design: with NEITHER marker the line stays a user turn, so a
+ * genuine human message is never mis-hidden. Without this gate the materializer
+ * folds task-notifications into a blue right-aligned user bubble — the exact
+ * "internal communication rendered as my question" bug this discriminates away.
+ */
+function isSystemInjectedUser(raw: unknown): boolean {
+  const origin = field(raw, FIELDS.ORIGIN);
+  if (origin != null && typeof origin === "object") return true;
+  return asString(field(raw, FIELDS.PROMPT_SOURCE)) === "system";
+}
+
 /** Pull the first content block of a given type out of `message.content`. */
 function findContentBlock(content: unknown, blockType: string): Record<string, unknown> | undefined {
   if (!Array.isArray(content)) return undefined;
   for (const block of content) {
-    const t = asString(field(block, FIELDS_V1.TYPE));
+    const t = asString(field(block, FIELDS.TYPE));
     if (t === blockType) return block as Record<string, unknown>;
   }
   return undefined;
 }
 
 /**
+ * Build the slash-command catalog from a `skill_listing` attachment. The
+ * `names` array is authoritative for the set of skills; the `content` field
+ * carries `- <name>: <description>` bullets we mine for descriptions.
+ */
+function reduceSkillListing(attachment: unknown): WireSlashCommand[] {
+  const names = field<unknown[]>(attachment, FIELDS.NAMES);
+  if (!Array.isArray(names)) return [];
+
+  const content = asString(field(attachment, FIELDS.CONTENT)) ?? "";
+  const descriptions = new Map<string, string>();
+  for (const block of content.split(/\n(?=- )/)) {
+    const match = /^-\s+([^:]+):\s*([\s\S]*)$/.exec(block.trim());
+    if (match) descriptions.set(match[1].trim(), match[2].trim());
+  }
+
+  const commands: WireSlashCommand[] = [];
+  for (const raw of names) {
+    const name = asString(raw);
+    if (name === undefined) continue;
+    commands.push({
+      name,
+      description: descriptions.get(name) ?? "",
+      argumentHint: "",
+      kind: "skill",
+    });
+  }
+  return commands;
+}
+
+/**
  * Coerce a `Task*` family tool_use into the variant-field subset the
- * `task_update` `ClaudeEvent` carries. Returns `undefined` when the
- * tool name is outside the family or when `TaskUpdate.input.status`
- * carries a value outside the v1 vocabulary (forces the caller to
- * fall through to the generic `tool_use` arm per Design § State and
- * error handling).
+ * `task_update` `ClaudeEvent` carries. Returns `undefined` when the tool name
+ * is outside the family or when `TaskUpdate.input.status` carries a value
+ * outside the vocabulary (forces the caller to fall through to the generic
+ * `tool_use` arm).
  */
 function parseTaskUpdate(
   toolName: string,
@@ -233,9 +275,9 @@ function parseTaskUpdate(
   | undefined {
   if (toolName === "TaskCreate") {
     const subject =
-      asString(field(input, FIELDS_V1.SUBJECT)) ??
-      asString(field(input, FIELDS_V1.DESCRIPTION));
-    const activeForm = asString(field(input, FIELDS_V1.ACTIVE_FORM));
+      asString(field(input, FIELDS.SUBJECT)) ??
+      asString(field(input, FIELDS.DESCRIPTION));
+    const activeForm = asString(field(input, FIELDS.ACTIVE_FORM));
     const out: {
       action: "create";
       subject?: string;
@@ -246,16 +288,16 @@ function parseTaskUpdate(
     return out;
   }
   if (toolName === "TaskUpdate") {
-    const taskId = asString(field(input, FIELDS_V1.TASK_ID));
-    const rawStatus = asString(field(input, FIELDS_V1.STATUS));
+    const taskId = asString(field(input, FIELDS.TASK_ID));
+    const rawStatus = asString(field(input, FIELDS.STATUS));
     let status: "pending" | "inProgress" | "completed" | undefined;
     if (rawStatus === "in_progress" || rawStatus === "inProgress") {
       status = "inProgress";
     } else if (rawStatus === "pending" || rawStatus === "completed") {
       status = rawStatus;
     } else if (rawStatus !== undefined) {
-      // Unknown status — defensive default: refuse the task_update arm so
-      // the parser falls through to the generic tool_use shape.
+      // Unknown status — defensive default: refuse the task_update arm so the
+      // parser falls through to the generic tool_use shape.
       return undefined;
     }
     const out: {
@@ -273,21 +315,20 @@ function parseTaskUpdate(
   return undefined;
 }
 
-function parseV1(raw: unknown, ctx: ParseCtx): ClaudeEvent {
+function parseEvent(raw: unknown, ctx: ParseCtx): ClaudeEvent {
   const id = readId(raw);
   const tsIso = readTs(raw);
-  const rawType = asString(field(raw, FIELDS_V1.TYPE)) ?? "";
+  const rawType = asString(field(raw, FIELDS.TYPE)) ?? "";
   const base = {
     id,
-    schemaVersion: CURRENT_SCHEMA_VERSION,
     chatId: ctx.chatId,
     sessionId: ctx.sessionId,
     tsIso,
   } as const;
 
-  const message = field<Record<string, unknown>>(raw, FIELDS_V1.MESSAGE);
-  const role = message ? asString(field(message, FIELDS_V1.ROLE)) : undefined;
-  const content = message ? field(message, FIELDS_V1.CONTENT) : undefined;
+  const message = field<Record<string, unknown>>(raw, FIELDS.MESSAGE);
+  const role = message ? asString(field(message, FIELDS.ROLE)) : undefined;
+  const content = message ? field(message, FIELDS.CONTENT) : undefined;
 
   // user / assistant lines carry the message envelope; their semantics are
   // distinguished by the content blocks within `message.content`.
@@ -296,9 +337,9 @@ function parseV1(raw: unknown, ctx: ParseCtx): ClaudeEvent {
     if (rawType === "assistant") {
       const toolUseBlock = findContentBlock(content, "tool_use");
       if (toolUseBlock) {
-        const toolName = asString(field(toolUseBlock, FIELDS_V1.TOOL_NAME)) ?? "";
-        const toolUseId = asString(field(toolUseBlock, FIELDS_V1.ID)) ?? "";
-        const input = field(toolUseBlock, FIELDS_V1.INPUT);
+        const toolName = asString(field(toolUseBlock, FIELDS.TOOL_NAME)) ?? "";
+        const toolUseId = asString(field(toolUseBlock, FIELDS.ID)) ?? "";
+        const input = field(toolUseBlock, FIELDS.INPUT);
         const taskFields = parseTaskUpdate(toolName, input);
         if (taskFields) {
           return {
@@ -321,9 +362,9 @@ function parseV1(raw: unknown, ctx: ParseCtx): ClaudeEvent {
     if (rawType === "user") {
       const toolResultBlock = findContentBlock(content, "tool_result");
       if (toolResultBlock) {
-        const toolUseId = asString(field(toolResultBlock, FIELDS_V1.TOOL_USE_ID)) ?? "";
-        const isError = field(toolResultBlock, FIELDS_V1.IS_ERROR) === true;
-        const output = field(toolResultBlock, FIELDS_V1.CONTENT);
+        const toolUseId = asString(field(toolResultBlock, FIELDS.TOOL_USE_ID)) ?? "";
+        const isError = field(toolResultBlock, FIELDS.IS_ERROR) === true;
+        const output = field(toolResultBlock, FIELDS.CONTENT);
         return {
           ...base,
           kind: "tool_result",
@@ -336,13 +377,36 @@ function parseV1(raw: unknown, ctx: ParseCtx): ClaudeEvent {
 
     // Plain text user / assistant message.
     const text = reduceContentToText(content);
-    const r: "user" | "assistant" = rawType === "assistant" ? "assistant" : "user";
+    let r: "user" | "assistant" | "system";
+    if (rawType === "assistant") {
+      r = "assistant";
+    } else if (isSystemInjectedUser(raw)) {
+      // Non-human user-role turn (task-notification, system reminder) — flag
+      // it `system` so the materializer renders a muted notice, not a blue
+      // user bubble.
+      r = "system";
+    } else {
+      r = "user";
+    }
     return {
       ...base,
       kind: "text",
       role: r,
       text,
     };
+  }
+
+  // attachment lines carry an inner `attachment` envelope; `skill_listing`
+  // enumerates the available slash commands (skills).
+  if (rawType === "attachment") {
+    const attachment = field(raw, FIELDS.ATTACHMENT);
+    if (asString(field(attachment, FIELDS.TYPE)) === "skill_listing") {
+      return {
+        ...base,
+        kind: "slash_command_set",
+        commands: reduceSkillListing(attachment),
+      };
+    }
   }
 
   if (rawType === "summary") {
@@ -362,36 +426,22 @@ function parseV1(raw: unknown, ctx: ParseCtx): ClaudeEvent {
   };
 }
 
-/** Parser-version selector. */
-export function parserFor(
-  v: SchemaVersion,
-): (raw: unknown, ctx: ParseCtx) => ClaudeEvent {
-  if (v === "v1") return parseV1;
-  throw new Error(`schema: unsupported parser version: ${String(v)}`);
-}
-
 /**
  * Convenience entry point. Throws on unparseable JSON; returns a
- * `kind: "unknown"` event for recognised JSON whose `type` field is
- * outside the v1 vocabulary.
+ * `kind: "unknown"` event for recognised JSON whose `type` field is outside
+ * the known vocabulary.
  */
-export function parseLine(
-  raw: string,
-  ctx: ParseCtx,
-  version: SchemaVersion = CURRENT_SCHEMA_VERSION,
-): ClaudeEvent {
-  const parsed = JSON.parse(raw);
-  const fn = parserFor(version);
-  return fn(parsed, ctx);
+export function parseLine(raw: string, ctx: ParseCtx): ClaudeEvent {
+  return parseEvent(JSON.parse(raw), ctx);
 }
 
 /**
- * Extract the inner `sessionId` field from a single JSONL line. Returns
- * `null` when the line cannot be parsed as JSON or the field is absent
- * / not a string. This is the only sanctioned path for callers that
- * need to discriminate JSONL files by their inner session-id (e.g. the
- * active-JSONL discovery used at bridge attach time), keeping the
- * field-name discipline grep green.
+ * Extract the inner `sessionId` field from a single JSONL line. Returns `null`
+ * when the line cannot be parsed as JSON or the field is absent / not a
+ * string. This is the only sanctioned path for callers that need to
+ * discriminate JSONL files by their inner session-id (e.g. the active-JSONL
+ * discovery used at bridge attach time), keeping the field-name discipline
+ * grep green.
  */
 export function readSessionIdFromLine(raw: string): string | null {
   let parsed: unknown;
@@ -400,6 +450,6 @@ export function readSessionIdFromLine(raw: string): string | null {
   } catch {
     return null;
   }
-  const v = field(parsed, FIELDS_V1.SESSION_ID);
+  const v = field(parsed, FIELDS.SESSION_ID);
   return asString(v) ?? null;
 }

@@ -1,7 +1,6 @@
 [
   {
     "id": "19826d87-a679-4939-9c07-58e4bc16de89",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:34.050Z",
@@ -12,7 +11,6 @@
   },
   {
     "id": "2e0a26b2-0798-49b3-84e9-567edf54bd27",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:34.119Z",
@@ -23,7 +21,6 @@
   },
   {
     "id": "9dc4dc38-0a20-4d85-9863-70e325317670",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:34.118Z",
@@ -32,7 +29,6 @@
   },
   {
     "id": "synthetic-f3ff8408ac4ee14f",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "",
@@ -41,7 +37,6 @@
   },
   {
     "id": "synthetic-c1d14ec4ebb3f282",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "",
@@ -50,7 +45,6 @@
   },
   {
     "id": "synthetic-73b8185bf9a7ba66",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "",
@@ -59,7 +53,6 @@
   },
   {
     "id": "e20d7792-a081-48f0-9d9a-645b1f365e61",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:38.370Z",
@@ -70,7 +63,6 @@
   },
   {
     "id": "b78b156d-b79d-442e-bc61-419d09bb687d",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:38.436Z",
@@ -81,7 +73,6 @@
   },
   {
     "id": "22e84747-cd4f-428f-b365-bc5df65b789a",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:38.436Z",
@@ -90,7 +81,6 @@
   },
   {
     "id": "8e9c0e1c-ed9f-4043-885e-e1fa986aa5e0",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:42.979Z",
@@ -101,7 +91,6 @@
   },
   {
     "id": "f59bd91c-6aa2-46da-a0b9-1b3dc6e71d9b",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:43.017Z",
@@ -112,7 +101,6 @@
   },
   {
     "id": "102a74d3-2973-4262-89c5-936f0d160f92",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:43.016Z",
@@ -121,7 +109,6 @@
   },
   {
     "id": "737d3a4b-a9d4-4fc4-a1b2-a6022e022c9f",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:46.770Z",
@@ -132,7 +119,6 @@
   },
   {
     "id": "bfaa973a-fb29-49ba-886a-f0a0e178c2cf",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:46.793Z",
@@ -143,7 +129,6 @@
   },
   {
     "id": "bc596725-33d8-4ecf-a4e7-611c27a849ec",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:46.792Z",
@@ -152,7 +137,6 @@
   },
   {
     "id": "3e1580be-6bd2-444b-8c7a-ccf415a254f7",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:50.670Z",
@@ -166,7 +150,6 @@
   },
   {
     "id": "c85708b7-b7d8-430c-b576-a3068a44256f",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:52.261Z",
@@ -177,7 +160,6 @@
   },
   {
     "id": "a9751c59-f942-4f2a-ae34-28f802dcc296",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:52.261Z",
@@ -186,7 +168,6 @@
   },
   {
     "id": "766b51a0-306b-4c03-934b-0622529922c9",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:54.901Z",
@@ -199,7 +180,6 @@
   },
   {
     "id": "2940d62c-9d0f-44d7-b0a7-90761401efc8",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:55.000Z",
@@ -210,7 +190,6 @@
   },
   {
     "id": "7a293b59-a041-434a-bbf1-ca81f7c4af74",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:54.999Z",
@@ -219,7 +198,6 @@
   },
   {
     "id": "8cb25fe0-30f8-49e8-9522-9d0032dbae58",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:57.618Z",
@@ -230,7 +208,6 @@
   },
   {
     "id": "9361ea68-c7bb-4e09-8da1-2a8b47bd3d64",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:57.653Z",
@@ -241,7 +218,6 @@
   },
   {
     "id": "ecbef19e-d8ab-4c36-85dc-4190a3ed6f4b",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:45:57.652Z",
@@ -250,7 +226,6 @@
   },
   {
     "id": "synthetic-ea4be68607d3f20d",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "",
@@ -259,7 +234,6 @@
   },
   {
     "id": "84eab3cc-2dbe-4d02-83e8-c60b09bd2255",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:03.652Z",
@@ -275,7 +249,6 @@
   },
   {
     "id": "113a0473-e8fc-4071-87c6-43f4934d1c4d",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:03.792Z",
@@ -286,7 +259,6 @@
   },
   {
     "id": "4897d081-cd17-4543-9081-4fa31af66a8b",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:03.725Z",
@@ -295,7 +267,6 @@
   },
   {
     "id": "synthetic-da996da05a3d5cc4",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "",
@@ -304,7 +275,6 @@
   },
   {
     "id": "ed471bf7-376c-4a94-97a7-843bca471f4b",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:06.129Z",
@@ -314,7 +284,6 @@
   },
   {
     "id": "938bc152-d7ea-441f-a08d-2b9b2efaad3b",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:07.637Z",
@@ -330,7 +299,6 @@
   },
   {
     "id": "e94d7649-19db-4d48-8e15-2fd51fd02264",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:07.704Z",
@@ -341,7 +309,6 @@
   },
   {
     "id": "e46fef21-7bef-47d0-8159-b6f929ef00e4",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:07.675Z",
@@ -350,7 +317,6 @@
   },
   {
     "id": "synthetic-e33b8a0df8ff40e7",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "",
@@ -359,7 +325,6 @@
   },
   {
     "id": "synthetic-c1d14ec4ebb3f282",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "",
@@ -368,7 +333,6 @@
   },
   {
     "id": "synthetic-73b8185bf9a7ba66",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "",
@@ -377,7 +341,6 @@
   },
   {
     "id": "214f8f29-0464-433c-a307-ead95dbe13ba",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:12.205Z",
@@ -393,7 +356,6 @@
   },
   {
     "id": "908d9907-53c7-4545-a78b-3bd0389ebd30",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:12.284Z",
@@ -404,7 +366,6 @@
   },
   {
     "id": "07e7754c-0584-4311-a6ab-ba7a760a0bc4",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:12.259Z",
@@ -413,7 +374,6 @@
   },
   {
     "id": "synthetic-a92b90d4ee01ec77",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "",
@@ -422,7 +382,6 @@
   },
   {
     "id": "1d90d4c7-e4c8-46c6-8b3f-c9fe37a27de8",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:15.136Z",
@@ -432,7 +391,6 @@
   },
   {
     "id": "7ea2547a-a3b1-4174-8c45-e0e601393e03",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:17.217Z",
@@ -448,7 +406,6 @@
   },
   {
     "id": "34b6ad28-1ff7-42eb-9b27-4c08e2fcec87",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:17.285Z",
@@ -459,7 +416,6 @@
   },
   {
     "id": "7797eef8-1422-480b-a786-4ab555e8011f",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:17.261Z",
@@ -468,7 +424,6 @@
   },
   {
     "id": "0794e485-1f30-4cc1-8576-fd18dc0b8cb6",
-    "schemaVersion": "v1",
     "chatId": "chat-13-task-create-update.jsonl",
     "sessionId": "session-13-task-create-update.jsonl",
     "tsIso": "2026-05-20T07:46:20.080Z",

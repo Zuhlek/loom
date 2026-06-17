@@ -14,7 +14,6 @@ const ctx: TranslatorCtx = { chatId: "c-1", sessionId: "s-1" };
 
 function ev(partial: Partial<ClaudeEvent> & { kind: ClaudeEvent["kind"]; id: string }): ClaudeEvent {
   const base = {
-    schemaVersion: "v1" as const,
     chatId: "c-1",
     sessionId: "s-1",
     tsIso: "2026-01-01T00:00:00.000Z",
@@ -30,6 +29,21 @@ describe("jsonl/materializer — dedupe + folding", () => {
     );
     expect(frames).toHaveLength(1);
     expect(frames[0]?.kind).toBe("item-append");
+  });
+
+  it("folds a role=system text event into a system-notice item, not a user-message", () => {
+    const m = createMaterializer();
+    const frames = m.ingest(
+      ev({ kind: "text", id: "e-notif", role: "system", text: "<task-notification>done</task-notification>" } as any),
+    );
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.kind).toBe("item-append");
+    const item = (frames[0] as any).body.item;
+    expect(item.kind).toBe("system-notice");
+    expect(item.level).toBe("info");
+    expect(item.text).toContain("task-notification");
+    // It must NOT render as the user's blue bubble.
+    expect(m.snapshot().items.some((i) => i.kind === "user-message")).toBe(false);
   });
 
   it("dedupe: feeding the same event twice yields a frame then zero frames", () => {

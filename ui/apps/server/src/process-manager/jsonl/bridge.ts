@@ -142,6 +142,16 @@ export interface JsonlTailBridgeOptions {
   onFirstUserTurn?(chatId: string): Promise<void> | void;
   onAssistantTurnComplete?(chatId: string, cwd: string): void;
   /**
+   * Pre-spawn folder-trust seeding. Called with the resolved cwd right
+   * before a `bypassPermissions` spawn so claude's
+   * `--dangerously-skip-permissions` trust dialog never blocks the pane
+   * (see `folder-trust.ts` for the failure it prevents). Only bypass mode
+   * triggers that dialog, so the bridge calls this for that mode only.
+   * Wired to the real `ensureFolderTrusted` in `index.ts`; absent (no-op)
+   * in tests so the suite never touches `~/.claude.json`.
+   */
+  ensureFolderTrusted?(cwd: string): void;
+  /**
    * Durable image store for the submit path. When a user turn carries
    * `images`, the bridge stages them via this store and appends an
    * `@<absPath>` token per image to the outbound tmux text. Injected in
@@ -216,6 +226,19 @@ interface ChatState {
    * is the fix.
    */
   ready: boolean;
+  /**
+   * Epoch ms when the CURRENT turn entered `running`, or `null` when the
+   * chat is idle. Mirrors the web reducer's `activeTurnStartedAt`. The
+   * bridge broadcasts `turn-state running`/`idle` as deltas, but a
+   * snapshot (WS reconnect / page refresh / second tab attach) is built
+   * from state — without this field `buildSnapshotFrame` always reported
+   * `idle`, so refreshing mid-turn dropped the WorkingChip and left the
+   * user unable to tell a live turn from a dead one. Set on the first
+   * `running` broadcast of a turn (preserved across repeat `running`
+   * broadcasts within the same turn so the elapsed timer keeps counting
+   * from the real start); cleared on the top-level `Stop`.
+   */
+  turnStartedAtMs: number | null;
   /**
    * Turns submitted before `ready` flipped true, in submission order.
    * Flushed serially (each: literal+Enter, await, then next) on the
@@ -357,8 +380,13 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       kind: "snapshot",
       "chat-id": state.chatId,
       body: {
+        // Honest turn-state so a reconnect / refresh / second-tab attach
+        // mid-turn re-arms the WorkingChip instead of falsely reporting
+        // idle. `turnStartedAt` lets the client's elapsed timer resume
+        // from the real start rather than resetting to 0.
         items: snap.items as ChatItem[],
-        turnState: "idle",
+        turnState: state.turnStartedAtMs != null ? "running" : "idle",
+        turnStartedAt: state.turnStartedAtMs,
         pendingPermission:
           state.pendingPermissions.size > 0
             ? [...state.pendingPermissions.values()][0]!
@@ -530,6 +558,23 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     const tailStrategy = "bound";
     const isResume = existsSync(jsonlPath);
 
+    // Folder-trust pre-seed (F4). A `bypassPermissions` spawn passes
+    // `--dangerously-skip-permissions`, which makes claude block on its
+    // "Is this a project you trust?" dialog in any not-yet-trusted folder.
+    // loom would then type the queued first turn straight into that dialog
+    // and lose it. Recording trust before the spawn keeps claude on its
+    // normal cold-start path (REPL → SessionStart), where the F1 readiness
+    // gate already works. Best-effort; never blocks the spawn.
+    if (resolvedPermissionMode === "bypassPermissions") {
+      try {
+        opts.ensureFolderTrusted?.(cwd);
+      } catch (err) {
+        console.warn(
+          `[loom] ensureFolderTrusted failed for ${chatId}: ${(err as Error).message}`,
+        );
+      }
+    }
+
     await opts.tmux.ensure(chatId, cwd, sessionId, resolvedPermissionMode, isResume);
 
     const tail = createJsonlTail({ pollingIntervalMs: opts.tailPollingMs });
@@ -568,6 +613,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       // this branch — `ensureChatState` returns the existing (already-
       // ready) state up top, so a second turn on a live chat sends now.
       ready: false,
+      turnStartedAtMs: null,
       pendingTurns: [],
       sendChain: Promise.resolve(),
       readyFallbackTimer: undefined,
@@ -846,6 +892,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       // shows "Working" until claude's first output flips it idle).
       if (!state.ready) {
         state.pendingTurns.push(turn);
+        if (state.turnStartedAtMs == null) state.turnStartedAtMs = Date.now();
         broadcast(state, {
           kind: "turn-state",
           "chat-id": chatId,
@@ -870,6 +917,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       // before the send; idempotent against the client reducer (a
       // running→running frame preserves `activeTurnStartedAt`). The
       // `stop` hook's `turn-state idle` clears it at turn end.
+      if (state.turnStartedAtMs == null) state.turnStartedAtMs = Date.now();
       broadcast(state, {
         kind: "turn-state",
         "chat-id": chatId,
@@ -1188,6 +1236,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       const state = chats.get(chatId);
       if (state) {
         state.materializer.reset();
+        state.turnStartedAtMs = null;
         broadcast(state, buildSnapshotFrame(state));
       }
       // The next ensureChatState call will mint a fresh sessionId.
@@ -1273,7 +1322,19 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
             body: { lifecycle: "active" },
           });
           return;
-        case "stop":
+        case "stop": {
+          // Only the TOP-LEVEL `Stop` ends the turn. `SubagentStop` fires
+          // every time a Task/Explore subagent finishes WHILE the parent
+          // agent is still running — treating it as turn-end would flip
+          // the chat to `idle` mid-turn, vanishing the WorkingChip even
+          // though work continues. Since nothing re-arms `running` until
+          // the next user submit, the indicator would then stay dark for
+          // the rest of the turn (the "I can't tell if it died" symptom).
+          // SubagentStop's gate-clearing already happened in the receiver;
+          // here we simply ignore it for turn-state purposes.
+          const stopKind = (env.body as { kind?: string } | undefined)?.kind;
+          if (stopKind === "SubagentStop") return;
+          state.turnStartedAtMs = null;
           broadcast(state, {
             kind: "turn-state",
             "chat-id": chatId,
@@ -1287,6 +1348,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
             );
           }
           return;
+        }
         case "pre-tool-use": {
           // pre-tool-use carries the permission-prompt side-channel.
           const body = env.body as

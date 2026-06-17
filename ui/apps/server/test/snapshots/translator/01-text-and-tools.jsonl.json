@@ -1,7 +1,6 @@
 [
   {
     "id": "synthetic-5a3b0c8216062753",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "",
@@ -10,7 +9,6 @@
   },
   {
     "id": "synthetic-babfcfd05cab8128",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "",
@@ -19,7 +17,6 @@
   },
   {
     "id": "bf3a8c2d-37fc-406a-987d-0daa65b1c5bb",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:20.786Z",
@@ -29,7 +26,6 @@
   },
   {
     "id": "12c4338f-5484-455a-b2f8-cffc6108bdd7",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:20.786Z",
@@ -39,7 +35,6 @@
   },
   {
     "id": "880b2140-27cc-4ce3-bad5-35791a82635b",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:20.785Z",
@@ -48,16 +43,99 @@
   },
   {
     "id": "4f81ae13-6c24-46b0-b73a-02971237db89",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:20.785Z",
-    "kind": "unknown",
-    "rawKind": "attachment"
+    "kind": "slash_command_set",
+    "commands": [
+      {
+        "name": "forge",
+        "description": "Give feedback, curate develop-log learnings, and analyze session transcripts for insights.",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "tune",
+        "description": "Give feedback, curate develop-log learnings, and analyze session transcripts for insights.",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "update-config",
+        "description": "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "keybindings-help",
+        "description": "Use when the user wants to customize keyboard shortcuts, rebind keys, add chord bindings, or modify ~/.claude/keybindings.json. Examples: \"rebind ctrl+s\", \"add a chord shortcut\", \"change the submit key\", \"customize keybindings\".",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "verify",
+        "description": "Verify that a code change actually does what it's supposed to by running the app and observing behavior. Use when asked to verify a PR, confirm a fix works, test a change manually, check that a feature works, or validate local changes before pushing.",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "code-review",
+        "description": "Review the current diff for correctness bugs at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings). Pass --comment to post findings as inline PR comments.",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "fewer-permission-prompts",
+        "description": "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "loop",
+        "description": "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace. - When the user wants to set up a recurring task, poll for status, or run something repeatedly on an interval (e.g. \"check the deploy every 5 minutes\", \"keep running /babysit-prs\"). Do NOT invoke for one-off tasks.",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "schedule",
+        "description": "Create, update, list, or run scheduled remote agents (routines) that execute on a cron schedule. - When the user wants to schedule a recurring remote agent, set up automated tasks, create a cron job for Claude Code, or manage their scheduled agents/routines. Also use when the user wants a one-time scheduled run (\"run this once at 3pm\", \"remind me to check X tomorrow\").",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "claude-api",
+        "description": "Build, debug, and optimize Claude API / Anthropic SDK apps. Apps built with this skill should include prompt caching. Also handles migrating existing Claude API code between Claude model versions (4.5 → 4.6, 4.6 → 4.7, retired-model replacements).\nTRIGGER when: code imports `anthropic`/`@anthropic-ai/sdk`; user asks for the Claude API, Anthropic SDK, or Managed Agents; user adds/modifies/tunes a Claude feature (caching, thinking, compaction, tool use, batch, files, citations, memory) or model (Opus/Sonnet/Haiku) in a file; questions about prompt caching / cache hit rate in an Anthropic SDK project.\nSKIP: file imports `openai`/other-provider SDK, filename like `*-openai.py`/`*-generic.py`, provider-neutral code, general programming/ML.",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "run",
+        "description": "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "init",
+        "description": "Initialize a new CLAUDE.md file with codebase documentation",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "review",
+        "description": "Review a pull request",
+        "argumentHint": "",
+        "kind": "skill"
+      },
+      {
+        "name": "security-review",
+        "description": "Complete a security review of the pending changes on the current branch",
+        "argumentHint": "",
+        "kind": "skill"
+      }
+    ]
   },
   {
     "id": "8a4635aa-04fb-4e72-aca7-2cd01af06d73",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:20.786Z",
@@ -66,7 +144,6 @@
   },
   {
     "id": "95c25d8f-85da-4fa8-87a0-3445d86f6fb5",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:47.184Z",
@@ -76,7 +153,6 @@
   },
   {
     "id": "2eafad73-606c-4efa-be33-f4d81e3f12ee",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:48.223Z",
@@ -89,7 +165,6 @@
   },
   {
     "id": "ce129bb9-a49d-4b87-8102-7ce9eaf498e7",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:48.295Z",
@@ -100,7 +175,6 @@
   },
   {
     "id": "9e071779-9b08-49cd-a613-9c20a3cd6e06",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:48.733Z",
@@ -113,7 +187,6 @@
   },
   {
     "id": "50d8391b-7bd9-4278-ae40-c9217e46319d",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:48.767Z",
@@ -124,7 +197,6 @@
   },
   {
     "id": "b37ac526-97cf-4c96-94d2-16ac560f67bd",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:50.113Z",
@@ -138,7 +210,6 @@
   },
   {
     "id": "1acc4663-1b4b-42f3-8637-0dafc4040b23",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:50.362Z",
@@ -149,7 +220,6 @@
   },
   {
     "id": "synthetic-e75aa70fe3d84353",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "",
@@ -158,7 +228,6 @@
   },
   {
     "id": "synthetic-5a3b0c8216062753",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "",
@@ -167,7 +236,6 @@
   },
   {
     "id": "8e7137cc-ccc2-4bd2-a300-87d639a3f2ae",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:56.460Z",
@@ -177,7 +245,6 @@
   },
   {
     "id": "f4210806-6ce3-41dc-bf8f-3550d73ec266",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:41:57.510Z",
@@ -187,7 +254,6 @@
   },
   {
     "id": "4464b8f9-e812-49b2-89fd-63aaa261c743",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:42:00.047Z",
@@ -201,7 +267,6 @@
   },
   {
     "id": "6a34a969-1d31-4d70-ba4c-6ac77e9a286d",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:42:00.142Z",
@@ -212,7 +277,6 @@
   },
   {
     "id": "86f4b4ae-15bd-4f6b-b34e-209dfb584350",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:42:11.203Z",
@@ -222,7 +286,6 @@
   },
   {
     "id": "673b766d-01ea-4cc3-8480-a02f6297b248",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:42:12.744Z",
@@ -232,7 +295,6 @@
   },
   {
     "id": "b6b6f215-bddb-49b9-be1c-0974fb871c46",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:42:16.634Z",
@@ -261,7 +323,6 @@
   },
   {
     "id": "synthetic-50522b3e1095d42d",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "",
@@ -270,7 +331,6 @@
   },
   {
     "id": "synthetic-5a3b0c8216062753",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "",
@@ -279,7 +339,6 @@
   },
   {
     "id": "719ee7a2-3081-4093-8d3b-898b788c88e9",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:42:53.215Z",
@@ -290,7 +349,6 @@
   },
   {
     "id": "020174d2-1386-4c01-a24d-c9f8cc6dc898",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:43:00.978Z",
@@ -300,7 +358,6 @@
   },
   {
     "id": "e394f599-d761-4714-97af-fc1048abf21e",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:43:02.470Z",
@@ -314,7 +371,6 @@
   },
   {
     "id": "28bf0bf6-3623-4e11-8003-0b669a02b137",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:43:02.579Z",
@@ -325,7 +381,6 @@
   },
   {
     "id": "f853690e-e279-40ac-9e3d-0260f6c5e4e4",
-    "schemaVersion": "v1",
     "chatId": "chat-01-text-and-tools.jsonl",
     "sessionId": "session-01-text-and-tools.jsonl",
     "tsIso": "2026-05-23T10:43:06.607Z",

@@ -10,7 +10,6 @@ import type { UserMessageItem } from "../src/chat-protocol/messages.ts";
 
 function userEv(id: string, text: string): ClaudeEvent {
   return {
-    schemaVersion: "v1",
     chatId: "c-1",
     sessionId: "s-1",
     tsIso: "2026-01-01T00:00:00.000Z",

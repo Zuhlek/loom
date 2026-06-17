@@ -344,20 +344,22 @@ export interface ApiDiffResponse {
 
 export async function getGitStatus(
   worktreePath: string,
-  base: string = "main",
+  base?: string,
 ): Promise<ApiGitStatus> {
-  const qs = `worktreePath=${encodeURIComponent(worktreePath)}&base=${encodeURIComponent(base)}`;
+  // Omit `base` so the server resolves the repo's actual trunk (origin/HEAD →
+  // main/master). Pass an explicit ref only to override.
+  let qs = `worktreePath=${encodeURIComponent(worktreePath)}`;
+  if (base) qs += `&base=${encodeURIComponent(base)}`;
   return apiFetch<ApiGitStatus>(`/git/status?${qs}`);
 }
 
 export async function getDiff(
   worktreePath: string,
-  opts: { base?: string; signal?: AbortSignal } = {},
+  opts: { signal?: AbortSignal } = {},
 ): Promise<ApiDiffResponse> {
-  const base = opts.base ?? "main";
-  const qs =
-    `worktreePath=${encodeURIComponent(worktreePath)}` +
-    `&base=${encodeURIComponent(base)}`;
+  // The diff base is resolved server-side (fork point of this branch/worktree),
+  // so the client sends only the path.
+  const qs = `worktreePath=${encodeURIComponent(worktreePath)}`;
   return apiFetch<ApiDiffResponse>(`/diff?${qs}`, { signal: opts.signal });
 }
 

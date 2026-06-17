@@ -2,7 +2,7 @@
  * T-004 — jsonl/translator.ts unit + golden-file tests.
  *
  * The translator is a pure function: `(rawLine, ctx) → ClaudeEvent`.
- * It composes `schema.parseLine(...)` and stamps the schema version.
+ * It composes `schema.parseLine(...)` and attaches per-chat provenance.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, mkdirSync, existsSync, writeFileSync } from "node:fs";
@@ -12,7 +12,6 @@ import {
   translateMany,
   type TranslatorCtx,
 } from "../src/process-manager/jsonl/translator.ts";
-import { CURRENT_SCHEMA_VERSION } from "../src/process-manager/jsonl/schema.ts";
 
 const ctx: TranslatorCtx = { chatId: "c-1", sessionId: "s-1" };
 
@@ -32,7 +31,7 @@ function readLines(path: string): string[] {
 }
 
 describe("jsonl/translator — unit", () => {
-  it("stamps every output event with CURRENT_SCHEMA_VERSION", () => {
+  it("translates a plain user line into a text event", () => {
     const line = JSON.stringify({
       type: "user",
       uuid: "e-1",
@@ -41,7 +40,7 @@ describe("jsonl/translator — unit", () => {
     });
     const ev = translate(line, ctx);
     expect(ev).not.toBeNull();
-    expect(ev!.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(ev!.kind).toBe("text");
   });
 
   it("is pure: same input → deep-equal output across two calls", () => {
@@ -153,11 +152,6 @@ describe("jsonl/translator — golden snapshots", () => {
       // Pure-function determinism: rerunning yields deep-equal output.
       const again = translateMany(lines, fxCtx);
       expect(again).toEqual(events);
-
-      // Every event carries the schema version stamp.
-      for (const ev of events) {
-        expect(ev.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-      }
 
       // Snapshot stability: write on first run, then assert equality.
       const snapPath = join(SNAPSHOT_DIR, `${fx}.json`);

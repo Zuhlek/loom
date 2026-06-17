@@ -413,14 +413,11 @@ Citations: `10-ask-user-question.jsonl`.
     a `user` event with literal text `[Request interrupted by user]`,
     not a control event. The translator must pattern-match it.
 
-## Schema-version evidence
+## Format stability evidence
 
 - `claude` versions observed in the sampled transcripts:
   `2.1.117 → 2.1.150` (every minor in between except a few skipped
   patches).
-- Every transcript carries `version` at the event level; this is
-  the version string Loom's `schemaVersion` stamp should mirror for
-  golden-file drift detection.
 - The type and field set observed is **stable across the entire
   version range**. No type was added or removed across the sample.
   The four `permission-mode` values (`default`, `auto`,
@@ -428,13 +425,15 @@ Citations: `10-ask-user-question.jsonl`.
 - `attachment.type` values observed: `task_reminder`,
   `edited_text_file`, `skill_listing`, `deferred_tools_delta`,
   `command_permissions`, `hook_success`, `hook_non_blocking_error`.
-  The latter two are loom-instrumentation artefacts (the hook
-  receiver POSTing back), not native `claude` events; the bridge's
-  translator should silently absorb them as `unknown` for now.
+  `skill_listing` is parsed into a `slash_command_set` event (the
+  slash-command catalog). `hook_success` / `hook_non_blocking_error`
+  are loom-instrumentation artefacts (the hook receiver POSTing back),
+  not native `claude` events; the remaining attachment types are
+  absorbed as `unknown`.
 
-Conclusion: a single `v1` parser covers the entire 2.1.x range
-observed. The schema-version selector (`parserFor(version)`) exists
-for future drift but is not exercised by today's transcripts.
+Conclusion: a single parser covers the entire 2.1.x range observed.
+Golden-file tests over recorded transcripts are the regression net for
+upstream format drift.
 
 ## Fixtures shipped
 

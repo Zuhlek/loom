@@ -1,7 +1,6 @@
 [
   {
     "id": "673b766d-01ea-4cc3-8480-a02f6297b248",
-    "schemaVersion": "v1",
     "chatId": "chat-10-ask-user-question.jsonl",
     "sessionId": "session-10-ask-user-question.jsonl",
     "tsIso": "2026-05-23T10:42:12.744Z",
@@ -11,7 +10,6 @@
   },
   {
     "id": "b6b6f215-bddb-49b9-be1c-0974fb871c46",
-    "schemaVersion": "v1",
     "chatId": "chat-10-ask-user-question.jsonl",
     "sessionId": "session-10-ask-user-question.jsonl",
     "tsIso": "2026-05-23T10:42:16.634Z",
@@ -40,7 +38,6 @@
   },
   {
     "id": "synthetic-1e593d85660ca278",
-    "schemaVersion": "v1",
     "chatId": "chat-10-ask-user-question.jsonl",
     "sessionId": "session-10-ask-user-question.jsonl",
     "tsIso": "",
@@ -49,7 +46,6 @@
   },
   {
     "id": "synthetic-0d36dfe829367440",
-    "schemaVersion": "v1",
     "chatId": "chat-10-ask-user-question.jsonl",
     "sessionId": "session-10-ask-user-question.jsonl",
     "tsIso": "",
@@ -58,7 +54,6 @@
   },
   {
     "id": "719ee7a2-3081-4093-8d3b-898b788c88e9",
-    "schemaVersion": "v1",
     "chatId": "chat-10-ask-user-question.jsonl",
     "sessionId": "session-10-ask-user-question.jsonl",
     "tsIso": "2026-05-23T10:42:53.215Z",
@@ -69,7 +64,6 @@
   },
   {
     "id": "020174d2-1386-4c01-a24d-c9f8cc6dc898",
-    "schemaVersion": "v1",
     "chatId": "chat-10-ask-user-question.jsonl",
     "sessionId": "session-10-ask-user-question.jsonl",
     "tsIso": "2026-05-23T10:43:00.978Z",

@@ -1,7 +1,6 @@
 [
   {
     "id": "0bff93ec-6bac-438e-8ac1-25b077c92ee2",
-    "schemaVersion": "v1",
     "chatId": "chat-04-permission-rejected.jsonl",
     "sessionId": "session-04-permission-rejected.jsonl",
     "tsIso": "2026-05-18T08:07:49.186Z",
@@ -10,7 +9,6 @@
   },
   {
     "id": "ac94edf1-9899-465c-870b-6f974d2b58d4",
-    "schemaVersion": "v1",
     "chatId": "chat-04-permission-rejected.jsonl",
     "sessionId": "session-04-permission-rejected.jsonl",
     "tsIso": "2026-05-18T08:08:07.747Z",
@@ -25,7 +23,6 @@
   },
   {
     "id": "synthetic-713131057efe09ad",
-    "schemaVersion": "v1",
     "chatId": "chat-04-permission-rejected.jsonl",
     "sessionId": "session-04-permission-rejected.jsonl",
     "tsIso": "",
@@ -34,7 +31,6 @@
   },
   {
     "id": "9028b633-3dc9-4408-a15c-e9f79a1717ef",
-    "schemaVersion": "v1",
     "chatId": "chat-04-permission-rejected.jsonl",
     "sessionId": "session-04-permission-rejected.jsonl",
     "tsIso": "2026-05-18T08:22:21.554Z",
@@ -45,7 +41,6 @@
   },
   {
     "id": "d8a9dcbc-7224-4043-8c6c-ae3407db1851",
-    "schemaVersion": "v1",
     "chatId": "chat-04-permission-rejected.jsonl",
     "sessionId": "session-04-permission-rejected.jsonl",
     "tsIso": "2026-05-18T08:22:21.558Z",

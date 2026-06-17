@@ -301,7 +301,7 @@ export type ServerFrame =
       body: { chat: ApiChat };
     }
   | {
-      /** Push the SDK-enumerated catalog. Fired on attach and on reload. */
+      /** Push the slash-command catalog. Fired on each `skill_listing` attachment. */
       kind: "slash-commands-update";
       "chat-id": string;
       body: { commands: WireSlashCommand[] };
@@ -460,9 +460,8 @@ export interface WireModelSettings {
 }
 
 /**
- * One row in the SDK-enumerated slash-command catalog — mirror of the
- * server `WireSlashCommand` byte-for-byte. `kind` is bridge-classified
- * and drives the menu's row icon.
+ * One row in the slash-command catalog — mirror of the server
+ * `WireSlashCommand` byte-for-byte. `kind` drives the menu's row icon.
  */
 export interface WireSlashCommand {
   name: string;

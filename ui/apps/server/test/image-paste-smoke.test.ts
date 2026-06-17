@@ -156,7 +156,6 @@ describe("T-007 — production-wiring smoke (real store + bridge + materializer)
         resolveImage: (p) => imageStore.lookupByPath("c-1", p),
       });
       const userEvent = {
-        schemaVersion: "v1",
         chatId: "c-1",
         sessionId: "sess-c-1",
         tsIso: "2026-01-01T00:00:00.000Z",

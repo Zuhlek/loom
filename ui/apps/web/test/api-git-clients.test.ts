@@ -60,7 +60,7 @@ afterEach(() => {
 });
 
 describe("getGitStatus", () => {
-  test("default base=main, URL-encodes worktreePath, parses JSON body", async () => {
+  test("omits base so the server resolves the trunk; URL-encodes worktreePath, parses JSON body", async () => {
     const body: ApiGitStatus = {
       branch: "feat/x",
       base: "main",
@@ -73,7 +73,7 @@ describe("getGitStatus", () => {
     const result = await getGitStatus("/wt");
 
     const { url } = readCall();
-    expect(url).toBe("/api/git/status?worktreePath=%2Fwt&base=main");
+    expect(url).toBe("/api/git/status?worktreePath=%2Fwt");
     expect(result).toEqual(body);
   });
 
@@ -105,7 +105,7 @@ describe("getGitStatus", () => {
 });
 
 describe("getDiff", () => {
-  test("default base=main — URL-encodes worktreePath; response parsed", async () => {
+  test("sends only worktreePath — base is resolved server-side; response parsed", async () => {
     const body: ApiDiffResponse = {
       sections: [{ kind: "whole", label: "", diff: "diff --git ..." }],
     };
@@ -114,22 +114,12 @@ describe("getDiff", () => {
     const result = await getDiff("/wt");
 
     const { url } = readCall();
-    expect(url).toContain("worktreePath=%2Fwt");
-    expect(url).toContain("base=main");
-    // The legacy turn-scope toggle is gone — no `mode` param.
+    expect(url).toBe("/api/diff?worktreePath=%2Fwt");
+    // The base is the repo's fork point, resolved on the server — the client
+    // sends no `base` param, and the legacy turn-scope `mode` toggle is gone.
+    expect(url).not.toContain("base=");
     expect(url).not.toContain("mode=");
     expect(result).toEqual(body);
-  });
-
-  test("custom base override appears in the query string", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({ sections: [] } satisfies ApiDiffResponse),
-    );
-
-    await getDiff("/wt", { base: "develop" });
-
-    const { url } = readCall();
-    expect(url).toContain("base=develop");
   });
 
   test("aborting the supplied signal rejects the promise", async () => {

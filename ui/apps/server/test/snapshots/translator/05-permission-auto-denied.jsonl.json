@@ -1,7 +1,6 @@
 [
   {
     "id": "2ecd58e0-aa81-4125-b8d2-dc89e28a9898",
-    "schemaVersion": "v1",
     "chatId": "chat-05-permission-auto-denied.jsonl",
     "sessionId": "session-05-permission-auto-denied.jsonl",
     "tsIso": "2026-05-16T09:00:59.781Z",
@@ -11,7 +10,6 @@
   },
   {
     "id": "020ce2c4-a9dd-4961-bff4-6d596f90609e",
-    "schemaVersion": "v1",
     "chatId": "chat-05-permission-auto-denied.jsonl",
     "sessionId": "session-05-permission-auto-denied.jsonl",
     "tsIso": "2026-05-16T09:01:00.977Z",
@@ -25,7 +23,6 @@
   },
   {
     "id": "ca21c2a5-7702-45f7-b79e-888a35927222",
-    "schemaVersion": "v1",
     "chatId": "chat-05-permission-auto-denied.jsonl",
     "sessionId": "session-05-permission-auto-denied.jsonl",
     "tsIso": "2026-05-16T09:01:14.156Z",
@@ -36,7 +33,6 @@
   },
   {
     "id": "d97c31da-9b96-4f9f-bc5c-84f7b9a9bb81",
-    "schemaVersion": "v1",
     "chatId": "chat-05-permission-auto-denied.jsonl",
     "sessionId": "session-05-permission-auto-denied.jsonl",
     "tsIso": "2026-05-16T09:01:18.032Z",
@@ -46,7 +42,6 @@
   },
   {
     "id": "d952f5d3-5e62-4739-817d-882be93463b9",
-    "schemaVersion": "v1",
     "chatId": "chat-05-permission-auto-denied.jsonl",
     "sessionId": "session-05-permission-auto-denied.jsonl",
     "tsIso": "2026-05-16T09:01:19.400Z",
@@ -56,7 +51,6 @@
   },
   {
     "id": "18e6553b-eb41-4e58-b8d7-5c63eb9a966d",
-    "schemaVersion": "v1",
     "chatId": "chat-05-permission-auto-denied.jsonl",
     "sessionId": "session-05-permission-auto-denied.jsonl",
     "tsIso": "2026-05-16T09:01:19.957Z",

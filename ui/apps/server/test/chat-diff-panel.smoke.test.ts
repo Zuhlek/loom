@@ -182,11 +182,11 @@ describe("chat-diff-panel smoke gate", () => {
     expect(frames.some((f) => f.kind === "checkpoint-captured")).toBe(true);
 
     // ── 5. GET /diff?worktreePath=<cwd> → total branch/workspace diff ─
-    // The agent's turn wrote feature.txt (uncommitted on main); the
-    // total diff vs `main` surfaces it.
+    // The agent's turn wrote feature.txt (uncommitted on main); on the trunk
+    // the fork-point base collapses to HEAD, so the diff surfaces it.
     const diffRes = await call(
       routes["/diff"]!,
-      `http://x/diff?worktreePath=${encodeURIComponent(cwd)}&base=main`,
+      `http://x/diff?worktreePath=${encodeURIComponent(cwd)}`,
     );
     expect(diffRes.status).toBe(200);
     const diffBody = (await diffRes.json()) as any;

@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  CURRENT_SCHEMA_VERSION,
-  FIELDS_V1,
+  FIELDS,
   parseLine,
-  parserFor,
   type ClaudeEvent,
   type ParseCtx,
 } from "../src/process-manager/jsonl/schema.ts";
@@ -11,32 +9,17 @@ import {
 const ctx: ParseCtx = { chatId: "c-1", sessionId: "s-1" };
 
 describe("jsonl/schema", () => {
-  it("CURRENT_SCHEMA_VERSION is the v1 literal", () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe("v1");
-  });
-
-  it("FIELDS_V1 contains the documented field-name string literals", () => {
-    expect(FIELDS_V1.TYPE).toBe("type");
-    expect(FIELDS_V1.UUID).toBe("uuid");
-    expect(FIELDS_V1.SESSION_ID).toBe("sessionId");
-    expect(FIELDS_V1.TIMESTAMP).toBe("timestamp");
-    expect(FIELDS_V1.MESSAGE).toBe("message");
-    expect(FIELDS_V1.CONTENT).toBe("content");
-    expect(FIELDS_V1.ROLE).toBe("role");
-    expect(FIELDS_V1.TOOL_USE_ID).toBe("tool_use_id");
-    expect(FIELDS_V1.TOOL_NAME).toBe("name");
-    expect(FIELDS_V1.INPUT).toBe("input");
-  });
-
-  it("stamps every returned event with the current schema version", () => {
-    const line = JSON.stringify({
-      type: "user",
-      uuid: "u-1",
-      timestamp: "2026-05-23T00:00:00.000Z",
-      message: { role: "user", content: "hello" },
-    });
-    const evt = parseLine(line, ctx);
-    expect(evt.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+  it("FIELDS contains the documented field-name string literals", () => {
+    expect(FIELDS.TYPE).toBe("type");
+    expect(FIELDS.UUID).toBe("uuid");
+    expect(FIELDS.SESSION_ID).toBe("sessionId");
+    expect(FIELDS.TIMESTAMP).toBe("timestamp");
+    expect(FIELDS.MESSAGE).toBe("message");
+    expect(FIELDS.CONTENT).toBe("content");
+    expect(FIELDS.ROLE).toBe("role");
+    expect(FIELDS.TOOL_USE_ID).toBe("tool_use_id");
+    expect(FIELDS.TOOL_NAME).toBe("name");
+    expect(FIELDS.INPUT).toBe("input");
   });
 
   it("produces a kind=unknown event for unrecognised type values rather than throwing", () => {
@@ -52,20 +35,57 @@ describe("jsonl/schema", () => {
     }
   });
 
-  it("parserFor('v1') returns a stable-shape function and is deterministic", () => {
-    const fn1 = parserFor("v1");
-    const fn2 = parserFor("v1");
-    expect(typeof fn1).toBe("function");
-    expect(typeof fn2).toBe("function");
-    const raw = {
+  it("is deterministic: same input → deep-equal output across two calls", () => {
+    const line = JSON.stringify({
       type: "user",
       uuid: "u-2",
       timestamp: "2026-05-23T01:00:00.000Z",
       message: { role: "user", content: "deterministic" },
-    };
-    const a = fn1(raw, ctx);
-    const b = fn2(raw, ctx);
-    expect(a).toEqual(b);
+    });
+    expect(parseLine(line, ctx)).toEqual(parseLine(line, ctx));
+  });
+
+  it("skill_listing attachment becomes a slash_command_set of skills", () => {
+    const line = JSON.stringify({
+      type: "attachment",
+      uuid: "u-skills",
+      timestamp: "2026-05-23T00:00:00.000Z",
+      attachment: {
+        type: "skill_listing",
+        skillCount: 2,
+        isInitial: true,
+        content: "- weave: Compose a fabric from threads.\n- forge: Curate learnings.",
+        names: ["weave", "forge"],
+      },
+    });
+    const evt = parseLine(line, ctx);
+    expect(evt.kind).toBe("slash_command_set");
+    if (evt.kind === "slash_command_set") {
+      expect(evt.commands).toEqual([
+        {
+          name: "weave",
+          description: "Compose a fabric from threads.",
+          argumentHint: "",
+          kind: "skill",
+        },
+        {
+          name: "forge",
+          description: "Curate learnings.",
+          argumentHint: "",
+          kind: "skill",
+        },
+      ]);
+    }
+  });
+
+  it("non-skill_listing attachments fall through to kind=unknown", () => {
+    const line = JSON.stringify({
+      type: "attachment",
+      uuid: "u-att",
+      timestamp: "2026-05-23T00:00:00.000Z",
+      attachment: { type: "task_reminder" },
+    });
+    expect(parseLine(line, ctx).kind).toBe("unknown");
   });
 
   it("text event: user role with string content", () => {
@@ -85,6 +105,52 @@ describe("jsonl/schema", () => {
       expect(evt.sessionId).toBe("s-1");
       expect(evt.tsIso).toBe("2026-05-23T00:00:00.000Z");
     }
+  });
+
+  it("classifies an `origin`-tagged user line (task-notification) as role=system", () => {
+    const line = JSON.stringify({
+      type: "user",
+      uuid: "u-notif",
+      timestamp: "2026-05-23T00:00:00.000Z",
+      origin: { kind: "task-notification" },
+      promptSource: "system",
+      message: {
+        role: "user",
+        content: "<task-notification>\n<task-id>bszpivywq</task-id>\n</task-notification>",
+      },
+    });
+    const evt = parseLine(line, ctx);
+    expect(evt.kind).toBe("text");
+    if (evt.kind === "text") {
+      expect(evt.role).toBe("system");
+      expect(evt.text).toContain("task-notification");
+    }
+  });
+
+  it("classifies a `promptSource:system` user line as role=system even without origin", () => {
+    const line = JSON.stringify({
+      type: "user",
+      uuid: "u-sys",
+      timestamp: "2026-05-23T00:00:00.000Z",
+      promptSource: "system",
+      message: { role: "user", content: "<system-reminder>be nice</system-reminder>" },
+    });
+    const evt = parseLine(line, ctx);
+    expect(evt.kind).toBe("text");
+    if (evt.kind === "text") expect(evt.role).toBe("system");
+  });
+
+  it("keeps a genuine human turn (promptSource:typed, no origin) as role=user", () => {
+    const line = JSON.stringify({
+      type: "user",
+      uuid: "u-typed",
+      timestamp: "2026-05-23T00:00:00.000Z",
+      promptSource: "typed",
+      message: { role: "user", content: "hello" },
+    });
+    const evt = parseLine(line, ctx);
+    expect(evt.kind).toBe("text");
+    if (evt.kind === "text") expect(evt.role).toBe("user");
   });
 
   it("text event: assistant role with content-block array", () => {
@@ -328,11 +394,11 @@ describe("jsonl/schema", () => {
     expect(evt.id.length).toBeGreaterThan(0);
   });
 
-  it("FIELDS_V1 is the single source of field-name string literals (structural)", () => {
-    // The values of FIELDS_V1 must be unique non-empty strings; this asserts
-    // the table is well-formed (and serves as the contract the CI grep
-    // enforces structurally in T-017).
-    const values = Object.values(FIELDS_V1);
+  it("FIELDS is the single source of field-name string literals (structural)", () => {
+    // The values of FIELDS must be unique non-empty strings; this asserts the
+    // table is well-formed (and serves as the contract the CI grep enforces
+    // structurally).
+    const values = Object.values(FIELDS);
     const unique = new Set(values);
     expect(unique.size).toBe(values.length);
     for (const v of values) {
