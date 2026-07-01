@@ -56,7 +56,7 @@ export function BranchToolbar(props: BranchToolbarProps) {
         */}
         <div
           className="flex items-center gap-1.5 text-xs"
-          title={`Changes on ${branch} relative to ${base} — the direction they merge in a pull request`}
+          title={`Changes on ${branch} relative to ${base}`}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-3.5" style={{ color: "var(--muted-foreground)" }}>
             <path d="M6 3v12M18 9V21M6 15l12-6" />
