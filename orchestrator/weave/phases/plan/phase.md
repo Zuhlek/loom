@@ -16,6 +16,19 @@ Convert solution structure into an executable work graph. Own Plan artifacts.
 10. Write `board.md` in the kanban shape below.
 11. Declare `Verification environment` in `plan.md` (see section below). Build reads this to pre-flight its capability before dispatching tasks.
 
+## Depth modulation
+
+Read `pipeline.md.Spec depth` (`light` / `standard` / `deep` — the project-wide depth field, reused here; do not invent a new one). Depth modulates how much of the work graph is *written down*, never how much is *reasoned through*. Per `methods/principles.md` right-size-ceremony: the quality bar is fixed at every depth.
+
+| Depth | Work-graph artifacts |
+|---|---|
+| `light` | For linear/small work the ceremony condenses: a short linear task list instead of a formal `blocked-by` DAG when there are genuinely no cross-task dependencies; fewer, coarser tasks; terser per-task test sketches. |
+| `standard` / `deep` | As written above — full `blocked-by` DAG, full per-task test sketches. |
+
+`light` means fewer written artifacts, NOT skipped planning — the agent still reasons through the full work graph internally before condensing it.
+
+**Never skip, regardless of depth:** story coverage validation (every active `US-NNN` covered by ≥1 task), the `## Verification environment` declaration, stable `T-NNN` IDs, and the `board.md` four-column shape.
+
 ## Refine scope
 
 When re-dispatched via `Refine`:

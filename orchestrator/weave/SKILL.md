@@ -59,7 +59,7 @@ The `--answers` flag is no longer accepted by `/weave`; the eval harness stages 
 
 `Phase status` values are exactly `Pending`, `blocked`, `failed`, and `complete`.
 `Lifecycle state` values are exactly `active` and `complete`. `active` covers every state from project creation through the Review phase completing; `complete` is set by the orchestrator on the Review→done transition and is the terminal marker for the project lifecycle.
-`Spec depth` values are exactly `pending`, `light`, `standard`, and `deep`. `pending` is the initial state written by `pipeline-parser.py init`; the orchestrator runs the Spec depth gate (see below) before the first Spec dispatch and replaces `pending` with one of `light` / `standard` / `deep`.
+`Spec depth` values are exactly `pending`, `light`, `standard`, and `deep`. `pending` is the initial state written by `pipeline-parser.py init`; the orchestrator runs the Spec depth gate (see below) before the first Spec dispatch and replaces `pending` with one of `light` / `standard` / `deep`. Despite the name, this is the project-wide depth read by Spec, Design, and Plan to modulate ceremony (same field, same values).
 
 ## Conventions
 
@@ -91,6 +91,10 @@ Runs once per project, before the first Spec dispatch. Skipped on every subseque
 
    `Standard` carries the `(Recommended)` suffix; the agent strips the suffix and writes one of `light` / `standard` / `deep` (lowercase) to `pipeline.md.Spec depth`.
 3. The Spec agent reads `pipeline.md.Spec depth` from its `pipeline.md` input and modulates the §0 mandate in `phases/spec/methods/grilling.md` per the depth-modulated mandate subsection there. The orchestrator does not pass the value through the dynamic tail — `pipeline.md` is already in Spec's Params and is the single source of truth for project-wide configuration.
+
+The chosen depth (`light` / `standard` / `deep`) is project-wide: it governs artifact ceremony not only in Spec but also in Design and Plan. Each of those phases reads `pipeline.md.Spec depth` and modulates its own ceremony per its `phase.md` "Depth modulation" section. The quality bar is fixed at every depth — depth tunes ceremony, not rigour (see the right-size-ceremony invariant in `methods/principles.md`).
+
+When choosing, weigh **blast radius** over diff size: `light` fits tight, well-scoped, low-blast-radius seeds; a change touching a trust boundary (auth, money, data loss, shared state, production/integration surface) is NOT `light` regardless of how small the diff looks. When unsure, choose the heavier option.
 
 The gate runs at orchestrator entry, after project resolution and before the Phase Cycle's first iteration. A user cancelling the gate (no option picked) is treated as a pause: `Spec depth` remains `pending`, the orchestrator exits, and a later `/weave` re-runs the gate.
 
@@ -209,6 +213,8 @@ A packager producing a slim loom profile can `rm -rf orchestrator/lib/telemetry/
 Reruns are user-driven, never automatic. The gate is a single `AskUserQuestion` with **up to 4 options** per phase. The `Refine` option replaces the prior rerun-phase option — it preserves user-confirmed content and applies any pending Quality Check findings, rather than re-deriving from scratch.
 
 The gate summary leads with the phase's purpose — the first sentence of `phases/<phase>/phase.md` (e.g. "Clarify the seed into specified intent." for Spec). Read that line at gate time and prepend it so the user knows what the phase was responsible for.
+
+Gate summaries and continue-labels stay terse — they already lead with the phase-purpose line, so no essays.
 
 ### Gate options by phase
 

@@ -21,7 +21,7 @@ import { spawn as childSpawn, execFileSync } from "node:child_process";
 
 import type { MetadataStore } from "../metadata-store/index.ts";
 import type { JsonlTailBridge } from "../process-manager/jsonl/bridge.ts";
-import { jsonResponse } from "./_response.ts";
+import { jsonResponse, methodNotAllowed } from "./_response.ts";
 import { decorateChat } from "./chat-decorator.ts";
 import { invalidateFabricCache } from "./sidebar.ts";
 
@@ -138,7 +138,7 @@ export function mountChatsRoute(
       const chats = store.chats.list().map((row) => decorateChat(row, store));
       return jsonResponse({ chats }, 200);
     }
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     let body: any;
     try {
       body = await req.json();
@@ -223,7 +223,7 @@ export function mountChatsRoute(
 
   routes["/chats/delete"] = async (req, url) => {
     if (req.method !== "DELETE" && req.method !== "POST") {
-      return new Response("method not allowed", { status: 405 });
+      return methodNotAllowed();
     }
     const id = url.searchParams.get("id");
     if (!id) {
@@ -250,7 +250,7 @@ export function mountChatsRoute(
 
   routes["/chats/fork"] = async (req, url) => {
     if (req.method !== "POST") {
-      return new Response("method not allowed", { status: 405 });
+      return methodNotAllowed();
     }
     const id = url.searchParams.get("id");
     if (!id) {
@@ -275,7 +275,7 @@ export function mountChatsRoute(
 
   routes["/chats/rename"] = async (req, url) => {
     if (req.method !== "POST") {
-      return new Response("method not allowed", { status: 405 });
+      return methodNotAllowed();
     }
     const id = url.searchParams.get("id");
     if (!id) {
@@ -315,7 +315,7 @@ export function mountChatsRoute(
 
   routes["/chats/handoff"] = async (req, url) => {
     if (req.method !== "POST") {
-      return new Response("method not allowed", { status: 405 });
+      return methodNotAllowed();
     }
     const id = url.searchParams.get("id");
     if (!id) {

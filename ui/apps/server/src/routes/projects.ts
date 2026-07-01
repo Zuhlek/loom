@@ -18,7 +18,7 @@
 import * as fs from "node:fs";
 import type { MetadataStore } from "../metadata-store/index.ts";
 import type { JsonlTailBridge } from "../process-manager/jsonl/bridge.ts";
-import { jsonResponse } from "./_response.ts";
+import { jsonResponse, methodNotAllowed } from "./_response.ts";
 import { invalidateFabricCache } from "./sidebar.ts";
 
 const NAME_RX = /^[A-Za-z0-9](?:[A-Za-z0-9-_ ]{0,62}[A-Za-z0-9])?$/;
@@ -82,12 +82,12 @@ export function mountProjectsRoute(
       const project = store.projects.create({ name, paths });
       return jsonResponse({ project }, 201);
     }
-    return new Response("method not allowed", { status: 405 });
+    return methodNotAllowed();
   };
 
   // Path-mutation endpoints. Use query string for project id.
   routes["/projects/path/add"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     const body = await req.json().catch(() => null);
     if (!body?.id || !body?.path) {
       return jsonResponse({ error: "id + path required" }, 400);
@@ -98,7 +98,7 @@ export function mountProjectsRoute(
   };
 
   routes["/projects/path/remove"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     const body = await req.json().catch(() => null);
     if (!body?.id || !body?.path) {
       return jsonResponse({ error: "id + path required" }, 400);
@@ -110,7 +110,7 @@ export function mountProjectsRoute(
 
   routes["/projects/delete"] = async (req, url) => {
     if (req.method !== "DELETE" && req.method !== "POST") {
-      return new Response("method not allowed", { status: 405 });
+      return methodNotAllowed();
     }
     const id = url.searchParams.get("id");
     if (!id) {

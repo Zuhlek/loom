@@ -183,6 +183,22 @@ export function highlightSync(code: string, lang: string): string | null {
   }
 }
 
+/** Escape the five HTML-significant chars for safe interpolation into markup. */
+export function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Plain `<pre><code>` fallback used when no highlighter is available yet. */
+export function plainCodeBlock(code: string, lang: string): string {
+  const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : "";
+  return `<pre><code${langClass}>${escapeHtml(code)}</code></pre>`;
+}
+
 // --- internals exposed for tests --------------------------------------
 
 /** Test-only: reset module state. Not exported via the public surface. */

@@ -6,25 +6,12 @@ import {
   highlightSync,
   isSupportedLang,
   loadHighlighter,
+  plainCodeBlock,
   type SupportedLang,
 } from "../../lib/shiki-loader";
 import { MermaidBlock } from "./MermaidBlock";
 
 marked.setOptions({ gfm: true, breaks: false });
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function plainCodeBlock(code: string, lang: string): string {
-  const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : "";
-  return `<pre><code${langClass}>${escapeHtml(code)}</code></pre>`;
-}
 
 const MERMAID_SOURCES = new Map<string, string>();
 let mermaidSourceCounter = 0;
@@ -160,5 +147,3 @@ export function FabricMarkdown({ source }: FabricMarkdownProps) {
     />
   );
 }
-
-export const __testing = { escapeHtml };

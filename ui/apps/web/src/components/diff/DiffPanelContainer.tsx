@@ -1,5 +1,5 @@
 // DiffPanelContainer — right-drawer diff surface. Mounts unconditionally.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import {
   getDiff,
@@ -43,6 +43,12 @@ type SnackbarState =
   | null;
 
 type DialogState = { intent: CommitDialogIntent; error?: string } | null;
+
+// Resizable-panel bounds (px) and the localStorage key for the chosen width.
+const PANEL_MIN_W = 360;
+const PANEL_MAX_W = 1100;
+const PANEL_DEFAULT_W = 560;
+const PANEL_WIDTH_KEY = "loom.diffPanelWidth";
 
 function shortSha(sha: string): string {
   return sha.slice(0, 7);
@@ -118,6 +124,52 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
   const [prOpening, setPrOpening] = useState<boolean>(false);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [snackbar, setSnackbar] = useState<SnackbarState>(null);
+
+  // ---- Resizable width (persisted) ---------------------------------------
+  // Diff lines don't wrap (overflow-x scroll per file), so a too-narrow panel
+  // clips content. A left-edge drag handle lets the user widen it; the chosen
+  // width survives reloads via localStorage.
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    let saved = NaN;
+    try {
+      saved = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+    } catch {
+      /* storage unavailable — use the default width */
+    }
+    return saved >= PANEL_MIN_W && saved <= PANEL_MAX_W ? saved : PANEL_DEFAULT_W;
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth));
+    } catch {
+      /* storage unavailable (private mode) — width simply won't persist */
+    }
+  }, [panelWidth]);
+
+  const onResizeStart = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = panelWidth;
+      const onMove = (ev: PointerEvent) => {
+        // Panel sits on the right; dragging its left edge leftwards widens it.
+        const next = Math.min(PANEL_MAX_W, Math.max(PANEL_MIN_W, startW + (startX - ev.clientX)));
+        setPanelWidth(next);
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+      };
+      // Suppress text selection / cursor flicker during the drag.
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "col-resize";
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [panelWidth],
+  );
 
   // Two controllers: one for the status fetch, one for the diff fetch.
   // Aborts cascade through `signal` on the underlying fetch.
@@ -416,46 +468,32 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
 
   return (
     <aside
-      className="w-[44vw] min-w-[420px] max-w-[640px] shrink-0 flex flex-col border-l"
-      style={{ borderColor: "var(--border)" }}
+      className="relative shrink-0 flex flex-col border-l"
+      style={{ width: panelWidth, borderColor: "var(--border)" }}
       data-testid="diff-panel-container"
     >
+      {/* Left-edge drag handle — widen the panel so non-wrapping diff lines
+          aren't clipped. */}
+      <div
+        onPointerDown={onResizeStart}
+        className="absolute left-0 top-0 z-10 h-full w-1.5 -ml-1 cursor-col-resize hover:bg-[var(--primary)]"
+        style={{ touchAction: "none" }}
+        title="Drag to resize"
+        data-testid="diff-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+      />
+
       <BranchToolbar
         {...toolbarProps}
         onCommit={onCommit}
         onCommitPush={onCommitPush}
         onCreatePr={onCreatePr}
         onRefresh={onRefresh}
+        fileCount={renderedFiles.length}
+        refreshing={refreshing}
+        busy={actionBusy}
       />
-
-      {/* Totals + refresh. */}
-      <div
-        className="border-b px-3 py-1.5 flex items-center gap-2"
-        style={{ borderColor: "var(--border)", background: "rgba(0,0,0,0.015)" }}
-      >
-        <span className="ml-auto text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-          {renderedFiles.length} files
-        </span>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={refreshing || actionBusy}
-          className="size-6 rounded grid place-items-center hover:bg-[var(--accent)] disabled:opacity-50"
-          style={{ color: "var(--muted-foreground)" }}
-          title="Refresh diff"
-          data-testid="diff-refresh"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            className={"size-3.5 " + (refreshing ? "animate-spin" : "")}
-          >
-            <path d="M3 12a9 9 0 0115-6.7L21 8M21 4v4h-4M21 12a9 9 0 01-15 6.7L3 16M3 20v-4h4" />
-          </svg>
-        </button>
-      </div>
 
       {dialog && (
         <div className="px-3 py-2 border-b" style={{ borderColor: "var(--border)" }}>

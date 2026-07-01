@@ -10,3 +10,7 @@ export function jsonResponse(body: unknown, status: number): Response {
     headers: { "content-type": "application/json" },
   });
 }
+
+export function methodNotAllowed(): Response {
+  return new Response("method not allowed", { status: 405 });
+}

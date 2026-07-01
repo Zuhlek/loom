@@ -53,10 +53,6 @@ import { mountSourceControlRoute } from "./routes/source-control-rpc.ts";
 import { mountHooksAdminRoute, buildStatus as buildHooksStatus } from "./routes/hooks-admin.ts";
 import { createCheckpointStore, type CheckpointStore } from "./checkpointing/checkpoint-store.ts";
 import {
-  createCheckpointDiffQuery,
-  type CheckpointDiffQuery,
-} from "./checkpointing/checkpoint-diff-query.ts";
-import {
   createCheckpointReactor,
   type CheckpointReactor,
 } from "./checkpointing/checkpoint-reactor.ts";
@@ -147,7 +143,6 @@ export function resolveClaudeBin(): string {
 
 export interface ChatDiffPanelSubstrate {
   checkpointStore: CheckpointStore;
-  diffQuery: CheckpointDiffQuery;
   reactor: CheckpointReactor;
   headWatcher: HeadWatcher;
   turnWatcher: TurnWatcher;
@@ -163,7 +158,6 @@ export function createChatDiffPanelSubstrate(
     bridge.broadcastFrameToChat(chatId, frame);
 
   const checkpointStore = createCheckpointStore();
-  const diffQuery = createCheckpointDiffQuery(checkpointStore);
   const reactor = createCheckpointReactor({
     store: checkpointStore,
     emit: (frame) => {
@@ -193,7 +187,6 @@ export function createChatDiffPanelSubstrate(
 
   return {
     checkpointStore,
-    diffQuery,
     reactor,
     headWatcher,
     turnWatcher,

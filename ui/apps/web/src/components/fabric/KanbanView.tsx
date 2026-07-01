@@ -49,6 +49,14 @@ const SIZE_FG: Record<NonNullable<KanbanCard["size"]>, string> = {
   XL: "#7f1d1d",
 };
 
+function Checkmark({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="size-3" style={{ color }}>
+      <path d="M5 12l5 5L20 7" />
+    </svg>
+  );
+}
+
 export function KanbanView({ columns }: { columns: KanbanColumn[] }) {
   return (
     <div className="flex-1 overflow-y-auto px-5 py-4">
@@ -64,11 +72,7 @@ export function KanbanView({ columns }: { columns: KanbanColumn[] }) {
                 <span className="size-1.5 rounded-full animate-pulse" style={{ background: LANE_DOT[col.id] }} />
               )}
               {col.id === "review" && <span className="size-1.5 rounded-full" style={{ background: LANE_DOT[col.id] }} />}
-              {col.id === "done" && (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="size-3" style={{ color: LANE_DOT[col.id] }}>
-                  <path d="M5 12l5 5L20 7" />
-                </svg>
-              )}
+              {col.id === "done" && <Checkmark color={LANE_DOT[col.id]} />}
               <span className="text-[10px] uppercase tracking-wide font-medium" style={{ color: LANE_DOT[col.id] }}>
                 {col.label}
               </span>
@@ -89,11 +93,7 @@ export function KanbanView({ columns }: { columns: KanbanColumn[] }) {
                   <div className="flex items-center justify-between text-[10px] font-mono" style={{ color: "var(--muted-foreground)" }}>
                     <span className={card.done ? "line-through" : ""}>{card.id}</span>
                     {card.active && <span className="size-1.5 rounded-full animate-pulse" style={{ background: "var(--info)" }} />}
-                    {card.done && (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="size-3" style={{ color: "var(--success)" }}>
-                        <path d="M5 12l5 5L20 7" />
-                      </svg>
-                    )}
+                    {card.done && <Checkmark color="var(--success)" />}
                   </div>
                   <p className={clsx("text-xs font-medium mt-0.5", card.done && "line-through")} style={card.done ? { color: "var(--muted-foreground)" } : undefined}>
                     {card.title}

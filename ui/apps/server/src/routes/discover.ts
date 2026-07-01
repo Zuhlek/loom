@@ -4,7 +4,7 @@
  */
 import { scanCommonParents, isAbsolutePath } from "../discover-wizard-service/index.ts";
 import { writeConfig } from "../config-loader/index.ts";
-import { jsonResponse } from "./_response.ts";
+import { jsonResponse, methodNotAllowed } from "./_response.ts";
 
 export function mountDiscoverRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
@@ -15,7 +15,7 @@ export function mountDiscoverRoute(
   };
 
   routes["/discover/save"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     let body: any;
     try {
       body = await req.json();

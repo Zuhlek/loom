@@ -20,6 +20,7 @@ These arrive inlined (see `## Inlined methods` appended below) — apply them be
   - **Major:** P2 mismatch with existing conventions; P5 unused abstraction with no consumer; P6 internal mocking.
   - **Minor:** stylistic deviations within a principle's spirit.
   - Where a `spec.md ## Constraints` entry contradicts a principle, the Constraint wins for this project.
+- **Shortcut-marker harvest** — grep the diff/codebase for `loom:shortcut` markers (convention in `principles.md § Marking deliberate shortcuts`: `loom:shortcut <ceiling>; <trigger>`). For each, list its ceiling + upgrade-trigger in `review.md`, then HONESTY CHECK: verify the stated ceiling matches reality, and flag any marker whose ceiling looks wrong or that names NO upgrade-trigger (rot risk). REPORT-ONLY — never blocks, never fails the verdict on its own.
 - Safety
 - User feedback
 - Process learning
@@ -36,7 +37,9 @@ These arrive inlined (see `## Inlined methods` appended below) — apply them be
 
 ## On completion
 
-Write two artifacts before returning: `review.md` (human-facing finding-by-finding narrative) and `review-verdict.json` (machine-readable verdict — single-object schema in `phase.signature.md ## Writes`). `verdict` is `FAIL` iff `blockers > 0`. Counts in `review-verdict.json` must equal `blockers`/`major`/`minor` in the RETURN block and the count of `## Note` findings in `review.md`. Then return `status: complete`. No live usage capture happens during the run; cost/usage data is produced post-hoc by `orchestrator/lib/telemetry/transcript-harvest.py` reading the session transcripts on disk after /weave finishes.
+Write two artifacts before returning: `review.md` (human-facing finding-by-finding narrative) and `review-verdict.json` (machine-readable verdict — single-object schema in `phase.signature.md ## Writes`). `verdict` is `FAIL` iff `blockers > 0`. Counts in `review-verdict.json` must equal `blockers`/`major`/`minor` in the RETURN block and the count of `## Note` findings in `review.md`. Then return `status: complete`.
+
+**`review.md` prose is TERSE by default.** Principle: think fully, report briefly — terseness applies to padding, never to evidence. A clean pass (0 blockers, 0 major) may be a SHORT verdict — verdict + what-was-checked + counts — NOT a manufactured finding-by-finding essay. Every REAL finding still keeps its full shape (Severity/Evidence/Expected/Actual/Impact/Recommendation/Owner phase); never compress a finding's evidence. Even when clean, MUST state what was checked (the Review Targets covered) — NEVER an unqualified "looks good" that hides unchecked targets. No live usage capture happens during the run; cost/usage data is produced post-hoc by `orchestrator/lib/telemetry/transcript-harvest.py` reading the session transcripts on disk after /weave finishes.
 
 ## Refine scope
 

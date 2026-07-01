@@ -7,7 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 
-import { jsonResponse } from "./_response.ts";
+import { jsonResponse, methodNotAllowed } from "./_response.ts";
 
 const ALLOWED_MIME = new Set([
   "image/png",
@@ -27,7 +27,7 @@ export function mountUploadImageRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
 ): void {
   routes["/upload-image"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     ensureDir();
     const ct = req.headers.get("content-type") ?? "";
     let buf: Uint8Array;

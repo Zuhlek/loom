@@ -27,6 +27,17 @@ Required sections (technical structure only — user-facing behaviour lives in `
 - Integration points — external systems, third-party services
 - State and error handling — state machines, failure modes, recovery
 - Constraints — technical envelope (libraries, runtime, language, performance, security)
-- Architecture decisions — one ADR block per significant decision: Context, Decision, Rationale, Alternatives (with what was rejected and why)
-- Alternatives considered — structural options weighed and rejected at the whole-design level (not per-decision)
+- Architecture decisions — one ADR block per significant decision: Context, Decision, Rationale, Alternatives (with what was rejected and why). Elaborate the per-decision Alternatives only for genuinely contested or significant decisions — obvious choices need no defense; don't turn ADRs into design guides.
 - Open ambiguity — structural questions not resolved
+
+## Depth modulation
+
+Read `pipeline.md.Spec depth` (`light` / `standard` / `deep` — the existing Spec depth field, reused project-wide). Depth cuts written volume, not thinking.
+
+| Depth | design.md bodies |
+|---|---|
+| `light` | Condense each section to the minimum that resolves structure; a single ADR for the load-bearing choice is enough. Section HEADERS remain present so signature/QC structural checks still pass — only the BODIES condense. An empty-ish section may read `(light: n/a)`. |
+| `standard` | Full structure, as written above. |
+| `deep` | Full structure, as written above. |
+
+NEVER skip regardless of depth: capturing rationale for the chosen structure, and coverage of `spec.md` constraints.

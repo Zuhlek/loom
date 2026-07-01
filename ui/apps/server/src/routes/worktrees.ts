@@ -4,7 +4,7 @@ import { listWorktrees, removeWorktree } from "../git/worktree.ts";
 import { invalidateVcsKindCache } from "../git/vcs-kind.ts";
 import type { MetadataStore } from "../metadata-store/index.ts";
 import type { ServerFrame } from "../chat-protocol/frames.ts";
-import { jsonResponse } from "./_response.ts";
+import { jsonResponse, methodNotAllowed } from "./_response.ts";
 import {
   errorMessage,
   getProjectDefaultBranch,
@@ -39,7 +39,7 @@ export function mountWorktreesRoute(
   broadcast?: (frame: ServerFrame) => void,
 ): void {
   routes["/worktrees"] = async (req) => {
-    if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "GET") return methodNotAllowed();
     try {
       const wts = await listWorktrees(serverCwd);
       const enriched = wts.map((w) => ({
@@ -53,7 +53,7 @@ export function mountWorktreesRoute(
   };
 
   routes["/worktrees/delete"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     let body: any;
     try {
       body = await req.json();

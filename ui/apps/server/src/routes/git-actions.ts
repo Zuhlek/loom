@@ -12,7 +12,7 @@ import {
   getRemoteUrl as defaultGetRemoteUrl,
 } from "../git/manager.ts";
 import { getProvider as defaultGetProvider } from "../source-control/index.ts";
-import { jsonResponse } from "./_response.ts";
+import { jsonResponse, methodNotAllowed } from "./_response.ts";
 import { errorMessage, providerErrorResponse } from "./_route-helpers.ts";
 import type { SourceControlProviderShape } from "../source-control/types.ts";
 
@@ -31,7 +31,7 @@ export function mountGitActionsRoute(
   const getRemoteUrl = deps.getRemoteUrl ?? defaultGetRemoteUrl;
 
   routes["/git/commit"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     let body: any;
     try {
       body = await req.json();
@@ -56,7 +56,7 @@ export function mountGitActionsRoute(
   };
 
   routes["/git/push"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     let body: any;
     try {
       body = await req.json();

@@ -17,7 +17,7 @@ import {
   DEFAULT_EVENTS,
 } from "../hook-installer.ts";
 import { getLastDelivered } from "../hook-receiver/index.ts";
-import { jsonResponse } from "./_response.ts";
+import { jsonResponse, methodNotAllowed } from "./_response.ts";
 
 export interface HooksAdminOptions {
   /** Receiver port that install() writes into the hook commands. */
@@ -82,7 +82,7 @@ export function mountHooksAdminRoute(
   routes["/hooks/status"] = async () => jsonResponse(buildStatus(opts), 200);
 
   routes["/hooks/install"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     try {
       install({ settingsPath: opts.settingsPath, receiverPort: opts.receiverPort });
       return jsonResponse(buildStatus(opts), 200);
@@ -92,7 +92,7 @@ export function mountHooksAdminRoute(
   };
 
   routes["/hooks/uninstall"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     try {
       uninstall({ settingsPath: opts.settingsPath });
       return jsonResponse(buildStatus(opts), 200);
@@ -102,7 +102,7 @@ export function mountHooksAdminRoute(
   };
 
   routes["/hooks/reveal"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     const settingsPath = resolveSettingsPath({ settingsPath: opts.settingsPath });
     if (!fs.existsSync(settingsPath)) {
       return jsonResponse({ error: "settings.json not found", settingsPath }, 404);

@@ -66,7 +66,7 @@ Success criteria: `status: complete` in RETURN AND Plan phase can proceed withou
 - Path: `.loom/<project>/design.md`.
 - Must exist.
 - Must have front matter with `project`, `phase`, and `created`.
-- Must contain the following sections (in this order): System shape, Interfaces, Data model, Integration points, State and error handling, Constraints, Architecture decisions, Alternatives considered, Open ambiguity.
+- Must contain the following sections (in this order): System shape, Interfaces, Data model, Integration points, State and error handling, Constraints, Architecture decisions, Open ambiguity.
 - Must define components, ownership boundaries, interfaces, data shapes, and state handling.
 - Must carry forward accepted technical constraints from Spec.
 - Must list open structural ambiguity or state none.

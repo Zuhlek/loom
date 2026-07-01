@@ -58,22 +58,9 @@ function matchPatternRoute(
     if (!key.includes(":")) continue;
     const keySegs = key.split("/");
     if (keySegs.length !== segs.length) continue;
-    let ok = true;
-    for (let i = 0; i < keySegs.length; i++) {
-      const ks = keySegs[i] ?? "";
-      const us = segs[i] ?? "";
-      if (ks.startsWith(":")) {
-        if (us.length === 0) {
-          ok = false;
-          break;
-        }
-        continue;
-      }
-      if (ks !== us) {
-        ok = false;
-        break;
-      }
-    }
+    const ok = keySegs.every((ks, i) =>
+      ks.startsWith(":") ? (segs[i] ?? "").length > 0 : ks === segs[i],
+    );
     if (ok) return routes[key];
   }
   return undefined;

@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const containerPath = webRoot + "src/components/diff/DiffPanelContainer.tsx";
+const toolbarPath = webRoot + "src/components/diff/DiffPanel.tsx";
 
 describe("DiffPanelContainer — file + import surface", () => {
   test("DiffPanelContainer.tsx exists at the documented path", () => {
@@ -169,9 +170,15 @@ describe("DiffPanelContainer — loading / empty / error UI", () => {
 });
 
 describe("DiffPanelContainer — refresh + action wiring", () => {
-  test("refresh button shows a spinner class while in flight", () => {
-    const src = readFileSync(containerPath, "utf8");
-    expect(src).toMatch(/animate-spin/);
+  test("refresh lives in the toolbar: container passes refreshing; toolbar spins", () => {
+    // The single refresh control now sits in BranchToolbar (the second
+    // totals/refresh strip was removed and the file count moved up). The
+    // container feeds it `refreshing`; the toolbar renders the spinner.
+    const container = readFileSync(containerPath, "utf8");
+    expect(container).toMatch(/refreshing=\{refreshing\}/);
+    expect(container).toMatch(/fileCount=\{renderedFiles\.length\}/);
+    const toolbar = readFileSync(toolbarPath, "utf8");
+    expect(toolbar).toMatch(/animate-spin/);
   });
 
   test("provides the four BranchToolbar handlers (onCommit / onCommitPush / onCreatePr / onRefresh)", () => {

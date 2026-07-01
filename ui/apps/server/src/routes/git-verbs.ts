@@ -2,7 +2,7 @@ import { executeGit } from "../git/worktree.ts";
 import { resolveBranchSelectionTarget } from "../git/resolve-branch-selection-target.ts";
 import type { MetadataStore } from "../metadata-store/index.ts";
 import type { ServerFrame } from "../chat-protocol/frames.ts";
-import { jsonResponse } from "./_response.ts";
+import { jsonResponse, methodNotAllowed } from "./_response.ts";
 import {
   errorMessage,
   getProjectDefaultBranch,
@@ -17,7 +17,7 @@ export function mountGitVerbsRoute(
   broadcast: (frame: ServerFrame) => void,
 ): void {
   routes["/git/switchRef"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     let body: any;
     try {
       body = await req.json();
@@ -64,7 +64,7 @@ export function mountGitVerbsRoute(
   };
 
   routes["/git/createRef"] = async (req) => {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return methodNotAllowed();
     let body: any;
     try {
       body = await req.json();

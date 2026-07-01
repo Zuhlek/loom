@@ -118,6 +118,42 @@ describe("GET /diff — total branch/workspace diff", () => {
     expect(body.sections[0]!.diff).toMatch(/a\.txt/);
   });
 
+  test("default branch renamed (main → master) still resolves a trunk via the remote-tracking ref", async () => {
+    const remote = fs.mkdtempSync(path.join(os.tmpdir(), "loom-diffroute-remote-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-diffroute-renamed-"));
+    tmpDirs.push(remote, root);
+
+    // Bare remote with a "main" default, cloned into root.
+    git(remote, ["init", "-q", "--bare", "-b", "main"]);
+    initRepo(root);
+    fs.writeFileSync(path.join(root, "a.txt"), "alpha\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "init"]);
+    git(root, ["remote", "add", "origin", remote]);
+    git(root, ["push", "-q", "-u", "origin", "main"]);
+    git(root, ["remote", "set-head", "origin", "main"]); // origin/HEAD → main
+
+    // Rename the local default out from under origin/HEAD: main → master. Now
+    // `origin/HEAD` still names the stale "main" (no local ref), but the
+    // committed work plus an uncommitted edit must still surface — resolved
+    // via the `origin/main` remote-tracking ref, not a HEAD-only fallback.
+    git(root, ["branch", "-q", "-m", "main", "master"]);
+    fs.writeFileSync(path.join(root, "feature.txt"), "committed on master\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "work after rename"]);
+    fs.writeFileSync(path.join(root, "a.txt"), "alpha edited after rename\n");
+
+    const res = await call(
+      mount()["/diff"]!,
+      `http://x/diff?worktreePath=${encodeURIComponent(root)}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { sections: Array<{ diff: string }> };
+    const diff = body.sections[0]!.diff;
+    expect(diff).toMatch(/feature\.txt/); // committed work surfaces
+    expect(diff).toMatch(/alpha edited after rename/); // uncommitted edit too
+  });
+
   test("a branch diverged from the trunk shows its committed work, not just uncommitted edits", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-diffroute-diverged-"));
     tmpDirs.push(root);

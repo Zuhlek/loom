@@ -4,6 +4,34 @@ Enforceable rules for every code-touching Loom subagent (Build phase agent, Revi
 
 ---
 
+## Right-size ceremony, never quality
+
+A project's depth (`pipeline.md.Spec depth`: light / standard / deep) governs how much *ceremony* a ticket gets — how many artifacts, sections, and questions — and nothing else.
+
+- The quality bar is FIXED at every depth. Principles P1–P7, Review severities, the trust-boundary validation / security / data-loss / accessibility carve-outs, and the requirement to state what was verified never relax.
+- Depth may reduce documents and prose; it NEVER reduces planning, rationale capture, or validation.
+- When unsure of a ticket's depth, choose heavier — a mis-scoped "light" is far more expensive than a mis-scoped "deep".
+- Depth is set by BLAST RADIUS (auth, money, shared state, data loss, production exposure, integration surface), not by diff size: a one-line change to a trust boundary is not light.
+
+## Marking deliberate shortcuts
+
+Mirrors Loom's existing `loom:` comment markers (e.g. `loom:question`). When you deliberately simplify with a known ceiling, leave a one-line marker at the site using the language-appropriate comment prefix (`//`, `#`, `--`, …):
+
+```
+loom:shortcut <ceiling>; <upgrade-trigger>
+```
+
+- `<ceiling>`: the limit this simplification is correct up to (e.g. "fine to ~1k rows", "single-process only").
+- `<upgrade-trigger>`: the concrete condition to revisit (e.g. "revisit if multi-process", "when p95 > 200ms").
+
+Rules:
+- ONE line. Only for DELIBERATE simplifications with a known ceiling — not TODOs, not bugs, not unfinished work.
+- Anchor to conditions, NOT owner names or dates (they go stale).
+- A marker missing an upgrade-trigger is allowed but is flagged as a rot risk when Review harvests markers.
+- Keep it minimal — heavy structure kills adoption.
+
+---
+
 ## P1 — Lean changes, especially against existing code
 
 **Default: the smallest diff that achieves the task's acceptance criteria. Nothing more.**

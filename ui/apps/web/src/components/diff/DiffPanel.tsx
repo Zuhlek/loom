@@ -36,25 +36,37 @@ export interface BranchToolbarProps {
   onCreatePr?: () => void;
   onRefresh?: () => void;
   remote?: string;
+  /** Number of changed files; rendered next to the refresh control. */
+  fileCount?: number;
+  /** Spin the refresh icon while a fetch is in flight. */
+  refreshing?: boolean;
+  /** Disable the refresh control during commit/push/PR actions. */
+  busy?: boolean;
 }
 
 export function BranchToolbar(props: BranchToolbarProps) {
-  const { branch, base, uncommitted, onCommit, onCommitPush, onCreatePr, onRefresh, remote } = props;
+  const { branch, base, uncommitted, onCommit, onCommitPush, onCreatePr, onRefresh, remote, fileCount, refreshing, busy } = props;
   return (
     <div className="border-b" style={{ borderColor: "var(--border)" }}>
       <div className="px-3 py-2 flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 text-xs">
+        {/*
+          Merge direction reads left → right as "head merges into base": the
+          changes on `branch` are what a PR would land on `base`. The arrow
+          points from source to target so the direction is unambiguous.
+        */}
+        <div
+          className="flex items-center gap-1.5 text-xs"
+          title={`Changes on ${branch} relative to ${base} — the direction they merge in a pull request`}
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-3.5" style={{ color: "var(--muted-foreground)" }}>
             <path d="M6 3v12M18 9V21M6 15l12-6" />
           </svg>
           <code className="font-mono font-medium">{branch}</code>
-        </div>
-        <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-          ←
-        </span>
-        <div className="flex items-center gap-1 text-[11px]" style={{ color: "var(--muted-foreground)" }}>
-          <span>base:</span>
-          <code className="font-mono">{base}</code>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-3.5 shrink-0" style={{ color: "var(--muted-foreground)" }} aria-label="merges into">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+          <code className="font-mono" style={{ color: "var(--muted-foreground)" }}>{base}</code>
+          <span className="text-[9px] uppercase tracking-wide px-1 rounded" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>base</span>
         </div>
         {uncommitted && (
           <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(245,158,11,0.12)", color: "var(--warning-foreground)" }}>
@@ -86,8 +98,20 @@ export function BranchToolbar(props: BranchToolbarProps) {
           </svg>
         </button>
         <span className="ml-auto" />
-        <button onClick={onRefresh} className="size-6 rounded grid place-items-center hover:bg-[var(--accent)]" style={{ color: "var(--muted-foreground)" }} title="Refresh">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-3.5">
+        {fileCount !== undefined && (
+          <span className="text-[10px] tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+            {fileCount} {fileCount === 1 ? "file" : "files"}
+          </span>
+        )}
+        <button
+          onClick={onRefresh}
+          disabled={refreshing || busy}
+          className="size-6 rounded grid place-items-center hover:bg-[var(--accent)] disabled:opacity-50"
+          style={{ color: "var(--muted-foreground)" }}
+          title="Refresh diff"
+          data-testid="diff-refresh"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={"size-3.5 " + (refreshing ? "animate-spin" : "")}>
             <path d="M3 12a9 9 0 0115-6.7L21 8M21 4v4h-4M21 12a9 9 0 01-15 6.7L3 16M3 20v-4h4" />
           </svg>
         </button>

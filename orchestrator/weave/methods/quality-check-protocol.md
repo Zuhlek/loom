@@ -12,7 +12,7 @@ The orchestrator dispatches the matching QC agent **only** when the user picks `
 
 The agent looks for evidence that proceeding to the next phase would surface contradictions the next phase cannot resolve — see each phase's `## Checks` table.
 
-If no finding lands in any category, status is `passed` and the agent recommends `Continue`.
+If no finding lands in any category, status is `passed` and the agent recommends `Continue`. A passing check is a short Summary + `Continue` recommendation — invent no findings to pad it; think fully, report briefly.
 
 ## Output: `quality-review.md`
 

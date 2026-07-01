@@ -10,7 +10,7 @@ Opt-in subagent that audits **only** the Design-phase artifacts (`design.md`, op
 
 | Check | What it surfaces |
 | --- | --- |
-| Required sections | A `design.md` missing one of: System shape, Interfaces, Data model, Integration points, State and error handling, Constraints, Architecture decisions, Alternatives considered, Open ambiguity. |
+| Required sections | A `design.md` missing one of: System shape, Interfaces, Data model, Integration points, State and error handling, Constraints, Architecture decisions, Open ambiguity. |
 | ADR completeness | An `Architecture decisions` block missing Context, Decision, Rationale, or Alternatives. |
 | Interfaces have signatures | An `## Interfaces` entry that names an API or function without a typed signature. |
 | Data model shape | A `## Data model` entry without a schema, persistence layer, or state shape. |

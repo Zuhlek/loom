@@ -11,13 +11,29 @@ export interface DiffSection {
   diff: string;
 }
 
+/** True when `ref` resolves to a commit object in `repo`. */
+function refResolvesToCommit(repo: string, ref: string): boolean {
+  const probe = spawnSync(
+    "git",
+    ["-C", repo, "rev-parse", "--verify", "--quiet", `${ref}^{commit}`],
+    { encoding: "utf8" },
+  );
+  return probe.status === 0;
+}
+
 /**
- * The trunk this repo's branches fork from — `origin/HEAD`'s target (e.g.
- * "main" or "master"), or a local "main"/"master" when no remote default is
- * set. Returns "HEAD" when no trunk can be identified, which makes the
- * merge-base below collapse to HEAD (uncommitted-only diff).
+ * The trunk this repo's branches fork from, as a ref that actually resolves.
+ *
+ * Tries, in order: the local branch named by `origin/HEAD`, that name's
+ * remote-tracking ref (`origin/<name>`), then local/remote `main`/`master`.
+ * The layered fallback keeps this robust when the local default branch was
+ * renamed (e.g. main → master, where `origin/HEAD` still names the stale
+ * "main" but only `origin/main`/`master` resolve) or never created (fresh
+ * clone on a feature branch). Returns "HEAD" when nothing resolves, which
+ * makes the merge-base below collapse to HEAD (uncommitted-only diff).
  */
 function resolveDefaultBranch(repo: string): string {
+  const candidates: string[] = [];
   const sym = spawnSync(
     "git",
     ["-C", repo, "symbolic-ref", "refs/remotes/origin/HEAD"],
@@ -25,15 +41,11 @@ function resolveDefaultBranch(repo: string): string {
   );
   if (sym.status === 0) {
     const m = sym.stdout.trim().match(/refs\/remotes\/origin\/(.+)$/);
-    if (m) return m[1]!;
+    if (m) candidates.push(m[1]!, `origin/${m[1]!}`);
   }
-  for (const cand of ["main", "master"]) {
-    const probe = spawnSync(
-      "git",
-      ["-C", repo, "rev-parse", "--verify", "--quiet", `${cand}^{commit}`],
-      { encoding: "utf8" },
-    );
-    if (probe.status === 0) return cand;
+  candidates.push("main", "master", "origin/main", "origin/master");
+  for (const cand of candidates) {
+    if (refResolvesToCommit(repo, cand)) return cand;
   }
   return "HEAD";
 }

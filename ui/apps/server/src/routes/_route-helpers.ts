@@ -28,17 +28,41 @@ export function providerErrorResponse(e: unknown): Response {
   return jsonResponse({ error: errorMessage(e) }, 500);
 }
 
+/**
+ * The project's default branch *name* (e.g. "main" or "master"), used both as
+ * a comparison base and as a fallback branch identity for chats. Prefers the
+ * branch named by `origin/HEAD`, but only when it resolves locally — so after
+ * a rename (main → master) it returns the branch that actually exists rather
+ * than the stale `origin/HEAD` name, which would make callers' `rev-parse`/
+ * `rev-list` fail. Falls back to local "main"/"master", then "main".
+ */
 export async function getProjectDefaultBranch(cwd: string): Promise<string> {
+  const resolves = async (ref: string): Promise<boolean> => {
+    try {
+      const r = await executeGit(cwd, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], {
+        allowNonZeroExit: true,
+      });
+      return r.exitCode === 0;
+    } catch {
+      return false;
+    }
+  };
+
+  let remoteName: string | null = null;
   try {
     const r = await executeGit(cwd, ["symbolic-ref", "refs/remotes/origin/HEAD"], {
       allowNonZeroExit: true,
     });
     if (r.exitCode === 0) {
       const m = r.stdout.trim().match(/refs\/remotes\/origin\/(.+)$/);
-      if (m) return m[1]!;
+      if (m) remoteName = m[1]!;
     }
   } catch {}
-  return "main";
+
+  for (const cand of [remoteName, "main", "master"]) {
+    if (cand && (await resolves(cand))) return cand;
+  }
+  return remoteName ?? "main";
 }
 
 export function emitChatMetaChanged(

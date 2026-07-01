@@ -24,7 +24,6 @@ const NEW_CHAT_DIFF_PANEL_FILES = [
   `${serverRoot}src/process-manager/turn-watcher.ts`,
   `${serverRoot}src/process-manager/persist-vcs-kind.ts`,
   `${serverRoot}src/checkpointing/checkpoint-store.ts`,
-  `${serverRoot}src/checkpointing/checkpoint-diff-query.ts`,
   `${serverRoot}src/checkpointing/checkpoint-reactor.ts`,
   `${serverRoot}src/routes/chats-meta.ts`,
   `${serverRoot}src/routes/git-verbs.ts`,

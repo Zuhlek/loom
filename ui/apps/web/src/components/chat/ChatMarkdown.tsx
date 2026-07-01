@@ -23,9 +23,11 @@ import { useEffect, useState } from "react";
 import { marked } from "marked";
 import markedShiki from "marked-shiki";
 import {
+  escapeHtml,
   highlightSync,
   isSupportedLang,
   loadHighlighter,
+  plainCodeBlock,
   type SupportedLang,
 } from "../../lib/shiki-loader";
 
@@ -35,20 +37,6 @@ marked.setOptions({
   gfm: true,
   breaks: true,
 });
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function plainCodeBlock(code: string, lang: string): string {
-  const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : "";
-  return `<pre><code${langClass}>${escapeHtml(code)}</code></pre>`;
-}
 
 marked.use(
   markedShiki({

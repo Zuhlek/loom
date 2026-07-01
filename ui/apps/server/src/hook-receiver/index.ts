@@ -24,23 +24,14 @@ import { traceHook } from "./trace.ts";
 export type EnvelopeBroadcaster = (envelope: any) => void;
 
 let broadcaster: EnvelopeBroadcaster | null = null;
-const lastWarnings: string[] = [];
 let lastDelivered: { channel: string; at: string } | null = null;
 
 export function setEnvelopeBroadcaster(b: EnvelopeBroadcaster | null) {
   broadcaster = b;
 }
 
-export function getRecentHookWarnings(): string[] {
-  return lastWarnings.slice(-50);
-}
-
 export function getLastDelivered(): { channel: string; at: string } | null {
   return lastDelivered;
-}
-
-export function resetLastDelivered(): void {
-  lastDelivered = null;
 }
 
 /** Build the PreToolUse hook stdout claude reads to decide allow/deny/ask/defer. */
@@ -129,7 +120,6 @@ export function mountHookReceiver(
       });
     }
     if (result.warning) {
-      lastWarnings.push(result.warning);
       console.warn(`[loom hook] ${result.warning}`);
     }
 

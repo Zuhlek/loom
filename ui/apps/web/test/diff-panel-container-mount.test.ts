@@ -296,7 +296,7 @@ describe("DiffPanelContainer mounts for every chat and renders the empty-state b
     expect(collectText(empty)).toContain("non-git project");
   });
 
-  test("the refresh button is present in the totals strip", async () => {
+  test("the refresh button is present in the branch toolbar", async () => {
     const { DiffPanelContainer } = await import("../src/components/diff/DiffPanelContainer");
     const cells: HookCell[] = [];
     const { result: tree } = renderWith(cells, () =>

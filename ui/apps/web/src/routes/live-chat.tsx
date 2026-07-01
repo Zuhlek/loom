@@ -1230,7 +1230,10 @@ export function LiveChatRoute({ chatId }: Props) {
           />
         ) : rightPane === "diff" && chat ? (
           <DiffPanelContainer
-            worktreePath={chat.worktree_path}
+            // Worktree chats diff their worktree; local ("current checkout")
+            // chats have a null worktree_path, so fall back to the chat's cwd —
+            // otherwise the panel never fetches a diff for local chats.
+            worktreePath={chat.worktree_path ?? chat.cwd}
             chatId={chat.id}
             vcsKind={chat.vcs_kind ?? null}
             refreshSignal={diffRefreshNonce}
