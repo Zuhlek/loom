@@ -25,6 +25,7 @@ import websocketPlugin from "@fastify/websocket";
 import type { WebSocket } from "ws";
 import { acquireLock } from "./lockfile.ts";
 import { makeError, type ChatEnvelope } from "./chat-protocol/envelope.ts";
+import { errorMessage } from "./error-message.ts";
 import { serializeServerFrame, type TasksUpdateFrame } from "./chat-protocol/frames.ts";
 import { sanitizeUserTurnImages } from "./chat-protocol/sanitize-user-turn-images.ts";
 import type { JsonlTailBridge } from "./process-manager/jsonl/bridge.ts";
@@ -211,8 +212,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
               "chat-id": chatId,
               body: { ok: true },
             });
-          } catch (err: any) {
-            send(makeError(chatId, err?.message ?? "attach failed"));
+          } catch (err) {
+            send(makeError(chatId, errorMessage(err) || "attach failed"));
           }
           return;
         }
@@ -238,8 +239,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
           // whole server process.
           try {
             await opts.bridge.submitUserTurn(chatId, text, images);
-          } catch (err: any) {
-            send(makeError(chatId, err?.message ?? "user-turn failed"));
+          } catch (err) {
+            send(makeError(chatId, errorMessage(err) || "user-turn failed"));
           }
           return;
         }
@@ -254,8 +255,8 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
           // bubble to an unhandled rejection.
           try {
             await opts.bridge.interrupt(chatId);
-          } catch (err: any) {
-            send(makeError(chatId, err?.message ?? "interrupt failed"));
+          } catch (err) {
+            send(makeError(chatId, errorMessage(err) || "interrupt failed"));
           }
           return;
         }
@@ -432,7 +433,19 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
       body,
     });
 
-    const res = await handler(webReq, url);
+    // Single choke point: routes that return their own jsonResponse are
+    // unaffected; routes that throw (e.g. diff → GitCommandError) get the
+    // same errorMessage cleanup as the ones that catch, instead of leaking
+    // Fastify's raw "Internal Server Error" + plumbing to the client.
+    let res: Response;
+    try {
+      res = await handler(webReq, url);
+    } catch (e) {
+      res = new Response(JSON.stringify({ error: errorMessage(e) }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    }
 
     // Always include CORS for localhost dev (Vite proxy preserves Origin).
     try {

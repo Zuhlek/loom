@@ -104,6 +104,29 @@ describe("sidebar route fabric discovery", () => {
     await store.close();
   });
 
+  test("bridge live state is surfaced onto decorated chats", async () => {
+    invalidateFabricCache();
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    const proj = store.projects.create({ name: "alpha", paths: ["/tmp/a"] });
+    store.chats.create({ id: "c-busy", cwd: "/tmp/a", project_id: proj.id });
+    store.chats.create({ id: "c-idle", cwd: "/tmp/a", project_id: proj.id });
+    const bridge: any = {
+      getLiveState: (id: string) =>
+        id === "c-busy" ? { turnState: "running", needsInput: false } : null,
+    };
+    const routes: Record<string, any> = {};
+    mountSidebarRoute(routes, store, bridge);
+    const req = new Request("http://localhost/sidebar/state", { method: "GET" });
+    const res = await routes["/sidebar/state"](req, new URL(req.url));
+    const body = await res.json();
+    const chats: any[] = body.groups[0].chats;
+    const busy = chats.find((c) => c.id === "c-busy");
+    const idle = chats.find((c) => c.id === "c-idle");
+    expect(busy.live).toEqual({ turnState: "running", needsInput: false });
+    expect(idle.live).toBeNull();
+    await store.close();
+  });
+
   test("grouped chat with empty chatItems exposes auto_title null", async () => {
     invalidateFabricCache();
     const store = await initMetadataStore({ inMemoryOnly: true });

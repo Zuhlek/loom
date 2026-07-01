@@ -1,6 +1,6 @@
 // M4 — render-and-interact tests for the VCS-verb dim surface.
 // Replaces the prior source-grep harness with assertions on rendered
-// JSX output. We mount AttachedRefPill and ProjectWorktreesPanel via
+// JSX output. We mount WorkspacePill and ProjectWorktreesPanel via
 // the hand-rolled React harness pattern.
 import { describe, expect, test, vi } from "vitest";
 import { vcsVerbTooltip } from "../src/components/diff/vcs-verb-copy";
@@ -155,20 +155,22 @@ describe("vcsVerbTooltip — copy for each verb + reason", () => {
   });
 });
 
-/* ───────────────────────── AttachedRefPill render assertions ───────────────────────── */
+/* ───────────────────────── WorkspacePill render assertions ───────────────────────── */
 
-describe("AttachedRefPill — dim under vcsKind='unknown'", () => {
+describe("WorkspacePill — dim under vcsKind='unknown'", () => {
   test("renders with opacity < 1 when vcsKind === 'unknown'", async () => {
-    const { AttachedRefPill } = await import("../src/components/chat/AttachedRefPill");
+    const { WorkspacePill } = await import("../src/components/chat/WorkspacePill");
     const cells: HookCell[] = [];
     const { result } = renderWith(cells, () =>
-      (AttachedRefPill as unknown as (p: unknown) => unknown)({
+      (WorkspacePill as unknown as (p: unknown) => unknown)({
+        repoName: null,
         branch: "feature/x",
         vcsKind: "unknown",
+        worktreeMode: "local",
+        defaultEnvMode: "local",
       }),
     );
-    // Find the root element; its inline style must include opacity.
-    const root = findFirst(result, (n) => n.props["data-testid"] === "attached-ref-pill")
+    const root = findFirst(result, (n) => n.props["data-testid"] === "workspace-pill")
       ?? findFirst(result, (n) => typeof n.props.style === "object");
     expect(root).not.toBeNull();
     const style = (root!.props.style as { opacity?: number }) ?? {};
@@ -176,20 +178,22 @@ describe("AttachedRefPill — dim under vcsKind='unknown'", () => {
     expect(style.opacity).toBeLessThan(1);
   });
 
-  test("renders full opacity (=1 or undefined) when vcsKind === 'git'", async () => {
-    const { AttachedRefPill } = await import("../src/components/chat/AttachedRefPill");
+  test("renders full opacity (=1) when vcsKind === 'git'", async () => {
+    const { WorkspacePill } = await import("../src/components/chat/WorkspacePill");
     const cells: HookCell[] = [];
     const { result } = renderWith(cells, () =>
-      (AttachedRefPill as unknown as (p: unknown) => unknown)({
+      (WorkspacePill as unknown as (p: unknown) => unknown)({
+        repoName: "loom",
         branch: "main",
         vcsKind: "git",
+        worktreeMode: "local",
+        defaultEnvMode: "local",
       }),
     );
-    const root = findFirst(result, (n) => n.props["data-testid"] === "attached-ref-pill")
+    const root = findFirst(result, (n) => n.props["data-testid"] === "workspace-pill")
       ?? findFirst(result, (n) => typeof n.props.style === "object");
     expect(root).not.toBeNull();
     const style = (root!.props.style as { opacity?: number }) ?? {};
-    // Either undefined (no dim) or 1 (explicit).
     if (style.opacity !== undefined) expect(style.opacity).toBe(1);
   });
 });

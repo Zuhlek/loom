@@ -2,32 +2,30 @@ import type { ReactNode } from "react";
 
 /**
  * Pure layout container for the composer footer pill row. Named pill
- * slots arrange LTR with a flex spacer between the right-side pills and
+ * slots arrange LTR with a flex spacer between the left-side pills and
  * the context-usage indicator; the send button anchors the right edge.
  *
- * `modeIndicator` (left-most) and `attachedRef` (just before the spacer)
- * surface the chat's working-tree mode and current git ref. Both slots
- * are optional — chats without a resolved mode or VCS context can omit
- * them and the toolbar layout collapses gracefully.
+ * `workspace` (left-most) surfaces the chat's git context — repo, branch,
+ * and working-tree mode — in one pill. The slot is optional; chats
+ * without a resolved VCS context omit it and the layout collapses
+ * gracefully.
  */
 export interface ComposerFooterToolbarProps {
-  modeIndicator?: ReactNode;
+  workspace?: ReactNode;
   modelSelector: ReactNode;
   modelSettings: ReactNode;
   buildPlanToggle: ReactNode;
   permissionLevel: ReactNode;
-  attachedRef?: ReactNode;
   contextUsage: ReactNode;
   sendButton: ReactNode;
 }
 
 export function ComposerFooterToolbar({
-  modeIndicator,
+  workspace,
   modelSelector,
   modelSettings,
   buildPlanToggle,
   permissionLevel,
-  attachedRef,
   contextUsage,
   sendButton,
 }: ComposerFooterToolbarProps) {
@@ -36,13 +34,12 @@ export function ComposerFooterToolbar({
       className="flex-1 flex items-center gap-1.5"
       data-testid="composer-footer-toolbar"
     >
-      {modeIndicator}
+      {workspace}
       {modelSelector}
       {modelSettings}
       {buildPlanToggle}
       {permissionLevel}
       <span className="flex-1" />
-      {attachedRef}
       {contextUsage}
       {sendButton}
     </div>

@@ -34,8 +34,7 @@ import { ModelSelectorPill } from "./ModelSelectorPill";
 import { ModelSettingsPill } from "./ModelSettingsPill";
 import { PermissionLevelPill } from "./PermissionLevelPill";
 import { BuildPlanTogglePill } from "./BuildPlanTogglePill";
-import { ModeIndicatorPill } from "./ModeIndicatorPill";
-import { AttachedRefPill } from "./AttachedRefPill";
+import { WorkspacePill } from "./WorkspacePill";
 import type { ContextUsageSnapshot } from "../../lib/use-chat-bridge";
 
 /**
@@ -140,20 +139,21 @@ export interface ChatComposerProps {
 
   /**
    * Chat's working-tree mode. `null` until the first-send hook commits
-   * a mode for the chat; the {@link ModeIndicatorPill} renders the
-   * resolved `defaultEnvMode` with a "(pending first-send)" qualifier
-   * while null.
+   * a mode for the chat; the {@link WorkspacePill} renders the resolved
+   * `defaultEnvMode` with a "(pending)" qualifier while null.
    */
   worktreeMode?: "local" | "worktree" | null;
   /**
    * Server-side resolved default env mode (from `GET /settings`). Drives
-   * the pre-commit copy of {@link ModeIndicatorPill}.
+   * the pre-commit copy of {@link WorkspacePill}.
    */
   defaultEnvMode?: "local" | "worktree";
   /** Current attached ref / branch (`null` when none). */
   branch?: string | null;
   /** Cached VCS kind for the chat's cwd. */
   vcsKind?: "git" | "unknown" | null;
+  /** Repo display name (git top-level basename); `null` when non-git. */
+  repoName?: string | null;
 }
 
 /**
@@ -199,6 +199,7 @@ export function ChatComposer({
   defaultEnvMode,
   branch,
   vcsKind,
+  repoName,
 }: ChatComposerProps) {
   // Resolve hard-disable + send-affordance flags from the three-state
   // composer mode. When `composerMode` is omitted the `disabled`
@@ -797,19 +798,14 @@ export function ChatComposer({
             </svg>
           </button>
           <ComposerFooterToolbar
-            modeIndicator={
-              defaultEnvMode !== undefined ? (
-                <ModeIndicatorPill
-                  worktreeMode={worktreeMode ?? null}
-                  defaultEnvMode={defaultEnvMode}
-                />
-              ) : null
-            }
-            attachedRef={
-              vcsKind !== undefined ? (
-                <AttachedRefPill
+            workspace={
+              vcsKind !== undefined && defaultEnvMode !== undefined ? (
+                <WorkspacePill
+                  repoName={repoName ?? null}
                   branch={branch ?? null}
                   vcsKind={vcsKind === "git" ? "git" : "unknown"}
+                  worktreeMode={worktreeMode ?? null}
+                  defaultEnvMode={defaultEnvMode}
                 />
               ) : null
             }

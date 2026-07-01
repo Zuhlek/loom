@@ -312,6 +312,13 @@ export interface JsonlTailBridge {
   // head-watcher, checkpoint reactor).
   broadcastFrameToChat(chatId: string, frame: ServerFrame): void;
   broadcastFrameToAll(frame: ServerFrame): void;
+
+  // Cheap O(1) liveness read for the sidebar poll — reads the in-memory
+  // ChatState map, no tmux probe or materializer snapshot. `null` when no
+  // live session is attached.
+  getLiveState(
+    chatId: string,
+  ): { turnState: "running" | "idle"; needsInput: boolean } | null;
 }
 
 // Cycle order Claude's TUI follows for Shift-Tab. `bypassPermissions`
@@ -1388,6 +1395,15 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       for (const state of chats.values()) {
         broadcast(state, frame);
       }
+    },
+    getLiveState(chatId) {
+      const state = chats.get(chatId);
+      if (!state) return null;
+      return {
+        turnState: state.turnStartedAtMs != null ? "running" : "idle",
+        needsInput:
+          state.pendingPermissions.size > 0 || state.pendingQuestions.size > 0,
+      };
     },
   };
 }

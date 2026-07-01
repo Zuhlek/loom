@@ -43,6 +43,8 @@ export interface ApiChat {
   branch: string | null;
   /** Cached VCS kind for the chat's cwd; `null` for legacy rows pre-attach. */
   vcs_kind: "git" | "unknown" | null;
+  /** Repo display name (git top-level basename); `null` when non-git / pre-attach. */
+  repo_name: string | null;
   /** Live session state; `null` for inert / unattached chats. */
   live?: ChatLiveState | null;
 }

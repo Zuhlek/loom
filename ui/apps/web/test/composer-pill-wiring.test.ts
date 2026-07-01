@@ -98,109 +98,87 @@ function collectText(node: unknown): string {
   return out;
 }
 
-/* ───────────────────────── ModeIndicatorPill ───────────────────────── */
+/* ───────────────────────── WorkspacePill ───────────────────────── */
 
-describe("ModeIndicatorPill — pending vs committed copy", () => {
-  test("worktree_mode === null + defaultEnvMode='worktree' renders 'new worktree (pending first-send)'", async () => {
-    const { ModeIndicatorPill } = await import("../src/components/chat/ModeIndicatorPill");
-    const cells: HookCell[] = [];
-    const { result } = renderWith(cells, () =>
-      (ModeIndicatorPill as unknown as (p: unknown) => unknown)({
-        worktreeMode: null,
-        defaultEnvMode: "worktree",
-      }),
-    );
-    const pill = byTestId(result, "mode-indicator-pill");
-    expect(pill).not.toBeNull();
-    expect(collectText(pill)).toContain("new worktree");
-    expect(collectText(pill)).toContain("pending first-send");
+async function renderWorkspace(props: Record<string, unknown>) {
+  const { WorkspacePill } = await import("../src/components/chat/WorkspacePill");
+  const cells: HookCell[] = [];
+  const { result } = renderWith(cells, () =>
+    (WorkspacePill as unknown as (p: unknown) => unknown)(props),
+  );
+  return byTestId(result, "workspace-pill");
+}
+
+describe("WorkspacePill — merged repo · branch · mode", () => {
+  test("git + committed local renders repo, branch and 'checkout' (no pending)", async () => {
+    const pill = await renderWorkspace({
+      repoName: "loom",
+      branch: "main",
+      vcsKind: "git",
+      worktreeMode: "local",
+      defaultEnvMode: "worktree",
+    });
+    const text = collectText(pill);
+    expect(text).toContain("loom");
+    expect(text).toContain("main");
+    expect(text).toContain("checkout");
+    expect(text).not.toContain("pending");
+    expect((pill!.props.style as { opacity?: number }).opacity).toBe(1);
   });
 
-  test("worktree_mode === null + defaultEnvMode='local' renders 'current checkout (pending first-send)'", async () => {
-    const { ModeIndicatorPill } = await import("../src/components/chat/ModeIndicatorPill");
-    const cells: HookCell[] = [];
-    const { result } = renderWith(cells, () =>
-      (ModeIndicatorPill as unknown as (p: unknown) => unknown)({
-        worktreeMode: null,
-        defaultEnvMode: "local",
-      }),
-    );
-    expect(collectText(byTestId(result, "mode-indicator-pill"))).toContain("current checkout");
-    expect(collectText(byTestId(result, "mode-indicator-pill"))).toContain("pending first-send");
-  });
-
-  test("committed worktree_mode='worktree' renders 'new worktree' (no pending qualifier)", async () => {
-    const { ModeIndicatorPill } = await import("../src/components/chat/ModeIndicatorPill");
-    const cells: HookCell[] = [];
-    const { result } = renderWith(cells, () =>
-      (ModeIndicatorPill as unknown as (p: unknown) => unknown)({
+  test("git + committed worktree renders 'worktree'", async () => {
+    const text = collectText(
+      await renderWorkspace({
+        repoName: "loom",
+        branch: "loom/abc",
+        vcsKind: "git",
         worktreeMode: "worktree",
         defaultEnvMode: "local",
       }),
     );
-    const text = collectText(byTestId(result, "mode-indicator-pill"));
-    expect(text).toContain("new worktree");
-    expect(text).not.toContain("pending first-send");
+    expect(text).toContain("worktree");
+    expect(text).not.toContain("pending");
   });
 
-  test("committed worktree_mode='local' renders 'current checkout'", async () => {
-    const { ModeIndicatorPill } = await import("../src/components/chat/ModeIndicatorPill");
-    const cells: HookCell[] = [];
-    const { result } = renderWith(cells, () =>
-      (ModeIndicatorPill as unknown as (p: unknown) => unknown)({
-        worktreeMode: "local",
+  test("worktreeMode=null falls back to defaultEnvMode + '(pending)'", async () => {
+    const text = collectText(
+      await renderWorkspace({
+        repoName: "loom",
+        branch: "main",
+        vcsKind: "git",
+        worktreeMode: null,
         defaultEnvMode: "worktree",
       }),
     );
-    const text = collectText(byTestId(result, "mode-indicator-pill"));
-    expect(text).toContain("current checkout");
-    expect(text).not.toContain("pending first-send");
-  });
-});
-
-/* ───────────────────────── AttachedRefPill ───────────────────────── */
-
-describe("AttachedRefPill — branch text + dim under unknown vcsKind", () => {
-  test("vcsKind='git' + branch='feat/x' renders the branch name", async () => {
-    const { AttachedRefPill } = await import("../src/components/chat/AttachedRefPill");
-    const cells: HookCell[] = [];
-    const { result } = renderWith(cells, () =>
-      (AttachedRefPill as unknown as (p: unknown) => unknown)({
-        branch: "feat/x",
-        vcsKind: "git",
-      }),
-    );
-    const pill = byTestId(result, "attached-ref-pill");
-    expect(pill).not.toBeNull();
-    expect(collectText(pill)).toBe("feat/x");
-    const style = (pill!.props.style as { opacity?: number }) ?? {};
-    expect(style.opacity).toBe(1);
+    expect(text).toContain("worktree");
+    expect(text).toContain("pending");
   });
 
-  test("vcsKind='unknown' renders 'no git' + dimmed opacity", async () => {
-    const { AttachedRefPill } = await import("../src/components/chat/AttachedRefPill");
-    const cells: HookCell[] = [];
-    const { result } = renderWith(cells, () =>
-      (AttachedRefPill as unknown as (p: unknown) => unknown)({
-        branch: null,
-        vcsKind: "unknown",
-      }),
-    );
-    const pill = byTestId(result, "attached-ref-pill");
-    expect(collectText(pill)).toContain("no git");
-    const style = (pill!.props.style as { opacity?: number }) ?? {};
-    expect(style.opacity).toBeLessThan(1);
-  });
-
-  test("vcsKind='git' + branch=null renders 'no branch'", async () => {
-    const { AttachedRefPill } = await import("../src/components/chat/AttachedRefPill");
-    const cells: HookCell[] = [];
-    const { result } = renderWith(cells, () =>
-      (AttachedRefPill as unknown as (p: unknown) => unknown)({
+  test("git + branch=null renders 'no branch'", async () => {
+    const text = collectText(
+      await renderWorkspace({
+        repoName: "loom",
         branch: null,
         vcsKind: "git",
+        worktreeMode: "local",
+        defaultEnvMode: "local",
       }),
     );
-    expect(collectText(byTestId(result, "attached-ref-pill"))).toBe("no branch");
+    expect(text).toContain("no branch");
+  });
+
+  test("vcsKind='unknown' renders 'no git' + dimmed, hides branch/mode", async () => {
+    const pill = await renderWorkspace({
+      repoName: null,
+      branch: "main",
+      vcsKind: "unknown",
+      worktreeMode: "local",
+      defaultEnvMode: "local",
+    });
+    const text = collectText(pill);
+    expect(text).toContain("no git");
+    expect(text).not.toContain("main");
+    expect(text).not.toContain("checkout");
+    expect((pill!.props.style as { opacity?: number }).opacity).toBeLessThan(1);
   });
 });

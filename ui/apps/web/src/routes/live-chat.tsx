@@ -487,7 +487,7 @@ export function LiveChatRoute({ chatId }: Props) {
    */
   const [rightPane, setRightPane] = useState<"tasks" | "diff" | "worktrees" | null>(null);
   // Resolved server default working-tree mode. Drives the pre-commit
-  // copy of {@link ModeIndicatorPill} when `chat.worktree_mode === null`.
+  // copy of the {@link WorkspacePill} when `chat.worktree_mode === null`.
   const [defaultEnvMode, setDefaultEnvMode] = useState<"local" | "worktree">("local");
   // Monotonic nonce bumped each time a turn's checkpoint lands
   // (`checkpoint-captured` WS frame). Passed to the diff panel as
@@ -1321,6 +1321,7 @@ export function LiveChatRoute({ chatId }: Props) {
           defaultEnvMode={defaultEnvMode}
           branch={chat?.branch ?? null}
           vcsKind={chat?.vcs_kind ?? null}
+          repoName={chat?.repo_name ?? null}
         />
     </AppLayout>
   );

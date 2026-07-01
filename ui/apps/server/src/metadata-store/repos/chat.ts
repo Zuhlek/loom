@@ -52,6 +52,14 @@ export interface ChatRow {
    * hook and the worktree CRUD verbs.
    */
   vcs_kind: "git" | "unknown" | null;
+  /**
+   * Basename of the git top-level directory for the chat's `cwd`, i.e.
+   * the repo name to display — NOT `basename(cwd)`, since a chat may be
+   * opened at a folder nested below the repo root. `null` for non-git
+   * chats and legacy rows (filled lazily on the next attach). Set
+   * alongside `vcs_kind` by the attach hook.
+   */
+  repo_name: string | null;
 }
 
 export interface ChatCreate {
@@ -131,6 +139,7 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
         model_settings: null,
         branch: null,
         vcs_kind: null,
+        repo_name: null,
       };
       // Persist the JSON column as text-at-rest; parse on the way out.
       storage.chats.set(c.id, { ...row, model_settings: null });
@@ -148,6 +157,7 @@ export function chatRepo(storage: InMemoryStorage): ChatRepo {
         ...raw,
         branch: raw.branch ?? null,
         vcs_kind: raw.vcs_kind ?? null,
+        repo_name: raw.repo_name ?? null,
         model_settings: parseModelSettings(raw.model_settings),
       } as ChatRow;
     },

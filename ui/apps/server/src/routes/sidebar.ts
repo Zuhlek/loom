@@ -156,15 +156,12 @@ export function mountSidebarRoute(
   store: MetadataStore,
   bridge?: JsonlTailBridge,
 ): void {
-  // Post-cutover: `JsonlTailBridge` does not expose a
-  // `getLiveState(chatId)` method — live state would require
-  // `tmux.exists` + a materializer snapshot per row, which is too
-  // expensive for the sidebar fan-out. The liveness indicator is
-  // therefore unconditionally suppressed for the JSONL bridge.
-  // Re-introduce when (and if) the JSONL bridge gains a cheap
-  // per-chat liveness probe.
-  const liveStateFor = undefined;
-  void bridge;
+  // Liveness comes from the bridge's in-memory ChatState map — an O(1)
+  // read per row (turnState + needsInput), no tmux probe or materializer
+  // snapshot. `null` for inert/unattached chats. Note the poll is 5s, so
+  // the sidebar dot can lag a live turn by up to that; WS clients still
+  // get it as an immediate delta.
+  const liveStateFor = bridge ? (id: string) => bridge.getLiveState(id) : undefined;
   routes["/sidebar/state"] = async () => {
     const projects = store.projects.list();
     const chats = store.chats.list();

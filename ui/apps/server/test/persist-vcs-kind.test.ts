@@ -32,6 +32,8 @@ describe("persistVcsKindOnAttach (T-008 attach hook)", () => {
     expect(r.written).toBe(true);
     expect(r.vcsKind).toBe("git");
     expect(store.chats.get("c1")!.vcs_kind).toBe("git");
+    // repo_name is the git top-level basename (here the tmp dir itself).
+    expect(store.chats.get("c1")!.repo_name).toBe(path.basename(cwd));
     await store.close();
   });
 
