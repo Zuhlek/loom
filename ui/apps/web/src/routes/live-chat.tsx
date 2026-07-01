@@ -25,7 +25,7 @@ import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker"
 import { useSnackbar } from "../components/ui/Snackbar";
 import { SessionRecoveryBanner } from "../components/chat/SessionRecoveryBanner";
 import { ConnectionBanner } from "../components/chat/ConnectionBanner";
-import { getChat, getSettings, wsUrl, type ApiChat } from "../lib/api";
+import { errorText, getChat, getSettings, wsUrl, type ApiChat } from "../lib/api";
 import { useChatBridge } from "../lib/use-chat-bridge";
 import { useSidebarState } from "../lib/sidebar-state";
 import type {
@@ -204,12 +204,15 @@ function isOptimisticId(id: string): boolean {
 }
 
 /**
- * `true` for a still-on-screen optimistic placeholder (either "sending"
- * or "failed"). Used by the reconcile path to find the oldest pending
- * bubble and by `rebuildItemsById` callers that need to partition.
+ * `true` for an optimistic placeholder still awaiting its server echo
+ * ("sending" only). Used by the reconcile path to find the oldest bubble
+ * to replace. Deliberately excludes "failed": the reducer's turn-state
+ * error/interrupt path declares a failed bubble can NEVER be reconciled
+ * (no server item-append will come), so a fresh echo consuming a stale
+ * failed bubble would desync every subsequent send and duplicate it.
  */
 function isPendingUserItem(it: ChatItem): it is UserMessageItem {
-  return it.kind === "user-message" && it.pending != null;
+  return it.kind === "user-message" && it.pending === "sending";
 }
 
 /** Rebuild the `id → index` map after a structural edit to `items`. */
@@ -549,7 +552,7 @@ export function LiveChatRoute({ chatId }: Props) {
           dispatch({ type: "permission-mode", mode: r.chat.permission_mode });
         }
       })
-      .catch((err) => { if (alive) setChatErr(err?.message ?? "load failed"); });
+      .catch((err) => { if (alive) setChatErr(errorText(err)); });
     return () => { alive = false; };
   }, [chatId]);
 

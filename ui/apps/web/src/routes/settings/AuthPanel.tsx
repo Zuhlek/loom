@@ -2,7 +2,7 @@
  * AuthPanel — read-only view of the auth slice of `GET /settings`.
  */
 import { useEffect, useState } from "react";
-import { getSettings, type ApiSettings } from "../../lib/api";
+import { errorText, getSettings, type ApiSettings } from "../../lib/api";
 
 export function AuthPanel() {
   const [data, setData] = useState<ApiSettings["auth"] | null>(null);
@@ -12,7 +12,7 @@ export function AuthPanel() {
     let alive = true;
     getSettings()
       .then((s) => alive && setData(s.auth))
-      .catch((e) => alive && setError(e?.message ?? "failed to load settings"));
+      .catch((e) => alive && setError(errorText(e)));
     return () => {
       alive = false;
     };

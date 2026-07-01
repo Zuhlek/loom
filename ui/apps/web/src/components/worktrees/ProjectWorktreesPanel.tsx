@@ -3,6 +3,7 @@ import {
   vcsVerbTooltip,
   type VcsVerbKind,
 } from "../diff/vcs-verb-copy";
+import { errorText } from "../../lib/api";
 
 export interface WorktreeInfoView {
   path: string;
@@ -37,7 +38,7 @@ export function ProjectWorktreesPanel(props: ProjectWorktreesPanelProps) {
       setWorktrees(body.worktrees ?? []);
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText(e));
     }
   }, [fetcher]);
 
@@ -65,7 +66,7 @@ export function ProjectWorktreesPanel(props: ProjectWorktreesPanelProps) {
         setConfirmModal(null);
         await reload();
       } catch (e) {
-        setError((e as Error).message);
+        setError(errorText(e));
       }
     },
     [fetcher, reload],

@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "../components/layout/AppLayout";
+import { errorText } from "../lib/api";
 import { WorkspacePanel } from "./settings/WorkspacePanel";
 import { WorktreesPanel } from "./settings/WorktreesPanel";
 import { AuthPanel } from "./settings/AuthPanel";
@@ -145,7 +146,7 @@ function LiveHooks() {
       setLoadError(null);
     } catch (e: any) {
       if (e?.name === "AbortError") return;
-      setLoadError(e?.message ?? "fetch failed");
+      setLoadError(errorText(e));
     }
   }, []);
 
@@ -173,8 +174,8 @@ function LiveHooks() {
           const data = (await res.json()) as HooksStatus;
           setStatus(data);
         }
-      } catch (e: any) {
-        setActionError(e?.message ?? `${kind} failed`);
+      } catch (e) {
+        setActionError(errorText(e));
       } finally {
         setBusy(null);
       }

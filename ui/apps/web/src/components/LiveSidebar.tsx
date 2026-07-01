@@ -350,7 +350,7 @@ function ProjectGroup({
         <span className="size-4 rounded-sm grid place-items-center text-[9px] font-bold bg-emerald-500/15 text-emerald-700 uppercase shrink-0">
           {project.name.slice(0, 1)}
         </span>
-        <span className="text-xs font-medium flex-1 min-w-0 truncate text-[var(--foreground)]">{project.name}</span>
+        <span className="text-xs font-medium flex-1 min-w-0 truncate text-[var(--foreground)]" title={project.paths.join("\n")}>{project.name}</span>
         {confirming ? (
           <div className="flex items-center gap-1 shrink-0">
             <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>

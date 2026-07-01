@@ -23,6 +23,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
+import { errorText } from "../lib/api";
 
 interface HooksHealthSnapshot {
   installed: boolean;
@@ -89,8 +90,8 @@ export function HooksHealthBanner(): JSX.Element | null {
       }
       const data = (await res.json()) as HooksHealthSnapshot;
       setSnapshot(data);
-    } catch (e: any) {
-      setActionError(e?.message ?? "Install failed");
+    } catch (e) {
+      setActionError(errorText(e));
     } finally {
       setBusy(false);
     }

@@ -46,6 +46,7 @@ export const FIELDS = {
   NAMES: "names",
   ORIGIN: "origin",
   PROMPT_SOURCE: "promptSource",
+  IS_META: "isMeta",
 } as const;
 
 /** Pretty alias of `FIELDS` values, for documentation purposes. */
@@ -214,6 +215,24 @@ function isSystemInjectedUser(raw: unknown): boolean {
   return asString(field(raw, FIELDS.PROMPT_SOURCE)) === "system";
 }
 
+/**
+ * True when a `type:"user"` line is Claude-Code hook feedback rather than a
+ * turn to render. When a Stop/PreToolUse/etc. hook returns
+ * `{decision:"block",reason}`, Claude Code injects the reason as an `isMeta`
+ * user line prefixed `"<Event> hook feedback:"` (e.g. loom's auto-advance Stop
+ * hook → "Stop hook feedback:\nLoom project … Run `/weave …`."). It is fed to
+ * the model, not typed by the human — surfacing it in the transcript renders
+ * pure orchestration noise as a blue user bubble. The paired
+ * `hook_blocking_error` attachment and `stop_hook_summary` system lines already
+ * fall through to `kind:"unknown"`; this hides the last visible leak.
+ */
+function isHookFeedback(raw: unknown): boolean {
+  if (field(raw, FIELDS.IS_META) !== true) return false;
+  const message = field<Record<string, unknown>>(raw, FIELDS.MESSAGE);
+  const text = asString(message ? field(message, FIELDS.CONTENT) : undefined);
+  return text !== undefined && /^[A-Z][A-Za-z]* hook feedback:/.test(text);
+}
+
 /** Pull the first content block of a given type out of `message.content`. */
 function findContentBlock(content: unknown, blockType: string): Record<string, unknown> | undefined {
   if (!Array.isArray(content)) return undefined;
@@ -373,6 +392,12 @@ function parseEvent(raw: unknown, ctx: ParseCtx): ClaudeEvent {
           output,
         };
       }
+    }
+
+    // Hook feedback (blocked Stop/PreToolUse/… reason) injected as an isMeta
+    // user line — hide it: absorbed silently as `unknown`, never a user bubble.
+    if (rawType === "user" && isHookFeedback(raw)) {
+      return { ...base, kind: "unknown", rawKind: rawType };
     }
 
     // Plain text user / assistant message.

@@ -144,6 +144,32 @@ describe("F2 (c) — two rapid sends reconcile FIFO", () => {
   });
 });
 
+describe("F2 (c') — a stale 'failed' bubble never steals a fresh echo", () => {
+  test("echo reconciles the current 'sending' bubble, not an older 'failed' one", () => {
+    // A prior send errored (turn-state error) and left a "failed" bubble
+    // that will NEVER get a server echo. The next send must not have its
+    // echo consumed by that dead bubble — otherwise the new prompt shows
+    // twice and the failed one vanishes.
+    const dead = optimistic(0, "send that failed");
+    let s = chatReducer(EMPTY_STATE, { type: "optimistic-user", item: dead });
+    s = chatReducer(s, { type: "turn-state", state: "error", lastError: "x" });
+    expect(userItems(s)[0]!.pending).toBe("failed");
+
+    const live = optimistic(1, "next send");
+    s = chatReducer(s, { type: "optimistic-user", item: live });
+
+    const echo = serverUser("srv-1", "next send");
+    s = chatReducer(s, { type: "item-append", item: echo });
+
+    const users = userItems(s);
+    // Failed bubble preserved; live bubble reconciled in place — no dup.
+    expect(users).toHaveLength(2);
+    expect(users[0]!.pending).toBe("failed");
+    expect(users[1]!.id).toBe("srv-1");
+    expect(users[1]!.pending).toBeUndefined();
+  });
+});
+
 describe("F2 (d) — snapshot / reset clear optimistic items", () => {
   test("snapshot rebuilds wholesale from the authoritative server items", () => {
     const opt = optimistic(0, "pending send");

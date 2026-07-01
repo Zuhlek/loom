@@ -25,7 +25,7 @@ import {
   PHASE_EMPTY_COPY,
   FABRIC_EMPTY_COPY,
 } from "../components/fabric/fabric-phase-map";
-import { listProjects, type ApiProject } from "../lib/api";
+import { errorText, listProjects, type ApiProject } from "../lib/api";
 import { BACKEND_ONLINE_EVENT } from "../lib/useHealthPoll";
 
 interface PipelineSummary {
@@ -136,9 +136,7 @@ export function FabricViewLive({ projectId, fabricName }: FabricViewLiveProps) {
       setLoading(false);
     } catch (cause: unknown) {
       if ((cause as { name?: string })?.name === "AbortError") return;
-      const message =
-        cause instanceof Error ? cause.message : "fetch failed";
-      setError(message);
+      setError(errorText(cause));
       setLoading(false);
     }
   }, [projectId, fabricName]);

@@ -18,6 +18,7 @@ import {
 } from "../hook-installer.ts";
 import { getLastDelivered } from "../hook-receiver/index.ts";
 import { jsonResponse, methodNotAllowed } from "./_response.ts";
+import { errorMessage } from "./_route-helpers.ts";
 
 export interface HooksAdminOptions {
   /** Receiver port that install() writes into the hook commands. */
@@ -86,8 +87,8 @@ export function mountHooksAdminRoute(
     try {
       install({ settingsPath: opts.settingsPath, receiverPort: opts.receiverPort });
       return jsonResponse(buildStatus(opts), 200);
-    } catch (err: any) {
-      return jsonResponse({ error: err?.message ?? String(err) }, 500);
+    } catch (err) {
+      return jsonResponse({ error: errorMessage(err) }, 500);
     }
   };
 
@@ -96,8 +97,8 @@ export function mountHooksAdminRoute(
     try {
       uninstall({ settingsPath: opts.settingsPath });
       return jsonResponse(buildStatus(opts), 200);
-    } catch (err: any) {
-      return jsonResponse({ error: err?.message ?? String(err) }, 500);
+    } catch (err) {
+      return jsonResponse({ error: errorMessage(err) }, 500);
     }
   };
 
@@ -110,8 +111,8 @@ export function mountHooksAdminRoute(
     try {
       revealInFileManager(settingsPath);
       return jsonResponse({ ok: true, settingsPath }, 200);
-    } catch (err: any) {
-      return jsonResponse({ error: err?.message ?? String(err) }, 500);
+    } catch (err) {
+      return jsonResponse({ error: errorMessage(err) }, 500);
     }
   };
 }

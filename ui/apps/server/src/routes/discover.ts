@@ -5,6 +5,7 @@
 import { scanCommonParents, isAbsolutePath } from "../discover-wizard-service/index.ts";
 import { writeConfig } from "../config-loader/index.ts";
 import { jsonResponse, methodNotAllowed } from "./_response.ts";
+import { errorMessage } from "./_route-helpers.ts";
 
 export function mountDiscoverRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
@@ -31,8 +32,8 @@ export function mountDiscoverRoute(
       const finalPath = configPath ?? `${process.env.HOME}/.loom/config.json`;
       writeConfig(finalPath, { root });
       return jsonResponse({ ok: true, configPath: finalPath, root }, 200);
-    } catch (err: any) {
-      return jsonResponse({ error: err.message }, 500);
+    } catch (err) {
+      return jsonResponse({ error: errorMessage(err) }, 500);
     }
   };
 }

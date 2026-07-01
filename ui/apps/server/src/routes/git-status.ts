@@ -9,7 +9,7 @@
 import { executeGit } from "../git/worktree.ts";
 import { currentBranch, getRemoteUrl, hasUncommittedChanges } from "../git/manager.ts";
 import { jsonResponse } from "./_response.ts";
-import { getProjectDefaultBranch } from "./_route-helpers.ts";
+import { errorMessage, getProjectDefaultBranch } from "./_route-helpers.ts";
 
 interface GitStatusResponse {
   branch: string;
@@ -50,8 +50,7 @@ export function mountGitStatusRoute(
       if (remote) body.remote = remote;
       return jsonResponse(body, 200);
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      return jsonResponse({ error: message }, 500);
+      return jsonResponse({ error: errorMessage(e) }, 500);
     }
   };
 }

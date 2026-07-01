@@ -2,7 +2,7 @@
  * AboutPanel — fetches `/api/health` for the app version field.
  */
 import { useEffect, useState } from "react";
-import { getHealth, type ApiHealth } from "../../lib/api";
+import { errorText, getHealth, type ApiHealth } from "../../lib/api";
 
 export function AboutPanel() {
   const [data, setData] = useState<ApiHealth | null>(null);
@@ -12,7 +12,7 @@ export function AboutPanel() {
     let alive = true;
     getHealth()
       .then((h) => alive && setData(h))
-      .catch((e) => alive && setError(e?.message ?? "failed to load health"));
+      .catch((e) => alive && setError(errorText(e)));
     return () => {
       alive = false;
     };

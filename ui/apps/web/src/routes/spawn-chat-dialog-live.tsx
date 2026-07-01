@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { createChat, listCwdRoots, listRecentCwds, type ApiProject } from "../lib/api";
+import { createChat, errorText, listCwdRoots, listRecentCwds, type ApiProject } from "../lib/api";
 import { useSidebarState } from "../lib/sidebar-state";
 import { CwdPicker } from "../components/CwdPicker";
 import type { ApiChat } from "../lib/api";
@@ -167,8 +167,8 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
       await refresh();
       onClose();
       navigate(`/chat/${result.chat.id}`);
-    } catch (err: any) {
-      setError(err?.message ?? "spawn failed");
+    } catch (err) {
+      setError(errorText(err));
       setBusy(false);
     }
   };

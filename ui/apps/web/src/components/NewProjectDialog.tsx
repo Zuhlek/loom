@@ -7,7 +7,7 @@
  * project (caller decides what "switch" means via `onUseExisting`).
  */
 import { useEffect, useState } from "react";
-import { ApiError, createProject, listCwdRoots, type ApiProject } from "../lib/api";
+import { ApiError, createProject, errorText, listCwdRoots, type ApiProject } from "../lib/api";
 import { useSidebarState } from "../lib/sidebar-state";
 import { CwdPicker } from "./CwdPicker";
 
@@ -94,7 +94,7 @@ export function NewProjectDialog({ onClose, onCreated, onUseExisting }: Props) {
         setDuplicate(err.body.project as ApiProject);
         setError(`Project "${name.trim()}" already exists.`);
       } else {
-        setError(err?.message ?? "create failed");
+        setError(errorText(err));
       }
       setBusy(false);
     }

@@ -105,6 +105,22 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Canonical error → display string for every catch site in the web app.
+ * ApiError already carries the server's cleaned `.error` field as its
+ * message, so `.message` is the right thing to show; the branches below
+ * cover plain Errors, thrown strings, and last-ditch unknowns.
+ */
+export function errorText(err: unknown): string {
+  if (err instanceof Error) return err.message || "request failed";
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return "request failed";
+  }
+}
+
 async function apiFetch<T>(pathname: string, init?: RequestInit): Promise<T> {
   const res = await fetch(API_BASE + pathname, init);
   if (!res.ok) {

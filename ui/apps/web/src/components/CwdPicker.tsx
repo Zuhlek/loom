@@ -10,7 +10,7 @@
  * absolute and inside HOME.
  */
 import { useEffect, useState } from "react";
-import { ApiError, listCwd, listCwdRoots, type CwdEntry } from "../lib/api";
+import { errorText, listCwd, listCwdRoots, type CwdEntry } from "../lib/api";
 
 interface Props {
   value: string;
@@ -38,7 +38,7 @@ export function CwdPicker({ value, onChange, onClose }: Props) {
         if (!value) setParent(r.home);
       })
       .catch((err) => {
-        if (alive) setError(err?.message ?? "load roots failed");
+        if (alive) setError(errorText(err));
       });
     return () => {
       alive = false;
@@ -60,14 +60,7 @@ export function CwdPicker({ value, onChange, onClose }: Props) {
       })
       .catch((err) => {
         if (!alive) return;
-        // Show the server's structured error message when present.
-        // Falls back to err.message for unparseable failures.
-        if (err instanceof ApiError) {
-          const msg = err.body?.error ?? err.message;
-          setError(typeof msg === "string" ? msg : "list failed");
-        } else {
-          setError(err?.message ?? "list failed");
-        }
+        setError(errorText(err));
         setEntries([]);
       })
       .finally(() => {

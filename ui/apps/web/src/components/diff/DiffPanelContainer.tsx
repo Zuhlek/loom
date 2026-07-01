@@ -7,6 +7,7 @@ import {
   postGitCommit,
   postGitPr,
   postGitPush,
+  errorText,
   type ApiDiffSection,
   type ApiGitStatus,
 } from "../../lib/api";
@@ -57,16 +58,6 @@ function shortSha(sha: string): string {
 function deriveRemoteRef(status: ApiGitStatus | null): string {
   if (!status) return "remote";
   return `origin/${status.branch}`;
-}
-
-function errMessage(err: unknown): string {
-  if (err instanceof Error) return err.message || "request failed";
-  if (typeof err === "string") return err;
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return "request failed";
-  }
 }
 
 /**
@@ -191,7 +182,7 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
       } catch (err) {
         if (controller.signal.aborted) return;
         if ((err as { name?: string })?.name === "AbortError") return;
-        setStatusError(errMessage(err));
+        setStatusError(errorText(err));
       }
     },
     [],
@@ -210,7 +201,7 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
       } catch (err) {
         if (controller.signal.aborted) return;
         if ((err as { name?: string })?.name === "AbortError") return;
-        setDiffError(errMessage(err));
+        setDiffError(errorText(err));
       }
     },
     [],
@@ -312,8 +303,9 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
         });
         return result;
       } catch (err) {
-        setDialog({ intent: dialog?.intent ?? "commit", error: errMessage(err) });
-        setSnackbar({ kind: "error", message: errMessage(err) });
+        // Inline dialog error only — the dialog stays open on a failed
+        // commit, so a toast would be a redundant second surface.
+        setDialog({ intent: dialog?.intent ?? "commit", error: errorText(err) });
         return null;
       } finally {
         setCommitting(false);
@@ -334,7 +326,7 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
       }
       return true;
     } catch (err) {
-      setSnackbar({ kind: "error", message: errMessage(err) });
+      setSnackbar({ kind: "error", message: errorText(err) });
       return false;
     } finally {
       setPushing(false);
@@ -349,7 +341,7 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
         const result = await postGitPr({ worktreePath, title, body });
         return result;
       } catch (err) {
-        setSnackbar({ kind: "error", message: errMessage(err) });
+        setSnackbar({ kind: "error", message: errorText(err) });
         return null;
       } finally {
         setPrOpening(false);

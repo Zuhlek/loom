@@ -127,6 +127,32 @@ describe("jsonl/schema", () => {
     }
   });
 
+  it("hides an isMeta hook-feedback user line (Stop hook block reason) as unknown", () => {
+    const line = JSON.stringify({
+      type: "user",
+      uuid: "u-hook",
+      timestamp: "2026-05-23T00:00:00.000Z",
+      isMeta: true,
+      message: {
+        role: "user",
+        content: "Stop hook feedback:\nLoom project 'x' is ready to advance in build. Run `/weave x`.",
+      },
+    });
+    expect(parseLine(line, ctx).kind).toBe("unknown");
+  });
+
+  it("keeps a human turn that merely mentions hook feedback (no isMeta) as role=user", () => {
+    const line = JSON.stringify({
+      type: "user",
+      uuid: "u-human-hook",
+      timestamp: "2026-05-23T00:00:00.000Z",
+      message: { role: "user", content: "Stop hook feedback: why does this fire?" },
+    });
+    const evt = parseLine(line, ctx);
+    expect(evt.kind).toBe("text");
+    if (evt.kind === "text") expect(evt.role).toBe("user");
+  });
+
   it("classifies a `promptSource:system` user line as role=system even without origin", () => {
     const line = JSON.stringify({
       type: "user",

@@ -16,6 +16,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import type { MetadataStore } from "../metadata-store/index.ts";
 import { jsonResponse } from "./_response.ts";
+import { errorMessage } from "./_route-helpers.ts";
 
 const HOME = os.homedir();
 
@@ -75,7 +76,7 @@ export function mountCwdRoute(
         );
       }
       return jsonResponse(
-        { error: `readdir failed: ${(err as Error).message}`, path: parent },
+        { error: `readdir failed: ${errorMessage(err)}`, path: parent },
         500,
       );
     }

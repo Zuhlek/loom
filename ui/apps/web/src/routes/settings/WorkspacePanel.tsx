@@ -3,7 +3,7 @@
  * `GET /settings`.
  */
 import { useEffect, useState } from "react";
-import { getSettings, type ApiSettings } from "../../lib/api";
+import { errorText, getSettings, type ApiSettings } from "../../lib/api";
 
 export function WorkspacePanel() {
   const [data, setData] = useState<ApiSettings["workspace"] | null>(null);
@@ -13,7 +13,7 @@ export function WorkspacePanel() {
     let alive = true;
     getSettings()
       .then((s) => alive && setData(s.workspace))
-      .catch((e) => alive && setError(e?.message ?? "failed to load settings"));
+      .catch((e) => alive && setError(errorText(e)));
     return () => {
       alive = false;
     };

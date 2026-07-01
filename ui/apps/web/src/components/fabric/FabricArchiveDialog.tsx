@@ -5,6 +5,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
+  errorText,
   listArchivedFabrics,
   unarchiveFabric,
   type ArchivedFabric,
@@ -27,8 +28,8 @@ export function FabricArchiveDialog({ onClose, onAfterUnarchive }: Props) {
       const { archived } = await listArchivedFabrics();
       setRows(archived);
       setError(null);
-    } catch (err: any) {
-      setError(err?.message ?? "failed to load archive");
+    } catch (err) {
+      setError(errorText(err));
     } finally {
       setLoading(false);
     }

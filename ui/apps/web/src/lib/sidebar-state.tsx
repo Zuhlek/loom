@@ -13,7 +13,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getSidebarState, type SidebarState } from "./api";
+import { errorText, getSidebarState, type SidebarState } from "./api";
 import { BACKEND_ONLINE_EVENT } from "./useHealthPoll";
 
 interface SidebarStateContextValue {
@@ -37,9 +37,9 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
       if (!mountedRef.current) return;
       setState(next);
       setError(null);
-    } catch (err: any) {
+    } catch (err) {
       if (!mountedRef.current) return;
-      setError(err?.message ?? "fetch failed");
+      setError(errorText(err));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
