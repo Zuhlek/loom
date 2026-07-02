@@ -9,7 +9,7 @@
  * retry every 1 s up to ~10 s. On reconnect the server sends a fresh
  * snapshot so we don't accumulate stale state.
  */
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Link } from "wouter";
 import clsx from "clsx";
 
@@ -19,6 +19,8 @@ import { TasksPanel, type Task } from "../components/TasksPanel";
 import { DiffPanelContainer } from "../components/diff/DiffPanelContainer";
 import { ProjectWorktreesPanel } from "../components/worktrees/ProjectWorktreesPanel";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
+import { QuestionNav } from "../components/chat/QuestionNav";
+import { deriveTimelineRows } from "../lib/timeline-rows";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { PermissionRequestInline } from "../components/chat/PermissionRequestInline";
 import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker";
@@ -206,13 +208,57 @@ function isOptimisticId(id: string): boolean {
 /**
  * `true` for an optimistic placeholder still awaiting its server echo
  * ("sending" only). Used by the reconcile path to find the oldest bubble
- * to replace. Deliberately excludes "failed": the reducer's turn-state
- * error/interrupt path declares a failed bubble can NEVER be reconciled
- * (no server item-append will come), so a fresh echo consuming a stale
- * failed bubble would desync every subsequent send and duplicate it.
+ * to replace. Excludes "failed": those are reclaimed separately and only
+ * on a TEXT match (see `matchesFailedOptimistic`), so a fresh echo can't
+ * blindly consume an unrelated stale failed bubble and desync FIFO.
  */
 function isPendingUserItem(it: ChatItem): it is UserMessageItem {
   return it.kind === "user-message" && it.pending === "sending";
+}
+
+/**
+ * A "failed" optimistic bubble whose text matches an incoming server echo.
+ * Reclaimed by the reconcile path only when NO "sending" bubble is available:
+ * a bubble the watchdog (or a transient turn error/interrupt) marked failed
+ * can still get a real echo later — a QUEUED send's `user` line is written
+ * only when claude dequeues it, long after the send, by which point the 45s
+ * watchdog may already have failed the bubble. Without this, that late echo
+ * appends a SECOND bubble and the prompt renders twice.
+ *
+ * Text-gated so the F2(c') guarantee holds: an UNRELATED message's echo can
+ * never steal a failed slot (different text → no match → it appends). Exact
+ * match covers the no-image case; `startsWith` tolerates the server appending
+ * `@<absPath>` image tokens to the text it echoes back.
+ * ponytail: text match, not turn-id — the optimistic bubble has no server
+ * turn id to key on until the echo itself arrives.
+ */
+function matchesFailedOptimistic(it: ChatItem, echoText: string): boolean {
+  if (it.kind !== "user-message" || it.pending !== "failed") return false;
+  if (!isOptimisticId(it.id)) return false;
+  const a = it.text.trim();
+  const b = echoText.trim();
+  return a.length > 0 && (a === b || b.startsWith(a));
+}
+
+/**
+ * Reconcile images when a server echo replaces an optimistic bubble.
+ * The optimistic item carries inline `dataB64` (rendered instantly, no
+ * network round-trip); the server echo carries only the durable staged
+ * `id` (see materializer). Replacing the bubble wholesale would drop the
+ * inline bytes and leave the thumbnails dependent on the `/chat-image`
+ * read-back — a flash at best, a vanish if that resolve is fragile.
+ * Merge instead so the live bubble keeps rendering from the inline bytes
+ * AND gains the `id` for read-back durability on a later refresh. Same
+ * turn ⇒ same images in the same order, so a positional merge is safe.
+ */
+function reconcileUserImages(echo: UserMessageItem, replaced: ChatItem): UserMessageItem {
+  if (replaced.kind !== "user-message" || !replaced.images?.length) return echo;
+  const prev = replaced.images;
+  if (!echo.images?.length) return { ...echo, images: prev };
+  const images = echo.images.map((img, i) =>
+    img.dataB64 ? img : { ...img, dataB64: prev[i]?.dataB64 },
+  );
+  return { ...echo, images };
 }
 
 /** Rebuild the `id → index` map after a structural edit to `items`. */
@@ -306,10 +352,22 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       // real item lands where the user already sees a bubble, avoiding a
       // position jump / flicker.
       if (action.item.kind === "user-message") {
-        const oldestPendingIdx = state.items.findIndex(isPendingUserItem);
-        if (oldestPendingIdx !== -1) {
+        const echoText = action.item.text;
+        // Prefer the oldest still-"sending" bubble (FIFO, text-agnostic —
+        // the server may rewrite text). If none is sending, reclaim a
+        // matching "failed" bubble: a queued/slow send can echo AFTER the
+        // watchdog gave up on it, and appending here would duplicate the
+        // prompt on screen.
+        const sendingIdx = state.items.findIndex(isPendingUserItem);
+        const reclaimIdx =
+          sendingIdx !== -1
+            ? sendingIdx
+            : state.items.findIndex((it) =>
+                matchesFailedOptimistic(it, echoText),
+              );
+        if (reclaimIdx !== -1) {
           const items = state.items.slice();
-          items[oldestPendingIdx] = action.item;
+          items[reclaimIdx] = reconcileUserImages(action.item, state.items[reclaimIdx]);
           return { ...state, items, itemsById: rebuildItemsById(items) };
         }
       }
@@ -499,6 +557,23 @@ export function LiveChatRoute({ chatId }: Props) {
   // toggles a small info card with the state name and reconnect detail.
   const [connInfoOpen, setConnInfoOpen] = useState(false);
   const tasksAutoOpenedRef = useRef(false);
+
+  // Question-nav (chat table-of-contents). Rendered as a full-height
+  // column to the left of the message area + composer, so its divider
+  // spans the whole content height. We derive the same timeline rows
+  // the MessagesTimeline renders (cheap, memoized on items);
+  // MessagesTimeline reports the in-view question id back up for the
+  // active highlight.
+  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
+  const navRows = useMemo(() => deriveTimelineRows(state.items), [state.items]);
+  const jumpToMessage = useCallback((id: string) => {
+    // `data-msg-id` is unique in the DOM, so a document-level query is
+    // enough; scrollIntoView walks up to the timeline's scroll
+    // container on its own.
+    document
+      .querySelector(`[data-msg-id="${CSS.escape(id)}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   // Mirror `rightPane` into a ref so the `tasks-update` auto-open
   // guard (inside the ws-attach effect closure, which captures
   // `rightPane` once per `chatId`) can read the current value
@@ -1247,6 +1322,14 @@ export function LiveChatRoute({ chatId }: Props) {
       }
       rightRail={rightRail}
     >
+      <div className="flex-1 flex flex-row min-h-0">
+        <QuestionNav
+          rows={navRows}
+          chatId={chatId}
+          activeId={activeQuestionId}
+          onJump={jumpToMessage}
+        />
+        <div className="flex-1 flex flex-col min-w-0">
         <MessagesTimeline
           key={chatId}
           items={state.items}
@@ -1255,6 +1338,7 @@ export function LiveChatRoute({ chatId }: Props) {
           activeTurnStartedAt={state.activeTurnStartedAt}
           onPlanAccept={acceptPlanProposal}
           onPlanReject={rejectPlanProposal}
+          onActiveQuestionChange={setActiveQuestionId}
         />
 
         {state.lifecycle !== "active" && (
@@ -1323,6 +1407,8 @@ export function LiveChatRoute({ chatId }: Props) {
           vcsKind={chat?.vcs_kind ?? null}
           repoName={chat?.repo_name ?? null}
         />
+        </div>
+      </div>
     </AppLayout>
   );
 }

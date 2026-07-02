@@ -2,7 +2,7 @@
   "name": "loom",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.0.9",
+  "packageManager": "pnpm@11.1.2",
   "engines": {
     "node": ">=20",
     "pnpm": ">=10"

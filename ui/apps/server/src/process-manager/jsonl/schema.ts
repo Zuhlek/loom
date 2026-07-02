@@ -45,6 +45,7 @@ export const FIELDS = {
   ATTACHMENT: "attachment",
   NAMES: "names",
   ORIGIN: "origin",
+  ORIGIN_KIND: "kind",
   PROMPT_SOURCE: "promptSource",
   IS_META: "isMeta",
 } as const;
@@ -197,21 +198,26 @@ function reduceContentToText(content: unknown): string {
 
 /**
  * True when a `type:"user"` line is a Claude-injected (non-human) turn rather
- * than something the user typed. Injected turns carry a positive marker that a
- * human turn never has:
- *   - `origin` — an object like `{ kind: "task-notification" }`, present only
- *     on injected turns;
+ * than something the user typed. Injected turns carry a positive marker:
+ *   - `origin.kind` — an injection tag like `"task-notification"`. Current
+ *     claude ALSO stamps human turns with an origin object (`{kind:"human"}`),
+ *     so the mere PRESENCE of an origin object no longer means injected — only
+ *     a non-`"human"` kind does;
  *   - `promptSource: "system"` — Claude's tag for system-injected prompts
- *     (human turns use `"typed"` / `"queued"`).
+ *     (human turns use `"typed"` / `"suggestion_accepted"` / `"queued"`).
  *
  * Conservative by design: with NEITHER marker the line stays a user turn, so a
- * genuine human message is never mis-hidden. Without this gate the materializer
- * folds task-notifications into a blue right-aligned user bubble — the exact
- * "internal communication rendered as my question" bug this discriminates away.
+ * genuine human message is never mis-hidden. The `origin.kind === "human"`
+ * carve-out is the fix for the "prompt printed twice" bug — treating the new
+ * human-origin object as injected rendered the real turn as a muted system
+ * notice, so the optimistic bubble never got its echo and both showed.
  */
 function isSystemInjectedUser(raw: unknown): boolean {
   const origin = field(raw, FIELDS.ORIGIN);
-  if (origin != null && typeof origin === "object") return true;
+  if (origin != null && typeof origin === "object") {
+    const kind = asString(field(origin, FIELDS.ORIGIN_KIND));
+    if (kind && kind !== "human") return true;
+  }
   return asString(field(raw, FIELDS.PROMPT_SOURCE)) === "system";
 }
 

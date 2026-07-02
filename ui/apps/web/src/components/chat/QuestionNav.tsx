@@ -13,9 +13,24 @@ import { useMemo } from "react";
 import clsx from "clsx";
 
 import type { TimelineRow } from "../../lib/timeline-rows";
+import type { UserMessageImage } from "../../lib/chat-types";
+
+/**
+ * `<img>` src for a nav thumbnail — mirrors UserRow in MessagesTimeline:
+ * inline `dataB64` (live turns) → data URL; staged `id` (reattach,
+ * ADR-002) → `/chat-image` read-back; neither → skip.
+ */
+function thumbSrc(img: UserMessageImage, chatId: string): string | undefined {
+  if (img.dataB64) return `data:${img.mediaType};base64,${img.dataB64}`;
+  if (img.id)
+    return `/api/chat-image?chatId=${encodeURIComponent(chatId)}&id=${encodeURIComponent(img.id)}`;
+  return undefined;
+}
 
 interface Props {
   rows: TimelineRow[];
+  /** Chat id — needed to build `/chat-image` read-back URLs for thumbnails. */
+  chatId: string;
   /** Id of the user message currently in view, or null. */
   activeId: string | null;
   /** Scroll the timeline to the user message with this id. */
@@ -36,12 +51,16 @@ export function firstSentence(text: string): string {
   return out;
 }
 
-export function QuestionNav({ rows, activeId, onJump }: Props) {
+export function QuestionNav({ rows, chatId, activeId, onJump }: Props) {
   const questions = useMemo(
     () =>
       rows
         .filter((r): r is Extract<TimelineRow, { kind: "user" }> => r.kind === "user")
-        .map((r) => ({ id: r.item.id, label: firstSentence(r.item.text) })),
+        .map((r) => ({
+          id: r.item.id,
+          label: firstSentence(r.item.text),
+          images: r.item.images ?? ([] as UserMessageImage[]),
+        })),
     [rows],
   );
 
@@ -83,6 +102,23 @@ export function QuestionNav({ rows, activeId, onJump }: Props) {
                 }}
               >
                 <span className="line-clamp-2">{q.label}</span>
+                {q.images.length > 0 && (
+                  <span className="mt-1 flex flex-wrap gap-1">
+                    {q.images.map((img, i) => {
+                      const src = thumbSrc(img, chatId);
+                      return src ? (
+                        <img
+                          key={i}
+                          src={src}
+                          alt={img.filename ?? ""}
+                          title={img.filename ?? ""}
+                          className="size-8 rounded border object-cover"
+                          style={{ borderColor: "var(--border)" }}
+                        />
+                      ) : null;
+                    })}
+                  </span>
+                )}
               </button>
             );
           })}

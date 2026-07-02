@@ -108,6 +108,28 @@ describe("F2 (b) — server echo reconciles to exactly one bubble", () => {
     expect(s2.itemsById[opt.id]).toBeUndefined();
   });
 
+  test("reconcile preserves the optimistic inline image bytes (no vanish)", () => {
+    // The optimistic bubble carries inline `dataB64`; the server echo
+    // carries only the durable staged `id`. Reconcile must keep the inline
+    // bytes so the chat thumbnail doesn't disappear on the swap, while
+    // grafting the `id` on for read-back durability.
+    const opt: UserMessageItem = {
+      ...optimistic(0, "look at this"),
+      images: [{ mediaType: "image/png", dataB64: "AAAA", filename: "shot.png" }],
+    };
+    const s1 = chatReducer(EMPTY_STATE, { type: "optimistic-user", item: opt });
+    const echo: UserMessageItem = {
+      ...serverUser("server-1", "look at this @/abs/shot.png"),
+      images: [{ mediaType: "image/png", id: "deadbeef", filename: "shot.png" }],
+    };
+    const s2 = chatReducer(s1, { type: "item-append", item: echo });
+    const users = userItems(s2);
+    expect(users).toHaveLength(1);
+    expect(users[0]!.images).toEqual([
+      { mediaType: "image/png", id: "deadbeef", filename: "shot.png", dataB64: "AAAA" },
+    ]);
+  });
+
   test("a server user-message with no pending placeholders just appends", () => {
     const echo = serverUser("server-1", "first turn");
     const s1 = chatReducer(EMPTY_STATE, { type: "item-append", item: echo });
@@ -167,6 +189,41 @@ describe("F2 (c') — a stale 'failed' bubble never steals a fresh echo", () => 
     expect(users[0]!.pending).toBe("failed");
     expect(users[1]!.id).toBe("srv-1");
     expect(users[1]!.pending).toBeUndefined();
+  });
+});
+
+describe("F2 (c'') — a matching echo reclaims a wrongly-failed bubble", () => {
+  test("queued send: watchdog fails the bubble, late echo reclaims it (no dup)", () => {
+    // A queued/slow send's `user` line is written only when claude dequeues
+    // it — long after send, by which point the 45s watchdog may have flipped
+    // the optimistic bubble to "failed". The eventual echo must RECLAIM that
+    // bubble, not append a second one.
+    const opt = optimistic(0, "run the long thing");
+    let s = chatReducer(EMPTY_STATE, { type: "optimistic-user", item: opt });
+    s = chatReducer(s, { type: "fail-pending" });
+    expect(userItems(s)[0]!.pending).toBe("failed");
+
+    // Server echoes the same text (possibly with an appended @<path> token).
+    const echo = serverUser("srv-1", "run the long thing @/abs/x.png");
+    s = chatReducer(s, { type: "item-append", item: echo });
+
+    const users = userItems(s);
+    expect(users).toHaveLength(1);
+    expect(users[0]!.id).toBe("srv-1");
+    expect(users[0]!.pending).toBeUndefined();
+  });
+
+  test("a non-matching echo does NOT steal a failed bubble (F2 c' preserved)", () => {
+    const dead = optimistic(0, "send that failed");
+    let s = chatReducer(EMPTY_STATE, { type: "optimistic-user", item: dead });
+    s = chatReducer(s, { type: "turn-state", state: "error", lastError: "x" });
+    // Unrelated echo — different text — appends rather than reclaiming.
+    const echo = serverUser("srv-1", "a totally different prompt");
+    s = chatReducer(s, { type: "item-append", item: echo });
+    const users = userItems(s);
+    expect(users).toHaveLength(2);
+    expect(users[0]!.pending).toBe("failed");
+    expect(users[1]!.id).toBe("srv-1");
   });
 });
 

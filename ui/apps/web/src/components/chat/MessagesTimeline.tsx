@@ -20,7 +20,6 @@ import { ToolUseCard } from "./ToolUseCard";
 import { ProposedPlanCard } from "./ProposedPlanCard";
 import { WorkingChip } from "./WorkingChip";
 import { WorkGroupCard } from "./WorkGroupCard";
-import { QuestionNav } from "./QuestionNav";
 import { deriveTimelineRows, type TimelineRow } from "../../lib/timeline-rows";
 import type {
   AssistantBlock,
@@ -58,6 +57,14 @@ interface Props {
   onPlanAccept?: (planId: string) => void;
   /** Counterpart for Reject. */
   onPlanReject?: (planId: string) => void;
+  /**
+   * Reports which user message is currently in view, for the
+   * QuestionNav highlight. Driven by an IntersectionObserver over the
+   * `[data-msg-id]` rows. `null` when no user message is visible. The
+   * nav itself is rendered by the parent (so its divider can span the
+   * full content height, past the composer).
+   */
+  onActiveQuestionChange?: (id: string | null) => void;
 }
 
 /**
@@ -80,6 +87,7 @@ export function MessagesTimeline({
   activeTurnStartedAt,
   onPlanAccept,
   onPlanReject,
+  onActiveQuestionChange,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const innerRef = useRef<HTMLDivElement | null>(null);
@@ -89,9 +97,6 @@ export function MessagesTimeline({
   // the ref too because the auto-scroll effect needs to read the
   // latest value without re-running on every scroll tick.
   const [isAtBottom, setIsAtBottom] = useState(true);
-  // Id of the user message currently in view — highlighted in the
-  // QuestionNav. Driven by the IntersectionObserver below.
-  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const el = scrollRef.current;
@@ -180,24 +185,15 @@ export function MessagesTimeline({
   // sequence of Bash / Glob / Grep calls between meaningful prose.
   const rows = useMemo(() => deriveTimelineRows(items), [items]);
 
-  // Scroll the timeline to a user message by id (QuestionNav click).
-  // Anchors on the `data-msg-id` attribute set on each UserRow. This is
-  // always an upward scroll, which trips the stick-to-bottom guard off
-  // by design — the user is navigating away from the live tail.
-  const jumpToMessage = useCallback((id: string) => {
-    const root = scrollRef.current;
-    if (!root) return;
-    const target = root.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
-    target?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
-
-  // Highlight the user message currently in view. We observe every
-  // `[data-msg-id]` row and treat the topmost intersecting one as
-  // active. Re-runs when `rows` change so freshly-appended questions
-  // get observed.
+  // Report which user message is currently in view (for the parent's
+  // QuestionNav highlight). We observe every `[data-msg-id]` row and
+  // treat the topmost intersecting one as active. Re-runs when `rows`
+  // change so freshly-appended questions get observed. A ref dedupes so
+  // the parent only re-renders when the active id actually changes.
+  const lastActiveRef = useRef<string | null>(null);
   useEffect(() => {
     const root = scrollRef.current;
-    if (!root || typeof IntersectionObserver === "undefined") return;
+    if (!root || !onActiveQuestionChange || typeof IntersectionObserver === "undefined") return;
     const visibleTops = new Map<string, number>();
     const io = new IntersectionObserver(
       (entries) => {
@@ -216,44 +212,44 @@ export function MessagesTimeline({
             bestId = id;
           }
         }
-        setActiveQuestionId(bestId);
+        if (bestId !== lastActiveRef.current) {
+          lastActiveRef.current = bestId;
+          onActiveQuestionChange(bestId);
+        }
       },
       { root, threshold: 0 },
     );
     root.querySelectorAll("[data-msg-id]").forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [rows]);
+  }, [rows, onActiveQuestionChange]);
 
   return (
-    <div className="relative flex-1 min-h-0 flex flex-row">
-      <QuestionNav rows={rows} activeId={activeQuestionId} onJump={jumpToMessage} />
-      <div className="relative flex-1 min-h-0 flex flex-col">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          <div ref={innerRef} className="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-4">
-            {shouldShowEmptyState(items.length, turnState) && (
-              <p className="text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
-                Send a message to start the conversation.
-              </p>
-            )}
-            {rows.map((row) => (
-              <TimelineRowView
-                key={row.id}
-                row={row}
-                chatId={chatId}
-                onPlanAccept={onPlanAccept}
-                onPlanReject={onPlanReject}
-              />
-            ))}
-            {turnState === "running" && activeTurnStartedAt != null && (
-              <WorkingChip startedAtMs={activeTurnStartedAt} />
-            )}
-          </div>
+    <div className="relative flex-1 min-h-0 flex flex-col">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <div ref={innerRef} className="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-4">
+          {shouldShowEmptyState(items.length, turnState) && (
+            <p className="text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
+              Send a message to start the conversation.
+            </p>
+          )}
+          {rows.map((row) => (
+            <TimelineRowView
+              key={row.id}
+              row={row}
+              chatId={chatId}
+              onPlanAccept={onPlanAccept}
+              onPlanReject={onPlanReject}
+            />
+          ))}
+          {turnState === "running" && activeTurnStartedAt != null && (
+            <WorkingChip startedAtMs={activeTurnStartedAt} />
+          )}
         </div>
-        <JumpToBottomButton
-          visible={!isAtBottom}
-          onClick={() => scrollToBottom("smooth")}
-        />
       </div>
+      <JumpToBottomButton
+        visible={!isAtBottom}
+        onClick={() => scrollToBottom("smooth")}
+      />
     </div>
   );
 }

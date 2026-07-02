@@ -179,6 +179,23 @@ describe("jsonl/schema", () => {
     if (evt.kind === "text") expect(evt.role).toBe("user");
   });
 
+  it("keeps a human turn tagged origin:{kind:human} as role=user (dup-prompt fix)", () => {
+    // Current claude stamps typed turns with an origin object. Treating any
+    // origin object as injected rendered the real turn as a system notice, so
+    // the optimistic bubble never reconciled and the prompt showed twice.
+    const line = JSON.stringify({
+      type: "user",
+      uuid: "u-human-origin",
+      timestamp: "2026-05-23T00:00:00.000Z",
+      origin: { kind: "human" },
+      promptSource: "typed",
+      message: { role: "user", content: "hi" },
+    });
+    const evt = parseLine(line, ctx);
+    expect(evt.kind).toBe("text");
+    if (evt.kind === "text") expect(evt.role).toBe("user");
+  });
+
   it("text event: assistant role with content-block array", () => {
     const line = JSON.stringify({
       type: "assistant",
