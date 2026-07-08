@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { RefChangeFrame, ServerFrame } from "../chat-protocol/frames.ts";
+import { parseHeadRef } from "./head.ts";
 
 export interface HeadWatcherOptions {
   emit: (frame: ServerFrame) => void;
@@ -35,14 +36,6 @@ interface WatcherEntry {
   headPath: string;
 }
 
-function parseHead(contents: string): string | null {
-  // `ref: refs/heads/<branch>\n` is the canonical attached-HEAD shape.
-  // Detached-HEAD writes a bare sha — we don't surface a branch in that
-  // case (return null and let the caller suppress the emission).
-  const m = contents.match(/^ref:\s+refs\/heads\/(.+?)\s*$/m);
-  return m ? m[1]! : null;
-}
-
 export function createHeadWatcher(opts: HeadWatcherOptions): HeadWatcher {
   const debounceMs = opts.debounceMs ?? 200;
   const pollMs = opts.pollMs ?? 2000;
@@ -56,7 +49,7 @@ export function createHeadWatcher(opts: HeadWatcherOptions): HeadWatcher {
     } catch {
       return;
     }
-    const branch = parseHead(raw);
+    const branch = parseHeadRef(raw);
     if (!branch) return;
     if (branch === entry.lastBranch) return;
     entry.lastBranch = branch;
@@ -79,7 +72,7 @@ export function createHeadWatcher(opts: HeadWatcherOptions): HeadWatcher {
     const headPath = path.join(cwd, ".git", "HEAD");
     let initialBranch: string | null = null;
     try {
-      initialBranch = parseHead(fs.readFileSync(headPath, "utf8"));
+      initialBranch = parseHeadRef(fs.readFileSync(headPath, "utf8"));
     } catch {
       /* missing HEAD — emit nothing until first write */
     }

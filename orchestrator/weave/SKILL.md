@@ -210,7 +210,9 @@ A packager producing a slim loom profile can `rm -rf orchestrator/lib/telemetry/
 
 ## Refine-or-Continue Decision (Human-In-The-Loop)
 
-Reruns are user-driven, never automatic. The gate is a single `AskUserQuestion` with **up to 4 options** per phase. The `Refine` option replaces the prior rerun-phase option — it preserves user-confirmed content and applies any pending Quality Check findings, rather than re-deriving from scratch.
+Reruns are user-driven, never automatic — with one bounded exception for all-mechanical findings (below). The gate is a single `AskUserQuestion` with **up to 4 options** per phase. The `Refine` option replaces the prior rerun-phase option — it preserves user-confirmed content and applies any pending Quality Check findings, rather than re-deriving from scratch.
+
+**All-mechanical exception:** when a phase's pending findings (`quality-review.md`, or `review.md` at the Review gate) are ALL mechanical — every finding's recommendation states "apply, no decision needed" per `methods/principles.md § Review checklist` findings triage — the orchestrator dispatches one Targeted refine automatically instead of asking (for Review-gate findings: a Targeted Build refine with `review.md` as the findings source, followed by one Review re-dispatch). It then informs the user at the gate about what was applied. This exception never chains: if anything remains after that single pass, the gate is asked normally.
 
 The gate summary leads with the phase's purpose — the first sentence of `phases/<phase>/phase.md` (e.g. "Clarify the seed into specified intent." for Spec). Read that line at gate time and prepend it so the user knows what the phase was responsible for.
 

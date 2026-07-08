@@ -19,10 +19,12 @@ const NEW_CHAT_DIFF_PANEL_FILES = [
   `${serverRoot}src/source-control/bitbucket/api.ts`,
   `${serverRoot}src/git/resolve-branch-selection-target.ts`,
   `${serverRoot}src/git/vcs-kind.ts`,
+  `${serverRoot}src/git/git-marker.ts`,
+  `${serverRoot}src/git/head.ts`,
   `${serverRoot}src/git/head-watcher.ts`,
   `${serverRoot}src/process-manager/first-send-hook.ts`,
   `${serverRoot}src/process-manager/turn-watcher.ts`,
-  `${serverRoot}src/process-manager/persist-vcs-kind.ts`,
+  `${serverRoot}src/process-manager/reconcile-git-context.ts`,
   `${serverRoot}src/checkpointing/checkpoint-store.ts`,
   `${serverRoot}src/checkpointing/checkpoint-reactor.ts`,
   `${serverRoot}src/routes/chats-meta.ts`,
@@ -32,8 +34,7 @@ const NEW_CHAT_DIFF_PANEL_FILES = [
   `${serverRoot}src/routes/source-control-rpc.ts`,
   `${serverRoot}src/routes/_route-helpers.ts`,
   // Web
-  `${webRoot}src/components/chat/ModeIndicatorPill.tsx`,
-  `${webRoot}src/components/chat/AttachedRefPill.tsx`,
+  `${webRoot}src/components/chat/WorkspacePill.tsx`,
   `${webRoot}src/components/diff/vcs-verb-copy.ts`,
   `${webRoot}src/components/worktrees/ProjectWorktreesPanel.tsx`,
 ];

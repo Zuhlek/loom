@@ -73,12 +73,13 @@ Concrete rules:
 - **2 occurrences allowed if contexts genuinely differ.** Two database query helpers that both filter by `user_id` but live in different bounded contexts can stay separate.
 - **3+ occurrences require extraction.** No exceptions. Find or create a helper.
 - **Before writing a helper, search.** The repo probably already has the pattern. Use it instead of duplicating.
+- **Extend, don't copy.** When a new unit (class, getter, test, config block) would differ from an existing one by a small delta, extend or parameterize the existing one instead of copying it. P2's nearest-neighbor rule governs naming and shape — it never justifies a new copy of existing code, and "this pattern already repeats in the file" is not a differing context.
 - **Don't copy-paste error messages, validation rules, or constants.** These belong in single sources of truth (constants module, validation schema, message catalog).
 - **Don't copy-paste tests.** If two tests are 90% the same, parameterize.
 
 **Self-check during implementation:** *"Have I written this same shape of code already in this PR or earlier in this file? If yes, extract."*
 
-**Review check:** scan the diff for repeated structural patterns. Three substantially-similar code blocks anywhere in the diff = MAJOR finding.
+**Review check:** scan the diff for repeated structural patterns. Three substantially-similar code blocks anywhere in the diff = MAJOR finding. A new unit that is a near-copy of an existing one = MAJOR, regardless of how many copies predate the diff.
 
 ---
 
@@ -131,8 +132,9 @@ Concrete rules:
 - Tests assert on **return values, state changes, exceptions** — never on whether a specific internal method was called.
 - Mocks are for **external boundaries** (HTTP, DB if testing in-memory replacement, file system, time). Never mock internal collaborators.
 - Test names describe the user-facing behaviour: `"returns 404 when product not found"`, not `"productService_returns_null_then_throws"`.
+- **New tests pin unpinned behaviour.** Before adding a test, name the existing test or golden that covers the behaviour at that layer; if one exists, extend it. Asserting instance identity, query shapes, or other internals that a public-interface test already covers is structural.
 
-**Review check:** flag tests that mock internal classes, assert on internal call counts, or have names tied to method names rather than behaviour.
+**Review check:** flag tests that mock internal classes, assert on internal call counts, or have names tied to method names rather than behaviour. Also flag tests that re-assert behaviour an existing test or golden already pins at the same layer.
 
 ---
 
@@ -154,7 +156,13 @@ Concrete rules:
 The Review Audit Agent uses these as a structured checklist. Each principle has its "flag if" rule from the sections above. Findings categorise:
 
 - **Blocker:** P1 if a clear scope violation; P3 if duplication is 3+ instances; P4 if `legacy*` naming or commented-out code lands.
-- **Major:** P2 mismatch with existing conventions; P5 unused abstraction with no consumer; P6 internal mocking.
+- **Major:** P2 mismatch with existing conventions; P3 near-copy of an existing unit; P5 unused abstraction with no consumer; P6 internal mocking or redundant coverage.
 - **Minor:** stylistic deviations within a principle's spirit.
+
+Findings triage — decide what each finding demands before writing it:
+
+- **Mechanical** — behaviour-preserving, no regression surface, tests prove it (a copy where an extension exists, dead flexibility, solved-elsewhere code): the finding's Recommendation states "apply, no decision needed".
+- **Material and debatable** — affects behaviour, scope, public API, data, or a real trade-off: full finding for the gate.
+- **Debatable but trivial** — a taste-level call whose benefit is a few lines: not a finding. The status quo wins; omit it.
 
 Project-level `spec.md ## Constraints` entries take precedence over the matching principle when both apply.

@@ -766,19 +766,21 @@ export function LiveChatRoute({ chatId }: Props) {
             bridge.handleServerFrame(frame);
             break;
           case "chat-meta-changed": {
-            // Verb routes (switchRef / createRef / createWorktree / etc.)
-            // PATCH the row server-side then broadcast this frame so the
-            // composer pills + diff panel re-render without a refetch.
-            const patch = frame.body ?? { branch: null, worktreePath: null };
-            setChat((c) =>
-              c
-                ? {
-                    ...c,
-                    branch: patch.branch ?? null,
-                    worktree_path: patch.worktreePath ?? null,
-                  }
-                : c,
-            );
+            // Verb routes (switchRef / createRef / createWorktree / etc.) and
+            // the attach-time git reconciler PATCH the row server-side then
+            // broadcast this frame so the composer pills + diff panel
+            // re-render without a refetch. Only merge the keys actually
+            // present so a partial update never nulls a sibling field.
+            const patch = frame.body ?? {};
+            setChat((c) => {
+              if (!c) return c;
+              const next = { ...c };
+              if ("branch" in patch) next.branch = patch.branch ?? null;
+              if ("worktreePath" in patch) next.worktree_path = patch.worktreePath ?? null;
+              if ("vcsKind" in patch) next.vcs_kind = patch.vcsKind ?? null;
+              if ("repoName" in patch) next.repo_name = patch.repoName ?? null;
+              return next;
+            });
             break;
           }
           case "checkpoint-captured": {

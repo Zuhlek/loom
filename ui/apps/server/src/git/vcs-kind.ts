@@ -1,6 +1,6 @@
 // VCS-kind detection with process-lifetime cache, invalidated by worktree CRUD.
-import * as fs from "node:fs";
 import * as path from "node:path";
+import { probeGitMarker } from "./git-marker.ts";
 
 export type VcsKind = "git" | "unknown";
 
@@ -11,25 +11,31 @@ const cache = new Map<string, VcsKind>();
 // does not increment the counter (the chat-attach AC2 contract).
 let probeCount = 0;
 
-function probe(cwd: string): VcsKind {
+// `null` means "couldn't determine" (a filesystem I/O error interrupted the
+// walk) — distinct from "unknown", which is a confirmed non-git tree. We
+// neither cache nor persist `null`, so the answer self-heals on the next
+// probe once the mount recovers.
+function probe(cwd: string): VcsKind | null {
   let cur = path.resolve(cwd);
   // Walk up to filesystem root. `path.dirname("/") === "/"` is the
   // termination condition on POSIX; Windows behaves similarly.
   while (true) {
     probeCount += 1;
-    if (fs.existsSync(path.join(cur, ".git"))) return "git";
+    const marker = probeGitMarker(cur);
+    if (marker === "present") return "git";
+    if (marker === "error") return null;
     const parent = path.dirname(cur);
     if (parent === cur) return "unknown";
     cur = parent;
   }
 }
 
-export function detectVcsKind(cwd: string): VcsKind {
+export function detectVcsKind(cwd: string): VcsKind | null {
   const key = path.resolve(cwd);
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
   const result = probe(key);
-  cache.set(key, result);
+  if (result !== null) cache.set(key, result);
   return result;
 }
 

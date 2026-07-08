@@ -12,7 +12,7 @@ import {
 } from "../src/index.ts";
 import type { ResolvedConfig } from "../src/config-loader/index.ts";
 import { runFirstSendHook } from "../src/process-manager/first-send-hook.ts";
-import { persistVcsKindOnAttach } from "../src/process-manager/persist-vcs-kind.ts";
+import { reconcileGitContextOnAttach } from "../src/process-manager/reconcile-git-context.ts";
 import type { ServerFrame } from "../src/chat-protocol/frames.ts";
 import { __resetVcsKindCacheForTests } from "../src/git/vcs-kind.ts";
 import type { TmuxSessionApi } from "../src/process-manager/tmux-session.ts";
@@ -154,8 +154,8 @@ describe("chat-diff-panel smoke gate", () => {
     // Brand-new chats start with worktree_mode === null; no workaround
     // mutation is needed — the hook will commit defaultEnvMode on send.
     expect(store.chats.get(chatId)!.worktree_mode).toBeNull();
-    // Attach hook: persist vcs_kind.
-    const attach = persistVcsKindOnAttach(store, chatId);
+    // Attach hook: reconcile git context (persists vcs_kind).
+    const attach = reconcileGitContextOnAttach(store, chatId);
     expect(attach.vcsKind).toBe("git");
     expect(store.chats.get(chatId)!.vcs_kind).toBe("git");
 

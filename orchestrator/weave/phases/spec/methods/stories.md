@@ -146,7 +146,7 @@ Stories are distilled **at the end** of grilling, not asked as questions. Flow:
 1. Foundation grilling — gather context (Background, Open questions).
 2. Branching grilling — resolve scope and decision points (Y/N, Choice, Architecture, Background).
 3. **Story distillation** — sweep the seed + answered decisions + foundation context; emit one or more `US-NNN` stories with EARS AC into `spec.md` `## User stories`. Match each story against its supporting Q-IDs in `decisions.md` if non-obvious.
-4. Validate — every story has ≥1 EARS AC; every AC opens with a valid keyword; every universal acceptance condition lives under Constraints not Stories.
+4. Validate — every story has ≥1 EARS AC; every AC opens with a valid keyword; every universal acceptance condition lives under Constraints not Stories; every story traces to the seed/ticket or to an answered decision in `decisions.md`. Capability the seed doesn't ask for is surfaced as an explicit scope question during grilling — never silently distilled into a story.
 
 If a story would surface a decision the agent cannot make confidently (e.g. role identity unclear, value ambiguous), the agent asks a normal grilling question first (typically `Open` category), then distils after the answer.
 

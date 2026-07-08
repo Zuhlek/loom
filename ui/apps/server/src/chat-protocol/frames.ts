@@ -350,14 +350,21 @@ export interface CheckpointCapturedFrame {
 }
 
 /**
- * The chat row's `(branch, worktree_path)` tuple was patched via
- * `PATCH /chats/meta` (or a verb route that calls into it). Carries the
- * post-patch values so the web client can update without a refetch.
+ * A chat row's git-context fields were patched server-side (via
+ * `PATCH /chats/meta`, a verb route, or the attach-time reconciler). Only the
+ * keys present in `body` were touched — the client merges them and leaves the
+ * rest untouched, so a partial update (e.g. vcs_kind alone) never clobbers a
+ * sibling field like `branch`.
  */
 export interface ChatMetaChangedFrame {
   kind: "chat-meta-changed";
   "chat-id": string;
-  body: { branch: string | null; worktreePath: string | null };
+  body: {
+    branch?: string | null;
+    worktreePath?: string | null;
+    vcsKind?: "git" | "unknown" | null;
+    repoName?: string | null;
+  };
 }
 
 export type ServerFrame =

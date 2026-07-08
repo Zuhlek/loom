@@ -17,7 +17,7 @@ These arrive inlined (see `## Inlined methods` appended below) — apply them be
 - Code quality
 - **Principle compliance** — walk P1–P7 from `principles.md` against the diff, applying each principle's "Review check" rule. Severity mapping per `principles.md` §"Review checklist":
   - **Blocker:** P1 with a clear scope violation; P3 duplication at 3+ instances; P4 `legacy*` naming or commented-out code that landed.
-  - **Major:** P2 mismatch with existing conventions; P5 unused abstraction with no consumer; P6 internal mocking.
+  - **Major:** P2 mismatch with existing conventions; P3 near-copy of an existing unit; P5 unused abstraction with no consumer; P6 internal mocking or redundant coverage.
   - **Minor:** stylistic deviations within a principle's spirit.
   - Where a `spec.md ## Constraints` entry contradicts a principle, the Constraint wins for this project.
 - **Shortcut-marker harvest** — grep the diff/codebase for `loom:shortcut` markers (convention in `principles.md § Marking deliberate shortcuts`: `loom:shortcut <ceiling>; <trigger>`). For each, list its ceiling + upgrade-trigger in `review.md`, then HONESTY CHECK: verify the stated ceiling matches reality, and flag any marker whose ceiling looks wrong or that names NO upgrade-trigger (rot risk). REPORT-ONLY — never blocks, never fails the verdict on its own.

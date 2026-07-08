@@ -83,4 +83,20 @@ describe("detectVcsKind (T-008)", () => {
     fs.writeFileSync(path.join(root, ".git"), "gitdir: /elsewhere\n");
     expect(detectVcsKind(root)).toBe("git");
   });
+
+  test("filesystem fault → null (not cached, so it self-heals)", () => {
+    // A regular file as cwd makes the `<cwd>/.git` stat fault with ENOTDIR
+    // (stand-in for a mount EIO): indeterminate, so detectVcsKind returns
+    // null and must not cache it.
+    const dir = track(makeNonGitDir());
+    const file = path.join(dir, "not-a-dir");
+    fs.writeFileSync(file, "x");
+    expect(detectVcsKind(file)).toBeNull();
+    // Replace the file with a real git dir → next probe resolves (null was
+    // never cached).
+    fs.rmSync(file);
+    fs.mkdirSync(file);
+    fs.mkdirSync(path.join(file, ".git"));
+    expect(detectVcsKind(file)).toBe("git");
+  });
 });

@@ -1,17 +1,9 @@
-/**
- * Composer footer pill that consolidates the chat's git context into one
- * place: `<repo> · <branch> · <mode>`. Replaces the former separate
- * ModeIndicatorPill (working-tree mode) and AttachedRefPill (branch / no
- * git) — a single glanceable answer to "which repo, which branch, and am
- * I on the current checkout or a fresh worktree".
- *
- * `repoName` is the git top-level basename (server-resolved), NOT the
- * opened folder's name, so it stays correct when a chat is opened at a
- * sub-directory below the repo root.
- *
- * Display-only (no popover): the diff and worktree panels remain reachable
- * from the right rail.
- */
+// Composer footer pill consolidating the chat's git context into one place:
+// `<repo> · <branch> · <mode>`. Replaces the former ModeIndicatorPill +
+// AttachedRefPill. `repoName` is the git top-level basename (server-resolved),
+// not the opened folder's name, so it stays correct when a chat opens at a
+// sub-directory below the repo root. Display-only — diff/worktree panels stay
+// reachable from the right rail.
 export interface WorkspacePillProps {
   repoName: string | null;
   branch: string | null;

@@ -43,7 +43,12 @@ import type {
   PendingQuestion,
   Task,
   WireModelSettings,
+  WireSlashCommand,
 } from "../../chat-protocol/messages.ts";
+import {
+  discoverUserSlashCommands,
+  mergeSlashCommands,
+} from "./user-commands.ts";
 import type { WirePermissionMode } from "../../chat-protocol/frames.ts";
 import {
   serializeServerFrame,
@@ -130,7 +135,7 @@ export interface JsonlTailBridgeOptions {
   /**
    * Lifecycle hooks for chat-diff-panel substrate wiring.
    *  - `onChatAttach` runs once per `attach()` call. Used by
-   *    `persistVcsKindOnAttach` and `turnWatcher.start`.
+   *    `reconcileGitContextOnAttach` and `turnWatcher.start`.
    *  - `onFirstUserTurn` runs before the first `submitUserTurn`
    *    for a chat. Used by `runFirstSendHook`. The bridge awaits the
    *    returned promise before forwarding the turn input.
@@ -195,6 +200,13 @@ interface ChatState {
   state: "absent" | "starting" | "live" | "disposed";
   tail: JsonlTail;
   materializer: Materializer;
+  /**
+   * User-invocable slash commands discovered on disk (see user-commands.ts).
+   * `skill_listing` omits them (it is model-facing), so they are merged into
+   * every `slash-commands-update` frame and seeded to each connecting client.
+   * Computed once at attach — the command dirs don't change mid-session.
+   */
+  userSlashCommands: WireSlashCommand[];
   clients: Set<WsClient>;
   pendingPermissions: Map<string, PendingPermission>;
   pendingQuestions: Map<string, PendingQuestion>;
@@ -420,6 +432,18 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     if (!ev) return;
     const frames = state.materializer.ingest(ev);
     for (const f of frames) {
+      // The model-facing `skill_listing` catalog omits user-only commands
+      // (e.g. `/weave`); fold in the disk-discovered ones so the composer
+      // can autocomplete them. See user-commands.ts.
+      if (f.kind === "slash-commands-update") {
+        broadcast(state, {
+          ...f,
+          body: {
+            commands: mergeSlashCommands(f.body.commands, state.userSlashCommands),
+          },
+        });
+        continue;
+      }
       broadcast(state, f);
       if (f.kind === "tasks-update") {
         state.latestTasks = f.body.tasks;
@@ -602,6 +626,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       state: "starting",
       tail,
       materializer,
+      userSlashCommands: discoverUserSlashCommands(cwd),
       clients: new Set(),
       pendingPermissions: new Map(),
       pendingQuestions: new Map(),
@@ -801,6 +826,17 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       state.clients.add(client);
       // Always deliver a snapshot frame before any subsequent deltas.
       sendTo(client, buildSnapshotFrame(state));
+      // Seed the disk-discovered user-only commands (e.g. `/weave`) so they
+      // autocomplete immediately, even before/without a `skill_listing`
+      // attachment. Subsequent `skill_listing` frames merge these back in
+      // (see onTailLine), so the model-facing catalog never drops them.
+      if (state.userSlashCommands.length > 0) {
+        sendTo(client, {
+          kind: "slash-commands-update",
+          "chat-id": state.chatId,
+          body: { commands: state.userSlashCommands },
+        });
+      }
       if (!state.hasAttachHookFired) {
         state.hasAttachHookFired = true;
         try {

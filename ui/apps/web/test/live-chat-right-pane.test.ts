@@ -115,7 +115,9 @@ describe("rightDrawer slot wiring", () => {
 
   test("DiffPanelContainer receives worktreePath, chatId, vcsKind, refreshSignal", () => {
     const src = readFileSync(routePath, "utf8");
-    expect(src).toMatch(/worktreePath=\{\s*chat\.worktree_path\s*\}/);
+    // Local chats have a null worktree_path and fall back to chat.cwd, so
+    // allow an optional `?? chat.cwd` after the primary source.
+    expect(src).toMatch(/worktreePath=\{\s*chat\.worktree_path(\s*\?\?\s*chat\.cwd)?\s*\}/);
     expect(src).toMatch(/chatId=\{\s*chat\.id\s*\}/);
     expect(src).toMatch(/vcsKind=\{/);
     expect(src).toMatch(/refreshSignal=\{/);

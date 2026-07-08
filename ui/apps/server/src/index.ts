@@ -58,7 +58,7 @@ import {
 } from "./checkpointing/checkpoint-reactor.ts";
 import { createHeadWatcher, type HeadWatcher } from "./git/head-watcher.ts";
 import { createTurnWatcher, type TurnWatcher } from "./process-manager/turn-watcher.ts";
-import { persistVcsKindOnAttach } from "./process-manager/persist-vcs-kind.ts";
+import { reconcileGitContextOnAttach } from "./process-manager/reconcile-git-context.ts";
 import { runFirstSendHook } from "./process-manager/first-send-hook.ts";
 import type { ServerFrame } from "./chat-protocol/frames.ts";
 
@@ -327,9 +327,26 @@ if (isEntrypoint) {
     onChatAttach: (chatId, cwd) => {
       if (!substrateRef) return;
       try {
-        persistVcsKindOnAttach(store, chatId);
+        // Self-heal git context frozen by a transient mount fault, and push
+        // any correction to the live client (a reload picks it up from the
+        // now-corrected row).
+        const git = reconcileGitContextOnAttach(store, chatId);
+        if (git.vcsChanged) {
+          bridge.broadcastFrameToChat(chatId, {
+            kind: "chat-meta-changed",
+            "chat-id": chatId,
+            body: { vcsKind: git.vcsKind, repoName: git.repoName },
+          });
+        }
+        if (git.branchChanged && git.branch !== null) {
+          bridge.broadcastFrameToChat(chatId, {
+            kind: "ref-change",
+            "chat-id": chatId,
+            body: { cwd, branch: git.branch },
+          });
+        }
       } catch (err) {
-        console.warn(`[loom] persistVcsKindOnAttach failed for ${chatId}: ${(err as Error).message}`);
+        console.warn(`[loom] reconcileGitContextOnAttach failed for ${chatId}: ${(err as Error).message}`);
       }
       try {
         substrateRef.turnWatcher.start(chatId, cwd);

@@ -42,6 +42,8 @@ If no finding lands in any category, status is `passed` and the agent recommends
 
 Severities: `blocker`, `major`, `minor`, `note`. A `blocker` finding implies the next phase cannot consume the output; `major` implies a likely regression; `minor` / `note` are polish.
 
+Findings also obey the triage in `methods/principles.md § Review checklist`: a two-sided finding whose benefit is a few lines is not a finding — omit it, the status quo wins. A mechanical fix (behaviour-preserving, no regression surface) states "apply, no decision needed" in its Suggested refine focus.
+
 ## User-Facing Decision
 
 The agent does NOT call `AskUserQuestion`. It writes `quality-review.md` and returns. The orchestrator surfaces the gate with the findings preview (see `orchestrator/weave/SKILL.md § Refine-or-Continue Decision`). The Refine option in the re-asked gate automatically scopes itself to the findings (Targeted refine, per `SKILL.md`).

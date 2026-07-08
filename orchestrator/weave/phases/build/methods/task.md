@@ -14,6 +14,7 @@ Copy this into your working notes for each task and tick as you go:
 - [ ] RED logged (a runtime assertion failure, not a compile error)
 - [ ] IMPLEMENT (smallest scoped diff; only files in files-likely-touched)
 - [ ] GREEN logged (test now passes)
+- [ ] REMOVAL PASS applied (cuts that keep green)
 - [ ] done.md written with status: green | failed | hitl-block
 - [ ] attempts <= 3 (else status: failed)
 ```
@@ -28,7 +29,9 @@ For task `T-NNN`:
 
 3. **Green phase.** Re-run the tests. On green, append the green output to the test log. On red, return to step 2 and try again. Stop after **three** failed implementation attempts and record `status: failed` in the done report.
 
-4. **Done report.** Write `tasks/T-NNN.done.md` per the schema below.
+4. **Removal pass.** Walk the task diff once, asking per hunk: does any acceptance criterion fail if I delete this? does the stdlib, the platform, or an existing helper already do it? does anything in this PR consume it? is there a shorter form that extends existing code? Apply every cut that survives, re-run the tests once, keep green. This is P1's self-check executed, not remembered — cuts are applied here, never surfaced as questions or notes.
+
+5. **Done report.** Write `tasks/T-NNN.done.md` per the schema below.
 
 ## Hard rules
 

@@ -7,6 +7,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { probeGitMarker } from "./git-marker.ts";
 
 export interface GitProbeResult {
   isGit: boolean;
@@ -20,12 +21,15 @@ export function isGitRepo(p: string): GitProbeResult {
   let cur = path.resolve(p);
   // Walk upward from the given path looking for a `.git` marker.
   while (cur !== "/") {
-    const gitMarker = path.join(cur, ".git");
-    if (fs.existsSync(gitMarker)) {
+    const marker = probeGitMarker(cur);
+    if (marker === "present") {
       // Found a repo root — return its name and top-level path.
       const repoName = path.basename(cur);
       return { isGit: true, repoName, topLevel: cur };
     }
+    // Stop guessing on a transient I/O error rather than mislabelling the
+    // tree as non-git; the caller retries on the next probe.
+    if (marker === "error") break;
     const parent = path.dirname(cur);
     if (parent === cur) break;
     cur = parent;

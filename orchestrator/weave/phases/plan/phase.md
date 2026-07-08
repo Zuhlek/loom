@@ -10,7 +10,7 @@ Convert solution structure into an executable work graph. Own Plan artifacts.
 4. Build a `blocked-by` DAG.
 5. Mark tasks as `AFK` or `HITL`.
 6. Set each task's `satisfies-stories` field to the `US-NNN` IDs whose acceptance criteria the task delivers. Every active `US-NNN` story must be covered by at least one task.
-7. Include likely file scope, layer coverage, acceptance criteria, and behavior-level test sketches (per-task test sketches derive from the satisfied stories' EARS clauses).
+7. Include likely file scope, layer coverage, acceptance criteria, and behavior-level test sketches (per-task test sketches derive from the satisfied stories' EARS clauses). Each sketch names the EARS clause it pins — one pin per behaviour per layer: when an existing test or golden already covers the clause at that layer, the sketch extends it rather than adding a parallel test.
 8. Declare `**Mutation Testing:** yes | no` at the top of `tests.md`. Default `no`. Set `yes` only when the work touches logic whose bug-impact justifies mutation cost (security boundaries, money, data integrity, irreversible operations).
 9. Validate graph coverage before returning — every story is covered; every `blocked-by` resolves; no cycles.
 10. Write `board.md` in the kanban shape below.

@@ -319,14 +319,20 @@ export type ServerFrame =
     }
   | {
       /**
-       * Verb-route mutation of `(branch, worktree_path)` on the chat row.
-       * Broadcast after `switchRef` / `createRef` / `createWorktree` /
-       * `removeWorktree` / `PATCH /chats/meta` so the composer pills +
-       * diff panel re-render without a refetch.
+       * Mutation of a chat row's git-context fields. Broadcast after
+       * `switchRef` / `createRef` / `createWorktree` / `removeWorktree` /
+       * `PATCH /chats/meta` or the attach-time reconciler so the composer
+       * pills + diff panel re-render without a refetch. Only the keys present
+       * in `body` were touched — the client merges those and leaves the rest.
        */
       kind: "chat-meta-changed";
       "chat-id": string;
-      body: { branch: string | null; worktreePath: string | null };
+      body: {
+        branch?: string | null;
+        worktreePath?: string | null;
+        vcsKind?: "git" | "unknown" | null;
+        repoName?: string | null;
+      };
     }
   | {
       /**
