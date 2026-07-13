@@ -3,6 +3,7 @@
   "private": true,
   "description": "Loom — phase-based development framework. Orchestrator (skills under orchestrator/), UI dev stack (server + web under ui/), evaluation harness (orchestrator/evaluation/).",
   "scripts": {
+    "bootstrap":     "bash orchestrator/setup-loom.sh",
     "dev":           "pnpm --dir ui dev",
     "dev:server":    "pnpm --dir ui dev:server",
     "dev:web":       "pnpm --dir ui dev:web",

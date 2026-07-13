@@ -188,8 +188,13 @@ missing=0
 while IFS= read -r cmd; do
     resolved="${cmd//\"/}"
     resolved="${resolved/\$HOME/$HOME}"
-    if [ ! -x "$resolved" ]; then
-        echo "warn       hook command not executable: $resolved" >&2
+    # A command may carry an interpreter prefix (e.g. `python3 <path>`); test the
+    # hook script path itself, not the whole invocation string, or an interpreted
+    # hook is falsely flagged as non-executable.
+    path="$(printf '%s' "$resolved" | grep -oE '[^ ]*loom-hooks[^ ]*' | head -n1)"
+    [ -n "$path" ] || path="$resolved"
+    if [ ! -x "$path" ]; then
+        echo "warn       hook command not executable: $path" >&2
         missing=$((missing + 1))
     fi
 done < <(jq -r '.hooks // {} | to_entries[].value[].hooks[]?.command? | select(. != null) | select(test("loom-hooks"))' "$SETTINGS")
