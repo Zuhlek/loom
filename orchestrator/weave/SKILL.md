@@ -35,7 +35,7 @@ Do not produce phase artifacts yourself. Phase agents own their artifacts.
    - `phases/review/phase.md` + `phases/review/phase.signature.md`
 4. Read `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` (available for `spec`, `design`, `plan`, `build`) only when the user picks `Run quality check` at the current phase's gate. Spec, Design, and Build QCs have narrow in-phase scope (audit only that phase's own artifacts); the Plan QC has comprehensive cross-phase scope (audits Spec + Design + Plan together — see `phases/plan/quality-check.md`). Review has no QC agent because Review is itself the project-level quality check.
 
-The RETURN schema is the fenced `yaml` block under `### RETURN block` inside `phase.signature.md` / `quality-check.signature.md`. Phase RETURN-block schema is enforced solely by `hooks/validate-subagent-output.py`; failures surface as visible hook blocks rather than silent re-dispatch.
+The RETURN schema is the fenced `yaml` block under `### RETURN block` inside `phase.signature.md` / `quality-check.signature.md`. Phase RETURN-block schema is enforced solely by `hooks/validate-subagent-output.py`; failures surface as visible hook blocks rather than silent re-dispatch. For a Plan return with `status: complete`, the same hook additionally enforces the deterministic work-graph invariants (frontmatter, `blocked-by` resolution, acyclicity, story coverage, board shape, required `plan.md` sections — see `phases/plan/phase.signature.md § Deterministic validation`); the opt-in pre-Build Quality Check audits judgment-level quality only.
 
 The `--answers` flag is no longer accepted by `/weave`; the eval harness stages `.answers.yaml` directly under `.loom/<project>/` before invoking `/weave`. Unknown flags are silently ignored. The Spec grilling agent's existing read-if-present behaviour on `.loom/<project>/.answers.yaml` is preserved, so a harness-staged file is consumed as before.
 
@@ -166,7 +166,7 @@ Operationalised:
    1. Read the body file (`phases/<phase>/phase.md` or `phases/<phase>/quality-check.md`).
    2. Append `\n\n---\n\n` (two newlines, a `---` thematic break, two newlines).
    3. Append the signature file (`phases/<phase>/phase.signature.md`, etc.).
-   4. **Inline the methods the body needs.** For every file listed in the body's `## Reads` (or `## Reads first`), in listed order: append `\n\n---\n\n`, then `## Inlined methods` (once, before the first), then `### <path-as-listed>`, then the file's verbatim content. A body with no `## Reads` (e.g. Design, Plan) skips this band — no `## Inlined methods` header. The subagent never disk-reads a method file; it has the content inline.
+   4. **Inline the methods the body needs.** For every file listed in the body's `## Reads` (or `## Reads first`), in listed order: append `\n\n---\n\n`, then `## Inlined methods` (once, before the first), then `### <path-as-listed>`, then the file's verbatim content. A body with no `## Reads` (e.g. Design) skips this band — no `## Inlined methods` header. The subagent never disk-reads a method file; it has the content inline.
    5. Keep the `<project>`, `<phase>`, `<task>` placeholder tokens **literal** — never substitute real values into the head. Literal placeholders are what make the prefix cacheable across projects.
    6. Add **no wrapper text** and **no path for the subagent to resolve**. The whole head — body, signature, inlined methods, RETURN schema — is the cacheable region.
 2. **Dynamic tail — single `<system-reminder>` block.** Append at the very end of the user turn, in exactly this shape:
@@ -176,11 +176,12 @@ Operationalised:
    Active project: <project>
    Active phase: <phase>
    Current task: <T-NNN | none>
+   Findings source: <quality-review.md | review.md | none>
    Date: <YYYY-MM-DD>
    </system-reminder>
    ```
 
-   Nothing dynamic appears above the opening `<system-reminder>` line.
+   Nothing dynamic appears above the opening `<system-reminder>` line. `Findings source` names the findings file a refine dispatch must consume: `quality-review.md` for a Targeted refine after a Quality Check, `review.md` for a fix-round dispatch from the Review gate, `none` otherwise.
 3. Pass the result as the user turn to a fresh `Task` session.
 
 The order — body, `\n\n---\n\n`, signature, tail — is fixed: body first establishes identity and work loop before the agent reads the wire contract.
@@ -212,7 +213,7 @@ A packager producing a slim loom profile can `rm -rf orchestrator/lib/telemetry/
 
 Reruns are user-driven, never automatic — with one bounded exception for all-mechanical findings (below). The gate is a single `AskUserQuestion` with **up to 4 options** per phase. The `Refine` option replaces the prior rerun-phase option — it preserves user-confirmed content and applies any pending Quality Check findings, rather than re-deriving from scratch.
 
-**All-mechanical exception:** when a phase's pending findings (`quality-review.md`, or `review.md` at the Review gate) are ALL mechanical — every finding's recommendation states "apply, no decision needed" per `methods/principles.md § Review checklist` findings triage — the orchestrator dispatches one Targeted refine automatically instead of asking (for Review-gate findings: a Targeted Build refine with `review.md` as the findings source, followed by one Review re-dispatch). It then informs the user at the gate about what was applied. This exception never chains: if anything remains after that single pass, the gate is asked normally.
+**All-mechanical exception:** when a phase's pending findings (`quality-review.md`, or `review.md` at the Review gate) are ALL mechanical — every finding's recommendation states "apply, no decision needed" per `methods/principles.md § Review checklist` findings triage — the orchestrator dispatches one Targeted refine automatically instead of asking (for Review-gate findings: a Targeted Build refine dispatched with `Findings source: review.md` in the dynamic tail, followed by one Review re-dispatch). It then informs the user at the gate about what was applied. This exception never chains: if anything remains after that single pass, the gate is asked normally.
 
 The gate summary leads with the phase's purpose — the first sentence of `phases/<phase>/phase.md` (e.g. "Clarify the seed into specified intent." for Spec). Read that line at gate time and prepend it so the user knows what the phase was responsible for.
 
@@ -226,16 +227,29 @@ Gate summaries and continue-labels stay terse — they already lead with the pha
 | Design | Continue → enter Plan / Refine / Run quality check / Go back to Spec |
 | Plan | Continue → start autonomous Build (modifies repository) / Refine / Run quality check (cross-phase Pre-Build audit) / Go back to Design |
 | Build | Continue → enter Review / Refine / Run quality check / Go back to Plan |
-| Review | Continue → mark lifecycle complete / Refine / Go back to Build |
+| Review | Continue → mark lifecycle complete / Fix findings (when eligible, see below) / Refine / Go back to Build |
 
 `Continue` labels are phase-aware (the table above). Free-text user input is never auto-interpreted as `Continue` — the user must pick the option. The Plan gate's label spells out `modifies repository` so the user cannot continue into Build without seeing the consequence.
+
+The Review gate surfaces `Fix findings` only when it is eligible: `review.md` carries at least one `blocker` or `major` finding whose Owner phase is Plan or Build, the findings are not all-mechanical (those take the automatic exception above), and fewer than 3 fix rounds have run (count `fix-round` entries in `pipeline.md.History`). At the cap, the gate states that 3 fix rounds are exhausted and a human decision is required (`Go back` or accept the risk via `Continue`).
+
+### When the user picks `Fix findings` (Review gate)
+
+Convert Review findings into executable work instead of advisory prose — the fix inherits the whole Build enforcement machinery (TDD, done-reports, board transitions, hooks):
+
+1. Append `fix-round <n>` to `pipeline.md.History` (n = prior fix rounds + 1).
+2. Dispatch the **Plan agent** in a fresh Task session with `Findings source: review.md` in the dynamic tail. Its Fix-round refine scope (`phases/plan/phase.md § Refine scope`) appends one `[fix]` task per `blocker`/`major` finding owned by Plan or Build and touches nothing else.
+3. On Plan `complete`: set `Current phase = build`, dispatch Build normally (it picks up the ready `[fix]` Backlog cards), then apply board transitions per the mapping above.
+4. On Build `complete`: re-dispatch Review, then surface the Review gate again.
+
+Findings owned by Spec or Design are never converted — the gate routes those through `Go back to <phase>`. The 3-round cap is a backstop against endless review↔build ping-pong; it never auto-extends.
 
 ### When the user picks `Refine`
 
 Re-dispatch the same phase agent in a fresh Task session. The agent's `## Refine scope` section in its `phase.md` defines what it preserves and what it re-derives. Implicit scope rules (no user input required beyond picking `Refine`):
 
-- **If `quality-review.md` exists in the workspace** (because the user just ran QC, or QC findings persist from a prior gate): treat it as a Targeted refine — re-derive only the artifacts the findings flag; pin everything else.
-- **Otherwise:** Light refine — preserve user-confirmed content (`Status: answered` slots in `decisions.md`, accepted `Architecture decisions` blocks in `design.md`, `In Progress` / `Review` / `Done` cards in `board.md`); re-derive the agent-drafted parts.
+- **If `quality-review.md` exists in the workspace** (because the user just ran QC, or QC findings persist from a prior gate): treat it as a Targeted refine — re-derive only the artifacts the findings flag; pin everything else. Set `Findings source: quality-review.md` in the dynamic tail.
+- **Otherwise:** Light refine — preserve user-confirmed content (`Status: answered` slots in `decisions.md`, accepted `Architecture decisions` blocks in `design.md`, `In Progress` / `Review` / `Done` cards in `board.md`); re-derive the agent-drafted parts. Set `Findings source: none`.
 
 There is no "Full rerun" option. The user achieves a full re-derivation by picking `Go back to <prior phase>` and then `Continue` back through. Refine is the smallest-diff option; full re-derivation is the gesture of "the prior phase needs to be reconsidered, not just this one".
 

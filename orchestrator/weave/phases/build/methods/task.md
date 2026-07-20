@@ -31,7 +31,22 @@ For task `T-NNN`:
 
 4. **Removal pass.** Walk the task diff once, asking per hunk: does any acceptance criterion fail if I delete this? does the stdlib, the platform, or an existing helper already do it? does anything in this PR consume it? is there a shorter form that extends existing code? Apply every cut that survives, re-run the tests once, keep green. This is P1's self-check executed, not remembered — cuts are applied here, never surfaced as questions or notes.
 
-5. **Done report.** Write `tasks/T-NNN.done.md` per the schema below.
+5. **Done report.** Write `tasks/T-NNN.done.md` per the schema below. Delete `tasks/T-NNN.remaining.md` if one exists — the checkpoint is spent.
+
+## Compaction checkpoint
+
+When context limits approach mid-task (the session is running out of room before the task can reach a terminal state), write `tasks/T-NNN.remaining.md` before stopping, then return with the task omitted from `task-outcomes` (unaddressed tasks keep their cards untouched). The file lists — tersely, facts only:
+
+```markdown
+# T-NNN — remaining work
+**State:** red-logged | implementing | green-attempt-<n>
+**Files still to change:** <path — one-line what>
+**Done so far:** <one line per completed step>
+**Next step:** <the single next action>
+**Test command:** <exact command used for red/green>
+```
+
+The next Build session reads it at step 2a of the work loop and resumes from the recorded state instead of re-analyzing the task from scratch. Delete the file when the task reaches its done report. Never write one for a task that reached a terminal state — `done.md` is the record then.
 
 ## Hard rules
 
@@ -85,3 +100,4 @@ A task is done only when all three of these have happened — partial completion
 | `<repo>/...` | task scope | Implementation files needed to satisfy the task's acceptance criteria. Smallest scoped diff per `principles.md` P1. |
 | `.loom/<project>/tasks/T-NNN.test-log.txt` | task | Red + green output, tail-sized. |
 | `.loom/<project>/tasks/T-NNN.done.md` | task | Done report per the schema above. |
+| `.loom/<project>/tasks/T-NNN.remaining.md` | task | Compaction checkpoint for an interrupted task; deleted when the task reaches its done report. |

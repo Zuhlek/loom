@@ -2,7 +2,7 @@
 """Unit tests for eval-aggregate.py per tests.md G2 + tasks/T-003.md.
 
 Run via:
-    python3 orchestrator/lib/test_eval_aggregate.py
+    python3 orchestrator/lib/telemetry/test_eval_aggregate.py
 """
 from __future__ import annotations
 

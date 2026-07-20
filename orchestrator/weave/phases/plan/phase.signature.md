@@ -17,8 +17,9 @@ I/O signature between `/weave` and the Work Graph Agent.
 | `decisions.md` | `.loom/<project>/decisions.md` | yes | Spec-phase decisions |
 | `design.md` | `.loom/<project>/design.md` | yes | Solution structure |
 | Evidence artifacts | `.loom/<project>/mockup/` etc. | optional | Design-phase evidence |
-| `plan.md` + `board.md` + `task.md` + `tests.md` + `tasks/T-*.md` | `.loom/<project>/` | on rerun | Prior run's outputs (starting point, not blank slate) |
+| `plan.md` + `board.md` + `tests.md` + `tasks/T-*.md` | `.loom/<project>/` | on rerun | Prior run's outputs (starting point, not blank slate) |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | when present | Quality Check findings to address |
+| `review.md` | `.loom/<project>/review.md` | fix round only | Review findings source when the dynamic tail carries `Findings source: review.md` (see `phase.md § Refine scope` › Fix-round refine) |
 | `type-guidance.md` | `.loom/<project>/type-guidance.md` | when typed | Domain guidance (materialized at project creation from the active `types/<type>.md`) |
 
 ### State preconditions
@@ -70,7 +71,9 @@ Success criteria: `status: complete` in RETURN AND the Build phase agent can pic
 
 - Path: `.loom/<project>/plan.md`.
 - Must exist.
-- Must include a top-level `## Verification environment` section naming the harness Build will use to execute the acceptance gates declared in `tests.md`.
+- Must contain the four required sections per `phase.md § plan.md contract`, in order: `## Approach & sequencing`, `## Plan decisions`, `## Risks`, `## Verification environment`.
+- `## Plan decisions` carries one `### <Decision title>` block (Context / Decision / Rationale / Alternatives) per significant plan-level decision; the verification-environment choice, the mutation yes/no, and every `HITL` designation are mandatory blocks at every depth.
+- `## Verification environment` names the harness Build will use to execute the acceptance gates declared in `tests.md`.
 
 #### `board.md`
 
@@ -83,11 +86,6 @@ Success criteria: `status: complete` in RETURN AND the Build phase agent can pic
 - Tasks with `blocked-by` entries display `(blocked by T-XXX, T-YYY)` in the card title.
 - `HITL` tasks display `[HITL]` immediately after the ID.
 - Stale tasks (after a Plan rerun) display `[stale]` immediately after the ID and live in `Backlog`.
-
-#### `task.md`
-
-- Path: `.loom/<project>/task.md`.
-- Task index — mirrors the task set and dependencies, including the `T-NNN` → `US-NNN` mapping.
 
 #### `tests.md`
 
@@ -113,15 +111,27 @@ Success criteria: `status: complete` in RETURN AND the Build phase agent can pic
 
 - Path: `.loom/<project>/ticket.md`.
 
+### Deterministic validation
+
+A Plan return with `status: complete` is additionally validated by the `SubagentStop` hook (`hooks/validate-subagent-output.py`) — always-on, zero-token, not opt-in:
+
+- Every `tasks/T-NNN.md` carries the required frontmatter fields (`id`, `title`, `type` ∈ {AFK, HITL}, `status`, `blocked-by`, `satisfies-stories` with ≥1 entry, `touches-layers`, `files-likely-touched`).
+- Every `blocked-by` reference resolves to an existing task; the graph is acyclic.
+- Every `status=active` `US-NNN` story in `spec.md ## User stories` appears in at least one task's `satisfies-stories`.
+- `board.md` has exactly the four columns in order and every task file appears on exactly one card.
+- `plan.md` contains the four required sections; `tests.md` declares `**Mutation Testing:** yes|no`.
+
+A violation blocks the return with the violation list as the reason. The pre-Build Quality Check no longer re-checks these mechanical invariants — it audits judgment-level quality only.
+
 ## Throws
 
 | Return status | Meaning | Orchestrator action |
 | --- | --- | --- |
-| `blocked` | `Pending user input` populated for plan-critical ambiguity | Surface the question; write answer back on next dispatch |
+| `blocked` | `Pending user input` populated for plan-critical ambiguity, OR the feasibility pre-check failed (see `phase.md § Work Loop` step 2 — `plan.md ## Infeasibility note` names the owning phase) | Surface the question or the infeasibility; for infeasibility recommend `Go back to <owning phase>` at the gate |
 | `failed` | Graph coverage validation failed | Surface to user; offer rerun |
 
 ### Rerun rules
 
 - Existing `T-NNN` IDs are preserved across reruns.
 - Tasks in `In Progress`, `Review`, `Done` stay in column unless explicitly invalidated.
-- Invalidated tasks return to `Backlog` with a `[stale]` tag.
+- Invalidated tasks return to `Backlog` with a `[stale]` tag; fix-round tasks carry a `[fix]` tag.

@@ -3,6 +3,7 @@
 ## Contents
 
 - 0. Mandate
+- 0.5. Seed-settled facts — never re-ask what the seed answers
 - 1. Six "good question" criteria
 - 1.5. Briefing block discipline
 - 2. Two sub-phases: Foundation, then Branching
@@ -41,6 +42,20 @@ The six G-rules (§1) still apply: relentless does not mean bad, leading, or rep
 The depth choice never relaxes G2–G6 (self-contained, briefed, opinionated, singular, decidable-now) — those are quality gates on every question regardless of depth. Light only loosens G1's enforcement *direction*: a Light run asks fewer questions because more branches collapse as "not decision-relevant" given the small scope, not because the agent is allowed to ship lazy questions.
 
 A Light run that surfaces a contradiction the user can't resolve in three questions still returns `status: blocked` with a `Pending user input` — Light does not mean "guess and move on".
+
+---
+
+## 0.5. Seed-settled facts — never re-ask what the seed answers
+
+Before generating ANY question, sweep `seed.md` in full — including every inlined `loom:seed-source` provenance block (tickets, backlog entries, pasted specs). A decision the seed states **explicitly** is settled, not open:
+
+- Record it as a pre-answered decision slot: normal `## Q<n>` block with the briefing condensed to one line, `Status: answered`, the seed's wording in the answer slot, and an `Answered-by: seed (<source-ref>)` line above the slot so provenance is auditable.
+- Never surface it via `AskUserQuestion`. It counts as an answered decision for the revisit mechanic (§5) — a later answer can still flip it, and the user can reopen it at the gate like any other decision.
+- Acceptance criteria the seed carries (e.g. a ticket's AC list) feed story distillation (§8) directly — they are draft EARS material, not questions.
+
+The bar is **explicit**: the seed must state the decision, not merely imply it. "Export as UVV XML" settles the output format; it does not settle the API shape. When a seed statement is ambiguous or contradicts another seed statement, that IS a question — cite both statements in the briefing.
+
+This rule exists because re-asking the already-answered is the fastest way to make grilling feel like ceremony. The G-criteria (§1) still govern everything genuinely open; this section only removes what was never open.
 
 ---
 
@@ -136,6 +151,17 @@ The Spec Grilling Agent surfaces every question via `AskUserQuestion` and runs t
 
 `decisions.md` is the audit / recovery surface, not the primary answer surface — every answer is mirrored into the matching `<!-- loom:answer-slot -->` region as it is captured.
 
+### File-relay fallback — when `AskUserQuestion` is unavailable
+
+Some harnesses block `AskUserQuestion` inside a dispatched subagent. On the FIRST failed or blocked `AskUserQuestion` call, switch to the file relay for the rest of the session — do not retry the tool, and never guess answers:
+
+1. Generate the full current question batch (every question triage would surface, each with its complete briefing block) and write them to `decisions.md` as `Status: awaiting-answer` slots.
+2. Populate `pipeline.md.Pending user input` and RETURN `status: blocked` with the questions mirrored into `open-ambiguity`.
+3. The orchestrator surfaces them via its own `AskUserQuestion` at the gate, writes each answer into the matching answer slot (state relay per the signature's `blocked` contract, not artifact production), and re-dispatches this agent.
+4. On re-entry, the slot-body parsing rules below pick the answers up and the loop continues — including the revisit mechanic over the newly answered batch.
+
+The file relay is the blessed degraded mode, not an error: the questions, briefings, and slots are identical either way; only the surfacing round-trips through the orchestrator.
+
 ### AskUserQuestion field mapping
 
 The agent populates the picker so the user can answer without opening `decisions.md`. Briefing fields fan out across the picker:
@@ -156,16 +182,16 @@ The user's response options map onto picker entries and a free-text fallback:
 | `(A)` / `(B)` / `YES` / `NO` / `Accept this direction` — direct answer | Picker entry. The recommended option's label carries a `(Recommended)` suffix. The agent strips the suffix and writes the option name to the slot. Status flips to `answered`. |
 | `Explain more` | Picker entry. The agent composes a 2–4 sentence elaboration grounded in the existing briefing and re-calls `AskUserQuestion` with the same options + the elaboration appended to the `question` field. Hard cap: **4 elaborations per Q** (raised from 2 — the user can iterate on understanding before being forced to commit). On the 5th attempt, write `[push back: needs more context]` to the slot. |
 | `Explain more: <focus>` | Free-text fallback. Same as `Explain more` but the agent focuses the elaboration on `<focus>` (the user's specific area of confusion — e.g., `Explain more: how does this affect deployment?`). Counted against the same 4-elab cap. |
-| `Stop` | Picker entry. The agent writes `[stop]` to the slot and exits the loop with `STATUS: stop-requested`. The next `/weave` kick force-ends Spec via the close branch, writes `spec.md` with whatever's resolved, and emits `phase-complete`. |
+| `Stop` | Picker entry. The agent writes `[stop]` to the slot, then force-ends Spec via the close branch in the same session: writes `spec.md` with whatever's resolved, captures unanswered questions under "Deferred clarifications", and returns. |
 | `side requirement: <text>` | Free-text fallback. The agent appends `SR-<n>: <text>` to the `## Side requirements (running)` section and re-calls `AskUserQuestion` (same Q, no answer captured yet). |
 | `push back: <text>` | Free-text fallback. For genuine objection to the framing or recommendation — NOT for "I want more info" (use `Explain more: <focus>` instead). The agent writes `[push back: <text>]` to the slot and continues the loop. The next iteration parses the bracket-prefix, runs the consistency pass (§5), and generates a `Q<n>'` revisit. |
 | Any other free text | Treated as a direct answer. The agent writes the text verbatim to the slot. Status flips to `answered`. |
 
 `Show alternatives` is intentionally out of scope — the `AskUserQuestion` picker has a hard cap of 4 options, and once 1–3 answer choices + `Explain more` + `Stop` have taken slots, there is no room left.
 
-`Defer` and `Skip` are not options. `Skip` was functionally identical to clicking the recommended answer; `Defer` left `[NEEDS CLARIFICATION]` markers in `plan.md` that never got resolved. A question worth asking is worth answering or pushing back on.
+`Defer` and `Skip` are not options. `Skip` was functionally identical to clicking the recommended answer; `Defer` left `[NEEDS CLARIFICATION]` markers that never got resolved. A question worth asking is worth answering or pushing back on.
 
-**Slot-body parsing rules** (used by the next `/weave` kick when it re-enters the agent for recovery):
+**Slot-body parsing rules** (used when a later dispatch re-enters this agent — after a `blocked` file-relay return, a Refine, or a crash mid-`AskUserQuestion`):
 
 - A slot whose body matches `\[(push back|stop)(:\s.*)?\]` → dispatch the matching action.
 - Any other non-whitespace body → direct answer; flip `Status: answered`.
@@ -207,7 +233,7 @@ With Q<m> in mind, my recommendation flips to <new>: <reason>.
 
 Your move:
   [re-open Q<n>]                          re-ask with the new context
-  [keep both — accept inconsistency]      flag in plan.md as NEEDS CLARIFICATION
+  [keep both — accept inconsistency]      record as NEEDS CLARIFICATION in decisions.md
   [explain consistency]                   you clarify why no change needed
 ```
 
@@ -216,7 +242,7 @@ Your move:
 | User choice | Effect |
 |---|---|
 | `re-open Qn` | Re-ask as **`Qn'`** (prime). Original Qn → `Status: superseded-by Qn'`. New Qn' → `Revisited-from: Qn`. |
-| `keep both` | Both stay active in `decisions.md`. Inconsistency recorded as `[NEEDS CLARIFICATION]` in plan.md buffer. |
+| `keep both` | Both stay active in `decisions.md`. Inconsistency recorded as a `[NEEDS CLARIFICATION]` item in `decisions.md`'s own section (per §6 slot rules) and mirrored into `spec.md ## Open ambiguity`. |
 | `explain consistency` | User explains; explanation captured under `Reconciliation:` on the original Q. Both stay active. |
 
 ### Caps
@@ -289,6 +315,7 @@ YES
 - A question MUST NOT have content between `start` and `end` other than the answer (or the placeholder `*(awaiting user answer)*`).
 - Side requirements (`SR-N`) and `[NEEDS CLARIFICATION]` items live in their own sections at the bottom of `decisions.md` — they do NOT use answer slots.
 - Status values: `awaiting-answer`, `answered`, `deferred`, `superseded-by Q<n'>`, `obsolete`, `active` (after revisit).
+- A pre-answered slot (§0.5) carries an `Answered-by: seed (<source-ref>)` line immediately above the slot's `start` marker; user-answered slots carry no `Answered-by` line.
 
 ### Parser invariant
 
@@ -310,7 +337,7 @@ Design phase reads only `Status: active` and `Status: answered` entries (and cha
 | Triage (§3) returns "otherwise" — Foundation, revisit, and Branching queues all empty (decision tree exhausted, per §0) | Return artifacts; orchestrator surfaces the Refine-or-Continue decision. |
 | User says `stop`, `enough`, `let's move on`, `go` | Write current state, return artifacts. |
 | Ambiguity still surfacing after many turns | RETURN `STATUS: needs_more_grilling` to the orchestrator; let the user decide whether to extend. |
-| User clicks `Stop` before answering N≥3 questions in a row | Force-end Spec: write the resolved Qs to decisions.md, capture the unanswered ones in the "Deferred clarifications" section (these become `[NEEDS CLARIFICATION]` markers when plan.md is generated), return artifacts. |
+| User clicks `Stop` before answering N≥3 questions in a row | Force-end Spec: write the resolved Qs to decisions.md, capture the unanswered ones in the "Deferred clarifications" section and mirror them into `spec.md ## Open ambiguity` so downstream phases see them, return artifacts. |
 
 ---
 

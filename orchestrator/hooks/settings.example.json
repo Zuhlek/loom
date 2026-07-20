@@ -26,7 +26,14 @@
       {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "\"$HOME/.claude/loom-hooks/refresh-artifacts.sh\"" }
+          { "type": "command", "command": "\"$HOME/.claude/loom-hooks/refresh-artifacts.sh\"" },
+          { "type": "command", "command": "python3 \"$HOME/.claude/loom-hooks/board-transition.py\"" }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$HOME/.claude/loom-hooks/../lib/telemetry/tag-subagent-phase.py\"" }
         ]
       }
     ]
