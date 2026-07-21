@@ -111,3 +111,28 @@
 - Notes (2): (1) T-005 protected golden-master deferred to operator/local HITL; (2) non-account inter-portfolio error message interpolates mandate ids (reads "between M1 and M1" intra-mandate) — cosmetic, out of scope per Q2, flagged for a future ticket.
 - Safety: no commits/destructive ops; diff confined to AbstractAityCSVMapper.ts + new test file. (.gitignore M / .forge untracked are pipeline bookkeeping, outside code review.)
 - Process learning captured: tsc --skipLibCheck is the correct source-compile gate for aper-interfaces (avoids @types/node false FAIL); in-memory mapper unit tests need 'unassigned' InvestmentType registered pre-ctor + mandate.language set.
+
+## 2026-07-21 — optimize-filtering — Learning
+**Target:** process
+**Lesson:** A plumbed-through opt-in flag is not "done" until a real consumer sets it. `keepPreviousData` was threaded into AbstractService.get and forwarded to useQuery, but no caller ever passed it true, so US-006 AC2 (rows stay visible on refilter) was inert on the shipped reference page — the acceptance criterion was mechanism-present-but-unwired, which a per-task green status masked.
+**Evidence:** grep of the cinnamon tree found only the param definition + forward, zero call sites; getMandates passes 6 positional args ending at isEnabled (position 6), never reaching keepPreviousData (position 8).
+
+## 2026-07-21 — optimize-filtering — Learning
+**Target:** phase-file: weave/phases/plan/phase.md
+**Lesson:** When the plan's named primary harness cannot resolve a core dependency of a whole thread (react-query not resolvable from cinnamon-ui-library; ui-base has no jest), the feasibility pre-check should catch it and either add the harness (HITL) up front or explicitly downgrade those ACs to secondary/manual BEFORE Build — otherwise a thread lands green on typecheck+manual with its behaviour unprotected by CI (US-005 AC1/AC2/AC3 here).
+**Evidence:** T-006/T-007/T-009 all shipped green with "no runnable primary harness" verification-limitation notes; the plan asserted the jsdom harness was runnable but it lacks react-query.
+
+## 2026-07-21 — optimize-filtering — Learning
+**Target:** process
+**Lesson:** Postgres rejects a STORED generated column whose expression uses a non-immutable cast (text->date depends on DateStyle). Design that pins a generated-column type (DATE->DATE) should be validated against Postgres immutability rules; storing ISO YYYY-MM-DD as TEXT preserves both chronological ordering and parity with an in-memory ISO-string comparison.
+**Evidence:** T-002 refined design.md's DATE->DATE row to DATE->TEXT after Postgres rejected the DATE generated column; parity DB-verified.
+
+## 2026-07-21 — optimize-filtering — Learning
+**Target:** process
+**Lesson:** react-query v4 auto-cancels an in-flight fetch when the last observer unmounts IFF the queryFn consumed context.signal (it sets abortSignalConsumed). Handing react-query's signal to axios therefore silently couples abort-on-cancel with abort-on-unmount — so a "navigate-away lets the query finish and caches it" requirement (US-005 AC3) is broken by the very wiring that implements Cancel. The fix is to drive axios abortion through a caller-owned per-key AbortController (never reading context.signal) so cancel/refilter abort explicitly while unmount aborts nothing. Reasoned code review (prior Major 3) accepted the hook as "correct" by inspection; only a real renderHook harness surfaced the RED. Behaviour that depends on a framework's implicit lifecycle side-effects must be CI-pinned, not inspection-accepted.
+**Evidence:** T-013 harness (UseListQuery.test.ts) went RED on AC3; fix added RequestAbortRegistry.ts + AbstractService.get queryFn as a zero-arg async fn that never touches context.signal; AC1/AC2/AC3 all green ×4.
+
+## 2026-07-21 — optimize-filtering — Learning
+**Target:** process
+**Lesson:** When a data-generation pipeline is itself the bottleneck that blocks a performance-evidence task (booking/state-building import times out well below the target cardinality), a server-side generate_series bulk-load into the *exact* domain tables the query scans — with the real indexed/generated columns provisioned — is a faithful proxy for a filter-latency + no-seq-scan contract, because those are functions of cardinality and index structure, not of how the rows were authored. Keep the distinction explicit in the artifact: it proxies the performance contract, NOT the generator's import path, and does not cover end-to-end HTTP/serialization latency.
+**Evidence:** T-011 loaded 600k positions via generate_series after T-010's generator→import path timed out at 63s/30 mandates; ≤2s proven at all tiers and EXPLAIN chose index scans at >500k with no enable_seqscan override.
