@@ -1,21 +1,14 @@
 # Recovery
 
-The orchestrator runs a silent schema-compliance check on every phase RETURN block before surfacing the Refine-or-Continue decision. Recovery covers the mechanical contract path: malformed returns, missing artifacts, and similar wire-shape failures. User-driven reruns are a separate path (see `SKILL.md` §"Refine-or-Continue Decision").
+Mechanical contract failures (malformed RETURN blocks, missing declared artifacts, Plan work-graph violations) are enforced by the `SubagentStop` hook (`hooks/validate-subagent-output.py`) — the orchestrator runs no schema check of its own. The hook blocks the subagent from stopping and hands it the violation as the block reason, so the producing agent repairs its own return in-session. User-driven reruns are a separate path (see `SKILL.md` § Refine-or-Continue Decision).
 
 ## Failure Modes
 
-| Mode | Action |
-| --- | --- |
-| Schema-compliance mismatch | Silently redispatch once with the mismatch as the rerun instruction and the expected shape (extracted from `phases/<phase>/phase.signature.md` › `## Returns` › `### RETURN block` per `SKILL.md` Phase Cycle 3c) |
-| Missing artifact | Silently redispatch once with the missing path list |
-| Invalid artifact | Surface the Refine-or-Continue decision; suggest `Run quality check` when the phase has a quality-check agent |
-| Failed phase | Leave status `failed` and ask the user for next action |
-| HITL block | Leave status `blocked` and surface the blocking question |
+| Mode | Enforcer | Action |
+| --- | --- | --- |
+| Schema mismatch / missing declared artifact / Plan graph violation | `SubagentStop` hook | The hook blocks the stop with the violation as the reason; the subagent fixes and returns again. No orchestrator involvement. If the subagent's session ends without a compliant RETURN despite the block (persistent failure), treat it as a hard failure: surface the hook reason to the user and exit — never silently re-dispatch. |
+| Invalid artifact (exists, wrong content) | judgment | Surface the Refine-or-Continue decision; suggest `Run quality check` when the phase has a quality-check agent. |
+| `failed` return | phase signature Throws | Leave status `failed`; surface per the signature's Throws row and ask the user for next action. |
+| `blocked` return (HITL) | phase signature Throws | Leave status `blocked`; surface the blocking question, relay the answer per the signature (e.g. Spec's answer slots), re-dispatch. |
 
-## Redispatch Rule
-
-Redispatch once for mechanical contract failure (schema-compliance mismatch, missing artifact). The first redispatch is silent — the user does not see the schema check happen unless it fails. If the same phase fails schema compliance again on the second attempt, surface the reason to the user and keep `Resume point` unchanged.
-
-Do not edit a phase artifact to repair an agent return. The producing phase owns its files.
-
-User-initiated reruns from the Refine-or-Continue decision are NOT mechanical contract failures — they go through the full phase dispatch with prior artifacts as additional context (see `SKILL.md` §"Refine-or-Continue Decision").
+Do not edit a phase artifact to repair an agent return. The producing phase owns its files. Answer relay into `decisions.md` slots on a Spec `blocked` return is state relay licensed by the signature, not artifact production.

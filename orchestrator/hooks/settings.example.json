@@ -8,6 +8,13 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"$HOME/.claude/loom-hooks/pin-on-weave.sh\"" }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "hooks": [
@@ -31,7 +38,7 @@
         ]
       },
       {
-        "matcher": "Task",
+        "matcher": "Agent|Task",
         "hooks": [
           { "type": "command", "command": "python3 \"$HOME/.claude/loom-hooks/../lib/telemetry/tag-subagent-phase.py\"" }
         ]

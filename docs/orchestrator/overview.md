@@ -54,9 +54,9 @@ Every callable under `orchestrator/weave/phases/<name>/` follows the same two-fi
 | `quality-check.signature.md` | with `quality-check.md` | Quality Check agent signature; `## Params` includes every artifact the QC reads |
 | `methods/` | when needed | Phase-internal files read inline by the phase agent. Build's `methods/` holds `task.md`, `smoke.md`, `mutation.md` as procedures the Build session applies at the relevant work-loop steps (not dispatched as subagents). Spec's `methods/` holds reference docs the Spec agent loads at the relevant question-shaping step. |
 
-The two halves of a callable — body and signature — are concatenated at dispatch time into a single system prompt for the producing agent. The concatenation order (body first, then `\n\n---\n\n`, then signature) is specified in `orchestrator/weave/SKILL.md` Phase Cycle 3.
+The two halves of a callable — body and signature — are concatenated at dispatch time into a single user-turn prompt for the producing agent. The concatenation order (body first, then `\n\n---\n\n`, then signature) is specified in `orchestrator/weave/SKILL.md § Dispatch concatenation`.
 
-The formal RETURN-block schema lives inline in the signature, under `## Returns` › `### Return block`, as a fenced `yaml` block. The orchestrator's silent schema-compliance check extracts it from there.
+The formal RETURN-block schema lives inline in the signature, under `## Returns` › `### Return block`, as a fenced `yaml` block. The `SubagentStop` hook (`hooks/validate-subagent-output.py`) enforces it — the orchestrator runs no schema check of its own.
 
 Phase-internal procedure files (`phases/<name>/methods/`) are not dispatched as subagents — they have no signature pair and no RETURN block. They are read inline by the phase agent at the relevant work-loop step.
 

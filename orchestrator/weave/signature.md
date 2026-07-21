@@ -15,8 +15,8 @@ I/O signature for the top-level Loom orchestrator. The orchestrator coordinates 
 | `$ARGUMENTS` | Slash command argument | optional | Project name, ticket ID, or free text used to resolve or create a workspace. Unknown flags are silently ignored — the eval harness pre-stages `.loom/<project>/.answers.yaml` via `evaluation/answer-queue.py` rather than passing an orchestrator flag |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | required when resuming | Canonical state file; absence implies new workspace |
 | `seed.md` | `.loom/<project>/seed.md` | required for new projects | Raw user input that seeds the Spec phase |
-| Phase agent body | `phases/<current-phase>/phase.md` | required at dispatch | Body half of the phase agent's system prompt |
-| Phase agent signature | `phases/<current-phase>/phase.signature.md` | required at dispatch | Signature half of the phase agent's system prompt, carrying trigger, params, returns (including the embedded RETURN-block YAML schema), and throws |
+| Phase agent body | `phases/<current-phase>/phase.md` | required at dispatch | Body half of the phase agent dispatch prompt |
+| Phase agent signature | `phases/<current-phase>/phase.signature.md` | required at dispatch | Signature half of the phase agent dispatch prompt, carrying trigger, params, returns (including the embedded RETURN-block YAML schema), and throws |
 | Orchestrator methods | `methods/find-project.md`, `methods/create-project.md` | conditional | Orchestrator-internal skills loaded per Load Order in `SKILL.md` |
 | Phase quality-check agent | `phases/<phase>/quality-check.md` + `phases/<phase>/quality-check.signature.md` | opt-in only | Loaded when user picks `Run quality check` at the current phase's gate. Available for Spec, Design, Plan, Build (4 of 5 phases); per-phase scope per `methods/quality-check-protocol.md`. Review has no QC — Review is itself the project-level quality check. |
 
@@ -96,4 +96,4 @@ In order:
 4. `phases/build/phase.md` + `phases/build/phase.signature.md`
 5. `phases/review/phase.md` + `phases/review/phase.signature.md`
 
-Each phase agent is dispatched in a fresh `Task` session with the body+signature concatenated as the system prompt per the rule in `SKILL.md` › "Dispatch concatenation". The orchestrator never inlines phase agent content into its own context. See `SKILL.md` for the full Load Order and decision logic.
+Each phase agent is dispatched in a fresh `Task` session with the body+signature concatenated as the user-turn prompt per the rule in `SKILL.md` › "Dispatch concatenation". The orchestrator never inlines phase agent content into its own context. See `SKILL.md` for the full Load Order and decision logic.

@@ -53,10 +53,12 @@ echo
 
 echo "[4/4] Unit tests"
 cd "$REPO_ROOT"
-lib_t=$(python3 -m unittest discover -s orchestrator/lib        -p 'test_*.py' 2>&1 | tail -1)
-ev_t=$( python3 -m unittest discover -s orchestrator/evaluation -p 'test_*.py' 2>&1 | tail -1)
-[ "$lib_t" = "OK" ] && ok "orchestrator/lib ($lib_t)"        || fail "orchestrator/lib ($lib_t)"
-[ "$ev_t"  = "OK" ] && ok "orchestrator/evaluation ($ev_t)"  || fail "orchestrator/evaluation ($ev_t)"
+# `-t` at the telemetry dir so discovery reaches the test modules there
+# (no __init__.py); discovering from orchestrator/lib finds nothing.
+lib_t=$(python3 -m unittest discover -s orchestrator/lib/telemetry -p 'test_*.py' 2>&1 | tail -1)
+ev_t=$( python3 -m unittest discover -s orchestrator/evaluation     -p 'test_*.py' 2>&1 | tail -1)
+[ "$lib_t" = "OK" ] && ok "orchestrator/lib/telemetry ($lib_t)" || fail "orchestrator/lib/telemetry ($lib_t)"
+[ "$ev_t"  = "OK" ] && ok "orchestrator/evaluation ($ev_t)"     || fail "orchestrator/evaluation ($ev_t)"
 echo
 
 if [ "$FAILS" -eq 0 ]; then
