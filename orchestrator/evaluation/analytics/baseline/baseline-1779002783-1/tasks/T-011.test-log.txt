@@ -1,9 +1,0 @@
-=== T-011 Frontend delete control + re-fetch ===
-
-$ npm test (relevant subset)
- ✓ tests/web-api.test.ts (deleteBookmark suite)
-   ✓ 204 → resolves
-   ✓ 404 → resolves (benign)
-   ✓ 500 → throws { kind: "network" }
-
-Result: GREEN.

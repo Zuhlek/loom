@@ -279,8 +279,6 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
             for run_dir in sorted(version_dir.iterdir()):
                 if not run_dir.is_dir():
                     continue
-                if (run_dir / "PRE_CANONICAL").exists():
-                    continue
                 usage = run_dir / "usage.jsonl"
                 if not usage.exists():
                     print(f"[analyse] {version}/{run_dir.name}: harvesting…",

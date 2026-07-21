@@ -1,9 +1,0 @@
-=== T-006 POST /api/bookmarks — validate, reject duplicates, return 201 ===
-
-POST /api/bookmarks subgroup (4 tests):
-  - creates a bookmark and returns 201
-  - rejects duplicate URL with 409 {error: "duplicate"}
-  - rejects invalid url with 400 {error}
-  - rejects empty/missing title with 400
-
-Result: GREEN.

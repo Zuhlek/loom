@@ -1,4 +1,0 @@
-GREEN RUN — tests/dom.test.ts tests/api.test.ts
-Test Files 2 passed (2); Tests 11 passed (11); 660ms.
-
-(Both files were authored as test-first alongside the implementation; happy-dom env declared at the top of dom.test.ts via @vitest-environment.)

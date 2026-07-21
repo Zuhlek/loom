@@ -78,8 +78,10 @@ Treat sub-20–30% deltas at n≈3–5 as noise.
 - absent → read every session id in `.eval-orchestrator-pointer` and
   `transcript-harvest.py --session <uuid>` (one per line) to extract rows,
   then `eval-aggregate.py` for `usage.md`.
-- Runs marked `PRE_CANONICAL` (pre-schema-v2, inflated numbers) are skipped.
 - Pool rows by version → render `analysis.html`.
+
+Every run is produced by the current harvester, so every filed run is
+directly usable — there is no legacy/outdated-run flagging to reason about.
 
 **Timing still matters for manual filing.** If you file a run long after it
 ran and its transcripts have aged out, harvest produces nothing and the run
@@ -150,7 +152,7 @@ remain the next step to turn this from a cost meter into an eval.
 | `no .eval-orchestrator-pointer` | Run wasn't from `run-baseline.sh`, or the pointer was stripped | Recover the session UUID(s), write one per line into `.eval-orchestrator-pointer`, retry |
 | `no rows harvested` | Session aged out of `~/.claude/projects/` | Data is gone; drop the dir |
 | Many rows `phase_source: "meta"` (or `untagged`) | PostToolUse phase hook not firing | Ensure the hook matcher is `Agent\|Task` and points at `orchestrator/lib/telemetry/tag-subagent-phase.py`; run with `claude --debug` to see hook stderr |
-| Row rejected: `schema_version` | Pre-v2 run | Re-harvest if transcripts survive, else mark the dir `PRE_CANONICAL` |
+| Row rejected: `schema_version` | Row not produced by the current harvester | Re-harvest with `transcript-harvest.py`, or drop the dir |
 | Dashboard shows a comparability warning | Pool mixes models / CLI versions / SHAs, or has incomplete runs | Re-run so the pool is homogeneous before trusting the delta |
 | `eval:run` aborts: "claude CLI not on PATH" | `claude` not installed | Install Claude Code |
 | Attempt marked `timeout` in run-meta | Run exceeded `--timeout-mins` | Raise the cap, or investigate the stuck phase in `.eval-logs/` |

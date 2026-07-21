@@ -22,8 +22,9 @@ v2 fixes three things:
 - **Each row carries `model` and an estimated `cost_usd`** priced per model
   with exact 5m/1h cache-write multipliers.
 
-Runs harvested before v2 carry no `schema_version` and are rejected by the
-validator; the analyzer skips them via a `PRE_CANONICAL` marker.
+Rows harvested before v2 carry no `schema_version` and are rejected by the
+validator — every run is produced by the current harvester, so all filed
+runs are directly usable for analysis with no per-run flagging.
 
 ## Row
 

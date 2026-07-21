@@ -1,5 +1,0 @@
-RED RUN — tests/routes.test.ts before implementation
-Test Files 1 failed (1); Tests 9 failed (9). All endpoints return 404 (no routes mounted yet).
-
-GREEN RUN — tests/routes.test.ts
-Test Files 1 passed (1); Tests 9 passed (9); 554ms.

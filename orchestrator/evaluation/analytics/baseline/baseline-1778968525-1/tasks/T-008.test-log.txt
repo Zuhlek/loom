@@ -1,2 +1,0 @@
-T-008 has no automated assertions (per tests.md). Structural correctness is validated by T-009 DOM tests and the T-010 smoke spec.
-Full suite still green: Test Files 5 passed (5); Tests 34 passed (34).

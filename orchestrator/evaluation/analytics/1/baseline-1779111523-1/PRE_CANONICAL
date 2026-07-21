@@ -1,1 +1,0 @@
-Pre-canonical measurement (schema_version < 2): token sums were per-row (2-4x inflated), autonomous_ms double-counted, no cost. Transcripts aged out; not re-harvestable. Excluded from pooled analysis.
