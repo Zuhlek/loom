@@ -1,6 +1,0 @@
-RED RUN — tests/db.test.ts before implementation
-Error: Failed to load url ../src/server/db/index.js — db/index.ts does not yet exist.
-Test Files  1 failed (1), Tests no tests collected.
-
-GREEN RUN — tests/db.test.ts after implementation
-Test Files  1 passed (1); Tests  4 passed (4); 390ms.

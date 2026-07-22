@@ -19,9 +19,8 @@ The agent audits every artifact produced by Spec, Design, and Plan — they are 
 | `spec.md` | `.loom/<project>/spec.md` | yes | Spec-phase intent (audited for gaps, open ambiguity, decision drift) |
 | `decisions.md` | `.loom/<project>/decisions.md` | yes | Spec-phase decisions (audited for slot/story consistency) |
 | `design.md` | `.loom/<project>/design.md` | yes | Design-phase structure (audited for realisation gaps and ADR completeness) |
-| `plan.md` | `.loom/<project>/plan.md` | yes | Plan-phase narrative (incl. `Verification environment`) |
+| `plan.md` | `.loom/<project>/plan.md` | yes | Plan-phase decision record (Approach & sequencing, Plan decisions, Risks, Verification environment) |
 | `board.md` | `.loom/<project>/board.md` | yes | Plan-phase board |
-| `task.md` | `.loom/<project>/task.md` | yes | Plan-phase task index |
 | `tests.md` | `.loom/<project>/tests.md` | yes | Plan-phase test strategy + mutation opt-in |
 | `tasks/T-*.md` | `.loom/<project>/tasks/T-*.md` | yes | Per-task definitions |
 | `ticket.md` | `.loom/<project>/ticket.md` | optional | Plan-phase optional write |

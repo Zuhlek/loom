@@ -70,7 +70,7 @@ Loom is five phases — **Spec → Design → Plan → Build → Review** — ea
    │     inlined: principles.md, methods/task.md, methods/mutation.md, methods/smoke.md
    │     internal work loop:
    │       for each task in dependency order:
-   │         apply the inlined methods/task.md procedure (Lock → Red → Implement → Green → Done)
+   │         apply the inlined methods/task.md procedure (Red → Implement → Green → Done)
    │         apply the inlined methods/mutation.md procedure when tests.md opts in
    │       apply the inlined methods/smoke.md procedure (once, when project is runnable)
    │     writes: repository files, tasks/T-*.done.md, tasks/T-*.test-log.txt,
@@ -100,7 +100,7 @@ The procedures the Build agent applies live in `phases/build/methods/`:
 
 | Procedure file | When applied | Scope |
 |---|---|---|
-| `methods/task.md` | Once per ready task | Lock → Red → Implement → Green → Done |
+| `methods/task.md` | Once per ready task | Red → Implement → Green → Done |
 | `methods/mutation.md` | Per task after `green`, only when `tests.md` opts in | Test-strength check on the just-implemented task |
 | `methods/smoke.md` | Once before returning, only when project is runnable | Whole-project runnable verification |
 

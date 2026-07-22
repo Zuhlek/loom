@@ -21,9 +21,9 @@ Implement every ready task on the board, verify the runnable result, and aggrega
 
    For each ready task:
 
-   a. Read `tasks/T-NNN.md`.
+   a. Read `tasks/T-NNN.md`. If `tasks/T-NNN.remaining.md` exists (a compaction checkpoint from an interrupted session — see `methods/task.md § Compaction checkpoint`), read it and resume from the recorded state instead of re-deriving the task's analysis.
    b. Note that this task is `In Progress` for purposes of reporting in the RETURN block; do NOT mutate `board.md`.
-   c. Apply `task` — the Lock → Red → Implement → Green → Done procedure for this single task. The procedure is inline within this session; do not dispatch it as a subagent.
+   c. Apply `task` — the Red → Implement → Green → Done procedure for this single task. The procedure is inline within this session; do not dispatch it as a subagent.
    d. Record the task outcome (`green` / `failed` / `hitl-block` plus attempt count and hitl-reason if applicable) for inclusion in the final RETURN block's `task-outcomes` array.
    e. When `tests.md` declares `**Mutation Testing:** yes` at the top AND the task reached `green`, apply `mutation` for this task. Inline within this session.
    f. Continue to the next ready task. As earlier tasks reach `Done`, previously-blocked tasks may become ready — re-read `board.md` between iterations to pick them up.
@@ -53,8 +53,8 @@ A PostToolUse hook mirrors Build's per-task file writes (`tasks/T-NNN.test-log.t
 
 When re-dispatched via `Refine`:
 
-- **Targeted refine (when `quality-review.md` is present):** address every `blocker` and `major` finding before returning. Touch only the tasks a finding references; re-open them by moving their cards back to `Backlog` with a `[stale]` tag. Preserve every `In Progress` / `Review` / `Done` card not flagged.
-- **Light refine (no `quality-review.md`):** preserve every `In Progress` / `Review` / `Done` card. Pick the next eligible `Backlog` cards.
+- **Targeted refine (dynamic tail carries `Findings source: quality-review.md` or `review.md`):** read the named findings file and address every `blocker` and `major` finding before returning. Touch only the tasks a finding references. This agent still never writes `board.md` — report each re-worked task in `task-outcomes` with its fresh outcome; the orchestrator applies the column transitions per `SKILL.md § Board transition mapping`.
+- **Light refine (`Findings source: none`):** leave finished work untouched. Pick the next eligible `Backlog` cards.
 
 A "Full rerun" of Build is not exposed at the gate; achieving one requires the user to pick `Go back to Plan` first.
 

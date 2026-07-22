@@ -12,7 +12,6 @@ import clsx from "clsx";
 import type {
   PermissionMode,
   UserTurnImage,
-  WireModelSettings,
   WireSlashCommand,
 } from "../../lib/chat-types";
 import {
@@ -30,10 +29,6 @@ import { ComposerFooterToolbar } from "./ComposerFooterToolbar";
 import { ComposerSlashMenu } from "./ComposerSlashMenu";
 import { buildSlashMenuRows, type SlashMenuRow } from "./ComposerSlashMenu";
 import { ContextUsageIndicator } from "./ContextUsageIndicator";
-import { ModelSelectorPill } from "./ModelSelectorPill";
-import { ModelSettingsPill } from "./ModelSettingsPill";
-import { PermissionLevelPill } from "./PermissionLevelPill";
-import { BuildPlanTogglePill } from "./BuildPlanTogglePill";
 import { WorkspacePill } from "./WorkspacePill";
 import type { ContextUsageSnapshot } from "../../lib/use-chat-bridge";
 
@@ -72,12 +67,11 @@ export interface ChatComposerProps {
   onInterrupt?: () => void;
 
   /**
-   * Permission-mode selector (always visible). The parent supplies the
-   * current mode + the dispatcher; the composer emits the selected
-   * mode through `onPermissionModeChange` and the route forwards it
-   * to the bridge via a `permission-mode-set` frame.
+   * Permission-mode dispatcher. The composer only WRITES the mode —
+   * the `/plan` and `/default` built-in slash-commands forward through
+   * this and the route emits a `permission-mode-set` frame. The mode is
+   * otherwise viewed / changed from the {@link ChatSettingsModal}.
    */
-  permissionMode?: PermissionMode;
   onPermissionModeChange?: (mode: PermissionMode) => void;
 
   /**
@@ -107,28 +101,12 @@ export interface ChatComposerProps {
   slashCommands?: WireSlashCommand[] | null;
 
   /**
-   * Optional external hook to open the model picker dropdown anchored
-   * to the model pill. The `/model` built-in dispatch always drives
-   * the local picker state ({@link ModelSelectorPill}); external
-   * callers may also subscribe for parity with other footer
-   * affordances.
+   * Opens the {@link ChatSettingsModal} (model / reasoning / context /
+   * mode / access). The `/model` built-in slash-command dispatch calls
+   * this so typing `/model` still jumps straight to the model setting —
+   * it just lives in the modal now rather than a footer pill.
    */
-  onOpenModelPicker?: () => void;
-
-  /**
-   * Per-chat persisted model-settings tuple read from the chat-row.
-   * NULL ⇒ Loom defaults apply at SDK spawn time
-   * ({@link ModelSelectorPill} renders the SDK-default label).
-   */
-  modelSettings?: WireModelSettings | null;
-
-  /**
-   * Partial-patch emitter — the route forwards the patch into a
-   * `model-settings-set` client→server frame. The composer only emits
-   * the changed field per pill ({@link ModelSelectorPill} sends
-   * `{ model }`).
-   */
-  onModelSettingsSet?: (patch: Partial<WireModelSettings>) => void;
+  onOpenSettings?: () => void;
 
   /**
    * Bridge-supplied context-window utilisation. `null` until the
@@ -186,14 +164,11 @@ export function ChatComposer({
   onSubmit,
   isRunning,
   onInterrupt,
-  permissionMode = "default",
   onPermissionModeChange,
   isInterrupted,
   cwd,
   slashCommands,
-  onOpenModelPicker,
-  modelSettings,
-  onModelSettingsSet,
+  onOpenSettings,
   contextUsage,
   worktreeMode,
   defaultEnvMode,
@@ -247,27 +222,6 @@ export function ChatComposer({
   const [atFileResults, setAtFileResults] = useState<string[]>([]);
   const [atFileLoading, setAtFileLoading] = useState(false);
   const atFileTriggerRef = useRef<{ rangeStart: number; rangeEnd: number } | null>(null);
-
-  // Local open state for the model selector dropdown. The `/model`
-  // built-in dispatch flips this to true; the pill owns its own
-  // outside-click + Escape close (parent-controlled per the
-  // ModelSelectorPill prop contract).
-  const [modelPickerOpen, setModelPickerOpen] = useState(false);
-
-  // The Build/Plan toggle pill flips between `plan` and the user's
-  // last non-plan mode; the ref survives the flip back so picking
-  // "Plan" then "Build" lands on the same mode the user was in
-  // before. Seeded with `'default'` and updated whenever a non-plan
-  // `permissionMode` arrives from the parent (slash-command or
-  // PermissionLevelPill pick).
-  const lastNonPlanModeRef = useRef<PermissionMode>(
-    permissionMode === "plan" ? "default" : permissionMode,
-  );
-  useEffect(() => {
-    if (permissionMode !== "plan" && permissionMode !== lastNonPlanModeRef.current) {
-      lastNonPlanModeRef.current = permissionMode;
-    }
-  }, [permissionMode]);
 
   // Slash-menu state machine. Detection runs on every (value, cursor)
   // update; the menu opens whenever the editor matches
@@ -492,11 +446,11 @@ export function ChatComposer({
   // Accept a slash-menu row. Built-in rows (`/model`, `/plan`,
   // `/default`) fire Loom-side actions and never touch the textarea:
   // `/plan` and `/default` dispatch through
-  // {@link onPermissionModeChange} (same prop chain as
-  // {@link PermissionLevelPill}); `/model` opens the model picker via
-  // {@link onOpenModelPicker}. SDK provider rows (and skills) write
-  // `/<name> ` into the textarea at the trigger range so the user
-  // lands one keystroke away from arguments.
+  // {@link onPermissionModeChange}; `/model` opens the settings modal
+  // via {@link onOpenSettings} (the model setting lives there now).
+  // SDK provider rows (and skills) write `/<name> ` into the textarea
+  // at the trigger range so the user lands one keystroke away from
+  // arguments.
   const acceptSlash = (row: SlashMenuRow) => {
     const trigger = slashTriggerRef.current;
     if (!trigger) return;
@@ -504,8 +458,7 @@ export function ChatComposer({
       if (row.name === "plan") onPermissionModeChange?.("plan");
       else if (row.name === "default") onPermissionModeChange?.("default");
       else if (row.name === "model") {
-        setModelPickerOpen(true);
-        onOpenModelPicker?.();
+        onOpenSettings?.();
       }
       setSlashMenuOpen(false);
       setSlashMenuQuery("");
@@ -523,13 +476,6 @@ export function ChatComposer({
     setSlashMenuOpen(false);
     setSlashMenuQuery("");
     queueMicrotask(() => editorRef.current?.focus());
-  };
-
-  // Forward the chosen model id as a partial `{ model }` patch — the
-  // route emits the `model-settings-set` frame.
-  const handleModelPick = (modelId: string) => {
-    onModelSettingsSet?.({ model: modelId });
-    setModelPickerOpen(false);
   };
 
   const submit = async () => {
@@ -684,11 +630,11 @@ export function ChatComposer({
   const stripVisible = attachments.length > 0 || overCapNotice !== null;
 
   return (
-    <div className={clsx("pt-1.5", compact ? "px-4 pb-4" : "px-5 pb-5")}>
+    <div className={clsx("pt-1.5", compact ? "px-4 pb-4" : "px-4 pb-4")}>
       <div
         className={clsx(
-          "mx-auto rounded-xl border",
-          compact ? "max-w-2xl" : "max-w-3xl",
+          "mx-auto w-full rounded-xl border",
+          compact ? "max-w-2xl" : "max-w-5xl",
           hardDisabled ? "opacity-50" : "",
         )}
         style={{ borderColor: "var(--border)", background: hardDisabled ? "var(--muted)" : "var(--card)" }}
@@ -738,7 +684,7 @@ export function ChatComposer({
             )}
           </div>
         )}
-        <div className="px-3 py-2.5 relative">
+        <div className="pl-3 pr-2 py-2.5 relative">
           {atFileMenuOpen && (
             <ComposerAtFileMenu
               items={displayedAtFileResults}
@@ -758,20 +704,41 @@ export function ChatComposer({
               onSelect={acceptSlash}
             />
           )}
-          <ComposerEditor
-            ref={editorRef}
-            disabled={hardDisabled}
-            placeholder={
-              hardDisabled
-                ? disabledReason ?? "Locked — resolve above"
-                : isQueueMode
-                  ? "Queue a follow-up for Claude… (Shift+Enter for new line)"
-                  : COMPOSER_PLACEHOLDER
-            }
-            onStateChange={handleEditorStateChange}
-            onKeyIntent={handleKeyIntent}
-            onPaste={handlePaste}
-          />
+          {/* Editor takes the row; the settings gear sits at the top-right,
+              its right edge on the same vertical axis as the send/stop
+              button below (both anchored to the pr-2 gutter). */}
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <ComposerEditor
+                ref={editorRef}
+                disabled={hardDisabled}
+                placeholder={
+                  hardDisabled
+                    ? disabledReason ?? "Locked — resolve above"
+                    : isQueueMode
+                      ? "Queue a follow-up for Claude… (Shift+Enter for new line)"
+                      : COMPOSER_PLACEHOLDER
+                }
+                onStateChange={handleEditorStateChange}
+                onKeyIntent={handleKeyIntent}
+                onPaste={handlePaste}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenSettings?.()}
+              className="size-7 shrink-0 rounded-md grid place-items-center hover:bg-[var(--accent)]"
+              style={{ color: "var(--muted-foreground)" }}
+              title="Chat settings"
+              aria-label="Chat settings"
+              data-testid="chat-settings-gear"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1.03 1.56V21a2 2 0 01-4 0v-.09a1.7 1.7 0 00-1.11-1.56 1.7 1.7 0 00-1.87.34l-.06.06A2 2 0 014 17.93l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.56-1.03H3a2 2 0 010-4h.09A1.7 1.7 0 004.6 9.9a1.7 1.7 0 00-.34-1.87l-.06-.06A2 2 0 016.07 4l.06.06a1.7 1.7 0 001.87.34h.09A1.7 1.7 0 009.1 2.91V3a2 2 0 014 0v.09a1.7 1.7 0 001.03 1.56 1.7 1.7 0 001.87-.34l.06-.06A2 2 0 0119.93 7l-.06.06a1.7 1.7 0 00-.34 1.87v.09c.27.66.92 1.09 1.65 1.09H21a2 2 0 010 4h-.09c-.73 0-1.38.43-1.65 1.09z" />
+              </svg>
+            </button>
+          </div>
         </div>
         <div className="px-2 pb-2 flex items-center gap-1.5">
           <input
@@ -808,37 +775,6 @@ export function ChatComposer({
                   defaultEnvMode={defaultEnvMode}
                 />
               ) : null
-            }
-            modelSelector={
-              <ModelSelectorPill
-                value={modelSettings?.model ?? null}
-                onPick={handleModelPick}
-                open={modelPickerOpen}
-                onOpenChange={setModelPickerOpen}
-                disabled={hardDisabled}
-              />
-            }
-            modelSettings={
-              <ModelSettingsPill
-                value={modelSettings ?? null}
-                onPick={(patch) => onModelSettingsSet?.(patch)}
-                disabled={hardDisabled}
-              />
-            }
-            buildPlanToggle={
-              <BuildPlanTogglePill
-                mode={permissionMode}
-                onModeChange={(next) => onPermissionModeChange?.(next)}
-                lastNonPlanMode={lastNonPlanModeRef.current}
-                disabled={hardDisabled}
-              />
-            }
-            permissionLevel={
-              <PermissionLevelPill
-                mode={permissionMode}
-                onChange={(next) => onPermissionModeChange?.(next)}
-                disabled={hardDisabled}
-              />
             }
             contextUsage={<ContextUsageIndicator usage={contextUsage ?? null} />}
             sendButton={

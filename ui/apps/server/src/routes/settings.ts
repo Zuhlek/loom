@@ -19,6 +19,7 @@ export function mountSettingsRoute(
         },
         worktrees: { root: config.worktreesRoot ?? null },
         auth,
+        models: config.models,
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     );

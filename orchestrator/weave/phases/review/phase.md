@@ -23,7 +23,14 @@ These arrive inlined (see `## Inlined methods` appended below) — apply them be
 - **Shortcut-marker harvest** — grep the diff/codebase for `loom:shortcut` markers (convention in `principles.md § Marking deliberate shortcuts`: `loom:shortcut <ceiling>; <trigger>`). For each, list its ceiling + upgrade-trigger in `review.md`, then HONESTY CHECK: verify the stated ceiling matches reality, and flag any marker whose ceiling looks wrong or that names NO upgrade-trigger (rot risk). REPORT-ONLY — never blocks, never fails the verdict on its own.
 - Safety
 - User feedback
-- Process learning
+- **Process learning** — beyond noting process issues in `review.md`, distil at most 3 lessons from this lifecycle run into the develop log (append-only; `~/.claude/skills/weave/../develop-log.md` on an installed setup — the `weave` symlink resolves it to `orchestrator/develop-log.md`). A lesson is a distilled fact, never a pointer — state the insight itself, not the file where it happened. Zero lessons is a valid outcome; do not manufacture entries. Entry shape (consumed by the human-gated curation pass in `methods/develop-log-curation.md` — not by this agent):
+
+  ```markdown
+  ## <date> — <project> — Learning
+  **Target:** phase-file: weave/phases/<phase>/phase.md | type-file: <type> | process
+  **Lesson:** <the distilled insight>
+  **Evidence:** <one line: what happened in this run>
+  ```
 
 ## Finding Shape
 
@@ -37,7 +44,7 @@ These arrive inlined (see `## Inlined methods` appended below) — apply them be
 
 ## On completion
 
-Write two artifacts before returning: `review.md` (human-facing finding-by-finding narrative) and `review-verdict.json` (machine-readable verdict — single-object schema in `phase.signature.md ## Writes`). `verdict` is `FAIL` iff `blockers > 0`. Counts in `review-verdict.json` must equal `blockers`/`major`/`minor` in the RETURN block and the count of `## Note` findings in `review.md`. Then return `status: complete`.
+Write two artifacts before returning: `review.md` (human-facing finding-by-finding narrative) and `review-verdict.json` (machine-readable verdict — single-object schema in `phase.signature.md ## Writes`). `verdict` is `FAIL` iff `blockers > 0`. Counts in `review-verdict.json` must equal `blockers`/`major`/`minor`/`note` in the RETURN block, and each count must match the findings of that severity in `review.md`. Then return `status: complete`.
 
 **`review.md` prose is TERSE by default.** Principle: think fully, report briefly — terseness applies to padding, never to evidence. A clean pass (0 blockers, 0 major) may be a SHORT verdict — verdict + what-was-checked + counts — NOT a manufactured finding-by-finding essay. Every REAL finding still keeps its full shape (Severity/Evidence/Expected/Actual/Impact/Recommendation/Owner phase); never compress a finding's evidence. Even when clean, MUST state what was checked (the Review Targets covered) — NEVER an unqualified "looks good" that hides unchecked targets. No live usage capture happens during the run; cost/usage data is produced post-hoc by `orchestrator/lib/telemetry/transcript-harvest.py` reading the session transcripts on disk after /weave finishes.
 

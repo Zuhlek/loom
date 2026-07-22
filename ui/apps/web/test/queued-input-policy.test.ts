@@ -61,7 +61,7 @@
  *     prop nor branch its disabled behaviour on the three-state
  *     value, so the corresponding regex assertions fail.
  */
-import { describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
 import { fileURLToPath } from "node:url";
@@ -126,6 +126,17 @@ describe("T-007 composerMode selector — runtime behaviour (US-007 AC1–AC4)",
     }
     return fn as (state: SelectorState) => "ready" | "queue" | "blocked" | "offline";
   }
+
+  // Warm the module cache once with a generous hook timeout. The route
+  // module transitively pulls in React + wouter + the whole chat
+  // component graph; the FIRST cold `await import(...)` pays the entire
+  // esbuild transform cost, which on a loaded machine legitimately
+  // exceeds vitest's 5 s default per-test timeout. Doing it here (and
+  // NOT racing a per-test clock) keeps the pure-selector assertions
+  // below fast and deterministic — they only re-read the cached module.
+  beforeAll(async () => {
+    await loadSelector();
+  }, 30_000);
 
   // F5 — the raw WebSocket connection state. Optional in the selector's
   // input (absent is treated as `"open"`), so connection-agnostic cases

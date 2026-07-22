@@ -37,6 +37,11 @@ const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const mediaPath = webRoot + "src/components/chat/ToolResultMedia.tsx";
 const toolCardPath = webRoot + "src/components/chat/ToolUseCard.tsx";
 const typesPath = webRoot + "src/lib/chat-types.ts";
+// The lightbox/carousel + focus-trap now live in the shared ImageLightbox,
+// and the broken-image fallback in the shared ImageThumb. ToolResultMedia
+// composes both.
+const lightboxPath = webRoot + "src/components/chat/ImageLightbox.tsx";
+const thumbPath = webRoot + "src/components/chat/ImageThumb.tsx";
 
 describe("T-006 ToolResultMedia — file exists and declares contract (US-006 + ADR-003/006/007)", () => {
   test("ToolResultMedia.tsx exists at the documented path", () => {
@@ -104,44 +109,46 @@ describe("T-006 ToolResultMedia — multi-image gallery (US-006 AC3, ADR-003)", 
   });
 });
 
-describe("T-006 ToolResultMedia — lightbox dismiss + focus trap (US-006 AC4, ADR-003)", () => {
-  test("Escape key dismisses the lightbox", () => {
+describe("T-006 lightbox dismiss + focus trap (US-006 AC4, ADR-003) — shared ImageLightbox", () => {
+  test("ToolResultMedia composes the shared ImageLightbox", () => {
     const src = readFileSync(mediaPath, "utf8");
+    expect(src).toMatch(/ImageLightbox/);
+  });
+
+  test("Escape key dismisses the lightbox", () => {
+    const src = readFileSync(lightboxPath, "utf8");
     // Common patterns: `key === "Escape"` or `Escape` literal in a
     // keydown handler.
     expect(src).toMatch(/Escape/);
   });
 
   test("backdrop click dismisses the lightbox", () => {
-    const src = readFileSync(mediaPath, "utf8");
-    // The component has a backdrop element with its own onClick
-    // (distinct from the image's onClick — the image click should
-    // stop propagation or sit on a different element).
+    const src = readFileSync(lightboxPath, "utf8");
+    // The overlay has its own onClick that closes only when the click
+    // landed on the overlay itself (backdrop), distinct from the image.
     expect(src).toMatch(/backdrop|onClose|close|dismiss/i);
   });
 
   test("focus-trap logic is present (saves/restores focus + keyboard cycling)", () => {
-    const src = readFileSync(mediaPath, "utf8");
-    // ADR-003: inline focus-trap (~1 KB). Look for the canonical
-    // focus-trap markers: focus(), activeElement, Tab handling, or
-    // a focus restore on unmount/close.
+    const src = readFileSync(lightboxPath, "utf8");
+    // ADR-003: inline focus-trap. Canonical markers: focus(),
+    // activeElement, Tab handling, or a focus restore on unmount/close.
     const hasFocusTrap =
       /\.focus\(\)/.test(src) ||
       /activeElement/.test(src) ||
-      /focusTrap|FocusTrap/.test(src) ||
-      /focus(\b|\W)/.test(src);
+      /focusTrap|FocusTrap/.test(src);
     expect(hasFocusTrap).toBe(true);
   });
 });
 
-describe("T-006 ToolResultMedia — broken-image fallback (US-006 AC5)", () => {
-  test("source wires an `onError` handler on the <img> for fallback", () => {
-    const src = readFileSync(mediaPath, "utf8");
+describe("T-006 broken-image fallback (US-006 AC5) — shared ImageThumb", () => {
+  test("thumbnail wires an `onError` handler on the <img> for fallback", () => {
+    const src = readFileSync(thumbPath, "utf8");
     expect(src).toMatch(/onError/);
   });
 
-  test("source mentions the `image unavailable` placeholder copy", () => {
-    const src = readFileSync(mediaPath, "utf8");
+  test("thumbnail mentions the `image unavailable` placeholder copy", () => {
+    const src = readFileSync(thumbPath, "utf8");
     // Either the exact phrase or an aria-friendly variant.
     expect(src).toMatch(/unavailable|placeholder|broken|failed/i);
   });

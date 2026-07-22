@@ -168,6 +168,8 @@ def aggregate(project: str, loom_root: Path) -> str:
             "error_results": 0,
             "read_errors": 0,
             "bash_failures": 0,
+            "cost_usd": 0.0,
+            "cost_rows": 0,
         }
 
     per_phase: dict[str, dict] = {p: _empty_phase_bucket() for p in ordered_phases}
@@ -206,6 +208,10 @@ def aggregate(project: str, loom_root: Path) -> str:
                 value = quality.get(key, 0)
                 if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
                     bucket[key] += value
+        cost = r.get("cost_usd")
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+            bucket["cost_usd"] += float(cost)
+            bucket["cost_rows"] += 1
         # Ensure ordered_phases reflects insertion order for unknowns.
         if p not in ordered_phases:
             ordered_phases.append(p)
@@ -214,12 +220,20 @@ def aggregate(project: str, loom_root: Path) -> str:
     run = _empty_tokens()
     run_wall = 0
     run_autonomous = 0
+    run_cost = 0.0
+    run_cost_rows = 0
     for p in ordered_phases:
         b = per_phase[p]
         for k in TOKEN_KEYS:
             run[k] += b["tokens"][k]
         run_wall += b["wall_ms"]
         run_autonomous += b["autonomous_ms"]
+        run_cost += b["cost_usd"]
+        run_cost_rows += b["cost_rows"]
+
+    models = sorted({r["model"] for r in rows
+                     if isinstance(r.get("model"), str)})
+    untagged = sum(1 for r in rows if r.get("status") == "untagged")
 
     # Render markdown.
     lines: list[str] = []
@@ -228,14 +242,16 @@ def aggregate(project: str, loom_root: Path) -> str:
     lines.append("## Per-phase totals")
     lines.append("")
     if ordered_phases:
-        headers = ["Phase", "Wall ms", "Autonomous ms",
+        headers = ["Phase", "Est. cost (USD)", "Wall ms", "Autonomous ms",
                    "input", "output", "cache_create", "cache_read",
                    "errors", "read-err", "bash-fail"]
         body = []
         for p in ordered_phases:
             b = per_phase[p]
+            cost_cell = f"{b['cost_usd']:.4f}" if b["cost_rows"] else "—"
             body.append([
                 p,
+                cost_cell,
                 str(b["wall_ms"]),
                 str(b["autonomous_ms"]),
                 str(b["tokens"]["input_tokens"]),
@@ -270,6 +286,9 @@ def aggregate(project: str, loom_root: Path) -> str:
     lines.append("")
     lines.append("## Run totals")
     lines.append("")
+    if run_cost_rows:
+        lines.append(f"- Estimated cost (USD): {run_cost:.4f} (subagent rows only; "
+                     f"whole-run totals incl. orchestrator live in run-meta.json)")
     lines.append(f"- Wall ms: {run_wall}")
     lines.append(f"- Autonomous ms: {run_autonomous}")
     lines.append(
@@ -277,6 +296,10 @@ def aggregate(project: str, loom_root: Path) -> str:
         f"cache_create={run['cache_creation_input_tokens']}, "
         f"cache_read={run['cache_read_input_tokens']}"
     )
+    if models:
+        lines.append(f"- Model(s): {', '.join(models)}")
+    if untagged:
+        lines.append(f"- Untagged rows (excluded from per-phase rollups): {untagged}")
     lines.append("")
     lines.append("## Run outcome")
     lines.append("")

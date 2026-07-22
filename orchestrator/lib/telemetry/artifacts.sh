@@ -2,6 +2,7 @@
 set -euo pipefail
 
 _DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$_DIR/../atomic-write.sh"
 
 _kind_for_path() {
     case "$1" in
@@ -59,7 +60,7 @@ refresh_artifacts() {
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     artifacts="$(jq -s '.' "$tmp")"
     rm -f "$tmp"
-    jq -n --arg updated "$ts" --argjson artifacts "$artifacts" '{"schema-version":1,"updated-at":$updated,artifacts:$artifacts}' > "$out"
+    atomic_write "$out" "$(jq -n --arg updated "$ts" --argjson artifacts "$artifacts" '{"schema-version":1,"updated-at":$updated,artifacts:$artifacts}')"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

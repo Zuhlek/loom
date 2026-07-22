@@ -79,6 +79,63 @@ export function LockOpenIcon({ className }: ModeIconProps) {
   );
 }
 
+export function HammerIcon({ className }: ModeIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M15 12l-8.5 8.5a2.121 2.121 0 0 1-3-3L12 9" />
+      <path d="M17.64 15L22 10.64" />
+      <path d="M20.91 11.7l-1.25-1.25a2.5 2.5 0 0 1 0-3.54l.71-.7a2.5 2.5 0 0 0-3.54-3.54l-.7.71a2.5 2.5 0 0 1-3.54 0L11.34 2.13" />
+    </svg>
+  );
+}
+
+export function ForkIcon({ className }: ModeIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="6" cy="6" r="2" />
+      <circle cx="18" cy="6" r="2" />
+      <circle cx="12" cy="20" r="2" />
+      <path d="M6 8v4a2 2 0 002 2h4M18 8v4a2 2 0 01-2 2h-4M12 14v4" />
+    </svg>
+  );
+}
+
+export function HandoffIcon({ className }: ModeIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="4" y="6" width="16" height="12" rx="1" />
+      <path d="M7 9l3 3-3 3M13 15h4" />
+    </svg>
+  );
+}
+
 export function ChevronDownIcon({ className }: ModeIconProps) {
   return (
     <svg

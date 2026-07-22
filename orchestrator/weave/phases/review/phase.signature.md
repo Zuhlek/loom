@@ -13,7 +13,7 @@ I/O signature between `/weave` and the Review Audit Agent.
 | Name | Source path | Required | Description |
 | --- | --- | --- | --- |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | yes | Canonical workspace state |
-| All phase artifacts | `.loom/<project>/{spec,design,plan,board,task,tests}.md` | yes | Read-only |
+| All phase artifacts | `.loom/<project>/{spec,design,plan,board,tests}.md` | yes | Read-only |
 | `test-report.md` | `.loom/<project>/test-report.md` | yes | Aggregated verification — canonical Build-evidence summary; the primary source the agent reads for test-evidence findings |
 | `smoke-report.md` | `.loom/<project>/smoke-report.md` | conditional | When Build ran smoke-test |
 | `tasks/T-*.done.md` | `.loom/<project>/tasks/T-NNN.done.md` | on-demand | Per-task done reports — open only when a finding references a specific task |
@@ -33,7 +33,7 @@ I/O signature between `/weave` and the Review Audit Agent.
 
 ```yaml
 type: object
-required: [phase, status, artifacts, summary, open-ambiguity, blockers, major, minor]
+required: [phase, status, artifacts, summary, open-ambiguity, blockers, major, minor, note]
 properties:
   phase:
     enum: [review]
@@ -55,9 +55,11 @@ properties:
     type: integer
   minor:
     type: integer
+  note:
+    type: integer
 ```
 
-Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major` / `minor` are present.
+Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major` / `minor` / `note` are present.
 
 ### Writes
 
@@ -90,7 +92,12 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 }
 ```
 
-Counts are non-negative integers. `verdict` is `FAIL` whenever `blockers > 0`; otherwise `PASS`. Values must equal the counts in the RETURN block (`blockers`, `major`, `minor`) and the count of `## Note` findings in `review.md` (`note`).
+Counts are non-negative integers. `verdict` is `FAIL` whenever `blockers > 0`; otherwise `PASS`. Values must equal the counts in the RETURN block (`blockers`, `major`, `minor`, `note`) and the per-severity finding counts in `review.md`.
+
+#### Develop log (append-only, conditional)
+
+- Path: `~/.claude/skills/weave/../develop-log.md` on an installed setup (resolves through the `weave` symlink to `orchestrator/develop-log.md`).
+- At most 3 distilled process-learning entries per lifecycle run, each naming a candidate target (`phase-file: <path>` / `type-file: <type>` / `process`). A lesson states the insight itself, never a pointer. Consumed by the human-gated curation pass in `methods/develop-log-curation.md`; zero entries is valid.
 
 ## Throws
 

@@ -48,6 +48,13 @@ LOOM_HOOKS_JSON="$(cat <<JSON
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"\$HOME/.claude/loom-hooks/pin-on-weave.sh\"" }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "hooks": [
@@ -71,7 +78,7 @@ LOOM_HOOKS_JSON="$(cat <<JSON
         ]
       },
       {
-        "matcher": "Task",
+        "matcher": "Agent|Task",
         "hooks": [
           { "type": "command", "command": "python3 \"$ROOT/lib/telemetry/tag-subagent-phase.py\"" }
         ]
@@ -162,23 +169,33 @@ tmp="$SETTINGS.tmp.$$"
 trap 'rm -f "$tmp"' EXIT
 
 jq --argjson loom "$LOOM_HOOKS_JSON" '
-  def is_legacy_loom_hook($entry):
-    ($entry.hooks // [])
-    | any(.command? // "" | test("loom/hooks/|orchestrator/hooks/|/loom-hooks/"));
+  # Anchored to path segments that only loom owns: the loom-hooks symlink
+  # dir, a direct orchestrator/hooks/ reference, and the one telemetry
+  # script referenced by absolute path. The leading slash keeps "heirloom
+  # /hooks/" and "my-orchestrator/lib/..." from being scrubbed as ours.
+  def is_loom_cmd:
+    (.command? // "")
+    | test("/loom-hooks/|/orchestrator/hooks/|tag-subagent-phase\\.py");
 
+  # Scrub at the individual-hook level, not the group level: a matcher
+  # group that mixes a user hook with a loom hook keeps the user hook.
+  # Groups left empty after scrubbing are dropped.
   def scrub_event($event):
     (.hooks[$event] // [])
-    | map(select(is_legacy_loom_hook(.) | not));
+    | map(.hooks = ((.hooks // []) | map(select(is_loom_cmd | not))))
+    | map(select((.hooks | length) > 0));
 
   def merge_event($event):
     (scrub_event($event)) + (($loom.hooks[$event]) // []);
 
   .hooks = (.hooks // {})
-    | .hooks.SessionStart = merge_event("SessionStart")
-    | .hooks.SubagentStop = merge_event("SubagentStop")
-    | .hooks.Stop         = merge_event("Stop")
-    | .hooks.PreToolUse   = merge_event("PreToolUse")
-    | .hooks.PostToolUse  = merge_event("PostToolUse")
+    | .hooks.SessionStart     = merge_event("SessionStart")
+    | .hooks.UserPromptSubmit = merge_event("UserPromptSubmit")
+    | .hooks.SubagentStop     = merge_event("SubagentStop")
+    | .hooks.Stop             = merge_event("Stop")
+    | .hooks.PreToolUse       = merge_event("PreToolUse")
+    | .hooks.PostToolUse      = merge_event("PostToolUse")
+    | .hooks |= with_entries(select((.value | type == "array" and length == 0) | not))
 ' "$SETTINGS" > "$tmp"
 
 mv "$tmp" "$SETTINGS"
@@ -188,8 +205,13 @@ missing=0
 while IFS= read -r cmd; do
     resolved="${cmd//\"/}"
     resolved="${resolved/\$HOME/$HOME}"
-    if [ ! -x "$resolved" ]; then
-        echo "warn       hook command not executable: $resolved" >&2
+    # A command may carry an interpreter prefix (e.g. `python3 <path>`); test the
+    # hook script path itself, not the whole invocation string, or an interpreted
+    # hook is falsely flagged as non-executable.
+    path="$(printf '%s' "$resolved" | grep -oE '[^ ]*loom-hooks[^ ]*' | head -n1)"
+    [ -n "$path" ] || path="$resolved"
+    if [ ! -x "$path" ]; then
+        echo "warn       hook command not executable: $path" >&2
         missing=$((missing + 1))
     fi
 done < <(jq -r '.hooks // {} | to_entries[].value[].hooks[]?.command? | select(. != null) | select(test("loom-hooks"))' "$SETTINGS")

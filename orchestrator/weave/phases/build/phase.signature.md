@@ -134,6 +134,6 @@ Success criteria: `status: complete` in RETURN AND all tasks reached `Done` OR a
 
 These procedure files arrive inlined in the dispatch prompt (per the body's `## Reads`, see `orchestrator/weave/SKILL.md § Dispatch concatenation`); the Build agent applies them from the inlined head at the relevant steps of its work loop — no disk read. They are not dispatched as subagents — they execute inline within the Build session.
 
-- `methods/task.md` — Lock → Red → Implement → Green → Done loop, applied per ready task. Three-attempt cap.
+- `methods/task.md` — Red → Implement → Green → Done loop, applied per ready task. Three-attempt cap; compaction checkpoint (`tasks/T-NNN.remaining.md`) for interrupted tasks.
 - `methods/smoke.md` — Runnable verification, applied once after the per-task loop completes when the project is runnable. Produces `smoke-report.md`.
 - `methods/mutation.md` — Per-task test-strength probe, applied after a task reaches green when `tests.md` enables mutation testing.

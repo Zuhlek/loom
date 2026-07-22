@@ -15,6 +15,9 @@ import { fileURLToPath } from "node:url";
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const timelinePath = webRoot + "src/components/chat/MessagesTimeline.tsx";
 const typesPath = webRoot + "src/lib/chat-types.ts";
+// Src resolution (inline data: URI vs /chat-image read-back) is centralised
+// in lib/chat-images.ts (imageSrc); UserRow calls it and filters unresolved.
+const chatImagesPath = webRoot + "src/lib/chat-images.ts";
 
 function readUserRowBlock(): string {
   const src = readFileSync(timelinePath, "utf8");
@@ -58,28 +61,28 @@ describe("T-006 UserRow past-turn image read-back route", () => {
     expect(src).toMatch(/dataB64\?\s*:\s*string/);
   });
 
-  test("UserRow builds a /chat-image route src from chatId + id when dataB64 is absent", () => {
-    const block = readUserRowBlock();
+  test("imageSrc builds a /chat-image route src from chatId + id when dataB64 is absent", () => {
+    const src = readFileSync(chatImagesPath, "utf8");
     // The route URL keyed by chatId + image id.
-    expect(block).toMatch(/\/chat-image\?chatId=/);
-    expect(block).toMatch(/id=/);
+    expect(src).toMatch(/\/chat-image\?chatId=/);
+    expect(src).toMatch(/id=/);
     // References the image id field.
-    expect(block).toMatch(/\bimg\.id\b/);
+    expect(src).toMatch(/\bimg\.id\b/);
   });
 
-  test("UserRow keeps the inline data: URI when dataB64 is present (no live-turn regression)", () => {
-    const block = readUserRowBlock();
-    expect(block).toMatch(/data:\$\{[^}]*mediaType[^}]*\};base64,\$\{[^}]*dataB64[^}]*\}/);
+  test("imageSrc keeps the inline data: URI when dataB64 is present (no live-turn regression)", () => {
+    const src = readFileSync(chatImagesPath, "utf8");
+    expect(src).toMatch(/data:\$\{[^}]*mediaType[^}]*\};base64,\$\{[^}]*dataB64[^}]*\}/);
   });
 
-  test("UserRow guards against emitting a broken <img> when neither dataB64 nor id is present", () => {
-    const block = readUserRowBlock();
-    // A src-selection helper or conditional must exist; the render must not
-    // unconditionally emit <img> for an image lacking both sources.
-    // Assert the row computes a src that can be falsy and filters/guards on it.
-    expect(block).toMatch(/img\.id/);
-    // Either a filter on images or a conditional return of the <img>.
-    expect(block).toMatch(/(filter|\?\s*\()/);
+  test("resolution guards against a broken <img> when neither dataB64 nor id is present", () => {
+    const helper = readFileSync(chatImagesPath, "utf8");
+    // imageSrc references the id field and can return undefined for images
+    // lacking both sources.
+    expect(helper).toMatch(/img\.id/);
+    expect(helper).toMatch(/return\s+undefined/);
+    // UserRow filters out unresolved images so no broken <img> is emitted.
+    expect(readUserRowBlock()).toMatch(/filter/);
   });
 
   test("chatId is threaded into UserRow so the route URL can be built", () => {

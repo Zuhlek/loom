@@ -1,25 +1,19 @@
 /**
- * T-015 — Composer integration smoke (browser scenario).
+ * Composer integration smoke (browser scenario).
  *
- * End-to-end happy-path walk across the delivered composer surface:
- * the slash-menu loading affordance, the grouped Built-in / Provider
- * rendering with skill icons, the built-in dispatch branch, the five
- * footer-toolbar pills, the model picker + model settings popup, and
- * the context-usage indicator. Each step touches one or more US-001
- * through US-009 acceptance criteria so the suite catalogues coverage
- * for the full delivered scope.
+ * End-to-end happy-path walk across the delivered composer surface: the
+ * slash-menu loading affordance, the grouped Built-in / Provider
+ * rendering with skill icons, the built-in dispatch branch, the footer
+ * toolbar, the settings modal (model / reasoning / context / mode /
+ * access), and the context-usage indicator.
  *
- * Runs under the project's node-only vitest runner (see
- * `ui/vitest.config.ts`) — assertions are static-source contract
- * checks across the integrated component graph, the same idiom used
- * by every per-component test in this tier (e.g.
- * `composer-slash-menu.test.ts`, `composer-footer-toolbar.test.ts`,
- * `model-selector-pill.test.ts`).
+ * Post model-settings-modal refactor: the model / reasoning / mode /
+ * access controls moved out of the footer pills into `ChatSettingsModal`,
+ * opened from the gear anchored to the top-right of the chat window. The
+ * old pill files are gone; this walk reads from the modal source instead.
  *
- * The walk reads from the production component sources rather than
- * dispatching synthetic frames — the per-component tests already
- * cover render-level behaviour; this file's job is to verify the
- * pieces are wired into one coherent path with no FS-scanner residue.
+ * Runs under the project's node-only vitest runner — assertions are
+ * static-source contract checks across the integrated component graph.
  */
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
@@ -32,10 +26,7 @@ const PATHS = {
   menu: webRoot + "src/components/chat/ComposerSlashMenu.tsx",
   composer: webRoot + "src/components/chat/ChatComposer.tsx",
   toolbar: webRoot + "src/components/chat/ComposerFooterToolbar.tsx",
-  modelSelector: webRoot + "src/components/chat/ModelSelectorPill.tsx",
-  modelSettings: webRoot + "src/components/chat/ModelSettingsPill.tsx",
-  buildPlan: webRoot + "src/components/chat/BuildPlanTogglePill.tsx",
-  permissionLevel: webRoot + "src/components/chat/PermissionLevelPill.tsx",
+  settingsModal: webRoot + "src/components/chat/ChatSettingsModal.tsx",
   contextUsage: webRoot + "src/components/chat/ContextUsageIndicator.tsx",
   liveChat: webRoot + "src/routes/live-chat.tsx",
   chatTypes: webRoot + "src/lib/chat-types.ts",
@@ -45,7 +36,7 @@ function read(path: string): string {
   return readFileSync(path, "utf8");
 }
 
-describe("T-015 browser smoke — every wired file exists", () => {
+describe("browser smoke — every wired file exists", () => {
   test("each integrated component / hook is present on disk", () => {
     for (const [name, path] of Object.entries(PATHS)) {
       expect(existsSync(path), `${name} missing at ${path}`).toBe(true);
@@ -53,7 +44,7 @@ describe("T-015 browser smoke — every wired file exists", () => {
   });
 });
 
-describe("T-015 walk step 1 — initial render: slashCommands === null shows Loading affordance", () => {
+describe("walk step 1 — initial render: slashCommands === null shows Loading affordance", () => {
   test("US-006 AC4 — menu renders 'Loading commands…' with aria-busy when null", () => {
     const src = read(PATHS.menu);
     expect(src).toMatch(/Loading commands/);
@@ -73,7 +64,7 @@ describe("T-015 walk step 1 — initial render: slashCommands === null shows Loa
   });
 });
 
-describe("T-015 walk step 2 — slash-commands-update arrives: skills + provider group + built-in suppression", () => {
+describe("walk step 2 — slash-commands-update arrives: skills + provider group + built-in suppression", () => {
   test("useChatBridge stores the latest slash-commands-update payload", () => {
     const src = read(PATHS.hook);
     expect(src).toMatch(/slash-commands-update/);
@@ -90,7 +81,6 @@ describe("T-015 walk step 2 — slash-commands-update arrives: skills + provider
     const src = read(PATHS.menu);
     expect(src).toMatch(/["']skill["']/);
     expect(src).toMatch(/["']command["']/);
-    // ADR-D01 — three inline SVG glyphs: hexagon / square / diamond.
     expect(src).toMatch(/12 2 21 7 21 17 12 22 3 17 3 7/);
     expect(src).toMatch(/<rect[^/]*x=["']3["'][^/]*y=["']3["']/);
     expect(src).toMatch(/12 2 22 12 12 22 2 12/);
@@ -104,7 +94,7 @@ describe("T-015 walk step 2 — slash-commands-update arrives: skills + provider
   });
 });
 
-describe("T-015 walk step 3 — click /plan built-in: permission-mode-set + textarea untouched", () => {
+describe("walk step 3 — click /plan built-in: permission-mode-set + textarea untouched", () => {
   test("US-003 AC2 — /plan built-in dispatches onPermissionModeChange('plan')", () => {
     const src = read(PATHS.composer);
     expect(src).toMatch(/onPermissionModeChange\??\.?\(\s*["']plan["']\s*\)/);
@@ -136,58 +126,54 @@ describe("T-015 walk step 3 — click /plan built-in: permission-mode-set + text
   });
 });
 
-describe("T-015 walk step 4 — click /model built-in: model picker opens", () => {
-  test("US-003 AC1 — /model built-in invokes onOpenModelPicker?.()", () => {
+describe("walk step 4 — click /model built-in: settings modal opens", () => {
+  test("US-003 AC1 — /model built-in invokes onOpenSettings?.()", () => {
     const src = read(PATHS.composer);
-    expect(src).toMatch(/onOpenModelPicker\??\.?\(\s*\)/);
+    expect(src).toMatch(/onOpenSettings\??\.?\(\s*\)/);
   });
 
-  test("ModelSelectorPill is mounted by the footer toolbar slot", () => {
-    const src = read(PATHS.composer);
-    // Either the toolbar slot wires the real pill or a placeholder stub
-    // marked with the toolbar slot's testid.
-    const stub = /data-testid=["']composer-pill-model-selector["']/.test(src);
-    const real = /<ModelSelectorPill\b/.test(src);
-    expect(stub || real).toBe(true);
+  test("composer renders the settings gear (top-left); live-chat mounts <ChatSettingsModal> wired to onOpenSettings", () => {
+    const composerSrc = read(PATHS.composer);
+    expect(composerSrc).toMatch(/data-testid=["']chat-settings-gear["']/);
+    const liveSrc = read(PATHS.liveChat);
+    expect(liveSrc).toMatch(/<ChatSettingsModal\b/);
+    expect(liveSrc).toMatch(/onOpenSettings=\{/);
   });
 });
 
-describe("T-015 walk step 5 — pick a model: emits model-settings-set { model }", () => {
-  test("US-007 AC1 — ModelSelectorPill emits a model-settings-set frame on selection", () => {
-    const src = read(PATHS.modelSelector);
-    expect(src).toMatch(/model-settings-set|onModelSettingsSet/);
-    expect(src).toMatch(/model/);
+describe("walk step 5 — pick a model: emits model-settings-set { model }", () => {
+  test("US-007 AC1 — the model chip dispatches onModelSettingsSet({ model: <id> })", () => {
+    const src = read(PATHS.settingsModal);
+    expect(src).toMatch(/onModelSettingsSet\(\s*\{\s*model:\s*m\.id\s*\}\s*\)/);
   });
 
-  test("US-007 AC4 — pill renders the persisted model label", () => {
-    const src = read(PATHS.modelSelector);
-    // The pill receives a `model` (or `value`) prop carrying the
-    // persisted SDK identifier and resolves it through the local
-    // model-row catalog to render the label.
+  test("US-007 AC4 — the model list is dynamic (mapped from the `models` prop, no hardcoded catalog)", () => {
+    const src = read(PATHS.settingsModal);
+    expect(src).toMatch(/modelList\.map\(/);
     expect(src).toMatch(/\blabel\b/);
-    expect(src).toMatch(/claude-opus-4-7|claude-sonnet|claude-haiku/);
+    // The id/label pairs come from the injected prop, not a literal
+    // model-id catalog baked into the component.
+    expect(src).toMatch(/models\s*&&\s*models\.length/);
   });
 });
 
-describe("T-015 walk step 6 — Ultrathink pick: model-settings-set { effort: 'max', thinking: { budgetTokens: 32000 } }", () => {
+describe("walk step 6 — Ultrathink pick: model-settings-set { effort: 'max', thinking: { budgetTokens: 32000 } }", () => {
   test("US-008 AC3 — Ultrathink maps to effort='max' + thinking.budgetTokens=32000", () => {
-    const src = read(PATHS.modelSettings);
+    const src = read(PATHS.settingsModal);
     expect(src).toMatch(/["']max["']/);
-    expect(src).toMatch(/budgetTokens\s*:\s*32000/);
+    expect(src).toMatch(/budgetTokens:\s*(?:ULTRATHINK_BUDGET_TOKENS|32000)/);
+    expect(src).toMatch(/ULTRATHINK_BUDGET_TOKENS\s*=\s*32000/);
     expect(src).toMatch(/type:\s*["']enabled["']/);
   });
 
   test("US-008 AC3 — 1M context window maps to contextWindow: '1m'", () => {
-    const src = read(PATHS.modelSettings);
+    const src = read(PATHS.settingsModal);
     expect(src).toMatch(/["']1m["']/);
     expect(src).toMatch(/["']200k["']/);
   });
 
-  test("US-008 AC4 — pill summary label reflects current persisted state", () => {
-    const src = read(PATHS.modelSettings);
-    // The summary label maps the persisted tuple to a human string —
-    // 'Ultrathink' for the budgetTokens variant, 'Extra High' for xhigh,
-    // 200k / 1M for the context window pick.
+  test("US-008 AC4 — modal surfaces the reasoning + context labels", () => {
+    const src = read(PATHS.settingsModal);
     expect(src).toMatch(/Ultrathink/);
     expect(src).toMatch(/Extra High/);
     expect(src).toMatch(/200k/);
@@ -195,7 +181,7 @@ describe("T-015 walk step 6 — Ultrathink pick: model-settings-set { effort: 'm
   });
 });
 
-describe("T-015 walk step 7 — context-usage frame at 42% / 91%: ring updates + warning state", () => {
+describe("walk step 7 — context-usage frame at 42% / 91%: ring updates + warning state", () => {
   test("US-005 AC2 — indicator renders the bridge-reported percentage", () => {
     const src = read(PATHS.contextUsage);
     expect(src).toMatch(/percentage/);
@@ -218,36 +204,32 @@ describe("T-015 walk step 7 — context-usage frame at 42% / 91%: ring updates +
   });
 });
 
-describe("T-015 walk step 8 — click Plan pill: permission-mode-set { mode: 'default' or lastNonPlan }", () => {
-  test("US-004 AC2 — Build click sets mode to 'plan'", () => {
-    const src = read(PATHS.buildPlan);
-    expect(src).toMatch(/["']plan["']/);
+describe("walk step 8 — Mode + Access in the settings modal", () => {
+  test("US-004 AC2 — Plan card sets mode to 'plan'", () => {
+    const src = read(PATHS.settingsModal);
+    expect(src).toMatch(/onPermissionModeChange\(\s*["']plan["']\s*\)/);
   });
 
-  test("US-004 AC3 — Plan click returns to lastNonPlanMode (defaults to 'default')", () => {
-    const src = read(PATHS.buildPlan);
-    expect(src).toMatch(/lastNonPlan|["']default["']/);
+  test("US-004 AC3 — Build card returns to lastNonPlanMode", () => {
+    const src = read(PATHS.settingsModal);
+    expect(src).toMatch(/onPermissionModeChange\(\s*lastNonPlanModeRef\.current\s*\)/);
   });
 
-  test("US-004 AC4 — PermissionLevelPill does NOT render a 'plan' row", () => {
-    const src = read(PATHS.permissionLevel);
-    // The four-mode dropdown loses 'plan'; the remaining three modes
-    // — default / acceptEdits / bypassPermissions — stay.
-    expect(src).not.toMatch(/value=["']plan["']/);
-    expect(src).not.toMatch(/mode:\s*["']plan["']/);
+  test("US-004 AC4 — the Access section does NOT list a 'plan' row (Plan lives in the Mode section)", () => {
+    const src = read(PATHS.settingsModal);
+    // The three access levels are present…
+    expect(src).toMatch(/value:\s*["']default["']/);
+    expect(src).toMatch(/value:\s*["']acceptEdits["']/);
+    expect(src).toMatch(/value:\s*["']bypassPermissions["']/);
+    // …and 'plan' is not one of the ACCESS_ROWS values.
+    expect(src).not.toMatch(/value:\s*["']plan["']/);
   });
 });
 
-describe("T-015 footer-toolbar integration — five pills + send button mounted in order", () => {
-  const SLOTS = [
-    "modelSelector",
-    "modelSettings",
-    "buildPlanToggle",
-    "permissionLevel",
-    "contextUsage",
-  ] as const;
+describe("footer-toolbar integration — workspace + context-usage + send button", () => {
+  const SLOTS = ["workspace", "contextUsage"] as const;
 
-  test("US-001 / US-004 / US-005 — toolbar declares all five named slots + sendButton", () => {
+  test("toolbar declares the remaining named slots + sendButton", () => {
     const src = read(PATHS.toolbar);
     for (const slot of SLOTS) {
       expect(src).toMatch(new RegExp(`\\b${slot}\\s*\\??\\s*:`));
@@ -269,17 +251,23 @@ describe("T-015 footer-toolbar integration — five pills + send button mounted 
     }
   });
 
-  test("ChatComposer mounts the toolbar with all five pill slots wired", () => {
+  test("toolbar no longer carries the migrated setting-pill slots", () => {
+    const src = read(PATHS.toolbar);
+    expect(src).not.toMatch(/\bmodelSelector\b/);
+    expect(src).not.toMatch(/\bmodelSettings\b/);
+    expect(src).not.toMatch(/\bbuildPlanToggle\b/);
+    expect(src).not.toMatch(/\bpermissionLevel\b/);
+  });
+
+  test("ChatComposer mounts the toolbar with the remaining slots wired", () => {
     const src = read(PATHS.composer);
     expect(src).toMatch(/<ComposerFooterToolbar\b/);
-    for (const slot of SLOTS) {
-      expect(src).toMatch(new RegExp(`${slot}=\\{`));
-    }
+    expect(src).toMatch(/contextUsage=\{/);
     expect(src).toMatch(/sendButton=\{/);
   });
 });
 
-describe("T-015 live-chat integration — useChatBridge feeds ChatComposer", () => {
+describe("live-chat integration — useChatBridge feeds ChatComposer + ChatSettingsModal", () => {
   test("live-chat consumes useChatBridge", () => {
     const src = read(PATHS.liveChat);
     expect(src).toMatch(/useChatBridge/);
@@ -294,9 +282,15 @@ describe("T-015 live-chat integration — useChatBridge feeds ChatComposer", () 
     const src = read(PATHS.liveChat);
     expect(src).toMatch(/contextUsage=\{|contextUsage:\s*/);
   });
+
+  test("live-chat threads modelSettings + onModelSettingsSet into <ChatSettingsModal>", () => {
+    const src = read(PATHS.liveChat);
+    expect(src).toMatch(/<ChatSettingsModal[\s\S]*?modelSettings\s*=\s*\{/);
+    expect(src).toMatch(/<ChatSettingsModal[\s\S]*?onModelSettingsSet\s*=\s*\{/);
+  });
 });
 
-describe("T-015 FS-scanner smoke guard — no residual references on the walk", () => {
+describe("FS-scanner smoke guard — no residual references on the walk", () => {
   test("ChatComposer does not reference the deleted scanner or its client fetch", () => {
     const src = read(PATHS.composer);
     expect(src).not.toMatch(/getSlashCommands\b/);
@@ -324,7 +318,7 @@ describe("T-015 FS-scanner smoke guard — no residual references on the walk", 
   });
 });
 
-describe("T-015 wire-shape smoke — chat-types mirror carries the three new frames", () => {
+describe("wire-shape smoke — chat-types mirror carries the three new frames", () => {
   test("chat-types declares the slash-commands-update frame kind", () => {
     const src = read(PATHS.chatTypes);
     expect(src).toMatch(/kind:\s*["']slash-commands-update["']/);

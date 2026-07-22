@@ -1,114 +1,158 @@
 # Loom evaluation harness — runbook
 
-Measure what a `/weave` run costs. Compare across loom versions.
+Measure what a `/weave` run costs, and compare across loom versions.
 
 ## Two commands
 
 ```bash
-pnpm run eval:run       # runs /weave once, creates .loom/<project>/
-pnpm run eval:analyse   # harvests anything new in analytics/, renders, opens HTML
+pnpm run eval:pool                         # 5 iterations, filed under analytics/<version>/
+pnpm run eval:analyse                      # (re)render analysis.html from filed runs
 ```
 
-Between them: you strip `.loom/<project>/app/` if you want (~99 MB of build artifact) and `mv .loom/<project>/ orchestrator/evaluation/analytics/<version>/`. Pick `<version>` yourself — anchor is `baseline/`, new iterations start at `1/`, then `2/`, etc.
+`eval:run` (one iteration) and `eval:pool` (five) both accept the same flags
+as `run-baseline.sh`:
 
-## How it works
+```bash
+bash orchestrator/evaluation/run-baseline.sh --n 5 --version 2 --model claude-fable-5
+```
 
-`/weave` writes its fabric into `.loom/<project>/`, including `.eval-orchestrator-pointer` (the Claude Code session UUID for that run).
+`--version LABEL` files each finished run straight into
+`analytics/<LABEL>/` (stripping the ~99 MB `app/` first, unless
+`--keep-app`). Omit it to leave runs under `.loom/` for manual filing. The
+anchor version is `baseline`; iterations are `1`, `2`, … (zero-pad past 9).
 
-`analyse.py` walks `analytics/<version>/<run>/`:
+## What each run produces
 
-- If `usage.jsonl` exists → that run is already analysed, skip.
-- If not → read `.eval-orchestrator-pointer`, invoke `transcript-harvest.py --session <uuid>` to extract per-subagent cost rows, then `eval-aggregate.py` to render a human-readable `usage.md`.
-- Then pool all rows by version, render `analysis.html`, open it.
+Every run — eval **and** regular interactive `/weave` — carries the same
+usage artifacts, so a workspace doubles as its own usage summary:
 
-**Timing matters.** Claude Code transcripts under `~/.claude/projects/` are local and ephemeral. If you let them age out before running `eval:analyse`, the pointer becomes a dangling reference and the run is reported as missing. This is intentional — the harness doesn't keep a copy.
+- `usage.jsonl` — one row per dispatched subagent (schema in `SCHEMA.md`).
+- `usage.md` — human-readable per-phase rollup with an **estimated cost**
+  column, run totals, model(s), and untagged-row count.
+- `outcome.json` — lifecycle state, final phase, review verdict, task counts.
+- `run-meta.json` (eval runs only) — **authoritative** whole-run cost /
+  turns / duration from `claude --print --output-format json`, plus the
+  confounders that decide comparability: model(s), claude CLI version, loom
+  git SHA, seed/answers hashes, attempt count, terminal status.
+
+For interactive runs these are refreshed by the PostToolUse hook after every
+subagent returns; for eval runs by `run-baseline.sh` in-loop after each
+iteration.
+
+## Reliability: how the harness avoids the old failure modes
+
+- **Session UUID chosen up front.** `run-baseline.sh` picks the Claude Code
+  session id, writes it to `.eval-orchestrator-pointer` *before* `/weave`
+  starts, and passes `--session-id`. Harvesting never depends on the hook
+  having fired. Retries `--resume` the same session, so their subagents land
+  in the same transcripts dir and are captured (v1 lost every retry).
+- **Bounded, non-interactive, machine-independent.** Each attempt runs under
+  `timeout` with explicit `--permission-mode bypassPermissions`, so a stuck
+  or permission-blocked run cannot hang the harness and behaviour does not
+  depend on the machine's `~/.claude/settings.json`.
+- **Harvest in-loop.** Claude transcripts under `~/.claude/projects/` are
+  ephemeral; the harness harvests immediately after each iteration rather
+  than at some later `analyse` time, closing the data-loss window.
+- **No cross-session contention.** A `.eval-run` marker in the workspace
+  keeps `auto-advance` in unrelated interactive sessions from adopting an
+  eval project (and vice-versa).
+
+## Reading the dashboard
+
+`analysis.html` leads with **estimated cost (USD)** — the headline trend
+metric, because it stays comparable when a change shifts the token mix
+between buckets that differ ~12× in price. Charts show the per-version
+**median** with **per-run dots** overlaid, so a small pool's spread is
+visible instead of hidden behind a mean. A red **comparability-warnings**
+banner appears when a version pools runs across different models, CLI
+versions, or loom SHAs, or contains untagged / incomplete runs — treat any
+delta under such a banner as suspect.
+
+Treat sub-20–30% deltas at n≈3–5 as noise.
+
+## How analyse works
+
+`analyze.py` walks `analytics/<version>/<run>/`:
+
+- `usage.jsonl` present → already harvested, skip.
+- absent → read every session id in `.eval-orchestrator-pointer` and
+  `transcript-harvest.py --session <uuid>` (one per line) to extract rows,
+  then `eval-aggregate.py` for `usage.md`.
+- Pool rows by version → render `analysis.html`.
+
+Every run is produced by the current harvester, so every filed run is
+directly usable — there is no legacy/outdated-run flagging to reason about.
+
+**Timing still matters for manual filing.** If you file a run long after it
+ran and its transcripts have aged out, harvest produces nothing and the run
+is reported missing. `eval:pool --version` harvests in-loop, so this only
+bites hand-filed runs.
 
 ## Layout
 
 ```
 orchestrator/evaluation/
 ├── setup.sh                    ← prerequisite check
-├── run-baseline.sh             ← just /weave; no harvest, no aggregate
+├── run-baseline.sh             ← drive /weave, capture telemetry, file runs
 ├── analyze.py                  ← harvest pending + render dashboard
+├── check-usage-jsonl.py        ← validate usage.jsonl / outcome.json against SCHEMA.md
 ├── chartjs/                    ← vendored Chart.js (no CDN)
 ├── baseline-seed.md            ← vendored bookmarks seed
-├── baseline-answers.yaml       ← canned answer queue staged into .loom/<project>/.answers.yaml
+├── baseline-answers.yaml       ← canned answer queue
 ├── analysis.html               ← rendered output (gitignore-able)
 └── analytics/                  ← filed runs, grouped by version
-    ├── baseline/
-    │   ├── baseline-<ts>-1/    ← moved-in .loom/ fabric
-    │   │   ├── usage.jsonl                   (written by analyse)
-    │   │   ├── usage.md                      (written by analyse)
-    │   │   ├── .eval-orchestrator-pointer    (from /weave, session UUID)
-    │   │   └── …                             (seed/spec/design/plan/…)
-    │   └── …
-    ├── 1/
-    └── …
+    ├── baseline/<run>/…
+    └── 1/<run>/…
 ```
 
-## Workflow
+Telemetry engine lives in `orchestrator/lib/telemetry/`:
+`transcript-harvest.py`, `eval-aggregate.py`, `run-outcome.py`,
+`tag-subagent-phase.py`.
 
-### First run
+## Row schema & validation
 
-```bash
-pnpm run eval:setup
-pnpm run eval:run
-rm -rf .loom/baseline-<ts>-1/app
-mv  .loom/baseline-<ts>-1 orchestrator/evaluation/analytics/baseline/
-pnpm run eval:analyse
-```
-
-### Next iteration
-
-Make a meaningful loom change, then:
-
-```bash
-pnpm run eval:run                              # creates .loom/baseline-<ts2>-1
-rm -rf .loom/baseline-<ts2>-1/app
-mkdir -p orchestrator/evaluation/analytics/1
-mv  .loom/baseline-<ts2>-1 orchestrator/evaluation/analytics/1/
-pnpm run eval:analyse
-```
-
-(The fabric is always named `baseline-<unix-ts>-<i>` by `run-baseline.sh`. The version label comes from the parent dir you `mv` it into.)
-
-`pnpm run eval:analyse` is idempotent — runs that already have `usage.jsonl` are skipped, only the new dir under `analytics/1/` is harvested.
-
-For pooled runs (`--n 5` or whatever), call `bash orchestrator/evaluation/run-baseline.sh --n 5` directly.
-
-## Row schema
-
-The canonical `usage.jsonl` row shape is defined in `orchestrator/evaluation/SCHEMA.md`. One row per direct subagent dispatched by `/weave`; rows
-group on `phase`. Validate any `usage.jsonl` with:
+The canonical `usage.jsonl` row shape (schema_version 2) is in
+`orchestrator/evaluation/SCHEMA.md`. Validate any run with:
 
 ```bash
 python3 orchestrator/evaluation/check-usage-jsonl.py <path-to-usage.jsonl>
+python3 orchestrator/evaluation/check-usage-jsonl.py --outcome <path-to-outcome.json>
 ```
 
-Exit zero on conformance; non-zero with offending rows on violation.
-
-`status: "crashed"` rows have `tokens: null` and `duration_autonomous_ms: null`,
-and are excluded from aggregation means. `status: "untagged"` rows are
-emitted when the PostToolUse hook (`orchestrator/lib/telemetry/tag-subagent-phase.py`)
-did not write a `.phase` sidecar for that subagent — they carry usage
-data but no `phase`, and are excluded from per-phase rollups.
-
-Runs filed before the canonical schema landed carry a `PRE_CANONICAL`
-marker file in their run directory. `analyze.py` skips those runs when
-pooling.
+Exit zero on conformance; non-zero with offending rows on violation. The
+validator rejects rows lacking `schema_version: 2` and any row whose
+`duration_autonomous_ms` exceeds `duration_wall_ms`.
 
 ## Known limitations
 
-- **Subagent rows only.** Orchestrator-side inference (mostly Spec's inline answers-queue consumption) is not captured. Roughly constant across runs of the same seed + answers file, so comparison signal is preserved.
-- **Build is one row per phase entry.** The Build phase agent runs as a single session and walks the dependency graph itself within that session. `usage.jsonl` therefore carries one Build row per dispatch, not one row per task. Per-task attribution is not extractable from the harvest; aggregate Build cost is.
-- **`duration_autonomous_ms` can exceed `duration_wall_ms`** by a few percent on multi-tool-call turns (timestamp-delta over-count). Treat autonomous as comparison-relative, not absolute.
-- **No spread / CI.** Means only. A single tail-latency run in a small pool can move a phase mean noticeably.
+- **Subagent rows only.** Per-subagent `cost_usd` in `usage.jsonl` excludes
+  orchestrator-side inference. The authoritative whole-run cost (incl.
+  orchestrator) is `run-meta.json.total_cost_usd`.
+- **Build is one row per phase entry.** The Build phase agent walks the task
+  graph within a single session, so `usage.jsonl` carries one Build row per
+  dispatch, not one per task. Aggregate Build cost is exact; per-task
+  attribution is not extractable.
+- **`cost_usd` is an estimate.** Priced from a checked-in per-model table
+  (`transcript-harvest.py`). Cross-check absolute figures against
+  `run-meta.json.total_cost_usd`, which comes straight from the API result.
+- **Small-n.** Medians over n≈3–5 with per-run dots — no confidence
+  intervals. Grow the pool for a tighter read.
+
+## Rubric grader (planned, not yet built)
+
+Cost/latency answer "did it get cheaper"; they do not answer "is it still
+correct". The per-seed rubric under `rubrics/` is the human checklist today;
+the automated grader + no-skill control run described in `rubrics/README.md`
+remain the next step to turn this from a cost meter into an eval.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `[analyse] <run>: no .eval-orchestrator-pointer` | You moved a run that wasn't from `/weave`, or stripped the pointer | Recover the UUID, write it into `.eval-orchestrator-pointer`, retry |
-| `[analyse] <run>: no rows harvested` | Session no longer in `~/.claude/projects/` (aged out, or different host) | Data is gone; drop the dir |
-| `[analyse] warning: no usage rows for run(s): …` | Run dir present in analytics but harvest produced nothing | See the two rows above |
-| `eval:run` aborts with "claude CLI not on PATH" | `claude` not installed | Install Claude Code |
+| `no .eval-orchestrator-pointer` | Run wasn't from `run-baseline.sh`, or the pointer was stripped | Recover the session UUID(s), write one per line into `.eval-orchestrator-pointer`, retry |
+| `no rows harvested` | Session aged out of `~/.claude/projects/` | Data is gone; drop the dir |
+| Many rows `phase_source: "meta"` (or `untagged`) | PostToolUse phase hook not firing | Ensure the hook matcher is `Agent\|Task` and points at `orchestrator/lib/telemetry/tag-subagent-phase.py`; run with `claude --debug` to see hook stderr |
+| Row rejected: `schema_version` | Row not produced by the current harvester | Re-harvest with `transcript-harvest.py`, or drop the dir |
+| Dashboard shows a comparability warning | Pool mixes models / CLI versions / SHAs, or has incomplete runs | Re-run so the pool is homogeneous before trusting the delta |
+| `eval:run` aborts: "claude CLI not on PATH" | `claude` not installed | Install Claude Code |
+| Attempt marked `timeout` in run-meta | Run exceeded `--timeout-mins` | Raise the cap, or investigate the stuck phase in `.eval-logs/` |

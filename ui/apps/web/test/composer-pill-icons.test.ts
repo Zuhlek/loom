@@ -26,10 +26,9 @@ import { fileURLToPath } from "node:url";
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
 
 const sharedPath = webRoot + "src/components/chat/composer-pill-icons.tsx";
-const permissionPath = webRoot + "src/components/chat/PermissionLevelPill.tsx";
-const modelSelectorPath = webRoot + "src/components/chat/ModelSelectorPill.tsx";
-const modelSettingsPath = webRoot + "src/components/chat/ModelSettingsPill.tsx";
 const chatComposerPath = webRoot + "src/components/chat/ChatComposer.tsx";
+// Post-modal-refactor consumer of the shared icons.
+const settingsModalPath = webRoot + "src/components/chat/ChatSettingsModal.tsx";
 
 const CHEVRON_PATH_LITERAL = 'M6 9l6 6 6-6';
 
@@ -68,20 +67,13 @@ describe("T-018 composer-pill-icons — shared icon module + bridge constant cle
     expect(src).toMatch(/export\s+type\s+ModeIconProps\b/);
   });
 
-  test("PermissionLevelPill imports chevron from the shared module", () => {
-    const src = readFileSync(permissionPath, "utf8");
-    expect(src).toMatch(/from\s+["']\.\/composer-pill-icons["']/);
-    expect(src).not.toContain(CHEVRON_PATH_LITERAL);
+  test("shared module exports HammerIcon (Build/Plan Mode glyph)", () => {
+    const src = readFileSync(sharedPath, "utf8");
+    expect(src).toMatch(/export\s+function\s+HammerIcon\b/);
   });
 
-  test("ModelSelectorPill imports chevron from the shared module", () => {
-    const src = readFileSync(modelSelectorPath, "utf8");
-    expect(src).toMatch(/from\s+["']\.\/composer-pill-icons["']/);
-    expect(src).not.toContain(CHEVRON_PATH_LITERAL);
-  });
-
-  test("ModelSettingsPill imports chevron from the shared module", () => {
-    const src = readFileSync(modelSettingsPath, "utf8");
+  test("ChatSettingsModal imports its glyphs from the shared module", () => {
+    const src = readFileSync(settingsModalPath, "utf8");
     expect(src).toMatch(/from\s+["']\.\/composer-pill-icons["']/);
     expect(src).not.toContain(CHEVRON_PATH_LITERAL);
   });
@@ -94,17 +86,10 @@ describe("T-018 composer-pill-icons — shared icon module + bridge constant cle
     expect(src).not.toMatch(/function\s+LockOpenIcon\b/);
   });
 
-  test("PermissionLevelPill no longer declares private ShieldIcon / PenLineIcon / LockOpenIcon", () => {
-    const src = readFileSync(permissionPath, "utf8");
-    expect(src).not.toMatch(/function\s+ShieldIcon\b/);
-    expect(src).not.toMatch(/function\s+PenLineIcon\b/);
-    expect(src).not.toMatch(/function\s+LockOpenIcon\b/);
-  });
-
   test("chevron SVG path literal appears only in the shared module", () => {
     const sharedHits = readFileSync(sharedPath, "utf8").split(CHEVRON_PATH_LITERAL).length - 1;
     expect(sharedHits).toBeGreaterThanOrEqual(1);
-    for (const path of [permissionPath, modelSelectorPath, modelSettingsPath, chatComposerPath]) {
+    for (const path of [settingsModalPath, chatComposerPath]) {
       expect(readFileSync(path, "utf8")).not.toContain(CHEVRON_PATH_LITERAL);
     }
   });

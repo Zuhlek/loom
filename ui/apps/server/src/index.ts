@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { startServer } from "./http-ws-server.ts";
+import { startServer, resolveAllowedOrigins } from "./http-ws-server.ts";
 import { resolveConfig, type ResolvedConfig } from "./config-loader/index.ts";
 import { initMetadataStore, type MetadataStore } from "./metadata-store/index.ts";
 import { createJsonlTailBridge, type JsonlTailBridge } from "./process-manager/jsonl/bridge.ts";
@@ -375,10 +375,15 @@ if (isEntrypoint) {
     permissionGate,
   });
 
+  const origins = resolveAllowedOrigins(process.env);
+  if (origins.length > 0) {
+    console.log(`[loom] additional allowed origins: ${origins.join(", ")}`);
+  }
   const server = await startServer({
     port: loomPort,
     routes,
     bridge,
+    origins,
   });
   console.log(
     `loom-server listening at ${server.url} (root: ${config.root ?? "<none>"} / source: ${config.source})`,

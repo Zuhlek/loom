@@ -20,6 +20,7 @@ The `methods/*` rows below are skill-resident procedures: the orchestrator reads
 | `decisions.md` | `.loom/<project>/decisions.md` | on rerun | Prior decision slots |
 | `repo-context.md` | `.loom/<project>/repo-context.md` | optional | User-maintained hand-curated context (see `methods/repo-context.md`); read if present, agentic search via Read/Grep/Bash otherwise |
 | `quality-review.md` | `.loom/<project>/quality-review.md` | when present | Quality Check findings to address |
+| `.answers.yaml` | `.loom/<project>/.answers.yaml` | optional | Canned-answer queue (pre-staged by the eval harness via `evaluation/answer-queue.py`); read if present — each grilling question consumes its matching queued answer instead of surfacing `AskUserQuestion` |
 | `phases/spec/methods/grilling.md` | `orchestrator/weave/phases/spec/methods/grilling.md` | yes | Six-rule question discipline, dispatch flow, slot conventions, revisit mechanic |
 | `phases/spec/methods/categories.md` | `orchestrator/weave/phases/spec/methods/categories.md` | yes | Per-category briefing templates and validation |
 | `phases/spec/methods/stories.md` | `orchestrator/weave/phases/spec/methods/stories.md` | yes | User story format, EARS acceptance-criteria patterns, marker shape, IDs, status |

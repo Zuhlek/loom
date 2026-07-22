@@ -422,188 +422,100 @@ describe("composer integration — click /plan built-in (US-003 AC2)", () => {
   });
 });
 
-describe("composer integration — click /model built-in opens picker (US-003 AC1)", () => {
-  test("ModelSelectorPill with open=true renders the Claude model list (Opus/Sonnet/Haiku)", async () => {
-    const { ModelSelectorPill } = await import(
-      "../src/components/chat/ModelSelectorPill"
-    );
-    const tree = renderWith([], () =>
-      (ModelSelectorPill as unknown as (p: unknown) => unknown)({
-        value: null,
-        onPick: () => {},
-        open: true,
-        onOpenChange: () => {},
-      }),
-    ).result;
+describe("composer integration — /model built-in opens the settings modal (US-003 AC1)", () => {
+  const composerSrc = readFileSync(
+    webRoot + "src/components/chat/ChatComposer.tsx",
+    "utf8",
+  );
+  const modalSrc = readFileSync(
+    webRoot + "src/components/chat/ChatSettingsModal.tsx",
+    "utf8",
+  );
 
-    const popup = byTestId(tree, "composer-pill-model-selector-popup");
-    expect(popup).not.toBeNull();
-    const rowButtons = findAll(tree, (n) => n.type === "button" && n.props.role === "option");
-    const labels = rowButtons.map((b) => collectText(b));
-    expect(labels).toContain("Opus 4.7");
-    expect(labels).toContain("Sonnet 4.6");
-    expect(labels).toContain("Haiku 4.5");
+  test("the /model built-in invokes onOpenSettings?.() (opens the modal)", () => {
+    expect(composerSrc).toMatch(/onOpenSettings\??\.?\(\s*\)/);
+  });
 
-    const trigger = byTestId(tree, "composer-pill-model-selector-trigger");
-    expect(collectText(trigger)).toContain("Claude (default)");
+  test("composer renders the gear (top-left); live-chat wires onOpenSettings + mounts the ChatSettingsModal", () => {
+    expect(composerSrc).toMatch(/data-testid=["']chat-settings-gear["']/);
+    const src = readRoute();
+    expect(src).toMatch(/onOpenSettings=\{/);
+    expect(src).toMatch(/<ChatSettingsModal\b/);
+  });
+
+  test("the modal renders the model list dynamically from the `models` prop (not a hardcoded catalog)", () => {
+    // Chips map over the injected `models` prop — the id/label pairs are
+    // server-resolved, so the modal must not carry its own model catalog.
+    expect(modalSrc).toMatch(/models\s*&&\s*models\.length/);
+    expect(modalSrc).toMatch(/modelList\.map\(/);
+    expect(modalSrc).toMatch(/chat-settings-model-\$\{[^}]*\.id\}/);
   });
 });
 
 describe("composer integration — pick a model emits { model } patch (US-007 AC1)", () => {
-  test("clicking an option invokes onPick with the model id; onPick → model-settings-set { model } patch", async () => {
-    const { ModelSelectorPill } = await import(
-      "../src/components/chat/ModelSelectorPill"
-    );
-    const picks: string[] = [];
-    const tree = renderWith([], () =>
-      (ModelSelectorPill as unknown as (p: unknown) => unknown)({
-        value: null,
-        onPick: (id: string) => picks.push(id),
-        open: true,
-        onOpenChange: () => {},
-      }),
-    ).result;
-    const opusRow = byTestId(tree, "composer-pill-model-selector-row-claude-opus-4-7")!;
-    expect(opusRow).not.toBeNull();
-    const onClick = opusRow.props.onClick as () => void;
-    onClick();
-    expect(picks).toEqual(["claude-opus-4-7"]);
+  const modalSrc = readFileSync(
+    webRoot + "src/components/chat/ChatSettingsModal.tsx",
+    "utf8",
+  );
 
-    // The composer wraps the pill's onPick to emit a `{ model }` partial
-    // patch through onModelSettingsSet — assert the production wrapper.
-    const composerSrc = readFileSync(
-      webRoot + "src/components/chat/ChatComposer.tsx",
-      "utf8",
-    );
-    expect(composerSrc).toMatch(
-      /onModelSettingsSet\??\.?\(\s*\{\s*model\s*:\s*[A-Za-z_$][\w$]*\s*\}\s*\)/,
-    );
+  test("a model chip dispatches onModelSettingsSet({ model: <id> })", () => {
+    expect(modalSrc).toMatch(/onModelSettingsSet\(\s*\{\s*model:\s*m\.id\s*\}\s*\)/);
+  });
 
-    // The route's onModelSettingsSet dispatcher must produce a
-    // `model-settings-set` frame with the patch as body — collapsing
-    // means B-02 has been reverted.
+  test("live-chat threads onModelSettingsSet into <ChatSettingsModal>", () => {
+    const src = readRoute();
+    expect(src).toMatch(/<ChatSettingsModal[\s\S]*?onModelSettingsSet\s*=\s*\{/);
+  });
+
+  test("the route's onModelSettingsSet dispatcher emits a `model-settings-set` frame", () => {
     const src = readRoute();
     expect(src).toMatch(/kind:\s*["']model-settings-set["']/);
-    expect(src).toMatch(/<ChatComposer[\s\S]*?onModelSettingsSet\s*=\s*\{/);
   });
 });
 
-describe("composer integration — Ultrathink pick emits effort='max' + thinking.budgetTokens=32000 (US-008 AC3)", () => {
-  test("clicking the Ultrathink radio invokes onPick with the documented patch", async () => {
-    const { ModelSettingsPill } = await import(
-      "../src/components/chat/ModelSettingsPill"
-    );
-    const cells: HookCell[] = [];
-    // First render seeds open=false; flip it via the trigger.
-    const first = renderWith(cells, () =>
-      (ModelSettingsPill as unknown as (p: unknown) => unknown)({
-        value: null,
-        onPick: () => {},
-      }),
-    ).result;
-    const trigger = byTestId(first, "composer-pill-model-settings-trigger")!;
-    (trigger.props.onClick as () => void)();
+describe("composer integration — reasoning/context patches (US-008 AC3)", () => {
+  const modalSrc = readFileSync(
+    webRoot + "src/components/chat/ChatSettingsModal.tsx",
+    "utf8",
+  );
 
-    const picks: unknown[] = [];
-    const second = renderWith(cells, () =>
-      (ModelSettingsPill as unknown as (p: unknown) => unknown)({
-        value: null,
-        onPick: (patch: unknown) => picks.push(patch),
-      }),
-    ).result;
-
-    const ultrathinkRadio = findFirst(
-      second,
-      (n) =>
-        n.type === "input" &&
-        n.props.type === "radio" &&
-        n.props.name === "model-settings-reasoning",
-    );
-    expect(ultrathinkRadio).not.toBeNull();
-    // Find specifically the Ultrathink label container.
-    const ultraLabel = byTestId(second, "composer-pill-model-settings-reasoning-Ultrathink");
-    expect(ultraLabel).not.toBeNull();
-    const ultraInput = findFirst(
-      ultraLabel,
-      (n) => n.type === "input" && n.props.type === "radio",
-    )!;
-    (ultraInput.props.onChange as () => void)();
-    expect(picks.length).toBe(1);
-    const patch = picks[0] as {
-      effort: string;
-      thinking: { type: string; budgetTokens: number };
-    };
-    expect(patch.effort).toBe("max");
-    expect(patch.thinking.type).toBe("enabled");
-    expect(patch.thinking.budgetTokens).toBe(32000);
+  test("Ultrathink maps to effort='max' + thinking.budgetTokens=32000", () => {
+    expect(modalSrc).toMatch(/ULTRATHINK_BUDGET_TOKENS\s*=\s*32000/);
+    expect(modalSrc).toMatch(/budgetTokens:\s*(?:ULTRATHINK_BUDGET_TOKENS|32000)/);
+    expect(modalSrc).toMatch(/type:\s*["']enabled["']/);
+    expect(modalSrc).toMatch(/effort:\s*["']max["']/);
   });
 
-  test("picking 1M context window emits contextWindow: '1m'", async () => {
-    const { ModelSettingsPill } = await import(
-      "../src/components/chat/ModelSettingsPill"
-    );
-    const cells: HookCell[] = [];
-    const first = renderWith(cells, () =>
-      (ModelSettingsPill as unknown as (p: unknown) => unknown)({
-        value: null,
-        onPick: () => {},
-      }),
-    ).result;
-    (byTestId(first, "composer-pill-model-settings-trigger")!.props.onClick as () => void)();
+  test("context window chips carry the '200k' / '1m' patches", () => {
+    expect(modalSrc).toMatch(/contextWindow:\s*["']200k["']/);
+    expect(modalSrc).toMatch(/contextWindow:\s*["']1m["']/);
+  });
 
-    const picks: unknown[] = [];
-    const second = renderWith(cells, () =>
-      (ModelSettingsPill as unknown as (p: unknown) => unknown)({
-        value: null,
-        onPick: (patch: unknown) => picks.push(patch),
-      }),
-    ).result;
-    const oneMLabel = byTestId(second, "composer-pill-model-settings-context-1M")!;
-    const oneMInput = findFirst(
-      oneMLabel,
-      (n) => n.type === "input" && n.props.type === "radio",
-    )!;
-    (oneMInput.props.onChange as () => void)();
-    expect(picks).toEqual([{ contextWindow: "1m" }]);
+  test("reasoning + context chips dispatch onModelSettingsSet(row.patch)", () => {
+    expect(modalSrc).toMatch(/onModelSettingsSet\(\s*row\.patch\s*\)/);
   });
 });
 
-describe("composer integration — Plan pill flips back to lastNonPlanMode (US-004 AC3)", () => {
-  test("click while mode=plan dispatches lastNonPlanMode", async () => {
-    const { BuildPlanTogglePill } = await import(
-      "../src/components/chat/BuildPlanTogglePill"
-    );
-    const changes: string[] = [];
-    const tree = renderWith([], () =>
-      (BuildPlanTogglePill as unknown as (p: unknown) => unknown)({
-        mode: "plan",
-        onModeChange: (m: string) => changes.push(m),
-        lastNonPlanMode: "acceptEdits",
-      }),
-    ).result;
-    const button = byTestId(tree, "composer-pill-build-plan")!;
-    expect(collectText(button)).toContain("Plan");
-    expect(button.props["aria-pressed"]).toBe(true);
-    (button.props.onClick as () => void)();
-    expect(changes).toEqual(["acceptEdits"]);
+describe("composer integration — Mode + Access dispatch permission mode (US-004 AC3)", () => {
+  const modalSrc = readFileSync(
+    webRoot + "src/components/chat/ChatSettingsModal.tsx",
+    "utf8",
+  );
+
+  test("the Plan card dispatches onPermissionModeChange('plan')", () => {
+    expect(modalSrc).toMatch(/onPermissionModeChange\(\s*["']plan["']\s*\)/);
   });
 
-  test("click while mode!=plan dispatches 'plan'", async () => {
-    const { BuildPlanTogglePill } = await import(
-      "../src/components/chat/BuildPlanTogglePill"
-    );
-    const changes: string[] = [];
-    const tree = renderWith([], () =>
-      (BuildPlanTogglePill as unknown as (p: unknown) => unknown)({
-        mode: "default",
-        onModeChange: (m: string) => changes.push(m),
-        lastNonPlanMode: "default",
-      }),
-    ).result;
-    const button = byTestId(tree, "composer-pill-build-plan")!;
-    expect(collectText(button)).toContain("Build");
-    (button.props.onClick as () => void)();
-    expect(changes).toEqual(["plan"]);
+  test("the Build card restores the lastNonPlanMode ref when leaving Plan", () => {
+    expect(modalSrc).toMatch(/lastNonPlanModeRef/);
+    expect(modalSrc).toMatch(/onPermissionModeChange\(\s*lastNonPlanModeRef\.current\s*\)/);
+  });
+
+  test("the Access section dispatches onPermissionModeChange(<value>) for the three non-plan modes; Plan is separate", () => {
+    expect(modalSrc).toMatch(/onPermissionModeChange\(\s*row\.value\s*\)/);
+    expect(modalSrc).toMatch(/value:\s*["']default["']/);
+    expect(modalSrc).toMatch(/value:\s*["']acceptEdits["']/);
+    expect(modalSrc).toMatch(/value:\s*["']bypassPermissions["']/);
   });
 });
 
@@ -616,12 +528,19 @@ describe("composer integration — live-chat threads bridge state into <ChatComp
     expect(kinds.has("context-usage-update")).toBe(true);
   });
 
-  test("<ChatComposer> receives modelSettings + onModelSettingsSet + contextUsage + slashCommands", () => {
+  test("<ChatSettingsModal> receives modelSettings + onModelSettingsSet + permissionMode + onPermissionModeChange", () => {
     const src = readRoute();
-    expect(src).toMatch(/<ChatComposer[\s\S]*?modelSettings\s*=\s*\{/);
-    expect(src).toMatch(/<ChatComposer[\s\S]*?onModelSettingsSet\s*=\s*\{/);
+    expect(src).toMatch(/<ChatSettingsModal[\s\S]*?modelSettings\s*=\s*\{/);
+    expect(src).toMatch(/<ChatSettingsModal[\s\S]*?onModelSettingsSet\s*=\s*\{/);
+    expect(src).toMatch(/<ChatSettingsModal[\s\S]*?permissionMode\s*=\s*\{/);
+    expect(src).toMatch(/<ChatSettingsModal[\s\S]*?onPermissionModeChange\s*=\s*\{/);
+  });
+
+  test("<ChatComposer> receives contextUsage + slashCommands + onOpenSettings", () => {
+    const src = readRoute();
     expect(src).toMatch(/<ChatComposer[\s\S]*?contextUsage\s*=\s*\{/);
     expect(src).toMatch(/<ChatComposer[\s\S]*?slashCommands\s*=\s*\{/);
+    expect(src).toMatch(/<ChatComposer[\s\S]*?onOpenSettings\s*=\s*\{/);
   });
 
   test("onModelSettingsSet dispatcher emits a `model-settings-set` frame with the patch as body", () => {

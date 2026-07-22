@@ -288,6 +288,13 @@ interface ChatState {
    * the tail when that happens. Cleared on dispose.
    */
   rotationPoll: ReturnType<typeof setInterval> | undefined;
+  /**
+   * Set once the poller has logged that it refused a rotation because the
+   * pane-pid ownership gate is degraded (no `lsof` / kill switch). Prevents
+   * spamming the log every `rotationPollMs` tick while a bystander file
+   * remains the most-recent entry in the encoded-cwd directory.
+   */
+  rotationGateWarned: boolean;
 }
 
 export interface JsonlTailBridge {
@@ -656,6 +663,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       pendingTurns: [],
       sendChain: Promise.resolve(),
       readyFallbackTimer: undefined,
+      rotationGateWarned: false,
     };
     chats.set(chatId, state);
 
@@ -703,6 +711,17 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
    * this JSONL mine?" — it accepts legitimate claude session-id
    * rotation, rejects bystander claude sessions (terminal `claude`,
    * `/weave`, onboarding JSONLs), and ignores mtime races entirely.
+   *
+   * Fail-closed when the gate is degraded: `paneOwnsFile` returns
+   * allow-all when `lsof` is absent or the kill switch is set
+   * (`paneProcess.gateDegraded()`), so it can no longer tell OUR
+   * session-id rotation from a bystander writing in the same encoded-cwd
+   * directory. In that state we adopt a differently-named file ONLY when
+   * its inner `sessionId` independently confirms ownership (equals the
+   * bound one); otherwise we leave the tail on the bound path rather than
+   * flood this chat with another session's transcript. The cost is that
+   * genuine session-id rotation is not followed on an lsof-less host —
+   * strictly preferable to cross-session mixing.
    */
   async function pollForRotation(state: ChatState): Promise<void> {
     if (state.state === "disposed") return;
@@ -719,10 +738,29 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       }
       return;
     }
-    const paneRoot = await opts.paneProcess.paneRootPid(state.chatId);
-    if (paneRoot === null) return;
-    const owned = await opts.paneProcess.paneOwnsFile(paneRoot, discovered.filePath);
-    if (!owned) return;
+    if (opts.paneProcess.gateDegraded()) {
+      // Ownership gate can't be trusted — only adopt a file we can
+      // independently prove is ours via its inner sessionId.
+      const sessionConfirmsOwnership =
+        discovered.sessionId !== null && discovered.sessionId === state.sessionId;
+      if (!sessionConfirmsOwnership) {
+        if (!state.rotationGateWarned) {
+          state.rotationGateWarned = true;
+          log.attach(state.chatId, {
+            sessionId: state.sessionId,
+            jsonlPath: state.jsonlPath,
+            strategy: "rotation-refused-gate-degraded",
+            candidate: discovered.filePath,
+          });
+        }
+        return;
+      }
+    } else {
+      const paneRoot = await opts.paneProcess.paneRootPid(state.chatId);
+      if (paneRoot === null) return;
+      const owned = await opts.paneProcess.paneOwnsFile(paneRoot, discovered.filePath);
+      if (!owned) return;
+    }
     // Rotation detected and ownership confirmed. Swap the tail.
     const oldTail = state.tail;
     const newTail = createJsonlTail({ pollingIntervalMs: opts.tailPollingMs });

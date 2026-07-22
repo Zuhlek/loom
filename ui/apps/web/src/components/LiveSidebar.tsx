@@ -13,14 +13,10 @@ import { useSidebarState } from "../lib/sidebar-state";
 import { useUnreadChats } from "../lib/unread-chats";
 import { SpawnChatModalLive } from "../routes/spawn-chat-dialog-live";
 import { NewProjectDialog } from "./NewProjectDialog";
-import { ChatContextMenu } from "./sidebar/ChatContextMenu";
 import {
   archiveFabric,
   deleteChat,
   deleteProject,
-  forkChat,
-  handoffChat,
-  renameChat,
   type ApiChat,
   type ApiProject,
   type ChatLiveState,
@@ -28,12 +24,6 @@ import {
 } from "../lib/api";
 import { FabricArchiveDialog } from "./fabric/FabricArchiveDialog";
 import clsx from "clsx";
-
-interface ContextMenuState {
-  chat: ApiChat;
-  x: number;
-  y: number;
-}
 
 const DOT_FOR_MODE: Record<ApiChat["permission_mode"], string> = {
   default: "bg-emerald-500",
@@ -72,62 +62,11 @@ export function LiveSidebar() {
   const [location, navigate] = useLocation();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [spawnFor, setSpawnFor] = useState<ApiProject | null>(null);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [detachedIds, setDetachedIds] = useState<Set<string>>(() => new Set());
-  const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
 
   const groups = state?.groups ?? [];
   const unassigned = state?.unassigned ?? [];
   const empty = !state || (groups.length === 0 && unassigned.length === 0);
-
-  const onContextMenu = (chat: ApiChat, evt: React.MouseEvent) => {
-    evt.preventDefault();
-    setContextMenu({ chat, x: evt.clientX, y: evt.clientY });
-  };
-
-  const onHandoff = async (chat: ApiChat) => {
-    setContextMenu(null);
-    try {
-      await handoffChat(chat.id);
-      setDetachedIds((prev) => {
-        const next = new Set(prev);
-        next.add(chat.id);
-        return next;
-      });
-    } catch (err) {
-      console.warn("[loom] handoffChat failed", err);
-    }
-  };
-
-  const onFork = async (chat: ApiChat) => {
-    setContextMenu(null);
-    try {
-      await forkChat(chat.id);
-      await refresh();
-    } catch (err) {
-      console.warn("[loom] forkChat failed", err);
-    }
-  };
-
-  const onRename = (chat: ApiChat) => {
-    setContextMenu(null);
-    setRenameTargetId(chat.id);
-  };
-
-  const onSubmitRename = async (chatId: string, value: string | null) => {
-    setRenameTargetId(null);
-    try {
-      await renameChat(chatId, value);
-      await refresh();
-    } catch (err) {
-      console.warn("[loom] renameChat failed", err);
-    }
-  };
-
-  const onCancelRename = () => {
-    setRenameTargetId(null);
-  };
 
   const onDelete = async (chatId: string) => {
     try {
@@ -209,11 +148,6 @@ export function LiveSidebar() {
                 onDelete={onDelete}
                 onSpawnChat={onSpawnChat}
                 onDeleteProject={onDeleteProject}
-                onContextMenu={onContextMenu}
-                detachedIds={detachedIds}
-                renameTargetId={renameTargetId}
-                onSubmitRename={onSubmitRename}
-                onCancelRename={onCancelRename}
                 isUnread={isUnread}
                 onMarkRead={markRead}
               />
@@ -232,11 +166,6 @@ export function LiveSidebar() {
                     chat={c}
                     active={location === `/chat/${c.id}`}
                     onDelete={onDelete}
-                    onContextMenu={onContextMenu}
-                    detached={detachedIds.has(c.id)}
-                    isRenaming={renameTargetId === c.id}
-                    onSubmitRename={(value) => onSubmitRename(c.id, value)}
-                    onCancelRename={onCancelRename}
                     unread={isUnread(c.id)}
                     onMarkRead={() => markRead(c.id)}
                   />
@@ -300,16 +229,6 @@ export function LiveSidebar() {
           onAfterUnarchive={refresh}
         />
       ) : null}
-      {contextMenu ? (
-        <ChatContextMenu
-          chat={contextMenu.chat}
-          position={{ x: contextMenu.x, y: contextMenu.y }}
-          onClose={() => setContextMenu(null)}
-          onHandoff={onHandoff}
-          onRename={onRename}
-          onFork={onFork}
-        />
-      ) : null}
     </aside>
   );
 }
@@ -321,11 +240,6 @@ function ProjectGroup({
   onDelete,
   onSpawnChat,
   onDeleteProject,
-  onContextMenu,
-  detachedIds,
-  renameTargetId,
-  onSubmitRename,
-  onCancelRename,
   isUnread,
   onMarkRead,
 }: {
@@ -335,11 +249,6 @@ function ProjectGroup({
   onDelete: (id: string) => void | Promise<void>;
   onSpawnChat: (project: ApiProject) => void;
   onDeleteProject: (project: ApiProject, deletedChatIds: string[]) => void | Promise<void>;
-  onContextMenu: (chat: ApiChat, evt: React.MouseEvent) => void;
-  detachedIds: Set<string>;
-  renameTargetId: string | null;
-  onSubmitRename: (chatId: string, value: string | null) => void | Promise<void>;
-  onCancelRename: () => void;
   isUnread: (chatId: string) => boolean;
   onMarkRead: (chatId: string) => void;
 }) {
@@ -430,11 +339,6 @@ function ProjectGroup({
           chat={c}
           active={location === `/chat/${c.id}`}
           onDelete={onDelete}
-          onContextMenu={onContextMenu}
-          detached={detachedIds.has(c.id)}
-          isRenaming={renameTargetId === c.id}
-          onSubmitRename={(value) => onSubmitRename(c.id, value)}
-          onCancelRename={onCancelRename}
           unread={isUnread(c.id)}
           onMarkRead={() => onMarkRead(c.id)}
         />
@@ -557,22 +461,12 @@ function ChatLink({
   chat,
   active,
   onDelete,
-  onContextMenu,
-  detached,
-  isRenaming,
-  onSubmitRename,
-  onCancelRename,
   unread,
   onMarkRead,
 }: {
   chat: ApiChat;
   active: boolean;
   onDelete: (id: string) => void | Promise<void>;
-  onContextMenu: (chat: ApiChat, evt: React.MouseEvent) => void;
-  detached: boolean;
-  isRenaming: boolean;
-  onSubmitRename: (value: string | null) => void | Promise<void>;
-  onCancelRename: () => void;
   unread?: boolean;
   onMarkRead?: () => void;
 }) {
@@ -596,51 +490,22 @@ function ChatLink({
         showUnread && "unread-pulse",
       )}
       title={`${chat.cwd} · ${chat.permission_mode}${chat.inert ? " · inert" : ""}${showNeedsInput ? " · waiting for your input" : showUnread ? " · unread reply" : ""}`}
-      onContextMenu={(evt) => onContextMenu(chat, evt)}
       data-unread={showUnread ? "true" : undefined}
       data-needs-input={showNeedsInput ? "true" : undefined}
     >
-      {isRenaming ? (
-        <div className="flex-1 min-w-0 flex items-center gap-1.5">
-          <span className={clsx("size-1.5 rounded-full shrink-0", dot)} />
-          <input
-            autoFocus
-            defaultValue={label}
-            data-testid="chat-rename-input"
-            className="flex-1 min-w-0 bg-transparent border rounded px-1 text-xs outline-none"
-            style={{ borderColor: "var(--border)" }}
-            onKeyDown={(evt) => {
-              if (evt.key === "Enter") {
-                evt.preventDefault();
-                const trimmed = evt.currentTarget.value.trim();
-                onSubmitRename(trimmed.length === 0 ? null : trimmed);
-              } else if (evt.key === "Escape") {
-                evt.preventDefault();
-                onCancelRename();
-              }
-            }}
-            onBlur={() => onCancelRename()}
-          />
-        </div>
-      ) : (
       <Link
         href={`/chat/${chat.id}`}
         className="flex-1 min-w-0 overflow-hidden"
         onClick={() => onMarkRead?.()}
       >
         <div className="flex items-center gap-1.5 cursor-pointer min-w-0">
-          {detached ? (
-            <span className="text-[10px] text-[var(--muted-foreground)] font-mono shrink-0" title="detached">↗</span>
-          ) : (
-            <span className={clsx("size-1.5 rounded-full shrink-0", dot)} />
-          )}
+          <span className={clsx("size-1.5 rounded-full shrink-0", dot)} />
           <span className="flex-1 min-w-0 truncate">{label}</span>
           <LiveStatusGlyph live={chat.live ?? null} />
           {chat.inert ? <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">·z</span> : null}
           {chat.worktree_mode === "worktree" ? <span className="text-[10px] text-[var(--muted-foreground)] font-mono shrink-0">⎇</span> : null}
         </div>
       </Link>
-      )}
       {confirming ? (
         <div className="flex items-center gap-1 shrink-0">
           <button

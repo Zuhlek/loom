@@ -40,7 +40,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from statistics import fmean, stdev
+from statistics import fmean, median, stdev
 from typing import Any
 
 
@@ -50,187 +50,38 @@ AGGREGATOR = _SCRIPT_DIR.parent / "lib" / "telemetry" / "eval-aggregate.py"
 REPO_ROOT = _SCRIPT_DIR.parent.parent
 
 
-VALID_PHASES_FOR_OUTCOME = {"spec", "design", "plan", "build", "review"}
-VALID_LIFECYCLE_STATES = {"active", "complete"}
-VALID_REVIEW_STATUSES = {"PASS", "FAIL"}
+# --------------------------------------------------------------------------
+# Outcome derivation lives in orchestrator/lib/telemetry/run-outcome.py so
+# regular /weave runs (via the tag-subagent-phase.py hook) and eval runs
+# (via run-baseline.sh) produce the same outcome.json without importing the
+# dashboard. Re-exported here for callers and tests.
+# --------------------------------------------------------------------------
 
-REVIEW_VERDICT_INLINE_RE = re.compile(
-    r"\*\*(PASS|FAIL)\*\*\s*[—–\-]+\s*"
-    r"(\d+)\s+Blockers?\b[^0-9]*"
-    r"(\d+)\s+Majors?\b[^0-9]*"
-    r"(\d+)\s+Minors?\b[^0-9]*"
-    r"(\d+)\s+Notes?",
-    re.IGNORECASE,
-)
-
-REVIEW_STATUS_RE = re.compile(r"\*\*(PASS|FAIL)\*\*", re.IGNORECASE)
-
-REVIEW_COUNT_RES = {
-    "blockers": re.compile(r"\*\*Blockers?:?\*\*:?\s*[—–\-]?\s*(\d+)", re.IGNORECASE),
-    "major":    re.compile(r"\*\*Majors?:?\*\*:?\s*[—–\-]?\s*(\d+)",   re.IGNORECASE),
-    "minor":    re.compile(r"\*\*Minors?:?\*\*:?\s*[—–\-]?\s*(\d+)",   re.IGNORECASE),
-    "note":     re.compile(r"\*\*Notes?:?\*\*:?\s*[—–\-]?\s*(\d+)",    re.IGNORECASE),
-}
-
-BOARD_SECTION_RE = re.compile(
-    r"^## (Backlog|In Progress|Review|Done)\s*$",
-    re.MULTILINE,
-)
-
-BOARD_TASK_BULLET_RE = re.compile(r"^- T-\d+\b", re.MULTILINE)
+def _load_run_outcome_module():
+    import importlib.util
+    path = _SCRIPT_DIR.parent / "lib" / "telemetry" / "run-outcome.py"
+    spec = importlib.util.spec_from_file_location("run_outcome", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def _read_pipeline_block(pipeline_text: str, heading: str) -> str | None:
-    """Return the first non-blank line inside the fenced block under
-    `## <heading>`, or None if the heading or block is absent."""
-    needle = f"## {heading}"
-    index = pipeline_text.find(needle)
-    if index < 0:
-        return None
-    rest = pipeline_text[index + len(needle):]
-    open_fence = rest.find("```")
-    if open_fence < 0:
-        return None
-    after_open = rest[open_fence + 3:]
-    newline = after_open.find("\n")
-    if newline < 0:
-        return None
-    body_start = newline + 1
-    close_fence = after_open.find("```", body_start)
-    if close_fence < 0:
-        return None
-    body = after_open[body_start:close_fence]
-    for line in body.splitlines():
-        stripped = line.strip()
-        if stripped:
-            return stripped
-    return None
-
-
-def _parse_review_verdict(review_text: str) -> dict | None:
-    inline = REVIEW_VERDICT_INLINE_RE.search(review_text)
-    if inline is not None:
-        return {
-            "status": inline.group(1).upper(),
-            "blockers": int(inline.group(2)),
-            "major": int(inline.group(3)),
-            "minor": int(inline.group(4)),
-            "note": int(inline.group(5)),
-        }
-    status_match = REVIEW_STATUS_RE.search(review_text)
-    if status_match is None:
-        return None
-    counts: dict[str, int] = {}
-    for name, pattern in REVIEW_COUNT_RES.items():
-        match = pattern.search(review_text)
-        if match is None:
-            return None
-        counts[name] = int(match.group(1))
-    return {"status": status_match.group(1).upper(), **counts}
-
-
-def _parse_board_tasks(board_text: str) -> dict | None:
-    section_matches = list(BOARD_SECTION_RE.finditer(board_text))
-    if not section_matches:
-        return None
-    counts: dict[str, int] = {}
-    for index, match in enumerate(section_matches):
-        name = match.group(1)
-        section_start = match.end()
-        section_end = (section_matches[index + 1].start()
-                       if index + 1 < len(section_matches) else len(board_text))
-        section_body = board_text[section_start:section_end]
-        counts[name] = len(BOARD_TASK_BULLET_RE.findall(section_body))
-    planned = sum(counts.values())
-    if planned == 0:
-        return None
-    return {"planned": planned, "done": counts.get("Done", 0)}
-
-
-def _read_text_or_empty(path: Path) -> str:
-    if not path.is_file():
-        return ""
-    try:
-        return path.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return ""
-
-
-def derive_outcome(run_dir: Path) -> dict:
-    pipeline_path = run_dir / "pipeline.md"
-    pipeline_present = pipeline_path.is_file()
-    lifecycle_state = "active"
-    final_phase: str | None = None
-    if pipeline_present:
-        text = _read_text_or_empty(pipeline_path)
-        raw_lifecycle = _read_pipeline_block(text, "Lifecycle state")
-        if isinstance(raw_lifecycle, str):
-            candidate = raw_lifecycle.lower()
-            if candidate in VALID_LIFECYCLE_STATES:
-                lifecycle_state = candidate
-        raw_phase = _read_pipeline_block(text, "Current phase")
-        if isinstance(raw_phase, str):
-            candidate = raw_phase.lower()
-            if candidate in VALID_PHASES_FOR_OUTCOME:
-                final_phase = candidate
-
-    board_text = _read_text_or_empty(run_dir / "board.md")
-
-    return {
-        "lifecycle_state": lifecycle_state,
-        "final_phase": final_phase,
-        "review_findings_present": (run_dir / "review.md").is_file(),
-        "pipeline_md_present": pipeline_present,
-        "review_verdict": _read_review_verdict(run_dir),
-        "tasks": _parse_board_tasks(board_text) if board_text else None,
-    }
-
-
-def _read_review_verdict(run_dir: Path) -> dict | None:
-    sidecar = run_dir / "review-verdict.json"
-    if sidecar.is_file():
-        try:
-            data = json.loads(sidecar.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            data = None
-        if isinstance(data, dict):
-            verdict = _normalise_review_verdict(data)
-            if verdict is not None:
-                return verdict
-    review_text = _read_text_or_empty(run_dir / "review.md")
-    return _parse_review_verdict(review_text) if review_text else None
-
-
-def _normalise_review_verdict(data: dict) -> dict | None:
-    status = data.get("verdict") or data.get("status")
-    if not isinstance(status, str):
-        return None
-    status_upper = status.upper()
-    if status_upper not in {"PASS", "FAIL"}:
-        return None
-    out = {"status": status_upper}
-    for key in ("blockers", "major", "minor", "note"):
-        value = data.get(key)
-        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-            return None
-        out[key] = value
-    return out
-
-
-def write_outcome(run_dir: Path) -> Path:
-    payload = derive_outcome(run_dir)
-    out_path = run_dir / "outcome.json"
-    atomic_write_text(out_path, json.dumps(payload, indent=2) + "\n")
-    return out_path
+_RUN_OUTCOME = _load_run_outcome_module()
+derive_outcome = _RUN_OUTCOME.derive_outcome
+write_outcome = _RUN_OUTCOME.write_outcome
 
 
 # Metric registry. Adding a new metric is one tuple.
 # Tuple: (name, dotted-path-into-row, rollup-fn-name).
+# `cost_usd` is the headline: a per-model-priced estimate that stays
+# comparable when a skill change shifts the token mix between buckets that
+# differ ~12x in price.
 METRICS = [
+    ("cost_usd",       "cost_usd",                          "sum"),
     ("autonomous_ms",  "duration_autonomous_ms",            "sum"),
     ("wall_ms",        "duration_wall_ms",                  "sum"),
-    ("input_tokens",   "tokens.input_tokens",               "sum"),
     ("output_tokens",  "tokens.output_tokens",              "sum"),
+    ("input_tokens",   "tokens.input_tokens",               "sum"),
     ("cache_creation", "tokens.cache_creation_input_tokens","sum"),
     ("cache_read",     "tokens.cache_read_input_tokens",    "sum"),
 ]
@@ -300,13 +151,14 @@ def _is_crashed(row: dict) -> bool:
     return row.get("status") == "crashed" or row.get("tokens") is None
 
 
-def _per_run_metric_sum(rows: list[dict], dotted: str, phase: str) -> int | None:
+def _per_run_metric_sum(rows: list[dict], dotted: str, phase: str) -> float | None:
     """Sum the metric over all OK rows in this run, filtered by phase.
 
     Returns None if there were no contributing OK rows for this phase
-    (used to skip empty per-run data points cleanly).
+    (used to skip empty per-run data points cleanly). Floats are preserved
+    (cost_usd is fractional); integer metrics collapse to int at pooling.
     """
-    total = 0
+    total = 0.0
     seen = False
     for r in rows:
         if r.get("phase") != phase:
@@ -314,8 +166,8 @@ def _per_run_metric_sum(rows: list[dict], dotted: str, phase: str) -> int | None
         if _is_crashed(r):
             continue
         v = _get_dotted(r, dotted)
-        if isinstance(v, (int, float)):
-            total += int(v)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            total += float(v)
             seen = True
     return total if seen else None
 
@@ -351,29 +203,32 @@ def _version_order(versions: list[str]) -> list[str]:
     return sorted(versions)
 
 
-def _read_pointer(run_dir: Path) -> str | None:
+def _read_pointer(run_dir: Path) -> list[str]:
+    """Return every session UUID in `.eval-orchestrator-pointer` (one per
+    line — retries and resumed sessions accumulate). Empty list if absent."""
     p = run_dir / ".eval-orchestrator-pointer"
     if not p.exists():
-        return None
+        return []
     try:
-        text = p.read_text(encoding="utf-8").strip()
+        text = p.read_text(encoding="utf-8")
     except OSError:
-        return None
-    return text or None
+        return []
+    return [line.strip() for line in text.splitlines() if line.strip()]
 
 
 def _harvest(run_dir: Path, cwd: Path) -> bool:
     """Run transcript-harvest.py for this run. Returns True iff usage.jsonl
     exists afterwards. Surfaces stderr on failure; quiet on success."""
-    session_id = _read_pointer(run_dir)
-    if not session_id:
+    session_ids = _read_pointer(run_dir)
+    if not session_ids:
         print(f"[analyse] {run_dir.name}: no .eval-orchestrator-pointer, "
               f"cannot harvest", file=sys.stderr)
         return False
     cmd = [sys.executable, str(HARVESTER), run_dir.name,
            "--workspace", str(run_dir),
-           "--session", session_id,
            "--cwd", str(cwd)]
+    for sid in session_ids:
+        cmd += ["--session", sid]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         print(f"[analyse] {run_dir.name}: harvester exit {proc.returncode}\n"
@@ -424,8 +279,6 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
             for run_dir in sorted(version_dir.iterdir()):
                 if not run_dir.is_dir():
                     continue
-                if (run_dir / "PRE_CANONICAL").exists():
-                    continue
                 usage = run_dir / "usage.jsonl"
                 if not usage.exists():
                     print(f"[analyse] {version}/{run_dir.name}: harvesting…",
@@ -466,14 +319,19 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
         for phase in ordered_phases:
             metric_block: dict[str, float] = {}
             for name, dotted, _rollup in METRICS:
-                per_run_values: list[int] = []
+                per_run_values: list[float] = []
                 for _run_id, run_rows in per_run_pairs:
                     summed = _per_run_metric_sum(run_rows, dotted, phase)
                     if summed is not None:
                         per_run_values.append(summed)
-                metric_block[name] = float(fmean(per_run_values)) if per_run_values else 0.0
-                if metric_block[name] == int(metric_block[name]):
-                    metric_block[name] = int(metric_block[name])
+                # Median is the pooled central stat — robust to a single
+                # tail-latency run in a small pool, where the mean is not.
+                central = float(median(per_run_values)) if per_run_values else 0.0
+                if name != "cost_usd" and central == int(central):
+                    central = int(central)
+                elif name == "cost_usd":
+                    central = round(central, 4)
+                metric_block[name] = central
             # Derive rate metrics from the summed components for this phase.
             for rname, num_keys, den_keys in RATE_METRICS:
                 metric_block[rname] = _derive_rate(metric_block, num_keys, den_keys)
@@ -482,19 +340,25 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
 
         run_blocks: list[dict] = []
         for run_id, run_rows in per_run_pairs:
-            phase_map: dict[str, dict[str, int]] = {}
+            phase_map: dict[str, dict[str, float]] = {}
             for phase in ordered_phases:
-                phase_metrics: dict[str, int] = {}
+                phase_metrics: dict[str, float] = {}
                 for name, dotted, _rollup in METRICS:
                     summed = _per_run_metric_sum(run_rows, dotted, phase)
                     if summed is not None:
-                        phase_metrics[name] = summed
+                        if name == "cost_usd":
+                            phase_metrics[name] = round(summed, 4)
+                        else:
+                            phase_metrics[name] = int(summed)
                 if phase_metrics:
                     for rname, num_keys, den_keys in RATE_METRICS:
                         phase_metrics[rname] = _derive_rate(phase_metrics, num_keys, den_keys)
                     phase_map[phase] = phase_metrics
             run_blocks.append({"run_id": run_id, "phases": phase_map})
         out_runs[v] = run_blocks
+
+    warnings = _collect_warnings(analytics_dir, ordered_versions,
+                                 versions_raw, outcomes_per_version)
 
     return {
         "versions": out_versions,
@@ -506,7 +370,70 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
                    + [name for name, _, _ in RATE_METRICS],
         "runs": out_runs,
         "outcomes": outcomes_per_version,
+        "warnings": warnings,
     }
+
+
+def _collect_warnings(analytics_dir: Path, ordered_versions: list[str],
+                      versions_raw: dict, outcomes_per_version: dict) -> list[str]:
+    """Cross-run hygiene checks. A pool that mixes models or CLI versions, or
+    contains untagged/incomplete runs, is not trend-comparable — surface it
+    loudly rather than letting a confounded delta read as a real change."""
+    warnings: list[str] = []
+    for version in ordered_versions:
+        pairs = versions_raw.get(version, [])
+        # Models actually used, from the rows.
+        models: set[str] = set()
+        untagged_runs = 0
+        for _run_id, rows in pairs:
+            row_models = {r.get("model") for r in rows
+                          if isinstance(r.get("model"), str)}
+            models |= row_models
+            if any(r.get("status") == "untagged" for r in rows):
+                untagged_runs += 1
+        if len(models) > 1:
+            warnings.append(
+                f"version '{version}' pools runs across {len(models)} models "
+                f"({', '.join(sorted(models))}) — token/cost deltas are not "
+                f"comparable across a model switch.")
+        if untagged_runs:
+            warnings.append(
+                f"version '{version}' has {untagged_runs} run(s) with untagged "
+                f"subagents (phase hook missing) — those rows are dropped from "
+                f"per-phase rollups.")
+        # CLI versions + git SHAs, from run-meta.json.
+        cli_versions: set[str] = set()
+        git_shas: set[str] = set()
+        incomplete = 0
+        version_dir = analytics_dir / version
+        for run_id, _rows in pairs:
+            meta_path = version_dir / run_id / "run-meta.json"
+            if not meta_path.is_file():
+                continue
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(meta.get("claude_version"), str):
+                cli_versions.add(meta["claude_version"])
+            if isinstance(meta.get("loom_git_sha"), str):
+                git_shas.add(meta["loom_git_sha"])
+            if meta.get("failed"):
+                incomplete += 1
+        if len(cli_versions) > 1:
+            warnings.append(
+                f"version '{version}' pools runs across {len(cli_versions)} "
+                f"claude CLI versions — harness overhead may differ.")
+        if len(git_shas) > 1:
+            warnings.append(
+                f"version '{version}' pools runs across {len(git_shas)} loom "
+                f"git SHAs ({', '.join(sorted(git_shas))}) — the 'version' "
+                f"label mixes more than one build.")
+        if incomplete:
+            warnings.append(
+                f"version '{version}' has {incomplete} run(s) that did not reach "
+                f"Lifecycle complete — partial runs skew totals downward.")
+    return warnings
 
 
 # --------------------------------------------------------------------------
@@ -517,11 +444,17 @@ def collect(analytics_dir: Path, cwd: Path = REPO_ROOT) -> dict:
 # --------------------------------------------------------------------------
 
 METRICS_DISPLAY: dict[str, dict[str, str]] = {
+    "cost_usd": {
+        "label": "Est. cost (USD)",
+        "group": "Cost",
+        "color": "#0f766e",
+        "desc":  "Per-model-priced estimate: input + output + cache writes (1.25×/2× by TTL) + cache reads (0.1×), summed across this run's subagents. The headline trend metric — comparable even when a change shifts the token mix between buckets. Whole-run cost incl. orchestrator is in run-meta.json.",
+    },
     "autonomous_ms":  {
         "label": "Inference time",
         "group": "Time",
         "color": "#dc2626",
-        "desc":  "Time the model spent generating, summed across assistant turns. The Anthropic-side bill driver.",
+        "desc":  "Wall-clock the model spent generating (timeline partition; always ≤ elapsed). A latency signal, not the bill driver — cost is.",
     },
     "wall_ms": {
         "label": "Elapsed time",
@@ -561,7 +494,7 @@ METRICS_DISPLAY: dict[str, dict[str, str]] = {
     },
 }
 
-GROUP_ORDER = ("Time", "Tokens", "Cache")
+GROUP_ORDER = ("Cost", "Time", "Tokens", "Cache")
 PHASE_DISPLAY: dict[str, str] = {
     "spec":   "Spec",
     "design": "Design",
@@ -572,6 +505,8 @@ PHASE_DISPLAY: dict[str, str] = {
 
 
 def _metric_kind(name: str) -> str:
+    if name == "cost_usd":
+        return "cost"
     if name.endswith("_ms"):
         return "duration"
     if any(name == rn for rn, _, _ in RATE_METRICS):
@@ -620,8 +555,16 @@ def _fmt_rate(v: float) -> str:
     return f"{float(v) * 100:.1f}%"
 
 
+def _fmt_cost(v: float) -> str:
+    if v is None:
+        return "—"
+    return f"${float(v):.4f}"
+
+
 def _fmt_value(name: str, val: float) -> str:
     kind = _metric_kind(name)
+    if kind == "cost":
+        return _fmt_cost(val)
     if kind == "duration":
         return _fmt_duration_ms(val)
     if kind == "rate":
@@ -646,7 +589,7 @@ def _phase_summary_chip(data: dict, phase_or_total: str, versions: list[str],
                        all_phases: list[str]) -> str:
     """Single-version: show the absolute number. Multi-version: show last / mean."""
     chips = []
-    for metric in ("autonomous_ms", "wall_ms"):
+    for metric in ("cost_usd", "wall_ms"):
         meta = _metric_meta(metric)
         if not versions:
             chips.append(f"<span class=\"chip\"><b>{_html(meta['label'])}:</b> —</span>")
@@ -943,6 +886,19 @@ def render_html(data: dict) -> str:
         counts_text = "<i>no runs filed yet</i>"
     total_chips = _phase_summary_chip(data, "total", versions, phases)
 
+    # ----- Comparability warnings banner -----
+    warnings = data.get("warnings") or []
+    if warnings:
+        items = "".join(f"<li>{_html(w)}</li>" for w in warnings)
+        warning_banner = (
+            f"<section id=\"warnings\" class=\"warn-banner\">"
+            f"<h2>⚠ Comparability warnings</h2>"
+            f"<ul>{items}</ul>"
+            f"</section>"
+        )
+    else:
+        warning_banner = ""
+
     # ----- Glossary -----
     glossary_groups = []
     for g in GROUP_ORDER:
@@ -1128,6 +1084,10 @@ tr.total-row td, tr.total-row th {{ background: var(--total-bg); font-weight: 60
 .phase-tab:hover {{ background: var(--bg); color: var(--fg); }}
 .phase-tab.active {{ background: var(--accent); border-color: var(--accent);
                       color: #fff; font-weight: 600; }}
+.warn-banner {{ border-color: #fca5a5; background: #fef2f2; }}
+.warn-banner h2 {{ color: #b91c1c; margin-bottom: 8px; }}
+.warn-banner ul {{ margin: 0; padding-left: 20px; }}
+.warn-banner li {{ font-size: 0.85rem; color: #7f1d1d; line-height: 1.5; }}
 .phase-pane {{ display: none; }}
 .phase-pane.active {{ display: block; }}
 .outcomes-section .outcome-version {{ padding: 10px 0; border-top: 1px solid var(--border); }}
@@ -1165,6 +1125,7 @@ tr.v-row.expanded .v-toggle {{ transform: rotate(90deg); color: var(--fg); }}
 <script id="loom-data" type="application/json">{data_json}</script>
 <script id="loom-display" type="application/json">{metrics_display_json}</script>
 <script id="loom-rates" type="application/json">{rate_metrics_json}</script>
+{warning_banner}
 {outcomes_section}
 {phase_tabs}
 {''.join(sections)}
@@ -1211,6 +1172,39 @@ tr.v-row.expanded .v-toggle {{ transform: rotate(90deg); color: var(--fg); }}
     }});
   }}
   function isDuration(metric) {{ return metric.endsWith('_ms'); }}
+  function isCost(metric) {{ return metric === 'cost_usd'; }}
+  function fmtCost(v) {{
+    if (v == null) return '—';
+    return '$' + Number(v).toFixed(4);
+  }}
+  // Per-run values for a (phase, metric): one array per version, in
+  // version order. Rate metrics are re-derived per run from components.
+  function runValuesFor(phase, metric) {{
+    var rspec = rateSpec(metric);
+    return versionList.map(function(v) {{
+      var runs = (data.runs && data.runs[v]) || [];
+      return runs.map(function(run) {{
+        var ph = run.phases || {{}};
+        if (phase === 'total') {{
+          if (rspec) {{
+            var num = 0, den = 0;
+            phases.forEach(function(p) {{
+              var block = ph[p] || {{}};
+              rspec.num.forEach(function(k) {{ num += block[k] || 0; }});
+              rspec.den.forEach(function(k) {{ den += block[k] || 0; }});
+            }});
+            return den ? num / den : null;
+          }}
+          var sum = 0, seen = false;
+          phases.forEach(function(p) {{
+            if (ph[p] && ph[p][metric] != null) {{ sum += ph[p][metric]; seen = true; }}
+          }});
+          return seen ? sum : null;
+        }}
+        return (ph[phase] && ph[phase][metric] != null) ? ph[phase][metric] : null;
+      }}).filter(function(x) {{ return x != null; }});
+    }});
+  }}
   function fmtDuration(ms) {{
     if (ms == null) return '—';
     if (ms < 1000) return Math.round(ms) + 'ms';
@@ -1238,6 +1232,7 @@ tr.v-row.expanded .v-toggle {{ transform: rotate(90deg); color: var(--fg); }}
     return function(v) {{
       var n = Number(v);
       if (!isFinite(n)) return v;
+      if (isCost(metric)) return '$' + n.toFixed(n < 1 ? 2 : 1);
       if (isDuration(metric)) {{
         if (n < 1000) return n + 'ms';
         if (n < 60000) return (n / 1000).toFixed(0) + 's';
@@ -1250,6 +1245,7 @@ tr.v-row.expanded .v-toggle {{ transform: rotate(90deg); color: var(--fg); }}
   }}
   function fmtValue(metric, v) {{
     if (isRate(metric)) return fmtRate(v);
+    if (isCost(metric)) return fmtCost(v);
     return isDuration(metric) ? fmtDuration(v) : fmtTokens(v);
   }}
   if (typeof Chart === 'undefined') return;
@@ -1266,12 +1262,20 @@ tr.v-row.expanded .v-toggle {{ transform: rotate(90deg); color: var(--fg); }}
       var r = parseInt(h.substr(0, 2), 16), g = parseInt(h.substr(2, 2), 16), b = parseInt(h.substr(4, 2), 16);
       return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
     }};
+    // Per-run dots overlaid on the median line, so a small pool's spread is
+    // visible rather than hidden behind a single central value.
+    var runVals = runValuesFor(phase, metric);
+    var scatterPoints = [];
+    versionList.forEach(function(v, idx) {{
+      runVals[idx].forEach(function(y) {{ scatterPoints.push({{ x: idx, y: y }}); }});
+    }});
+    var multiRun = scatterPoints.length > versionList.length;
     new Chart(canvas.getContext('2d'), {{
-      type: 'line',
       data: {{
         labels: versionList,
         datasets: [{{
-          label: info.label,
+          type: 'line',
+          label: info.label + ' (median)',
           data: valuesFor(phase, metric),
           borderColor: color,
           backgroundColor: rgba(color, 0.12),
@@ -1280,7 +1284,18 @@ tr.v-row.expanded .v-toggle {{ transform: rotate(90deg); color: var(--fg); }}
           pointHoverRadius: 5,
           pointBackgroundColor: color,
           borderWidth: 2,
-          fill: true
+          fill: true,
+          order: 2
+        }}, {{
+          type: 'scatter',
+          label: 'per-run',
+          data: multiRun ? scatterPoints : [],
+          parsing: false,
+          borderColor: rgba(color, 0.55),
+          backgroundColor: rgba(color, 0.35),
+          pointRadius: 2.5,
+          pointHoverRadius: 4,
+          order: 1
         }}]
       }},
       options: {{

@@ -29,13 +29,17 @@ VALIDATOR = _load_validator_module()
 
 def _ok_row(**overrides) -> dict:
     row = {
+        "schema_version": 2,
         "phase": "spec",
+        "phase_source": "sidecar",
         "agent_kind": "subagent",
         "agent_label": "Spec phase agent",
+        "model": "claude-opus-4-8",
         "tokens": {
             "input_tokens": 1, "output_tokens": 1,
             "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
         },
+        "cost_usd": 0.0001,
         "duration_wall_ms": 100,
         "duration_autonomous_ms": 50,
         "status": "ok",
@@ -92,10 +96,58 @@ class RowQualityValidationTests(unittest.TestCase):
 
     def test_untagged_row_carries_quality(self) -> None:
         row = _ok_row(
-            phase=None, status="untagged", agent_label="unknown-agent",
+            phase=None, phase_source=None, status="untagged",
+            agent_label="unknown-agent",
             quality={"error_results": 2, "read_errors": 1, "bash_failures": 0},
         )
         self.assertEqual(VALIDATOR.validate_row(row), [])
+
+
+class SchemaV2FieldTests(unittest.TestCase):
+    def test_missing_schema_version_rejected(self) -> None:
+        row = _ok_row()
+        del row["schema_version"]
+        violations = VALIDATOR.validate_row(row)
+        self.assertTrue(any("schema_version" in v for v in violations))
+
+    def test_v1_schema_version_rejected(self) -> None:
+        violations = VALIDATOR.validate_row(_ok_row(schema_version=1))
+        self.assertTrue(any("schema_version" in v for v in violations))
+
+    def test_autonomous_exceeding_wall_rejected(self) -> None:
+        violations = VALIDATOR.validate_row(_ok_row(
+            duration_wall_ms=100, duration_autonomous_ms=200,
+        ))
+        self.assertTrue(any("must not exceed" in v for v in violations))
+
+    def test_phase_source_meta_accepted(self) -> None:
+        self.assertEqual(VALIDATOR.validate_row(_ok_row(phase_source="meta")), [])
+
+    def test_phase_source_bogus_rejected(self) -> None:
+        violations = VALIDATOR.validate_row(_ok_row(phase_source="guess"))
+        self.assertTrue(any("phase_source" in v for v in violations))
+
+    def test_phase_source_must_be_null_when_untagged(self) -> None:
+        row = _ok_row(phase=None, status="untagged",
+                      agent_label="unknown-agent")  # phase_source stays "sidecar"
+        violations = VALIDATOR.validate_row(row)
+        self.assertTrue(any("phase_source must be null" in v for v in violations))
+
+    def test_model_and_cost_null_accepted_on_ok_row(self) -> None:
+        self.assertEqual(VALIDATOR.validate_row(_ok_row(model=None, cost_usd=None)), [])
+
+    def test_crashed_row_requires_null_model_and_cost(self) -> None:
+        row = _ok_row(
+            status="crashed", tokens=None, duration_autonomous_ms=None,
+            quality=None,
+        )  # model/cost stay non-null from the helper
+        violations = VALIDATOR.validate_row(row)
+        self.assertTrue(any("model must be null" in v for v in violations))
+        self.assertTrue(any("cost_usd must be null" in v for v in violations))
+
+    def test_negative_cost_rejected(self) -> None:
+        violations = VALIDATOR.validate_row(_ok_row(cost_usd=-0.5))
+        self.assertTrue(any("cost_usd" in v for v in violations))
 
 
 def _outcome(**overrides) -> dict:

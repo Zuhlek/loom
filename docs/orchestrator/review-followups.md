@@ -2,17 +2,15 @@
 
 Engineering follow-ups for the `/weave` orchestrator. Listed in priority order.
 
-## 1. Deterministic invariant gates before user gates
+## 1. Deterministic invariant gates before user gates — PARTIALLY DONE
 
-`hooks/validate-subagent-output.py:64-68` only checks flat-field presence (`artifacts`, `summary`). The structural invariants in `phases/build/phase.signature.md` — board ↔ `done.md` consistency, "no In Progress without red log", "no Done without smoke evidence when runnable" — have no runtime enforcement.
+`hooks/validate-subagent-output.py` now enforces the **Plan** work-graph invariants deterministically on every `status: complete` return (frontmatter, `blocked-by` resolution, acyclicity, story coverage, board shape, required `plan.md` sections, `tests.md` mutation declaration — see `phases/plan/phase.signature.md § Deterministic validation`, tests in `hooks/validate-subagent-output.test.sh`). Still open: the **Build** invariants — board ↔ `done.md` consistency, "no In Progress without red log", "no Done without smoke evidence when runnable".
 
-**Fix:** add `lib/weave-checks.py` running these invariants on phase artifacts. Wire it into `/weave` before surfacing the rerun-or-continue gate. Frame as "before user gate", not "before Review" — Review is itself the project-level QC (see `SKILL.md`).
+**Remaining fix:** extend the same hook with a `validate_build_workspace()` sibling to `validate_plan_workspace()`. One enforcement site; one edit point.
 
-## 2. RETURN-schema enforcement consolidated to the hook
+## 2. RETURN-schema enforcement consolidated to the hook — DONE for Plan
 
-RETURN-block schema enforcement runs solely in `hooks/validate-subagent-output.py` as a `SubagentStop` hook. Malformed returns surface as visible `decision: block` reasons; the orchestrator does not maintain a parallel extractor.
-
-**Fix:** extend `hooks/validate-subagent-output.py` to enforce structural invariants beyond the flat-field check (board ↔ `done.md` consistency, "no In Progress without red log", "no Done without smoke evidence when runnable"). One enforcement site; one edit point.
+RETURN-block schema enforcement runs solely in `hooks/validate-subagent-output.py` as a `SubagentStop` hook. Malformed returns surface as visible `decision: block` reasons; the orchestrator does not maintain a parallel extractor. Plan structural invariants are enforced there as of item 1; Build structural invariants remain open (see above).
 
 ## 3. Eval thresholds with fail conditions
 

@@ -18,7 +18,9 @@ from pathlib import Path
 VALID_PHASES = {"spec", "design", "plan", "build", "review"}
 VALID_AGENT_KINDS = {"subagent"}
 VALID_STATUSES = {"ok", "crashed", "untagged"}
+VALID_PHASE_SOURCES = {"sidecar", "meta"}
 VALID_LIFECYCLE_STATES = {"active", "complete"}
+SCHEMA_VERSION = 2
 TOKEN_KEYS = (
     "input_tokens",
     "output_tokens",
@@ -31,6 +33,14 @@ CANONICAL_LABEL = {phase: f"{phase.capitalize()} phase agent" for phase in VALID
 
 def validate_row(row: dict) -> list[str]:
     violations: list[str] = []
+
+    schema_version = row.get("schema_version")
+    if schema_version != SCHEMA_VERSION:
+        violations.append(
+            f"schema_version must be {SCHEMA_VERSION} (rows from older "
+            f"harvests carry inflated token sums and must be re-harvested "
+            f"or quarantined); got {schema_version!r}"
+        )
 
     status = row.get("status")
     if status not in VALID_STATUSES:
@@ -48,6 +58,35 @@ def validate_row(row: dict) -> list[str]:
                 f"phase must be one of {sorted(VALID_PHASES)} when status is {status!r}; "
                 f"got {phase!r}"
             )
+
+    phase_source = row.get("phase_source")
+    if isinstance(phase, str) and phase in VALID_PHASES:
+        if phase_source not in VALID_PHASE_SOURCES:
+            violations.append(
+                f"phase_source must be one of {sorted(VALID_PHASE_SOURCES)} "
+                f"when phase is set; got {phase_source!r}"
+            )
+    elif phase_source is not None:
+        violations.append(
+            f"phase_source must be null when phase is null; got {phase_source!r}"
+        )
+
+    model = row.get("model")
+    if status == "crashed":
+        if model is not None:
+            violations.append("model must be null when status is crashed")
+    elif model is not None and not isinstance(model, str):
+        violations.append(f"model must be a string or null; got {model!r}")
+
+    cost_usd = row.get("cost_usd")
+    if status == "crashed":
+        if cost_usd is not None:
+            violations.append("cost_usd must be null when status is crashed")
+    elif cost_usd is not None:
+        if not isinstance(cost_usd, (int, float)) or isinstance(cost_usd, bool):
+            violations.append(f"cost_usd must be a number or null; got {cost_usd!r}")
+        elif cost_usd < 0:
+            violations.append(f"cost_usd must be >= 0; got {cost_usd}")
 
     agent_kind = row.get("agent_kind")
     if agent_kind not in VALID_AGENT_KINDS:
@@ -106,6 +145,13 @@ def validate_row(row: dict) -> list[str]:
             violations.append(
                 f"duration_autonomous_ms must be an int >= 0 when status is {status!r}; "
                 f"got {autonomous!r}"
+            )
+        elif (isinstance(wall, int) and not isinstance(wall, bool)
+                and autonomous > wall):
+            violations.append(
+                f"duration_autonomous_ms ({autonomous}) must not exceed "
+                f"duration_wall_ms ({wall}) — the v2 partition algorithm "
+                f"guarantees autonomous <= wall"
             )
 
     if "quality" not in row:

@@ -14,9 +14,9 @@ State file: `.loom/<project>/pipeline.md`
 | --- | --- | --- |
 | Spec | Spec Grilling Agent | `spec.md`, `decisions.md` |
 | Design | Design Structuring Agent | `design.md`, optional `mockup/` |
-| Plan | Work Graph Agent | `plan.md`, `board.md`, `task.md`, `tests.md`, `tasks/T-*.md` |
+| Plan | Work Graph Agent | `plan.md` (decision record), `board.md`, `tests.md`, `tasks/T-*.md` |
 | Build | Build Phase Agent | implementation, task logs, done reports, `test-report.md` |
-| Review | Review Audit Agent | `review.md`, `feedback.md` |
+| Review | Review Audit Agent | `review.md`, `review-verdict.json` (`feedback.md` only when the gate relays explicit user feedback) |
 
 After every phase the orchestrator surfaces a rerun-or-continue decision to the user. Reruns are never automatic. Four of the five phases (Spec, Design, Plan, Build) additionally offer an opt-in Quality Check subagent that analyses artifacts for holes, blind spots, and contradictions to help the user decide whether a rerun is worth the token burn. Review is itself the project-level quality check and has no separate Quality Check subagent.
 
@@ -36,7 +36,7 @@ Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatche
 | `orchestrator/weave/phases/<phase>/methods/` | Phase-internal procedure files (when present) — read inline by the phase agent, not dispatched as subagents (e.g. Build's `task`, `smoke`, `mutation`) |
 | `orchestrator/weave/phases/<phase>/quality-check.md` | Opt-in Quality Check agent body — present for `spec`, `design`, `plan`, `build`. Spec/Design/Build have narrow in-phase scope; Plan has comprehensive cross-phase scope. Review has none because Review is itself the project-level quality check |
 | `orchestrator/weave/phases/<phase>/quality-check.signature.md` | Quality Check agent signature (one per phase QC) |
-| `orchestrator/lib/` | Workspace helpers (pipeline parser, events, artifacts, locks, atomic write) |
+| `orchestrator/lib/` | Shared shell helpers (`atomic-write.sh`) plus the deletable telemetry/eval substrate under `lib/telemetry/`; the pipeline parser lives at `orchestrator/weave/lib/pipeline-parser.py` |
 | `orchestrator/hooks/` | Claude Code hooks |
 | `orchestrator/types/` | Domain guidance keyed by Type hint; the active type is materialized into each workspace as `.loom/<project>/type-guidance.md` at project creation |
 | `orchestrator/templates/` | Project templates (seed) |
@@ -54,9 +54,9 @@ Every callable under `orchestrator/weave/phases/<name>/` follows the same two-fi
 | `quality-check.signature.md` | with `quality-check.md` | Quality Check agent signature; `## Params` includes every artifact the QC reads |
 | `methods/` | when needed | Phase-internal files read inline by the phase agent. Build's `methods/` holds `task.md`, `smoke.md`, `mutation.md` as procedures the Build session applies at the relevant work-loop steps (not dispatched as subagents). Spec's `methods/` holds reference docs the Spec agent loads at the relevant question-shaping step. |
 
-The two halves of a callable — body and signature — are concatenated at dispatch time into a single system prompt for the producing agent. The concatenation order (body first, then `\n\n---\n\n`, then signature) is specified in `orchestrator/weave/SKILL.md` Phase Cycle 3.
+The two halves of a callable — body and signature — are concatenated at dispatch time into a single user-turn prompt for the producing agent. The concatenation order (body first, then `\n\n---\n\n`, then signature) is specified in `orchestrator/weave/SKILL.md § Dispatch concatenation`.
 
-The formal RETURN-block schema lives inline in the signature, under `## Returns` › `### Return block`, as a fenced `yaml` block. The orchestrator's silent schema-compliance check extracts it from there.
+The formal RETURN-block schema lives inline in the signature, under `## Returns` › `### Return block`, as a fenced `yaml` block. The `SubagentStop` hook (`hooks/validate-subagent-output.py`) enforces it — the orchestrator runs no schema check of its own.
 
 Phase-internal procedure files (`phases/<name>/methods/`) are not dispatched as subagents — they have no signature pair and no RETURN block. They are read inline by the phase agent at the relevant work-loop step.
 
