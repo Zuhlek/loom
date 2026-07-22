@@ -20,13 +20,15 @@
  * restores the user's prior access level when leaving Plan, matching the
  * old BuildPlanTogglePill behaviour.
  */
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import type { ModelOption } from "../../lib/api";
 import type { PermissionMode, WireModelSettings } from "../../lib/chat-types";
 import {
   ClipboardListIcon,
+  ForkIcon,
   HammerIcon,
+  HandoffIcon,
   LockOpenIcon,
   PenLineIcon,
   ShieldIcon,
@@ -44,6 +46,23 @@ export interface ChatSettingsModalProps {
   onModelSettingsSet: (patch: Partial<WireModelSettings>) => void;
   permissionMode: PermissionMode;
   onPermissionModeChange: (mode: PermissionMode) => void;
+
+  /**
+   * Chat-row mutations mirrored from the sidebar right-click menu, so the
+   * gear modal is a superset of it. All optional — omitting one hides its
+   * affordance.
+   *
+   * `chatName` seeds the rename field with the current custom label;
+   * `autoTitle` only supplies the input placeholder. `onRename(null)`
+   * clears the custom name (reverts to the auto title).
+   */
+  chatName?: string | null;
+  autoTitle?: string | null;
+  onRename?: (name: string | null) => void | Promise<void>;
+  /** Clone this chat (same cwd / permission preset) and open the copy. */
+  onFork?: () => void | Promise<void>;
+  /** Detach this chat's PTY into a system terminal. */
+  onHandoff?: () => void | Promise<void>;
 }
 
 type ReasoningLabel = "Low" | "Medium" | "High" | "Extra High" | "Max" | "Ultrathink";
@@ -142,6 +161,11 @@ export function ChatSettingsModal({
   onModelSettingsSet,
   permissionMode,
   onPermissionModeChange,
+  chatName,
+  autoTitle,
+  onRename,
+  onFork,
+  onHandoff,
 }: ChatSettingsModalProps) {
   // Survives close/reopen (component stays mounted) so "Build" restores
   // the access level the user was on before switching to Plan.
@@ -154,6 +178,14 @@ export function ChatSettingsModal({
     }
   }, [permissionMode]);
 
+  // Rename draft. Re-seeded from the persisted name whenever the modal
+  // (re)opens or the upstream name changes, so an external rename (or a
+  // reopen) never shows a stale draft.
+  const [nameDraft, setNameDraft] = useState(chatName ?? "");
+  useEffect(() => {
+    if (open) setNameDraft(chatName ?? "");
+  }, [open, chatName]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -164,6 +196,14 @@ export function ChatSettingsModal({
   }, [open, onClose]);
 
   if (!open) return null;
+
+  const submitRename = () => {
+    if (!onRename) return;
+    const trimmed = nameDraft.trim();
+    const next = trimmed.length > 0 ? trimmed : null;
+    if (next === (chatName ?? null)) return;
+    void onRename(next);
+  };
 
   const modelList = models && models.length > 0 ? models : FALLBACK_MODELS;
   const reasoningLabel = deriveReasoningLabel(modelSettings);
@@ -222,6 +262,42 @@ export function ChatSettingsModal({
         </div>
 
         <div className="px-5 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
+          {/* Name (rename) */}
+          {onRename ? (
+            <Section title="Name">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      submitRename();
+                    }
+                  }}
+                  onBlur={submitRename}
+                  placeholder={autoTitle || "Custom chat name"}
+                  className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border bg-transparent outline-none text-sm"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                  data-testid="chat-settings-name-input"
+                />
+                <button
+                  type="button"
+                  onClick={submitRename}
+                  className="px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-[var(--accent)]"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                  data-testid="chat-settings-name-save"
+                >
+                  Save
+                </button>
+              </div>
+              <p className="pt-1 text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+                Leave empty to clear the custom name and fall back to the auto title.
+              </p>
+            </Section>
+          ) : null}
+
           {/* Model */}
           <Section title="Model">
             <div className="grid grid-cols-2 gap-1.5">
@@ -321,6 +397,34 @@ export function ChatSettingsModal({
               )}
             </div>
           </Section>
+
+          {/* Actions — the remaining sidebar right-click mutations. */}
+          {onFork || onHandoff ? (
+            <Section title="Actions">
+              <div className="space-y-1.5">
+                {onFork ? (
+                  <OptionCard
+                    active={false}
+                    onClick={() => void onFork()}
+                    icon={<ForkIcon className="size-4" />}
+                    label="Fork chat"
+                    description="Open a copy with the same cwd & permission preset; this chat is unchanged."
+                    testId="chat-settings-fork"
+                  />
+                ) : null}
+                {onHandoff ? (
+                  <OptionCard
+                    active={false}
+                    onClick={() => void onHandoff()}
+                    icon={<HandoffIcon className="size-4" />}
+                    label="Handoff to terminal"
+                    description="Detach this PTY into a system terminal; the chat row goes detached."
+                    testId="chat-settings-handoff"
+                  />
+                ) : null}
+              </div>
+            </Section>
+          ) : null}
         </div>
 
         <div

@@ -14,18 +14,8 @@ import clsx from "clsx";
 
 import type { TimelineRow } from "../../lib/timeline-rows";
 import type { UserMessageImage } from "../../lib/chat-types";
-
-/**
- * `<img>` src for a nav thumbnail — mirrors UserRow in MessagesTimeline:
- * inline `dataB64` (live turns) → data URL; staged `id` (reattach,
- * ADR-002) → `/chat-image` read-back; neither → skip.
- */
-function thumbSrc(img: UserMessageImage, chatId: string): string | undefined {
-  if (img.dataB64) return `data:${img.mediaType};base64,${img.dataB64}`;
-  if (img.id)
-    return `/api/chat-image?chatId=${encodeURIComponent(chatId)}&id=${encodeURIComponent(img.id)}`;
-  return undefined;
-}
+import { imageSrc } from "../../lib/chat-images";
+import { ImageThumb } from "./ImageThumb";
 
 interface Props {
   rows: TimelineRow[];
@@ -35,6 +25,12 @@ interface Props {
   activeId: string | null;
   /** Scroll the timeline to the user message with this id. */
   onJump: (id: string) => void;
+  /**
+   * Open the shared image lightbox at the given message's `localIdx`-th
+   * resolvable image. `localIdx` counts only images that resolve to a
+   * src, matching `collectUserImages` in `lib/chat-images.ts`.
+   */
+  onOpenImage?: (messageId: string, localIdx: number) => void;
 }
 
 /**
@@ -51,7 +47,7 @@ export function firstSentence(text: string): string {
   return out;
 }
 
-export function QuestionNav({ rows, chatId, activeId, onJump }: Props) {
+export function QuestionNav({ rows, chatId, activeId, onJump, onOpenImage }: Props) {
   const questions = useMemo(
     () =>
       rows
@@ -59,9 +55,16 @@ export function QuestionNav({ rows, chatId, activeId, onJump }: Props) {
         .map((r) => ({
           id: r.item.id,
           label: firstSentence(r.item.text),
-          images: r.item.images ?? ([] as UserMessageImage[]),
+          // Only images that resolve to a src, so the click index lines up
+          // with `collectUserImages` in `lib/chat-images.ts` (which counts
+          // resolvable images).
+          images: (r.item.images ?? ([] as UserMessageImage[]))
+            .map((img) => ({ src: imageSrc(img, chatId), filename: img.filename }))
+            .filter(
+              (e): e is { src: string; filename: string | undefined } => e.src !== undefined,
+            ),
         })),
-    [rows],
+    [rows, chatId],
   );
 
   return (
@@ -86,40 +89,40 @@ export function QuestionNav({ rows, chatId, activeId, onJump }: Props) {
           {questions.map((q) => {
             const active = q.id === activeId;
             return (
-              <button
+              <div
                 key={q.id}
-                type="button"
-                onClick={() => onJump(q.id)}
-                title={q.label}
                 data-active={active || undefined}
-                className={clsx(
-                  "border-l-2 px-3 py-1.5 text-left text-xs leading-snug transition-colors",
-                  "hover:bg-[var(--accent)]",
-                )}
-                style={{
-                  borderColor: active ? "var(--primary)" : "transparent",
-                  color: active ? "var(--foreground)" : "var(--muted-foreground)",
-                }}
+                className="border-l-2"
+                style={{ borderColor: active ? "var(--primary)" : "transparent" }}
               >
-                <span className="line-clamp-2">{q.label}</span>
+                <button
+                  type="button"
+                  onClick={() => onJump(q.id)}
+                  title={q.label}
+                  className={clsx(
+                    "block w-full px-3 py-1.5 text-left text-xs leading-snug transition-colors",
+                    "hover:bg-[var(--accent)]",
+                  )}
+                  style={{ color: active ? "var(--foreground)" : "var(--muted-foreground)" }}
+                >
+                  <span className="line-clamp-2">{q.label}</span>
+                </button>
                 {q.images.length > 0 && (
-                  <span className="mt-1 flex flex-wrap gap-1">
-                    {q.images.map((img, i) => {
-                      const src = thumbSrc(img, chatId);
-                      return src ? (
-                        <img
-                          key={i}
-                          src={src}
-                          alt={img.filename ?? ""}
-                          title={img.filename ?? ""}
-                          className="size-8 rounded border object-cover"
-                          style={{ borderColor: "var(--border)" }}
-                        />
-                      ) : null;
-                    })}
-                  </span>
+                  <div className="flex flex-wrap gap-1 px-3 pb-1.5">
+                    {q.images.map((img, i) => (
+                      <ImageThumb
+                        key={i}
+                        src={img.src}
+                        alt={img.filename ?? ""}
+                        title={img.filename ?? ""}
+                        onClick={onOpenImage ? () => onOpenImage(q.id, i) : undefined}
+                        className="size-8"
+                        ariaLabel={`Open image ${i + 1} from this question`}
+                      />
+                    ))}
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </nav>

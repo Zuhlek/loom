@@ -61,3 +61,17 @@ describe("T-005 /spawn dev-note removed (US-002 AC4)", () => {
     expect(src).toMatch(/checked=\{worktree\}/);
   });
 });
+
+describe("spawn dialog — optional custom name", () => {
+  test("renders a Name input bound to a `name` state", () => {
+    const src = readFileSync(dialogPath, "utf8");
+    expect(src).toContain('title="Name"');
+    expect(src).toMatch(/data-testid=["']spawn-chat-name-input["']/);
+    expect(src).toMatch(/value=\{name\}/);
+  });
+
+  test("names the new chat via renameChat after createChat when a name is given", () => {
+    const src = readFileSync(dialogPath, "utf8");
+    expect(src).toMatch(/renameChat\(\s*result\.chat\.id/);
+  });
+});

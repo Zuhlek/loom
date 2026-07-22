@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { createChat, errorText, listCwdRoots, listRecentCwds, type ApiProject } from "../lib/api";
+import { createChat, errorText, listCwdRoots, listRecentCwds, renameChat, type ApiProject } from "../lib/api";
 import { useSidebarState } from "../lib/sidebar-state";
 import { CwdPicker } from "../components/CwdPicker";
 import type { ApiChat } from "../lib/api";
@@ -74,6 +74,7 @@ interface Props {
 
 export function SpawnChatModalLive({ onClose, project = null }: Props) {
   const [cwd, setCwd] = useState(project?.paths[0] ?? "");
+  const [name, setName] = useState("");
   const [mode, setMode] = useState<SpawnModeId>("default");
   const [worktree, setWorktree] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
@@ -157,6 +158,16 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
         worktreeMode: worktree ? "worktree" : "local",
         projectId: project?.id ?? null,
       });
+      // Optional custom name — the create endpoint has no name field, so
+      // set it on the fresh row via the same rename path the sidebar uses.
+      const trimmedName = name.trim();
+      if (trimmedName.length > 0) {
+        try {
+          await renameChat(result.chat.id, trimmedName);
+        } catch (err) {
+          console.warn("[loom] naming new chat failed", err);
+        }
+      }
       await refresh();
       onClose();
       navigate(`/chat/${result.chat.id}`);
@@ -204,6 +215,17 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
         </div>
 
         <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          <Section title="Name">
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Optional — a custom label for this chat"
+              className="w-full px-2.5 py-1.5 rounded-lg border bg-transparent outline-none text-sm"
+              style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              data-testid="spawn-chat-name-input"
+            />
+          </Section>
           {project ? (
             <div
               className="flex items-center gap-2 px-2.5 py-2 rounded-lg border"

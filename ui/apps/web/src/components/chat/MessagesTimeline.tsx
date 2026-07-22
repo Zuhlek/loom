@@ -20,7 +20,9 @@ import { ToolUseCard } from "./ToolUseCard";
 import { ProposedPlanCard } from "./ProposedPlanCard";
 import { WorkingChip } from "./WorkingChip";
 import { WorkGroupCard } from "./WorkGroupCard";
+import { ImageThumb } from "./ImageThumb";
 import { deriveTimelineRows, type TimelineRow } from "../../lib/timeline-rows";
+import { imageSrc } from "../../lib/chat-images";
 import type {
   AssistantBlock,
   AssistantMessageItem,
@@ -65,6 +67,12 @@ interface Props {
    * full content height, past the composer).
    */
   onActiveQuestionChange?: (id: string | null) => void;
+  /**
+   * Open the shared image lightbox at the given message's `localIdx`-th
+   * resolvable image (counts only images that resolve to a src, matching
+   * `collectUserImages` in `lib/chat-images.ts`). Wired by `live-chat.tsx`.
+   */
+  onOpenImage?: (messageId: string, localIdx: number) => void;
 }
 
 /**
@@ -88,6 +96,7 @@ export function MessagesTimeline({
   onPlanAccept,
   onPlanReject,
   onActiveQuestionChange,
+  onOpenImage,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const innerRef = useRef<HTMLDivElement | null>(null);
@@ -239,6 +248,7 @@ export function MessagesTimeline({
               chatId={chatId}
               onPlanAccept={onPlanAccept}
               onPlanReject={onPlanReject}
+              onOpenImage={onOpenImage}
             />
           ))}
           {turnState === "running" && activeTurnStartedAt != null && (
@@ -308,15 +318,17 @@ function TimelineRowView({
   chatId,
   onPlanAccept,
   onPlanReject,
+  onOpenImage,
 }: {
   row: TimelineRow;
   chatId: string;
   onPlanAccept?: (planId: string) => void;
   onPlanReject?: (planId: string) => void;
+  onOpenImage?: (messageId: string, localIdx: number) => void;
 }) {
   switch (row.kind) {
     case "user":
-      return <UserRow item={row.item} chatId={chatId} />;
+      return <UserRow item={row.item} chatId={chatId} onOpenImage={onOpenImage} />;
     case "assistant":
       return <AssistantRow item={row.item} />;
     case "work-group":
@@ -334,7 +346,15 @@ function TimelineRowView({
   }
 }
 
-function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
+function UserRow({
+  item,
+  chatId,
+  onOpenImage,
+}: {
+  item: UserMessageItem;
+  chatId: string;
+  onOpenImage?: (messageId: string, localIdx: number) => void;
+}) {
   // Right-aligned chat bubble. No avatar — the alignment alone signals
   // role (mirrors t3code's UserTimelineRow). The asymmetric corner
   // radius (`rounded-br-sm`) is the visual tail pointing at the user.
@@ -342,24 +362,15 @@ function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
   // visually distinguishes the user's turn from the agent's bubble.
   //
   // When `item.images?.length` is non-zero render a thumbnail row above the
-  // text. Live-turn thumbnails are inline `data:` URLs; past-turn thumbnails
-  // (reattach, no inline bytes) point at the `/chat-image` read-back route
-  // keyed by chatId + the staged image id (ADR-002). Images that resolve to
-  // neither source are skipped so no broken `<img>` is emitted.
-  // Live turns carry inline `dataB64` (a `data:` URI). Past-turn images on
-  // reattach carry only `mediaType` + the staged `id` and are fetched via the
-  // `/chat-image` read-back route (ADR-002). Images with neither source are
-  // skipped so no broken `<img>` is emitted.
+  // text. `imageSrc` (lib/chat-images) resolves inline `dataB64` (live turns)
+  // to a `data:` URL and staged `id` (reattach, no inline bytes) to the
+  // `/api/chat-image` read-back route (ADR-002); images that resolve to
+  // neither are skipped so no broken `<img>` is emitted. Clicking a thumbnail
+  // opens the shared chat-wide lightbox via `onOpenImage`.
   const renderImages =
-    item.images?.map((img): { img: UserMessageImage; src: string | undefined } => ({
-      img,
-      src: img.dataB64
-        ? `data:${img.mediaType};base64,${img.dataB64}`
-        : img.id
-          ? `/api/chat-image?chatId=${encodeURIComponent(chatId)}&id=${encodeURIComponent(img.id)}`
-          : undefined,
-    }))
-    .filter((e): e is { img: UserMessageImage; src: string } => e.src !== undefined) ?? [];
+    item.images
+      ?.map((img) => ({ img, src: imageSrc(img, chatId) }))
+      .filter((e): e is { img: UserMessageImage; src: string } => e.src !== undefined) ?? [];
   const hasImages = renderImages.length > 0;
   // F2 — optimistic-send affordance. While `item.pending === "sending"`
   // the bubble is dimmed and its footer shows a clock + "Sending…" in
@@ -389,12 +400,14 @@ function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
             data-testid="user-message-images"
           >
             {renderImages.map(({ img, src }, idx) => (
-              <img
+              <ImageThumb
                 key={idx}
                 src={src}
                 alt={img.filename ?? ""}
                 title={img.filename ?? ""}
-                className="h-24 w-24 rounded-md object-cover"
+                onClick={onOpenImage ? () => onOpenImage(item.id, idx) : undefined}
+                className="h-24 w-24 rounded-md"
+                ariaLabel={`Open image ${idx + 1} of this message`}
               />
             ))}
           </div>

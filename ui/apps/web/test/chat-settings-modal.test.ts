@@ -67,6 +67,38 @@ describe("ChatSettingsModal — sections", () => {
   });
 });
 
+describe("ChatSettingsModal — chat mutations (superset of the sidebar menu)", () => {
+  test("accepts optional rename / fork / handoff props", () => {
+    const src = readModal();
+    for (const prop of ["chatName", "onRename", "onFork", "onHandoff"]) {
+      expect(src, `prop ${prop} must be declared`).toMatch(new RegExp(`\\b${prop}\\s*[:?]`));
+    }
+  });
+
+  test("renders a Name (rename) section wired to onRename", () => {
+    const src = readModal();
+    expect(src).toContain('title="Name"');
+    expect(src).toMatch(/data-testid=["']chat-settings-name-input["']/);
+    expect(src).toMatch(/onRename\(/);
+  });
+
+  test("empty name clears the custom name (onRename receives null)", () => {
+    const src = readModal();
+    // The submit helper maps a blank draft to null before dispatching.
+    expect(src).toMatch(/length\s*>\s*0\s*\?\s*trimmed\s*:\s*null/);
+  });
+
+  test("renders an Actions section with Fork + Handoff wired to their props", () => {
+    const src = readModal();
+    expect(src).toContain('title="Actions"');
+    // Testids are threaded through OptionCard's `testId` prop.
+    expect(src).toContain("chat-settings-fork");
+    expect(src).toContain("chat-settings-handoff");
+    expect(src).toMatch(/onFork\(\)/);
+    expect(src).toMatch(/onHandoff\(\)/);
+  });
+});
+
 describe("ChatSettingsModal — dynamic model list", () => {
   test("maps model chips over the injected `models` prop (no hardcoded id catalog)", () => {
     const src = readModal();
@@ -160,5 +192,16 @@ describe("ChatSettingsModal — wiring", () => {
     const src = readFileSync(liveChatPath, "utf8");
     expect(src).toMatch(/<ChatSettingsModal\b/);
     expect(src).toMatch(/onOpenSettings=\{/);
+  });
+
+  test("live-chat wires the rename / fork / handoff mutations into the modal", () => {
+    const src = readFileSync(liveChatPath, "utf8");
+    expect(src).toMatch(/onRename=\{/);
+    expect(src).toMatch(/onFork=\{/);
+    expect(src).toMatch(/onHandoff=\{/);
+    // The handlers call the REST endpoints.
+    expect(src).toMatch(/renameChat\(/);
+    expect(src).toMatch(/forkChat\(/);
+    expect(src).toMatch(/handoffChat\(/);
   });
 });

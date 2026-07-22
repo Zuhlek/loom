@@ -10,7 +10,7 @@
  * snapshot so we don't accumulate stale state.
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import clsx from "clsx";
 
 import { AppLayout } from "../components/layout/AppLayout";
@@ -20,6 +20,8 @@ import { DiffPanelContainer } from "../components/diff/DiffPanelContainer";
 import { ProjectWorktreesPanel } from "../components/worktrees/ProjectWorktreesPanel";
 import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { QuestionNav } from "../components/chat/QuestionNav";
+import { ImageLightbox, useLightbox } from "../components/chat/ImageLightbox";
+import { collectUserImages } from "../lib/chat-images";
 import { deriveTimelineRows } from "../lib/timeline-rows";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { ChatSettingsModal } from "../components/chat/ChatSettingsModal";
@@ -28,7 +30,17 @@ import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker"
 import { useSnackbar } from "../components/ui/Snackbar";
 import { SessionRecoveryBanner } from "../components/chat/SessionRecoveryBanner";
 import { ConnectionBanner } from "../components/chat/ConnectionBanner";
-import { errorText, getChat, getSettings, wsUrl, type ApiChat, type ModelOption } from "../lib/api";
+import {
+  errorText,
+  forkChat,
+  getChat,
+  getSettings,
+  handoffChat,
+  renameChat,
+  wsUrl,
+  type ApiChat,
+  type ModelOption,
+} from "../lib/api";
 import { useChatBridge } from "../lib/use-chat-bridge";
 import { useSidebarState } from "../lib/sidebar-state";
 import type {
@@ -514,6 +526,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 }
 
 export function LiveChatRoute({ chatId }: Props) {
+  const [, navigate] = useLocation();
   const [chat, setChat] = useState<ApiChat | null>(null);
   const [chatErr, setChatErr] = useState<string | null>(null);
   const [conn, setConn] = useState<ConnState>("idle");
@@ -574,6 +587,21 @@ export function LiveChatRoute({ chatId }: Props) {
   // active highlight.
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
   const navRows = useMemo(() => deriveTimelineRows(state.items), [state.items]);
+  // Chat-wide user-image list + (messageId, localIdx) → global-index lookup,
+  // shared by the chat bubbles and the QuestionNav so a click anywhere opens
+  // the same carousel over every user image in the chat.
+  const { images: chatImages, indexOf: imageIndexOf } = useMemo(
+    () => collectUserImages(navRows, chatId),
+    [navRows, chatId],
+  );
+  const lightbox = useLightbox();
+  const openImage = useCallback(
+    (messageId: string, localIdx: number) => {
+      const idx = imageIndexOf(messageId, localIdx);
+      if (idx >= 0) lightbox.open(idx);
+    },
+    [imageIndexOf, lightbox],
+  );
   const jumpToMessage = useCallback((id: string) => {
     // `data-msg-id` is unique in the DOM, so a document-level query is
     // enough; scrollIntoView walks up to the timeline's scroll
@@ -1000,6 +1028,43 @@ export function LiveChatRoute({ chatId }: Props) {
     [chatId],
   );
 
+  // Chat-row mutations surfaced in the settings modal (same set as the
+  // sidebar right-click menu). These are plain REST calls; on success we
+  // patch local state + kick the sidebar so its row reflects the change.
+  const renameChatHandler = useCallback(
+    async (name: string | null) => {
+      try {
+        const updated = await renameChat(chatId, name);
+        setChat(updated);
+        void sidebarRefreshRef.current();
+      } catch (err) {
+        console.warn("[loom] renameChat failed", err);
+      }
+    },
+    [chatId],
+  );
+
+  const forkChatHandler = useCallback(async () => {
+    try {
+      const { chat: forked } = await forkChat(chatId);
+      void sidebarRefreshRef.current();
+      setSettingsOpen(false);
+      navigate(`/chat/${forked.id}`);
+    } catch (err) {
+      console.warn("[loom] forkChat failed", err);
+    }
+  }, [chatId, navigate]);
+
+  const handoffChatHandler = useCallback(async () => {
+    try {
+      await handoffChat(chatId);
+    } catch (err) {
+      console.warn("[loom] handoffChat failed", err);
+    } finally {
+      setSettingsOpen(false);
+    }
+  }, [chatId]);
+
   // Snackbar dismiss → flip the reducer's dismissed flag so the
   // same message doesn't re-raise on subsequent renders.
   const dismissError = useCallback(() => {
@@ -1339,6 +1404,7 @@ export function LiveChatRoute({ chatId }: Props) {
           chatId={chatId}
           activeId={activeQuestionId}
           onJump={jumpToMessage}
+          onOpenImage={openImage}
         />
         <div className="flex-1 flex flex-col min-w-0">
         <MessagesTimeline
@@ -1350,7 +1416,17 @@ export function LiveChatRoute({ chatId }: Props) {
           onPlanAccept={acceptPlanProposal}
           onPlanReject={rejectPlanProposal}
           onActiveQuestionChange={setActiveQuestionId}
+          onOpenImage={openImage}
         />
+        {lightbox.isOpen && chatImages.length > 0 && (
+          <ImageLightbox
+            images={chatImages}
+            activeIndex={lightbox.index}
+            onChangeIndex={lightbox.open}
+            onClose={lightbox.close}
+            label="Chat image viewer"
+          />
+        )}
 
         {state.lifecycle !== "active" && (
           <SessionRecoveryBanner
@@ -1425,6 +1501,11 @@ export function LiveChatRoute({ chatId }: Props) {
           onModelSettingsSet={setModelSettings}
           permissionMode={state.permissionMode}
           onPermissionModeChange={changePermissionMode}
+          chatName={chat?.custom_name ?? null}
+          autoTitle={chat?.auto_title ?? null}
+          onRename={renameChatHandler}
+          onFork={forkChatHandler}
+          onHandoff={handoffChatHandler}
         />
         </div>
       </div>

@@ -23,6 +23,11 @@ import { fileURLToPath } from "node:url";
 const webRoot = fileURLToPath(new URL("../", import.meta.url));
 const timelinePath = webRoot + "src/components/chat/MessagesTimeline.tsx";
 const typesPath = webRoot + "src/lib/chat-types.ts";
+// Image src construction was centralised into lib/chat-images.ts (imageSrc)
+// and the thumbnail element into components/chat/ImageThumb.tsx; UserRow now
+// composes those instead of inlining the data-URL + <img>.
+const chatImagesPath = webRoot + "src/lib/chat-images.ts";
+const imageThumbPath = webRoot + "src/components/chat/ImageThumb.tsx";
 
 function readTimelineSource(): string {
   return readFileSync(timelinePath, "utf8");
@@ -86,28 +91,32 @@ describe("T-004 UserRow image thumbnails (US-007 + ADR-D03)", () => {
     expect(src).toMatch(/images\?\s*:\s*UserMessageImage\[\]/);
   });
 
-  test("UserRow renders an <img> element for each item.images entry", () => {
+  test("UserRow renders a thumbnail for each item.images entry via the shared ImageThumb", () => {
     const block = readUserRowBlock();
-    // Renders <img> from item.images via .map (any of these spellings
-    // would satisfy: `item.images.map`, `item.images?.map`,
-    // `(item.images ?? []).map`).
+    // Renders one thumbnail per resolvable image via .map (any of these
+    // spellings satisfy: `item.images.map`, `item.images?.map`).
     expect(block).toMatch(/item\.images[?\.\s]*\.?map\s*\(/);
-    expect(block).toMatch(/<img\b/);
+    // The row composes the shared ImageThumb rather than inlining <img>.
+    expect(block).toMatch(/<ImageThumb\b/);
+    // ImageThumb itself owns the actual <img> element.
+    expect(readFileSync(imageThumbPath, "utf8")).toMatch(/<img\b/);
   });
 
-  test("UserRow constructs a data:<mediaType>;base64,<dataB64> src (ADR-006 mirror)", () => {
-    const block = readUserRowBlock();
-    // Mirror of ToolResultMedia's data-URL transport: the src must
-    // be a data URL keyed by mediaType + dataB64. No blob URLs.
-    expect(block).toMatch(/data:\$\{[^}]*mediaType[^}]*\};base64,\$\{[^}]*dataB64[^}]*\}/);
-    expect(block).not.toMatch(/createObjectURL/);
+  test("image src is a data:<mediaType>;base64,<dataB64> URL, built centrally in imageSrc (ADR-006)", () => {
+    const src = readFileSync(chatImagesPath, "utf8");
+    // Mirror of ToolResultMedia's data-URL transport: the src must be a
+    // data URL keyed by mediaType + dataB64. No blob URLs.
+    expect(src).toMatch(/data:\$\{[^}]*mediaType[^}]*\};base64,\$\{[^}]*dataB64[^}]*\}/);
+    expect(src).not.toMatch(/createObjectURL/);
+    // UserRow resolves its src through the shared helper.
+    expect(readUserRowBlock()).toMatch(/imageSrc\(/);
   });
 
   test("UserRow renders the thumbnail row above {item.text}", () => {
     const block = readUserRowBlock();
-    const imgIdx = block.indexOf("<img");
+    const imgIdx = block.indexOf("<ImageThumb");
     const textIdx = block.indexOf("{item.text}");
-    expect(imgIdx, "UserRow should contain <img>").toBeGreaterThan(-1);
+    expect(imgIdx, "UserRow should contain <ImageThumb>").toBeGreaterThan(-1);
     expect(textIdx, "UserRow should contain {item.text}").toBeGreaterThan(-1);
     expect(imgIdx).toBeLessThan(textIdx);
   });
