@@ -67,6 +67,68 @@ function matchPatternRoute(
   return undefined;
 }
 
+/**
+ * Matches an allowed-origin entry against a request origin. An entry may be:
+ *   - a full origin (`https://host:port`) — exact match against `origin`;
+ *   - a bare host (`host` or `host:port`) — exact match against `u.host`;
+ *   - a glob host containing `*` (e.g. `*--main--general--foo.example.ch`) —
+ *     each `*` matches one or more chars that are not a dot, so it stays
+ *     scoped to a single subdomain label.
+ * Matching is case-insensitive on the host.
+ */
+function originEntryMatches(entry: string, origin: string, host: string): boolean {
+  if (entry === origin) return true;
+  if (entry.includes("://")) return false; // full-origin entry, already compared
+  const target = host.toLowerCase();
+  const pat = entry.toLowerCase();
+  if (!pat.includes("*")) return pat === target;
+  const re = new RegExp(
+    "^" + pat.split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^.]+") + "$",
+  );
+  return re.test(target);
+}
+
+/**
+ * Builds the list of extra allowed origins (localhost is always allowed
+ * regardless). Two sources, both optional and additive:
+ *
+ *   - `LOOM_ALLOWED_ORIGINS`: comma-separated origins / host globs, for
+ *     any reverse-proxy or remote-access setup.
+ *   - `VSCODE_PROXY_URI`: set inside Coder / code-server workspaces to a
+ *     template like `https://{{port}}--main--general--user.host.tld/`.
+ *     We turn the `{{port}}` placeholder into a `*` glob so every proxied
+ *     port on that workspace host is accepted without hardcoding one.
+ *
+ * Local development (localhost / 127.0.0.1) keeps working with neither var
+ * set, so this is purely additive.
+ */
+export function resolveAllowedOrigins(env: NodeJS.ProcessEnv): string[] {
+  const out: string[] = [];
+
+  const explicit = env.LOOM_ALLOWED_ORIGINS;
+  if (explicit) {
+    for (const raw of explicit.split(",")) {
+      const entry = raw.trim();
+      if (entry) out.push(entry);
+    }
+  }
+
+  const proxyUri = env.VSCODE_PROXY_URI;
+  if (proxyUri) {
+    try {
+      // Parse with the placeholder swapped for a real label so URL accepts it,
+      // then re-insert the `*` glob into the host.
+      const u = new URL(proxyUri.replace(/\{\{\s*port\s*\}\}/g, "0"));
+      const host = u.host.replace(/^0/, "*");
+      if (host.includes("*") && !out.includes(host)) out.push(host);
+    } catch {
+      // Malformed template — ignore rather than break startup.
+    }
+  }
+
+  return out;
+}
+
 function isLocalhostOrigin(origin: string | null, allowed: string[]): boolean {
   if (!origin) {
     // Tools like curl don't send Origin; allow when not present.
@@ -74,12 +136,13 @@ function isLocalhostOrigin(origin: string | null, allowed: string[]): boolean {
   }
   try {
     const u = new URL(origin);
-    if (u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "::1") {
+    // IPv6 hostnames keep their surrounding brackets (`[::1]`); strip them
+    // so the loopback comparison matches.
+    const hostname = u.hostname.replace(/^\[(.*)\]$/, "$1");
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
       return true;
     }
-    if (allowed.includes(origin)) return true;
-    if (allowed.includes(u.host)) return true;
-    return false;
+    return allowed.some((entry) => originEntryMatches(entry, origin, u.host));
   } catch {
     return false;
   }
@@ -495,4 +558,4 @@ function makeWsClient(ws: WebSocket) {
   };
 }
 
-export const __test__ = { isLocalhostOrigin };
+export const __test__ = { isLocalhostOrigin, originEntryMatches };
