@@ -420,6 +420,99 @@ describe("JsonlTailBridge — directory-scan discovery (rotation via pane-PID fi
     await env.bridge.dispose("chat-1");
   });
 
+  it("rotation refused when the pane-pid gate is degraded (no lsof) and the newer file's inner sessionId does not confirm ownership", async () => {
+    env = makeEnv({ rotationPollMs: 30 });
+    // Gate degraded ⇒ paneOwnsFile would answer allow-all. Without the
+    // fail-closed guard the poller would adopt any bystander that becomes
+    // the most-recent entry — the lsof-less cross-session-mixing bug.
+    env.pane.gateDegraded = () => true;
+    env.pane.paneOwnsFile = async () => true; // allow-all, as the real gate degrades to
+
+    const ws = makeWs();
+    await env.bridge.attach("chat-1", ws);
+
+    // A bystander session (different inner sessionId) becomes the newest
+    // file in the same encoded-cwd directory.
+    const bystanderPath = join(env.sessionDir, "bystander.jsonl");
+    writeFileSync(
+      bystanderPath,
+      JSON.stringify({
+        type: "user",
+        uuid: "ev-bystander",
+        timestamp: "2026-05-24T13:00:00.000Z",
+        sessionId: "someone-else",
+        message: { role: "user", content: "content from another session" },
+      }) + "\n",
+      "utf8",
+    );
+
+    // Several poll cycles pass; the bystander MUST NOT be adopted.
+    await new Promise((r) => setTimeout(r, 200));
+
+    const appended = ws.sent
+      .map((s) => {
+        try {
+          return JSON.parse(s);
+        } catch {
+          return null;
+        }
+      })
+      .filter((f) => f && f.kind === "item-append");
+    expect(
+      appended.some((f) => f.body?.item?.text === "content from another session"),
+    ).toBe(false);
+    // Store stays on the bound persisted id — no cross-session upsert.
+    expect(env.store.__map["chat-1"]!.sessionId).toBe("persisted-chat-1");
+    // The refusal is surfaced once for observability.
+    expect(
+      env.logRecord.some(
+        (e) =>
+          e.stage === "bridge:attach" &&
+          e.data.strategy === "rotation-refused-gate-degraded",
+      ),
+    ).toBe(true);
+    await env.bridge.dispose("chat-1");
+  });
+
+  it("rotation still adopted under a degraded gate when the newer file's inner sessionId matches the bound one", async () => {
+    env = makeEnv({ rotationPollMs: 30 });
+    env.pane.gateDegraded = () => true;
+
+    const ws = makeWs();
+    await env.bridge.attach("chat-1", ws);
+
+    // Same session, differently-named file (inner sessionId confirms it is
+    // ours). This is the only rotation we can prove ownership of without lsof.
+    const ownPath = join(env.sessionDir, "renamed-but-ours.jsonl");
+    writeFileSync(
+      ownPath,
+      JSON.stringify({
+        type: "user",
+        uuid: "ev-own",
+        timestamp: "2026-05-24T13:00:00.000Z",
+        sessionId: "persisted-chat-1",
+        message: { role: "user", content: "still my session" },
+      }) + "\n",
+      "utf8",
+    );
+
+    await waitFor(() =>
+      ws.sent.some((s) => {
+        try {
+          const f = JSON.parse(s);
+          return f.kind === "item-append" && f.body?.item?.text === "still my session";
+        } catch {
+          return false;
+        }
+      }),
+    );
+    const appended = ws.sent
+      .map((s) => JSON.parse(s))
+      .filter((f) => f.kind === "item-append");
+    expect(appended.some((f) => f.body.item.text === "still my session")).toBe(true);
+    await env.bridge.dispose("chat-1");
+  });
+
   it("emits trace-level [tail:line], [translator:event], [bridge:emit] for each JSONL line", async () => {
     env = makeEnv({ logLevel: "trace" });
     // Post-T-028: the bridge tails the bound `persisted-chat-1.jsonl`
