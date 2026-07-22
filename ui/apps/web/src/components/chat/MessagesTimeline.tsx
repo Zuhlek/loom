@@ -226,7 +226,7 @@ export function MessagesTimeline({
   return (
     <div className="relative flex-1 min-h-0 flex flex-col">
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div ref={innerRef} className="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-4">
+        <div ref={innerRef} className="mx-auto w-full max-w-5xl px-4 py-4 flex flex-col gap-2.5">
           {shouldShowEmptyState(items.length, turnState) && (
             <p className="text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
               Send a message to start the conversation.
@@ -371,7 +371,7 @@ function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
     <div className="flex justify-end" data-msg-id={item.id}>
       <div
         className={clsx(
-          "group relative max-w-[85%] rounded-2xl rounded-br-sm border px-4 py-2.5",
+          "group relative max-w-[85%] rounded-2xl rounded-br-sm border px-3.5 py-2",
           pending === "sending" && "opacity-60",
           pending === "failed" && "opacity-80",
         )}
@@ -399,8 +399,13 @@ function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
             ))}
           </div>
         )}
-        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+        <div className="whitespace-pre-wrap break-words text-sm leading-snug">
           {item.text}
+          {!pending && (
+            <span className="float-right ml-3 translate-y-[0.35em] select-none text-[10px] leading-none opacity-60">
+              {formatTime(item.createdAt)}
+            </span>
+          )}
         </div>
         {pending === "sending" ? (
           <p
@@ -444,11 +449,7 @@ function UserRow({ item, chatId }: { item: UserMessageItem; chatId: string }) {
             </svg>
             <span>Failed to send</span>
           </p>
-        ) : (
-          <p className="mt-1 text-right text-[10px] opacity-70">
-            {formatTime(item.createdAt)}
-          </p>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -541,7 +542,7 @@ function AssistantRow({ item }: { item: AssistantMessageItem }) {
   // stamp; the tool cards and WorkingChip carry the "still working"
   // signal on their own.
   return (
-    <div className="flex flex-col items-start gap-2">{rendered}</div>
+    <div className="flex flex-col items-start gap-1.5">{rendered}</div>
   );
 }
 
@@ -564,10 +565,12 @@ function AssistantTextBubble({
   timestamp: string | null;
 }) {
   return (
-    <div className="w-full" data-testid="assistant-message-bubble">
+    <div className="group relative w-full" data-testid="assistant-message-bubble">
       {children}
       {timestamp && (
-        <p className="mt-1 text-right text-[10px] opacity-60">{timestamp}</p>
+        <span className="pointer-events-none absolute right-0 top-full mt-0.5 select-none text-[10px] leading-none opacity-0 transition-opacity group-hover:opacity-60">
+          {timestamp}
+        </span>
       )}
     </div>
   );

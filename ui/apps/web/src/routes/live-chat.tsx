@@ -22,12 +22,13 @@ import { MessagesTimeline } from "../components/chat/MessagesTimeline";
 import { QuestionNav } from "../components/chat/QuestionNav";
 import { deriveTimelineRows } from "../lib/timeline-rows";
 import { ChatComposer } from "../components/chat/ChatComposer";
+import { ChatSettingsModal } from "../components/chat/ChatSettingsModal";
 import { PermissionRequestInline } from "../components/chat/PermissionRequestInline";
 import { AskUserQuestionPicker } from "../components/chat/AskUserQuestionPicker";
 import { useSnackbar } from "../components/ui/Snackbar";
 import { SessionRecoveryBanner } from "../components/chat/SessionRecoveryBanner";
 import { ConnectionBanner } from "../components/chat/ConnectionBanner";
-import { errorText, getChat, getSettings, wsUrl, type ApiChat } from "../lib/api";
+import { errorText, getChat, getSettings, wsUrl, type ApiChat, type ModelOption } from "../lib/api";
 import { useChatBridge } from "../lib/use-chat-bridge";
 import { useSidebarState } from "../lib/sidebar-state";
 import type {
@@ -547,6 +548,13 @@ export function LiveChatRoute({ chatId }: Props) {
   // Resolved server default working-tree mode. Drives the pre-commit
   // copy of the {@link WorkspacePill} when `chat.worktree_mode === null`.
   const [defaultEnvMode, setDefaultEnvMode] = useState<"local" | "worktree">("local");
+  // Server-resolved selectable models (config-overridable) for the
+  // settings modal. `null` until the first `GET /settings` resolves;
+  // the modal falls back to a built-in list in that window.
+  const [models, setModels] = useState<ModelOption[] | null>(null);
+  // Per-chat settings modal — opened from the gear anchored to the
+  // top-right of the chat window (and from the `/model` slash-command).
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Monotonic nonce bumped each time a turn's checkpoint lands
   // (`checkpoint-captured` WS frame). Passed to the diff panel as
   // `refreshSignal` so it re-fetches the total diff when the agent
@@ -649,6 +657,7 @@ export function LiveChatRoute({ chatId }: Props) {
         } else {
           setDefaultEnvMode("local");
         }
+        setModels(s.models ?? null);
       })
       .catch(() => {
         // Settings fetch failures are non-fatal; the pill still renders
@@ -1364,7 +1373,7 @@ export function LiveChatRoute({ chatId }: Props) {
             has a structured Retry button that doesn't fit a toast. */}
 
         {pp && (
-          <div className="px-5 pb-3">
+          <div className="mx-auto w-full max-w-5xl px-4 pb-3">
             <PermissionRequestInline
               prompt={pp.title ?? `Allow ${pp.toolName}?`}
               args={stringifyArgs(pp.input)}
@@ -1378,7 +1387,7 @@ export function LiveChatRoute({ chatId }: Props) {
         )}
 
         {state.pendingQuestion && (
-          <div className="px-5 pb-3">
+          <div className="mx-auto w-full max-w-5xl px-4 pb-3">
             <AskUserQuestionPicker
               pending={state.pendingQuestion}
               onSubmit={({ answers, otherText }) =>
@@ -1395,19 +1404,27 @@ export function LiveChatRoute({ chatId }: Props) {
           onSubmit={submitTurn}
           isRunning={state.turnState === "running"}
           onInterrupt={interruptTurn}
-          permissionMode={state.permissionMode}
           onPermissionModeChange={changePermissionMode}
+          onOpenSettings={() => setSettingsOpen(true)}
           isInterrupted={state.turnState === "interrupted"}
           cwd={chat?.cwd}
           slashCommands={bridge.slashCommands}
           contextUsage={bridge.contextUsage}
-          modelSettings={chat?.model_settings ?? null}
-          onModelSettingsSet={setModelSettings}
           worktreeMode={chat?.worktree_mode ?? null}
           defaultEnvMode={defaultEnvMode}
           branch={chat?.branch ?? null}
           vcsKind={chat?.vcs_kind ?? null}
           repoName={chat?.repo_name ?? null}
+        />
+
+        <ChatSettingsModal
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          models={models}
+          modelSettings={chat?.model_settings ?? null}
+          onModelSettingsSet={setModelSettings}
+          permissionMode={state.permissionMode}
+          onPermissionModeChange={changePermissionMode}
         />
         </div>
       </div>

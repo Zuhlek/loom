@@ -19,6 +19,7 @@ import {
   PenLineIcon,
   ShieldIcon,
 } from "../components/chat/composer-pill-icons";
+import { OptionCard, Section } from "../components/chat/settings-ui";
 
 type PermissionMode = ApiChat["permission_mode"];
 type SpawnModeId = Exclude<PermissionMode, "plan">;
@@ -26,26 +27,21 @@ type SpawnModeId = Exclude<PermissionMode, "plan">;
 /**
  * Permission-mode catalog for the spawn-chat dialog. The `id` values
  * match the SDK's `PermissionMode` literals (camelCase) — same vocabulary
- * the composer's `PermissionLevelPill` uses, so the user sees one
+ * the chat settings modal's Access section uses, so the user sees one
  * naming scheme everywhere.
  *
  *   default            → Supervised        (ShieldIcon)
  *   acceptEdits        → Auto-accept edits (PenLineIcon)
  *   bypassPermissions  → Full access       (LockOpenIcon)
  *
- * `plan` is deliberately absent: the composer treats it as a
- * mid-session toggle (see `BuildPlanTogglePill`), not a per-chat
- * permission preset.
+ * `plan` is deliberately absent: it lives in the settings modal's
+ * separate Build/Plan "Mode" toggle, not as a per-chat permission preset.
  */
 interface SpawnMode {
   id: SpawnModeId;
   label: string;
   subtitle: string;
   Icon: (props: ModeIconProps) => JSX.Element;
-  /** Accent colour for the icon halo — preserves the original
-   *  green/amber/red signalling so the cards stay visually
-   *  distinct at a glance. */
-  accent: string;
 }
 
 const MODES: ReadonlyArray<SpawnMode> = [
@@ -54,14 +50,12 @@ const MODES: ReadonlyArray<SpawnMode> = [
     label: "Supervised",
     subtitle: "Ask before commands and file changes.",
     Icon: ShieldIcon,
-    accent: "var(--success)",
   },
   {
     id: "acceptEdits",
     label: "Auto-accept edits",
     subtitle: "Auto-approve edits, ask before other actions.",
     Icon: PenLineIcon,
-    accent: "var(--warning)",
   },
   {
     id: "bypassPermissions",
@@ -69,7 +63,6 @@ const MODES: ReadonlyArray<SpawnMode> = [
     subtitle:
       "Allow commands and edits without prompts. Runs with --dangerously-skip-permissions — assumes the local environment (typically a developer VM) as the trust boundary.",
     Icon: LockOpenIcon,
-    accent: "var(--destructive)",
   },
 ];
 
@@ -182,18 +175,18 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
       }}
     >
       <div
-        className="w-full max-w-xl rounded-2xl bg-white shadow-xl border overflow-hidden"
-        style={{ borderColor: "var(--border)" }}
+        className="w-full max-w-xl rounded-2xl shadow-xl border overflow-hidden"
+        style={{ borderColor: "var(--border)", background: "var(--popover, var(--card))" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: "var(--border)" }}>
-          <div className="size-8 rounded-lg grid place-items-center" style={{ background: "var(--muted)" }}>
+          <div className="size-8 rounded-lg grid place-items-center" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
             </svg>
           </div>
           <div className="flex-1">
-            <h2 className="text-sm font-semibold tracking-tight">New chat</h2>
+            <h2 className="text-sm font-semibold tracking-tight" style={{ color: "var(--foreground)" }}>New chat</h2>
             <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
               {project ? `In project: ${project.name}` : "Each chat is one Claude Code PID via PTY."}
             </p>
@@ -213,27 +206,26 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
         <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {project ? (
             <div
-              className="flex items-center gap-2 px-2.5 py-2 rounded-md border"
-              style={{ borderColor: "var(--border)", background: "rgba(0,0,0,0.02)" }}
+              className="flex items-center gap-2 px-2.5 py-2 rounded-lg border"
+              style={{ borderColor: "var(--border)", background: "var(--muted)" }}
             >
               <span className="size-4 rounded-sm grid place-items-center text-[9px] font-bold bg-emerald-500/15 text-emerald-700 uppercase">
                 {project.name.slice(0, 1)}
               </span>
-              <span className="text-xs font-medium">Project: {project.name}</span>
+              <span className="text-xs font-medium" style={{ color: "var(--foreground)" }}>Project: {project.name}</span>
               <span className="ml-auto text-[10px]" style={{ color: "var(--muted-foreground)" }}>
                 locked
               </span>
             </div>
           ) : null}
           {project ? (
-            <div>
-              <label className="text-xs font-medium">Working directory</label>
+            <Section title="Working directory">
               {project.paths.length > 1 ? (
                 <select
                   value={cwd}
                   onChange={(e) => setCwd(e.target.value)}
-                  className="mt-1.5 w-full px-2.5 py-1.5 rounded-md border bg-transparent outline-none text-sm font-mono"
-                  style={{ borderColor: "var(--border)" }}
+                  className="w-full px-2.5 py-1.5 rounded-lg border bg-transparent outline-none text-sm font-mono"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                   data-testid="cwd-path-select"
                 >
                   {project.paths.map((p) => (
@@ -244,24 +236,23 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
                 </select>
               ) : (
                 <div
-                  className="mt-1.5 flex items-center gap-2 px-2.5 py-1.5 rounded-md border"
-                  style={{ borderColor: "var(--border)", background: "rgba(0,0,0,0.02)" }}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border"
+                  style={{ borderColor: "var(--border)", background: "var(--muted)" }}
                   data-testid="cwd-path-readonly"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-3.5 shrink-0" style={{ color: "var(--muted-foreground)" }}>
                     <path d="M3 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
                   </svg>
-                  <span className="flex-1 text-sm font-mono truncate" title={project.paths[0]}>
+                  <span className="flex-1 text-sm font-mono truncate" title={project.paths[0]} style={{ color: "var(--foreground)" }}>
                     {project.paths[0]}
                   </span>
                 </div>
               )}
-            </div>
+            </Section>
           ) : (
-            <div>
-              <label className="text-xs font-medium">Working directory</label>
-              <div className="flex items-center gap-2 mt-1.5">
-                <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-md border" style={{ borderColor: "var(--border)" }}>
+            <Section title="Working directory">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg border" style={{ borderColor: "var(--border)" }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-3.5 shrink-0" style={{ color: "var(--muted-foreground)" }}>
                     <path d="M3 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
                   </svg>
@@ -270,14 +261,15 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
                     value={cwd}
                     onChange={(e) => setCwd(e.target.value)}
                     className="flex-1 bg-transparent outline-none text-sm font-mono"
+                    style={{ color: "var(--foreground)" }}
                     placeholder="/path/to/project"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => setPickerOpen((v) => !v)}
-                  className="px-2.5 py-1.5 rounded-md border text-xs font-medium hover:bg-[var(--accent)]"
-                  style={{ borderColor: "var(--border)" }}
+                  className="px-2.5 py-1.5 rounded-lg border text-xs font-medium hover:bg-[var(--accent)]"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                 >
                   {pickerOpen ? "Hide" : "Browse..."}
                 </button>
@@ -302,7 +294,7 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
                         key={p}
                         onClick={() => setCwd(p)}
                         className="px-1.5 py-0.5 rounded text-[10px] font-mono hover:bg-[var(--accent)] border"
-                        style={{ borderColor: "var(--border)" }}
+                        style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                       >
                         {p}
                       </button>
@@ -310,86 +302,30 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
                   </div>
                 </>
               ) : null}
-            </div>
+            </Section>
           )}
 
-          <div>
-            <label className="text-xs font-medium">Permission mode</label>
-            <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+          <Section title="Permission mode">
+            <div className="space-y-1.5">
               {MODES.map((m) => {
-                const sel = mode === m.id;
                 const ModeIcon = m.Icon;
                 return (
-                  <label
+                  <OptionCard
                     key={m.id}
+                    active={mode === m.id}
                     onClick={() => setMode(m.id)}
-                    className="flex items-start gap-2.5 px-2.5 py-2 rounded-md cursor-pointer"
-                    style={
-                      sel
-                        ? { borderWidth: 2, borderStyle: "solid", borderColor: "var(--primary)", background: "rgba(59,130,246,0.04)" }
-                        : { borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)" }
-                    }
-                  >
-                    {/*
-                     * Mode icon in an accent-tinted halo. Replaces the
-                     * coloured dot + radio dot that used to sit here;
-                     * the icon is the same SVG component the composer
-                     * footer renders so the two UIs stay aligned at a
-                     * glance ("oh, the lock-open icon means Full access
-                     * everywhere"). The halo uses `color-mix` to derive
-                     * a 12% tint of the accent for the background while
-                     * keeping the icon stroke at full accent for
-                     * contrast.
-                     */}
-                    <span
-                      aria-hidden="true"
-                      className="size-7 shrink-0 rounded-md grid place-items-center"
-                      style={{
-                        background: `color-mix(in srgb, ${m.accent} 12%, transparent)`,
-                        color: m.accent,
-                      }}
-                    >
-                      <ModeIcon className="size-4" />
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1.5">
-                        <span className="text-xs font-medium">{m.label}</span>
-                        {/*
-                         * Radio affordance — kept small and to the right
-                         * so the icon can lead. The selected state still
-                         * paints the primary accent so the card visibly
-                         * "checks in" even before the user notices the
-                         * border change.
-                         */}
-                        <span
-                          aria-hidden="true"
-                          className="size-3 rounded-full grid place-items-center shrink-0"
-                          style={{
-                            borderWidth: 2,
-                            borderStyle: "solid",
-                            borderColor: sel ? "var(--primary)" : "var(--border)",
-                          }}
-                        >
-                          {sel && (
-                            <span
-                              className="size-1.5 rounded-full"
-                              style={{ background: "var(--primary)" }}
-                            />
-                          )}
-                        </span>
-                      </div>
-                      <p className="text-[10px] leading-snug" style={{ color: "var(--muted-foreground)" }}>
-                        {m.subtitle}
-                      </p>
-                    </div>
-                  </label>
+                    icon={<ModeIcon className="size-4" />}
+                    label={m.label}
+                    description={m.subtitle}
+                    testId={`spawn-permission-${m.id}`}
+                  />
                 );
               })}
             </div>
-          </div>
+          </Section>
 
-          <div>
-            <label className="flex items-start gap-2.5 px-3 py-2.5 rounded-md border cursor-pointer" style={{ borderColor: "var(--border)" }}>
+          <Section title="Isolation">
+            <label className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border cursor-pointer" style={{ borderColor: "var(--border)" }}>
               <input
                 type="checkbox"
                 checked={worktree}
@@ -398,23 +334,26 @@ export function SpawnChatModalLive({ onClose, project = null }: Props) {
               />
               <div className="flex-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium">Worktree mode</span>
+                  <span className="text-xs font-medium" style={{ color: "var(--foreground)" }}>Worktree mode</span>
                   <span className="text-[9px] uppercase tracking-wide font-medium px-1 rounded font-mono" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>
                     opt-in
                   </span>
                 </div>
+                <p className="text-[11px] leading-snug mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                  Run the chat in an isolated git worktree instead of the bare cwd.
+                </p>
               </div>
             </label>
-          </div>
+          </Section>
 
           {error ? (
-            <div className="rounded-md border px-3 py-2 text-xs" style={{ borderColor: "var(--destructive)", color: "var(--destructive)", background: "rgba(220,38,38,0.06)" }}>
+            <div className="rounded-lg border px-3 py-2 text-xs" style={{ borderColor: "var(--destructive)", color: "var(--destructive)", background: "rgba(220,38,38,0.06)" }}>
               {error}
             </div>
           ) : null}
         </div>
 
-        <div className="px-5 py-3 border-t flex items-center justify-between" style={{ borderColor: "var(--border)", background: "rgba(0,0,0,0.015)" }}>
+        <div className="px-5 py-3 border-t flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
           <span className="text-[10px] font-mono truncate max-w-[60%]" style={{ color: "var(--muted-foreground)" }}>
             claude --cwd {cwd || "(none)"} --permission-mode {mode}
           </span>

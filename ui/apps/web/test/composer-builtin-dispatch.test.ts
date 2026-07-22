@@ -41,16 +41,16 @@ describe("T-008 ChatComposer — built-in dispatch in acceptSlash", () => {
     expect(existsSync(composerPath)).toBe(true);
   });
 
-  test("declares a new `onOpenModelPicker` prop on ChatComposerProps", () => {
+  test("declares an `onOpenSettings` prop on ChatComposerProps", () => {
     const src = readFileSync(composerPath, "utf8");
-    expect(src).toMatch(/onOpenModelPicker\s*\??\s*:/);
+    expect(src).toMatch(/onOpenSettings\s*\??\s*:/);
   });
 
-  test("destructures `onOpenModelPicker` from props in the component body", () => {
+  test("destructures `onOpenSettings` from props in the component body", () => {
     const src = readFileSync(composerPath, "utf8");
     // Destructuring inside the function signature — the name appears in
     // the destructured block alongside the other prop names.
-    expect(src).toMatch(/onOpenModelPicker\b/);
+    expect(src).toMatch(/onOpenSettings\b/);
   });
 
   test("acceptSlash branches on row.kind === 'builtin'", () => {
@@ -70,9 +70,9 @@ describe("T-008 ChatComposer — built-in dispatch in acceptSlash", () => {
     expect(src).toMatch(/onPermissionModeChange\??\.?\(\s*["']default["']\s*\)/);
   });
 
-  test("acceptSlash invokes `onOpenModelPicker?.()` for the /model built-in", () => {
+  test("acceptSlash invokes `onOpenSettings?.()` for the /model built-in (opens the settings modal)", () => {
     const src = readFileSync(composerPath, "utf8");
-    expect(src).toMatch(/onOpenModelPicker\??\.?\(\s*\)/);
+    expect(src).toMatch(/onOpenSettings\??\.?\(\s*\)/);
   });
 
   test("built-in dispatch closes the menu (setSlashMenuOpen(false) inside the branch)", () => {

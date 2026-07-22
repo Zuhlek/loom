@@ -294,6 +294,11 @@ export async function listRecentCwds(limit = 10): Promise<{ cwds: string[] }> {
  *
  * Mirrors `ui/apps/server/src/routes/settings.ts` response shape.
  */
+export interface ModelOption {
+  id: string;
+  label: string;
+}
+
 export interface ApiSettings {
   workspace: {
     root: string;
@@ -308,6 +313,12 @@ export interface ApiSettings {
     apiKeyRejected: boolean;
     message?: string;
   };
+  /**
+   * Server-resolved selectable Claude models (config-overridable). The
+   * settings modal renders this list — nothing is hardcoded client-side.
+   * Optional so older servers that omit it degrade gracefully.
+   */
+  models?: ModelOption[];
 }
 
 export async function getSettings(): Promise<ApiSettings> {
