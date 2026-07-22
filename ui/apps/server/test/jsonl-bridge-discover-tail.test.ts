@@ -29,10 +29,6 @@ import type {
   SessionIdStore,
   SessionEntry,
 } from "../src/process-manager/session-store.ts";
-import type {
-  JsonlPathProbe,
-  ResolvedTailRoot,
-} from "../src/process-manager/jsonl-path-probe.ts";
 import type { PaneProcessApi } from "../src/process-manager/pane-process.ts";
 import {
   createBridgeLog,
@@ -78,9 +74,6 @@ function mkStore(initial: Record<string, SessionEntry> = {}): SessionIdStore & {
 } {
   const map: Record<string, SessionEntry> = { ...initial };
   const store: SessionIdStore = {
-    async get(chatId) {
-      return map[chatId];
-    },
     async getOrCreate(chatId, cwd) {
       const existing = map[chatId];
       if (existing) return existing;
@@ -115,25 +108,6 @@ function mkStore(initial: Record<string, SessionEntry> = {}): SessionIdStore & {
   return Object.assign(store, { __map: map });
 }
 
-function mkProbe(tailRoot: string): JsonlPathProbe {
-  const resolved: ResolvedTailRoot = {
-    tailRoot,
-    encodingScheme: "cwd-slash-encoded",
-    resolvedAt: "2026-01-01T00:00:00.000Z",
-    claudeVersionAtProbe: "test",
-  };
-  return {
-    async resolve() {
-      return resolved;
-    },
-    async reprobe() {
-      return resolved;
-    },
-    encodeCwd(cwd) {
-      return cwd.replace(/\//g, "-");
-    },
-  };
-}
 
 function makeWs() {
   return {
@@ -178,7 +152,7 @@ function makeEnv(opts?: { logLevel?: "silent" | "info" | "trace"; rotationPollMs
   const bridgeOpts: JsonlTailBridgeOptions = {
     tmux,
     sessionStore: store,
-    pathProbe: mkProbe(tailRoot),
+    tailRoot,
     paneProcess: pane,
     cwdResolver: async () => `/tmp/cwd-chat-1`,
     tailPollingMs: 25,

@@ -75,11 +75,3 @@ export function resolveConfig(opts: ResolveOptions = {}): ResolvedConfig {
   return { root: null, source: "none", configPath, defaultEnvMode: "local" };
 }
 
-export function writeConfig(
-  configPath: string,
-  payload: { root: string; worktreesRoot?: string; defaultEnvMode?: DefaultEnvMode },
-): void {
-  const dir = path.dirname(configPath);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify(payload, null, 2), "utf8");
-}

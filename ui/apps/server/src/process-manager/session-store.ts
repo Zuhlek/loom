@@ -25,7 +25,6 @@ export interface SessionEntry {
 }
 
 export interface SessionIdStore {
-  get(chatId: string): Promise<SessionEntry | undefined>;
   getOrCreate(chatId: string, cwd: string): Promise<SessionEntry>;
   delete(chatId: string): Promise<void>;
   /**
@@ -101,11 +100,6 @@ export function createSessionIdStore(opts: SessionIdStoreOptions): SessionIdStor
   }
 
   return {
-    async get(chatId) {
-      const state = await ensureLoaded();
-      return state[chatId];
-    },
-
     async getOrCreate(chatId, cwd) {
       const state = await ensureLoaded();
       const existing = state[chatId];

@@ -56,21 +56,21 @@ describe("image-store — stageTurnImages (T-001)", () => {
     expect(existsSync(staged[1].absPath)).toBe(true);
   });
 
-  it("throws StageImageError('mime') for a disallowed type and writes nothing for it", async () => {
+  it("throws StageImageError for a disallowed type and writes nothing for it", async () => {
     const store = createImageStore({ dataDir });
     await expect(
       store.stageTurnImages("c-1", [img({ mediaType: "image/svg+xml" })]),
-    ).rejects.toMatchObject({ reason: "mime" });
+    ).rejects.toMatchObject({ message: /unsupported image mediaType/ });
     await expect(
       store.stageTurnImages("c-1", [img({ mediaType: "image/svg+xml" })]),
     ).rejects.toBeInstanceOf(StageImageError);
   });
 
-  it("throws StageImageError('decode') for malformed base64", async () => {
+  it("throws StageImageError for malformed base64", async () => {
     const store = createImageStore({ dataDir });
     await expect(
       store.stageTurnImages("c-1", [img({ dataB64: "!!!not base64!!!" })]),
-    ).rejects.toMatchObject({ reason: "decode" });
+    ).rejects.toMatchObject({ message: /failed to decode base64/ });
   });
 
   it("records the manifest keyed by absPath with mediaType/filename/stagedAt and merges across stages", async () => {

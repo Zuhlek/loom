@@ -18,10 +18,6 @@ import {
 import type { TmuxSessionApi } from "../src/process-manager/tmux-session.ts";
 import { TmuxUnavailableError } from "../src/process-manager/tmux-availability.ts";
 import type { SessionIdStore, SessionEntry } from "../src/process-manager/session-store.ts";
-import type {
-  JsonlPathProbe,
-  ResolvedTailRoot,
-} from "../src/process-manager/jsonl-path-probe.ts";
 
 function mkUnavailableTmux(): TmuxSessionApi {
   return {
@@ -48,9 +44,6 @@ function mkUnavailableTmux(): TmuxSessionApi {
 function mkStore(): SessionIdStore {
   const map: Record<string, SessionEntry> = {};
   return {
-    async get(chatId) {
-      return map[chatId];
-    },
     async getOrCreate(chatId, cwd) {
       const existing = map[chatId];
       if (existing) return existing;
@@ -84,25 +77,6 @@ function mkStore(): SessionIdStore {
   };
 }
 
-function mkProbe(tailRoot: string): JsonlPathProbe {
-  const resolved: ResolvedTailRoot = {
-    tailRoot,
-    encodingScheme: "cwd-slash-encoded",
-    resolvedAt: "2026-01-01T00:00:00.000Z",
-    claudeVersionAtProbe: "test",
-  };
-  return {
-    async resolve() {
-      return resolved;
-    },
-    async reprobe() {
-      return resolved;
-    },
-    encodeCwd(cwd) {
-      return cwd.replace(/\//g, "-");
-    },
-  };
-}
 
 function freshOpts(): { opts: JsonlTailBridgeOptions; cleanup: () => void } {
   const root = mkdtempSync(join(tmpdir(), "jsonl-bridge-runtime-unavail-"));
@@ -111,7 +85,7 @@ function freshOpts(): { opts: JsonlTailBridgeOptions; cleanup: () => void } {
   const opts: JsonlTailBridgeOptions = {
     tmux: mkUnavailableTmux(),
     sessionStore: mkStore(),
-    pathProbe: mkProbe(tailRoot),
+    tailRoot,
     paneProcess: {
       async paneRootPid() {
         return 12345;

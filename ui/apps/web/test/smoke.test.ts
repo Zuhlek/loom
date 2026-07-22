@@ -13,7 +13,6 @@ describe("apps/web frontend skeleton", () => {
 
   test("App.tsx has all expected routes wired", () => {
     const app = readFileSync(root + "src/App.tsx", "utf8");
-    expect(app).toContain('path="/discover"');
     expect(app).toContain("/chat/:id");
     expect(app).toContain("/fabric/:projectId/:fabricName");
     // T-001: settings route is /settings/:variant? — the active panel
@@ -25,7 +24,6 @@ describe("apps/web frontend skeleton", () => {
 
   test("Production route files exist", () => {
     const expected = [
-      "src/routes/discover-wizard.tsx",
       "src/routes/live-home.tsx",
       "src/routes/live-chat.tsx",
       "src/routes/fabric-view-live.tsx",

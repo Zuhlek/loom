@@ -1,8 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  vcsVerbTooltip,
-  type VcsVerbKind,
-} from "../diff/vcs-verb-copy";
 import { errorText } from "../../lib/api";
 
 export interface WorktreeInfoView {
@@ -73,8 +69,7 @@ export function ProjectWorktreesPanel(props: ProjectWorktreesPanelProps) {
   );
 
   const dimmed = props.vcsKind === "unknown";
-  const verbKind: VcsVerbKind = "removeWorktree";
-  const dimTitle = vcsVerbTooltip(verbKind, "not-a-git-repo");
+  const dimTitle = "Remove worktree unavailable — this project is not a git repository.";
 
   return (
     <div data-testid="project-worktrees-panel" className="p-3 space-y-2">

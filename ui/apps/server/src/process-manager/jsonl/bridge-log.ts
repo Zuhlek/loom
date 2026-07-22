@@ -21,7 +21,6 @@ export type BridgeLogLevel = "silent" | "info" | "trace";
 export interface BridgeLogEvent {
   stage:
     | "bridge:attach"
-    | "bridge:detach"
     | "bridge:emit-first"
     | "bridge:emit"
     | "tail:line"
@@ -31,9 +30,7 @@ export interface BridgeLogEvent {
 }
 
 export interface BridgeLog {
-  level: BridgeLogLevel;
   attach(chatId: string, data: Record<string, unknown>): void;
-  detach(chatId: string, data: Record<string, unknown>): void;
   emitFirst(chatId: string, data: Record<string, unknown>): void;
   emit(chatId: string, data: Record<string, unknown>): void;
   tailLine(chatId: string, data: Record<string, unknown>): void;
@@ -66,12 +63,8 @@ function parseLevel(raw: string | undefined): BridgeLogLevel {
 function shouldLog(level: BridgeLogLevel, stage: BridgeLogEvent["stage"]): boolean {
   if (level === "silent") return false;
   if (level === "trace") return true;
-  // info: attach/detach/emit-first only
-  return (
-    stage === "bridge:attach" ||
-    stage === "bridge:detach" ||
-    stage === "bridge:emit-first"
-  );
+  // info: attach/emit-first only
+  return stage === "bridge:attach" || stage === "bridge:emit-first";
 }
 
 function defaultSink(event: BridgeLogEvent): void {
@@ -105,12 +98,8 @@ export function createBridgeLog(opts: BridgeLogOptions = {}): BridgeLog {
   }
 
   return {
-    level,
     attach(chatId, data) {
       maybeEmit("bridge:attach", chatId, data);
-    },
-    detach(chatId, data) {
-      maybeEmit("bridge:detach", chatId, data);
     },
     emitFirst(chatId, data) {
       maybeEmit("bridge:emit-first", chatId, data);

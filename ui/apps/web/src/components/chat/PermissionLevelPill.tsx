@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import clsx from "clsx";
 import type { PermissionMode } from "../../lib/chat-types";
+import { usePopoverClose } from "../../lib/use-popover-close";
 import {
   ChevronDownIcon,
   LockOpenIcon,
@@ -59,27 +60,7 @@ const ROWS: ReadonlyArray<ModeRow> = [
 export function PermissionLevelPill({ mode, onChange, disabled }: PermissionLevelPillProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-
-  // Close the popup on outside click / Escape — matches the rest of the
-  // composer popup affordances (slash menu, @-file menu).
-  useEffect(() => {
-    if (!open) return;
-    const onDocPointer = (e: MouseEvent) => {
-      const node = wrapRef.current;
-      if (!node) return;
-      if (node.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const onDocKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocPointer);
-    document.addEventListener("keydown", onDocKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocPointer);
-      document.removeEventListener("keydown", onDocKey);
-    };
-  }, [open]);
+  usePopoverClose(wrapRef, open, () => setOpen(false));
 
   // Pick the active row — fall back to the first entry (Supervised)
   // when the prop carries `plan` (Build/Plan toggle's mid-flip state)

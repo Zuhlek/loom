@@ -48,7 +48,6 @@ interface FabricViewResponse {
   pipeline: PipelineSummary | null;
   tree: FabricTreeEntry[];
   artifacts: Record<string, string>;
-  mockupPages: string[];
 }
 
 const PHASE_KEYS: readonly PhaseId[] = ["spec", "design", "plan", "build", "review"];

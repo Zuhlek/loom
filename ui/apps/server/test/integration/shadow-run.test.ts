@@ -25,7 +25,7 @@ import { describe, expect, it } from "vitest";
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createMaterializer } from "../../src/process-manager/jsonl/materializer.ts";
-import { translateMany } from "../../src/process-manager/jsonl/translator.ts";
+import { translateMany } from "../helpers/translate.ts";
 import type { ServerFrame } from "../../src/chat-protocol/frames.ts";
 
 const FIXTURE_DIR = join(__dirname, "..", "fixtures", "jsonl");

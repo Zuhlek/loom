@@ -12,10 +12,6 @@ import { createJsonlTailBridge } from "../src/process-manager/jsonl/bridge.ts";
 import type { ResolvedConfig } from "../src/config-loader/index.ts";
 import type { TmuxSessionApi } from "../src/process-manager/tmux-session.ts";
 import type { SessionIdStore } from "../src/process-manager/session-store.ts";
-import type {
-  JsonlPathProbe,
-  ResolvedTailRoot,
-} from "../src/process-manager/jsonl-path-probe.ts";
 import type { PaneProcessApi } from "../src/process-manager/pane-process.ts";
 
 function fakeDeps() {
@@ -30,9 +26,6 @@ function fakeDeps() {
     },
   };
   const sessionStore: SessionIdStore = {
-    async get() {
-      return undefined;
-    },
     async getOrCreate(chatId, cwd) {
       return { sessionId: `sess-${chatId}`, cwd, createdAt: "x" };
     },
@@ -43,12 +36,6 @@ function fakeDeps() {
     async findByClaudeSessionId() {
       return undefined;
     },
-  };
-  const pathProbe: JsonlPathProbe = {
-    async resolve(): Promise<ResolvedTailRoot> {
-      return { tailRoot: root, source: "default" };
-    },
-    async persist() {},
   };
   const paneProcess: PaneProcessApi = {
     async paneOwnsFile() {
@@ -61,12 +48,12 @@ function fakeDeps() {
       return false;
     },
   };
-  return { root, tmux, sessionStore, pathProbe, paneProcess };
+  return { root, tmux, sessionStore, paneProcess };
 }
 
 describe("index.ts wiring (T-021)", () => {
   test("mountAllRoutes registers every chat-diff-panel route", async () => {
-    const { root, tmux, sessionStore, pathProbe, paneProcess } = fakeDeps();
+    const { root, tmux, sessionStore, paneProcess } = fakeDeps();
     try {
       const store = await initMetadataStore({ inMemoryOnly: true });
       const config: ResolvedConfig = {
@@ -79,7 +66,7 @@ describe("index.ts wiring (T-021)", () => {
       const bridge = createJsonlTailBridge({
         tmux,
         sessionStore,
-        pathProbe,
+        tailRoot: join(root, "projects"),
         paneProcess,
         cwdResolver: () => root,
       });
@@ -156,12 +143,12 @@ describe("index.ts wiring (T-021)", () => {
   });
 
   test("JsonlTailBridge exposes broadcastFrameToChat + broadcastFrameToAll", () => {
-    const { tmux, sessionStore, pathProbe, paneProcess, root } = fakeDeps();
+    const { tmux, sessionStore, paneProcess, root } = fakeDeps();
     try {
       const bridge = createJsonlTailBridge({
         tmux,
         sessionStore,
-        pathProbe,
+        tailRoot: join(root, "projects"),
         paneProcess,
         cwdResolver: () => root,
       });

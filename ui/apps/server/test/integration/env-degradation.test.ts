@@ -24,11 +24,6 @@ import { createJsonlTailBridge } from "../../src/process-manager/jsonl/bridge.ts
 import { createTmuxSession } from "../../src/process-manager/tmux-session.ts";
 import { probeTmux } from "../../src/process-manager/tmux-availability.ts";
 import { createSessionIdStore } from "../../src/process-manager/session-store.ts";
-import {
-  createJsonlPathProbe,
-  ProbeError,
-  type ProbeDriver,
-} from "../../src/process-manager/jsonl-path-probe.ts";
 
 function freshRoot(): { root: string; cleanup: () => void } {
   const root = mkdtempSync(join(tmpdir(), "env-degrade-"));
@@ -87,7 +82,7 @@ describe("Environmental-degradation smoke matrix (T-024)", () => {
         const bridge = createJsonlTailBridge({
           tmux,
           sessionStore,
-          pathProbe,
+      tailRoot,
           cwdResolver: async (chatId) => `/tmp/cwd-${chatId}`,
           tailPollingMs: 25,
         });
@@ -147,7 +142,7 @@ describe("Environmental-degradation smoke matrix (T-024)", () => {
         const bridge = createJsonlTailBridge({
           tmux,
           sessionStore,
-          pathProbe,
+      tailRoot,
           cwdResolver: async (chatId) => `/tmp/cwd-${chatId}`,
           tailPollingMs: 25,
         });
@@ -163,64 +158,21 @@ describe("Environmental-degradation smoke matrix (T-024)", () => {
   });
 
   describe("Gate: no-projects-dir", () => {
-    it("createJsonlPathProbe surfaces a structured ProbeError when discoverRoots returns empty (no projects dir)", async () => {
-      const { root, cleanup } = freshRoot();
-      try {
-        // Driver that simulates `~/.claude/projects` being absent: no
-        // candidate roots.
-        const emptyDriver: ProbeDriver = {
-          discoverRoots() {
-            return [];
-          },
-          async invokeClaudeBenignSession() {
-            return;
-          },
-          async getClaudeVersion() {
-            return "test";
-          },
-        };
-        const probe = createJsonlPathProbe({
-          storagePath: join(root, "tail-root.json"),
-          driver: emptyDriver,
-        });
-        // The probe rejects with a typed ProbeError carrying a
-        // diagnostic code. It does NOT throw an unstructured exception.
-        await expect(probe.resolve()).rejects.toBeInstanceOf(ProbeError);
-      } finally {
-        cleanup();
-      }
-    });
-
-    it("bridge composition completes even when the probe will reject later (lazy probe contract)", async () => {
+    it("bridge composition completes even when the tail root does not exist yet", async () => {
       const { root, cleanup } = freshRoot();
       try {
         const sessionStore = createSessionIdStore({
           storagePath: join(root, "session-id-store.json"),
         });
-        const emptyDriver: ProbeDriver = {
-          discoverRoots() {
-            return [];
-          },
-          async invokeClaudeBenignSession() {
-            return;
-          },
-          async getClaudeVersion() {
-            return "test";
-          },
-        };
-        const pathProbe = createJsonlPathProbe({
-          storagePath: join(root, "tail-root.json"),
-          driver: emptyDriver,
-        });
         const tmux = createTmuxSession({
           availability: () => ({ available: false }),
         });
-        // The composition itself does not invoke pathProbe.resolve().
-        // Lazy probe — only on the first attach to a chat.
+        // The composition itself never touches the tail root — it is
+        // only joined into a file path at first chat-attach.
         const bridge = createJsonlTailBridge({
           tmux,
           sessionStore,
-          pathProbe,
+          tailRoot: join(root, "does-not-exist", "projects"),
           cwdResolver: async (chatId) => `/tmp/cwd-${chatId}`,
           tailPollingMs: 25,
         });

@@ -72,20 +72,17 @@ describe("B1 production-path: first-send hook commits worktree_mode", () => {
     // First-send hook → commit defaultEnvMode = "worktree". This is
     // the path that failed silently in Build-2.
     const ckStore = createCheckpointStore();
-    const r = await runFirstSendHook({
+    await runFirstSendHook({
       store,
       chatId,
       defaultEnvMode: "worktree",
       checkpointStore: ckStore,
     });
-    expect(r.alreadyCommitted).toBe(false);
-    expect(r.worktreeMode).toBe("worktree");
-    expect(r.worktreePath).toBeTruthy();
-    expect(fs.existsSync(r.worktreePath!)).toBe(true);
-    expect(r.checkpointRef).toBe(`refs/loom-checkpoints/${chatId}/0`);
-
     // The row reflects the committed mode.
-    expect(store.chats.get(chatId)!.worktree_mode).toBe("worktree");
+    const row = store.chats.get(chatId)!;
+    expect(row.worktree_mode).toBe("worktree");
+    expect(row.worktree_path).toBeTruthy();
+    expect(fs.existsSync(row.worktree_path!)).toBe(true);
 
     // ref 0 was written (US-013 AC2 / US-005 AC1 baseline).
     const showRef = git(cwd, ["show-ref", "--verify", `refs/loom-checkpoints/${chatId}/0`]);
@@ -112,15 +109,14 @@ describe("B1 production-path: first-send hook commits worktree_mode", () => {
     expect(created.chat.worktree_mode).toBeNull();
     const chatId = created.chat.id;
 
-    const r = await runFirstSendHook({
+    await runFirstSendHook({
       store,
       chatId,
       defaultEnvMode: "local",
       checkpointStore: createCheckpointStore(),
     });
-    expect(r.worktreeMode).toBe("local");
-    expect(r.worktreePath).toBeNull();
     expect(store.chats.get(chatId)!.worktree_mode).toBe("local");
+    expect(store.chats.get(chatId)!.worktree_path).toBeNull();
     await store.close();
   });
 
@@ -143,13 +139,15 @@ describe("B1 production-path: first-send hook commits worktree_mode", () => {
     // see "worktree" and short-circuit.
     expect(created.chat.worktree_mode).toBe("worktree");
 
-    const r = await runFirstSendHook({
+    await runFirstSendHook({
       store,
       chatId: created.chat.id,
       defaultEnvMode: "local",
       checkpointStore: createCheckpointStore(),
     });
-    expect(r.alreadyCommitted).toBe(true);
+    // Short-circuited: the caller-supplied worktree mode is untouched
+    // and no local fallback occurred.
+    expect(store.chats.get(created.chat.id)!.worktree_mode).toBe("worktree");
     await store.close();
   });
 });

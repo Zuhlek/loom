@@ -27,14 +27,13 @@ import {
   existsSync,
   statSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, delimiter } from "node:path";
 
 import { createJsonlTailBridge } from "../../src/process-manager/jsonl/bridge.ts";
 import { createTmuxSession } from "../../src/process-manager/tmux-session.ts";
 import { probeTmux } from "../../src/process-manager/tmux-availability.ts";
 import { createSessionIdStore } from "../../src/process-manager/session-store.ts";
-import { createJsonlPathProbe } from "../../src/process-manager/jsonl-path-probe.ts";
 
 function findOnPath(name: string): string | null {
   const PATH = process.env.PATH ?? "";
@@ -104,15 +103,13 @@ describeIfLive("happy-path-live (M7) — user submit → assistant reply round-t
     async () => {
       const root = mkdtempSync(join(tmpdir(), "loom-happy-live-"));
       const sessionStorePath = join(root, "session-id-store.json");
-      const tailRootPath = join(root, "tail-root.json");
 
       const tmux = createTmuxSession({ claudeBin: gate.claudeBin! });
       const sessionStore = createSessionIdStore({ storagePath: sessionStorePath });
-      const pathProbe = createJsonlPathProbe({ storagePath: tailRootPath });
       const bridge = createJsonlTailBridge({
         tmux,
         sessionStore,
-        pathProbe,
+        tailRoot: join(homedir(), ".claude", "projects"),
         cwdResolver: () => process.cwd(),
       });
 

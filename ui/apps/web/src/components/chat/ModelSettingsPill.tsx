@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import clsx from "clsx";
 import type { WireModelSettings } from "../../lib/chat-types";
+import { usePopoverClose } from "../../lib/use-popover-close";
 import { ChevronDownIcon } from "./composer-pill-icons";
 
 /**
@@ -103,25 +104,7 @@ function deriveContextLabel(
 export function ModelSettingsPill({ value, onPick, disabled }: ModelSettingsPillProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocPointer = (e: MouseEvent) => {
-      const node = wrapRef.current;
-      if (!node) return;
-      if (node.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const onDocKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocPointer);
-    document.addEventListener("keydown", onDocKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocPointer);
-      document.removeEventListener("keydown", onDocKey);
-    };
-  }, [open]);
+  usePopoverClose(wrapRef, open, () => setOpen(false));
 
   const reasoningLabel = deriveReasoningLabel(value);
   const contextLabel = deriveContextLabel(value);

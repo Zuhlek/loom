@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { createMaterializer } from "../src/process-manager/jsonl/materializer.ts";
-import { translateMany, type TranslatorCtx } from "../src/process-manager/jsonl/translator.ts";
+import type { TranslatorCtx } from "../src/process-manager/jsonl/translator.ts";
+import { translateMany } from "./helpers/translate.ts";
 import type { ClaudeEvent } from "../src/process-manager/jsonl/schema.ts";
 import type { ServerFrame } from "../src/chat-protocol/frames.ts";
 

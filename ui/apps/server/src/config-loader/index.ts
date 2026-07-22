@@ -1,6 +1,5 @@
 export {
   resolveConfig,
-  writeConfig,
   type ResolvedConfig,
   type ConfigSource,
   type DefaultEnvMode,

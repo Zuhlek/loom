@@ -15,7 +15,6 @@ import { join } from "node:path";
 import { createJsonlTailBridge } from "../src/process-manager/jsonl/bridge.ts";
 import type { TmuxSessionApi } from "../src/process-manager/tmux-session.ts";
 import type { SessionIdStore } from "../src/process-manager/session-store.ts";
-import type { JsonlPathProbe } from "../src/process-manager/jsonl-path-probe.ts";
 import type { PaneProcessApi } from "../src/process-manager/pane-process.ts";
 
 function mkBridgeOpts() {
@@ -32,9 +31,6 @@ function mkBridgeOpts() {
     },
   };
   const store: SessionIdStore = {
-    async get() {
-      return undefined;
-    },
     async getOrCreate(c, cwd) {
       return { sessionId: `sess-${c}`, cwd, createdAt: "x" };
     },
@@ -45,20 +41,6 @@ function mkBridgeOpts() {
     async findByClaudeSessionId() {
       return undefined;
     },
-  };
-  const probe: JsonlPathProbe = {
-    async resolve() {
-      return {
-        tailRoot,
-        encodingScheme: "cwd-slash-encoded",
-        resolvedAt: "x",
-        claudeVersionAtProbe: "test",
-      };
-    },
-    async reprobe() {
-      return this.resolve();
-    },
-    encodeCwd: (c) => c.replace(/\//g, "-"),
   };
   const paneProcess: PaneProcessApi = {
     async paneRootPid() {
@@ -76,7 +58,7 @@ function mkBridgeOpts() {
     bridgeOpts: {
       tmux,
       sessionStore: store,
-      pathProbe: probe,
+      tailRoot,
       paneProcess,
       cwdResolver: async (c: string) => `/tmp/${c}`,
       tailPollingMs: 25,

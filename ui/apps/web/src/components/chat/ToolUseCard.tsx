@@ -10,6 +10,7 @@
  */
 import { useState } from "react";
 import clsx from "clsx";
+import { describeInput } from "../../lib/describe-tool-input";
 
 import type { AssistantToolUseBlock } from "../../lib/chat-types";
 import { ToolResultMedia } from "./ToolResultMedia";
@@ -81,43 +82,4 @@ export function ToolUseCard({ block }: Props) {
 }
 
 /** One-line summary of the tool input. Tuned for common Claude tools. */
-function describeInput(name: string, input: Record<string, unknown>): string {
-  const get = (k: string): string | undefined => {
-    const v = input?.[k];
-    return typeof v === "string" ? v : undefined;
-  };
-  switch (name) {
-    case "Read":
-    case "Edit":
-    case "Write":
-    case "NotebookEdit":
-      return get("file_path") ?? "";
-    case "Bash": {
-      const cmd = get("command") ?? "";
-      return cmd.length > 80 ? `${cmd.slice(0, 80)}…` : cmd;
-    }
-    case "Glob":
-      return get("pattern") ?? "";
-    case "Grep":
-      return get("pattern") ?? "";
-    case "WebFetch":
-    case "WebSearch":
-      return get("url") ?? get("query") ?? "";
-    case "TodoWrite": {
-      const todos = (input as { todos?: unknown[] }).todos;
-      return Array.isArray(todos) ? `${todos.length} task${todos.length === 1 ? "" : "s"}` : "";
-    }
-    case "Task":
-    case "Agent":
-      return get("description") ?? "";
-    default: {
-      // Fall back to the first string-valued field for a hint.
-      for (const [k, v] of Object.entries(input ?? {})) {
-        if (typeof v === "string" && v.length > 0) {
-          return `${k}=${v.length > 80 ? `${v.slice(0, 80)}…` : v}`;
-        }
-      }
-      return "";
-    }
-  }
-}
+

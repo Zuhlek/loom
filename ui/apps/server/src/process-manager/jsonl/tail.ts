@@ -4,59 +4,20 @@
  * Design ADR-003. Public surface is identical regardless of the underlying
  * strategy (polling forced by `forcePolling: true` for tests and
  * known-unreliable filesystems). The tail layer has zero JSONL knowledge —
- * it does not import from `schema.ts`. Its only public type is
- * `RawLine = { text, offset, fileVersion }`.
+ * it emits raw line text.
  *
- * Append-only reads: a truncation or unexpected file-shrink surfaces as a
- * `TailError` rather than silently rewinding. `fileVersion` increments on
- * (re-)open so consumers can detect rotation if the underlying inode is
- * replaced.
+ * Append-only reads: a truncation or unexpected file-shrink is logged and
+ * the tail restarts from offset 0 so subsequent appends still surface.
  */
 
 import { open, stat } from "node:fs/promises";
 import { watch, type FSWatcher } from "node:fs";
-import { dirname, join } from "node:path";
-
-export type RawLine = {
-  text: string;
-  offset: number;
-  fileVersion: number;
-};
-
-export interface TailError extends Error {
-  code:
-    | "OPEN_FAILED"
-    | "READ_FAILED"
-    | "TRUNCATION"
-    | "WATCHER_DIED"
-    | "DECODE_FAILED";
-}
-
-function makeTailError(code: TailError["code"], message: string): TailError {
-  const e = new Error(message) as TailError;
-  e.name = "TailError";
-  (e as TailError).code = code;
-  return e;
-}
-
-/**
- * `start` accepts EITHER the legacy synthesised triplet
- * `{tailRoot, encodedCwd, sessionId}` OR an explicit absolute
- * `{filePath}`. The explicit-path form is used by the bridge after
- * directory-scan discovery: claude can rotate its session-id out from
- * under loom, so the file actually being written may not match
- * `<sessionId>.jsonl`. Both forms converge on the same internal
- * file-path string.
- */
-export type StartOpts =
-  | { tailRoot: string; encodedCwd: string; sessionId: string }
-  | { filePath: string };
+import { dirname } from "node:path";
 
 export interface JsonlTail {
-  start(opts: StartOpts): void;
+  start(opts: { filePath: string }): void;
   stop(): Promise<void>;
-  onLine(cb: (line: RawLine) => void): () => void;
-  onError(cb: (err: TailError) => void): () => void;
+  onLine(cb: (text: string) => void): () => void;
 }
 
 export interface TailOptions {
@@ -79,8 +40,7 @@ export function createJsonlTail(opts: TailOptions = {}): JsonlTail {
   //     assert the polling path in isolation.
   const forcePolling = opts.forcePolling === true;
 
-  const lineListeners = new Set<(l: RawLine) => void>();
-  const errorListeners = new Set<(e: TailError) => void>();
+  const lineListeners = new Set<(text: string) => void>();
 
   let stopped = false;
   let started = false;
@@ -88,7 +48,6 @@ export function createJsonlTail(opts: TailOptions = {}): JsonlTail {
   let watcher: FSWatcher | undefined;
   let filePath = "";
   let cursor = 0; // byte offset within the current file version
-  let fileVersion = 0;
   let lastInode: number | undefined; // detect rotation
   let buffer = ""; // partial line carry-over
   let pollInFlight = false;
@@ -98,50 +57,31 @@ export function createJsonlTail(opts: TailOptions = {}): JsonlTail {
     pollInFlight = true;
     pollOnce()
       .catch((err) => {
-        emitError(
-          makeTailError("READ_FAILED", `tail: poll loop crashed: ${String(err)}`),
-        );
+        console.warn(`[loom] tail: poll loop crashed: ${String(err)}`);
       })
       .finally(() => {
         pollInFlight = false;
       });
   }
 
-  function emitLine(text: string, offset: number): void {
-    const line: RawLine = { text, offset, fileVersion };
+  function emitLine(text: string): void {
     for (const cb of lineListeners) {
       try {
-        cb(line);
+        cb(text);
       } catch {
         /* listener exceptions should not break the tail */
       }
     }
   }
 
-  function emitError(err: TailError): void {
-    for (const cb of errorListeners) {
-      try {
-        cb(err);
-      } catch {
-        /* swallow */
-      }
-    }
-  }
-
-  function flushBuffer(chunk: string, lineBaseOffset: number): void {
+  function flushBuffer(chunk: string): void {
     // chunk arrives as the concatenation of the carry-over buffer + the
     // new bytes; emit complete lines and keep any trailing partial.
-    let combined = buffer + chunk;
-    buffer = "";
+    const combined = buffer + chunk;
     let cur = 0;
     let nl = combined.indexOf("\n", cur);
     while (nl !== -1) {
-      const text = combined.slice(cur, nl);
-      // offset semantics: the offset where the line was emitted (start of
-      // line in the file). We compute as lineBaseOffset (start of chunk)
-      // + cur - (length of original buffer at start).
-      const emittedOffset = lineBaseOffset + cur;
-      emitLine(text, emittedOffset);
+      emitLine(combined.slice(cur, nl));
       cur = nl + 1;
       nl = combined.indexOf("\n", cur);
     }
@@ -159,43 +99,33 @@ export function createJsonlTail(opts: TailOptions = {}): JsonlTail {
       // File doesn't exist yet — that's fine, wait for it.
       const code = (err as NodeJS.ErrnoException).code;
       if (code === "ENOENT") {
-        // If we previously had a file, this is rotation — bump fileVersion
-        // when it reappears.
+        // If we previously had a file, this is rotation — reset when it
+        // reappears.
         if (lastInode !== undefined) {
           lastInode = undefined;
         }
         return;
       }
-      emitError(makeTailError("READ_FAILED", `tail: stat failed: ${String(err)}`));
+      console.warn(`[loom] tail: stat failed: ${String(err)}`);
       return;
     }
     if (st === undefined) return;
 
     // Rotation detection: inode changed → file replaced.
-    if (lastInode !== undefined && st.ino !== lastInode) {
-      fileVersion += 1;
-      cursor = 0;
-      buffer = "";
-    } else if (lastInode === undefined) {
-      fileVersion += 1;
+    if (lastInode === undefined || st.ino !== lastInode) {
       cursor = 0;
       buffer = "";
     }
     lastInode = st.ino;
 
     if (st.size < cursor) {
-      // Truncation (or shrink). Surface as a TailError per the
-      // append-only contract. We do not silently rewind.
-      const err = makeTailError(
-        "TRUNCATION",
-        `tail: file shrank from ${cursor} to ${st.size} bytes (truncation); refusing to rewind`,
+      // Truncation (or shrink). Log per the append-only contract, then
+      // treat as rotation: start over so subsequent appends still tail.
+      console.warn(
+        `[loom] tail: file shrank from ${cursor} to ${st.size} bytes (truncation); restarting from 0`,
       );
-      emitError(err);
-      // After surfacing the error, treat this as a rotation: start over
-      // so subsequent appends can still be tailed.
       cursor = 0;
       buffer = "";
-      fileVersion += 1;
       return;
     }
     if (st.size === cursor) return;
@@ -213,31 +143,23 @@ export function createJsonlTail(opts: TailOptions = {}): JsonlTail {
         await fh.close();
       }
     } catch (err) {
-      emitError(makeTailError("READ_FAILED", `tail: read failed: ${String(err)}`));
+      console.warn(`[loom] tail: read failed: ${String(err)}`);
       return;
     }
 
-    const chunkBaseOffset = cursor;
     cursor = st.size;
-    flushBuffer(chunk, chunkBaseOffset);
+    flushBuffer(chunk);
   }
 
   return {
     start(startOpts) {
       if (started) return;
       started = true;
-      let watchTargetName: string;
-      if ("filePath" in startOpts) {
-        filePath = startOpts.filePath;
-        // The watch listener filters parent-dir events by basename so it
-        // only reacts to its own file. Compute the basename here.
-        const slash = filePath.lastIndexOf("/");
-        watchTargetName = slash >= 0 ? filePath.slice(slash + 1) : filePath;
-      } else {
-        const { tailRoot, encodedCwd, sessionId } = startOpts;
-        filePath = join(tailRoot, encodedCwd, `${sessionId}.jsonl`);
-        watchTargetName = `${sessionId}.jsonl`;
-      }
+      filePath = startOpts.filePath;
+      // The watch listener filters parent-dir events by basename so it
+      // only reacts to its own file.
+      const slash = filePath.lastIndexOf("/");
+      const watchTargetName = slash >= 0 ? filePath.slice(slash + 1) : filePath;
       // Polling timer is the fallback / safety-net path. It runs at
       // `pollingIntervalMs` regardless of whether the watcher is
       // active, so filesystems where `fs.watch` does not fire still
@@ -285,7 +207,6 @@ export function createJsonlTail(opts: TailOptions = {}): JsonlTail {
         watcher = undefined;
       }
       lineListeners.clear();
-      errorListeners.clear();
     },
 
     onLine(cb) {
@@ -296,14 +217,6 @@ export function createJsonlTail(opts: TailOptions = {}): JsonlTail {
       lineListeners.add(cb);
       return () => {
         lineListeners.delete(cb);
-      };
-    },
-
-    onError(cb) {
-      if (stopped) return () => {};
-      errorListeners.add(cb);
-      return () => {
-        errorListeners.delete(cb);
       };
     },
   };

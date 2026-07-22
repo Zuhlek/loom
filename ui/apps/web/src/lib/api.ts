@@ -141,10 +141,6 @@ export async function getSidebarState(): Promise<SidebarState> {
   return apiFetch<SidebarState>("/sidebar/state");
 }
 
-export async function listChats(): Promise<{ chats: ApiChat[] }> {
-  return apiFetch<{ chats: ApiChat[] }>("/chats");
-}
-
 export async function getChat(id: string): Promise<{ chat: ApiChat }> {
   return apiFetch<{ chat: ApiChat }>(`/chats/get?id=${encodeURIComponent(id)}`);
 }

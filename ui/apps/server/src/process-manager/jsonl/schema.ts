@@ -9,7 +9,6 @@
  * entry point.
  */
 
-import { randomUUID } from "node:crypto";
 
 import type {
   SessionLifecycle,
@@ -166,10 +165,12 @@ function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
-/** Synthesise a stable-ish id when the JSONL record lacks the dedupe field. */
-function synthesiseId(): string {
-  return `synthetic-${randomUUID()}`;
-}
+/**
+ * Sentinel id for JSONL records lacking the dedupe field. The translator
+ * replaces it with a deterministic content-hash id (`translate()`), so the
+ * schema layer never mints randomness.
+ */
+const SYNTHETIC_ID_SENTINEL = "synthetic-";
 
 /** Best-effort timestamp extraction; falls back to empty string. */
 function readTs(obj: unknown): string {
@@ -178,7 +179,7 @@ function readTs(obj: unknown): string {
 
 /** Best-effort id extraction; synthesises one if absent. */
 function readId(obj: unknown): string {
-  return asString(field(obj, FIELDS.UUID)) ?? synthesiseId();
+  return asString(field(obj, FIELDS.UUID)) ?? SYNTHETIC_ID_SENTINEL;
 }
 
 /** Reduce the raw `message.content` to a plain text string. */
@@ -352,7 +353,6 @@ function parseEvent(raw: unknown, ctx: ParseCtx): ClaudeEvent {
   } as const;
 
   const message = field<Record<string, unknown>>(raw, FIELDS.MESSAGE);
-  const role = message ? asString(field(message, FIELDS.ROLE)) : undefined;
   const content = message ? field(message, FIELDS.CONTENT) : undefined;
 
   // user / assistant lines carry the message envelope; their semantics are
@@ -449,7 +449,6 @@ function parseEvent(raw: unknown, ctx: ParseCtx): ClaudeEvent {
   }
 
   // Unknown — preserve provenance for downstream debugging without throwing.
-  void role;
   return {
     ...base,
     kind: "unknown",

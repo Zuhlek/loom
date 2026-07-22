@@ -1,5 +1,4 @@
 import { Route, Switch } from "wouter";
-import { DiscoverWizard } from "./routes/discover-wizard";
 import { LiveHome } from "./routes/live-home";
 import { LiveChatRoute } from "./routes/live-chat";
 import { FabricViewLive } from "./routes/fabric-view-live";
@@ -25,7 +24,6 @@ export function App() {
         {!health.isOffline && <HooksHealthBanner />}
         <Switch>
         <Route path="/" component={LiveHome} />
-        <Route path="/discover" component={DiscoverWizard} />
         <Route path="/chat/:id">
           {(params: { id: string }) => <LiveChatRoute chatId={params.id} />}
         </Route>

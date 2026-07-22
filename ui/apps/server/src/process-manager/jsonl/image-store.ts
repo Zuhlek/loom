@@ -68,10 +68,7 @@ export interface ImageStore {
 }
 
 export class StageImageError extends Error {
-  constructor(
-    readonly reason: "decode" | "mime" | "write",
-    message: string,
-  ) {
+  constructor(message: string) {
     super(message);
     this.name = "StageImageError";
   }
@@ -131,7 +128,6 @@ export function createImageStore(opts: CreateImageStoreOptions = {}): ImageStore
       for (const image of images) {
         if (!ALLOWED_MIME.has(image.mediaType)) {
           throw new StageImageError(
-            "mime",
             `unsupported image mediaType: ${image.mediaType}`,
           );
         }
@@ -148,7 +144,6 @@ export function createImageStore(opts: CreateImageStoreOptions = {}): ImageStore
           }
         } catch (err) {
           throw new StageImageError(
-            "decode",
             `failed to decode base64 image: ${(err as Error).message}`,
           );
         }
@@ -159,7 +154,6 @@ export function createImageStore(opts: CreateImageStoreOptions = {}): ImageStore
           fs.writeFileSync(absPath, bytes);
         } catch (err) {
           throw new StageImageError(
-            "write",
             `failed to write image to disk: ${(err as Error).message}`,
           );
         }

@@ -38,10 +38,7 @@ vi.mock("node:child_process", () => ({
   },
 }));
 
-import {
-  probeTmux,
-  formatTmuxUnavailableNotice,
-} from "../src/process-manager/tmux-availability.ts";
+import { probeTmux } from "../src/process-manager/tmux-availability.ts";
 
 beforeEach(() => {
   capture.argv = [];
@@ -86,26 +83,4 @@ describe("tmux-availability", () => {
     });
   });
 
-  describe("formatTmuxUnavailableNotice", () => {
-    it("returns null when the probe reports available=true (no notice)", () => {
-      const notice = formatTmuxUnavailableNotice({
-        available: true,
-        version: "tmux 3.4",
-        versionError: null,
-      });
-      expect(notice).toBeNull();
-    });
-
-    it("returns a single-line, actionable string when probe reports unavailable", () => {
-      const notice = formatTmuxUnavailableNotice({
-        available: false,
-        version: null,
-        versionError: "tmux: binary not found (ENOENT).",
-      });
-      expect(notice).not.toBeNull();
-      expect(notice!.includes("\n")).toBe(false);
-      expect(notice!.toLowerCase()).toContain("tmux");
-      expect(notice).toContain("docs/setup.md");
-    });
-  });
 });

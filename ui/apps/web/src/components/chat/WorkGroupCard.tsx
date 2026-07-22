@@ -12,6 +12,7 @@ import { Component, type ErrorInfo, type ReactNode, useState } from "react";
 import clsx from "clsx";
 
 import type { AssistantToolUseBlock } from "../../lib/chat-types";
+import { describeInput } from "../../lib/describe-tool-input";
 import { ToolResultMedia } from "./ToolResultMedia";
 
 const MAX_VISIBLE_ENTRIES = 8;
@@ -143,49 +144,6 @@ function WorkEntryRow({ block }: { block: AssistantToolUseBlock }) {
  *  so a malformed bridge payload can't throw inside the render path
  *  and take the whole timeline down with it.
  */
-function describeInput(name: string, input: unknown): string {
-  const safe: Record<string, unknown> =
-    input && typeof input === "object" && !Array.isArray(input)
-      ? (input as Record<string, unknown>)
-      : {};
-  const get = (k: string): string | undefined => {
-    const v = safe[k];
-    return typeof v === "string" ? v : undefined;
-  };
-  switch (name) {
-    case "Read":
-    case "Edit":
-    case "Write":
-    case "NotebookEdit":
-      return get("file_path") ?? "";
-    case "Bash": {
-      const cmd = get("command") ?? "";
-      return cmd.length > 80 ? `${cmd.slice(0, 80)}…` : cmd;
-    }
-    case "Glob":
-    case "Grep":
-      return get("pattern") ?? "";
-    case "WebFetch":
-    case "WebSearch":
-      return get("url") ?? get("query") ?? "";
-    case "TodoWrite": {
-      const todos = (safe as { todos?: unknown }).todos;
-      return Array.isArray(todos) ? `${todos.length} task${todos.length === 1 ? "" : "s"}` : "";
-    }
-    case "Task":
-    case "Agent":
-      return get("description") ?? "";
-    default: {
-      for (const [k, v] of Object.entries(safe)) {
-        if (typeof v === "string" && v.length > 0) {
-          return `${k}=${v.length > 80 ? `${v.slice(0, 80)}…` : v}`;
-        }
-      }
-      return "";
-    }
-  }
-}
-
 /**
  * Per-row error boundary. A single malformed tool_use block should
  * render as an inert "failed to render" line instead of taking down

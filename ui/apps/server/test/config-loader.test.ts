@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { resolveConfig, writeConfig } from "../src/config-loader/index.ts";
+import { resolveConfig } from "../src/config-loader/index.ts";
 
 function tmpFile(): string {
   return path.join(os.tmpdir(), `loom-config-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
@@ -38,15 +38,6 @@ describe("resolveConfig", () => {
     fs.writeFileSync(p, "{not valid json");
     const r = resolveConfig({ configPath: p });
     expect(r.source).toBe("none");
-    fs.unlinkSync(p);
-  });
-
-  test("writeConfig round-trip", () => {
-    const p = tmpFile();
-    writeConfig(p, { root: "/abc", worktreesRoot: "/wt" });
-    const r = resolveConfig({ configPath: p });
-    expect(r.root).toBe("/abc");
-    expect(r.worktreesRoot).toBe("/wt");
     fs.unlinkSync(p);
   });
 });

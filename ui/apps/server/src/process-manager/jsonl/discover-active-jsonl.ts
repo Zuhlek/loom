@@ -31,17 +31,6 @@ export interface DiscoveredJsonl {
   mtimeMs: number;
 }
 
-export interface DiscoverOptions {
-  /** Override for tests: returns the current wall-clock millis. */
-  now?: () => number;
-  /**
-   * Informational ceiling on file age (millis since mtime). Files older
-   * than this are still returned; callers decide whether to discard.
-   * Reserved for future use; not consumed by the current logic.
-   */
-  maxAgeMs?: number;
-}
-
 /**
  * Return the most-recently-modified `.jsonl` file in `dir` together
  * with its inner `sessionId`, or `null` when none exists.
@@ -50,7 +39,6 @@ export interface DiscoverOptions {
  */
 export async function discoverActiveJsonl(
   dir: string,
-  _opts: DiscoverOptions = {},
 ): Promise<DiscoveredJsonl | null> {
   let entries: string[];
   try {

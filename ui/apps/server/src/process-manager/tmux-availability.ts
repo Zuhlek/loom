@@ -89,25 +89,3 @@ export async function probeTmux(
   return { available: false, version: null, versionError };
 }
 
-/**
- * Build the boot stderr notice. Returns null when tmux is available
- * (no notice to print). Returns a single-line string otherwise — the
- * caller wraps it in a `[loom]` prefix and chooses warn vs error.
- */
-export function formatTmuxUnavailableNotice(
-  probe: TmuxProbeResult,
-): string | null {
-  if (probe.available) return null;
-  // The notice MUST contain the install hint (with docs/setup.md
-  // pointer) so the user has a single actionable line to follow.
-  // `probeTmux` already attaches the hint to `versionError`, but a
-  // hand-rolled caller may pass an unadorned message — defence in
-  // depth, we append the hint if missing.
-  let base = (probe.versionError ?? "tmux: unavailable.")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!base.includes("docs/setup.md")) {
-    base = `${base} ${INSTALL_HINT}`.replace(/\s+/g, " ").trim();
-  }
-  return base;
-}

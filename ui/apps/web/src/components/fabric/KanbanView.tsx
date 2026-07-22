@@ -5,14 +5,9 @@ export type Lane = "backlog" | "in-progress" | "review" | "done";
 export type KanbanCard = {
   id: string;
   title: string;
-  subtitle?: string;
   tags?: string[];
-  size?: "S" | "M" | "L" | "XL";
-  duration?: string;
-  reviewer?: boolean;
   /** Crossed-through done state */
   done?: boolean;
-  active?: boolean;
 };
 
 export type KanbanColumn = {
@@ -33,20 +28,6 @@ const LANE_DOT: Record<Lane, string> = {
   "in-progress": "var(--info)",
   review: "var(--warning)",
   done: "var(--success-foreground)",
-};
-
-const SIZE_BG: Record<NonNullable<KanbanCard["size"]>, string> = {
-  S: "rgba(59,130,246,0.15)",
-  M: "rgba(16,185,129,0.15)",
-  L: "rgba(239,68,68,0.15)",
-  XL: "rgba(239,68,68,0.25)",
-};
-
-const SIZE_FG: Record<NonNullable<KanbanCard["size"]>, string> = {
-  S: "var(--info-foreground)",
-  M: "var(--success-foreground)",
-  L: "#b91c1c",
-  XL: "#7f1d1d",
 };
 
 function Checkmark({ color }: { color: string }) {
@@ -85,50 +66,24 @@ export function KanbanView({ columns }: { columns: KanbanColumn[] }) {
                 <div
                   key={card.id}
                   className={clsx("rounded-md border p-2.5", card.done && "opacity-80")}
-                  style={{
-                    borderColor: card.active ? "rgba(59,130,246,0.5)" : "var(--border)",
-                    background: "var(--card)",
-                  }}
+                  style={{ borderColor: "var(--border)", background: "var(--card)" }}
                 >
                   <div className="flex items-center justify-between text-[10px] font-mono" style={{ color: "var(--muted-foreground)" }}>
                     <span className={card.done ? "line-through" : ""}>{card.id}</span>
-                    {card.active && <span className="size-1.5 rounded-full animate-pulse" style={{ background: "var(--info)" }} />}
                     {card.done && <Checkmark color="var(--success)" />}
                   </div>
                   <p className={clsx("text-xs font-medium mt-0.5", card.done && "line-through")} style={card.done ? { color: "var(--muted-foreground)" } : undefined}>
                     {card.title}
                   </p>
-                  {card.subtitle && (
-                    <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-                      {card.subtitle}
-                    </p>
+                  {card.tags && card.tags.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      {card.tags.map((t) => (
+                        <span key={t} className="text-[9px] font-mono px-1 rounded" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>
+                          {t}
+                        </span>
+                      ))}
+                    </div>
                   )}
-                  <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                    {card.tags?.map((t) => (
-                      <span key={t} className="text-[9px] font-mono px-1 rounded" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>
-                        {t}
-                      </span>
-                    ))}
-                    {card.size && (
-                      <span className="text-[9px] px-1 rounded" style={{ background: SIZE_BG[card.size], color: SIZE_FG[card.size] }}>
-                        {card.size}
-                      </span>
-                    )}
-                    {card.reviewer && (
-                      <span className="ml-auto text-[10px] inline-flex items-center gap-1" style={{ color: "var(--warning-foreground)" }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-3">
-                          <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
-                          <rect x="8" y="2" width="8" height="4" rx="1" />
-                        </svg>
-                        Reviewer
-                      </span>
-                    )}
-                    {card.duration && (
-                      <span className="ml-auto text-[10px] font-mono" style={{ color: card.active ? "var(--info-foreground)" : card.done ? "var(--success-foreground)" : "var(--muted-foreground)" }}>
-                        {card.duration}
-                      </span>
-                    )}
-                  </div>
                 </div>
               ))}
             </div>

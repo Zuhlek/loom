@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import clsx from "clsx";
 import { ChevronDownIcon } from "./composer-pill-icons";
+import { usePopoverClose } from "../../lib/use-popover-close";
 
 /**
  * Composer footer pill for the per-chat Claude model. Renders a ghost
@@ -47,25 +48,7 @@ export function ModelSelectorPill({
   onOpenChange,
 }: ModelSelectorPillProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocPointer = (e: MouseEvent) => {
-      const node = wrapRef.current;
-      if (!node) return;
-      if (node.contains(e.target as Node)) return;
-      onOpenChange?.(false);
-    };
-    const onDocKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onOpenChange?.(false);
-    };
-    document.addEventListener("mousedown", onDocPointer);
-    document.addEventListener("keydown", onDocKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocPointer);
-      document.removeEventListener("keydown", onDocKey);
-    };
-  }, [open, onOpenChange]);
+  usePopoverClose(wrapRef, open, () => onOpenChange?.(false));
 
   const active = MODELS.find((m) => m.id === value);
   const triggerLabel = active?.label ?? DEFAULT_LABEL;

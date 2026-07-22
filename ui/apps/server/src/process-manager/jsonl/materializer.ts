@@ -82,8 +82,6 @@ export interface Materializer {
   ingest(event: ClaudeEvent): ServerFrame[];
   snapshot(): MaterializerSnapshot;
   reset(): void;
-  /** Current chat id (after the first event or explicit init). */
-  readonly chatId: string;
 }
 
 export function createMaterializer(opts: MaterializerOptions = {}): Materializer {
@@ -343,9 +341,6 @@ export function createMaterializer(opts: MaterializerOptions = {}): Materializer
   }
 
   return {
-    get chatId() {
-      return chatId;
-    },
     ingest(event) {
       return ingestOne(event);
     },

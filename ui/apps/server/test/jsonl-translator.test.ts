@@ -7,11 +7,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  translate,
-  translateMany,
-  type TranslatorCtx,
-} from "../src/process-manager/jsonl/translator.ts";
+import { translate, type TranslatorCtx } from "../src/process-manager/jsonl/translator.ts";
+import { translateMany } from "./helpers/translate.ts";
 
 const ctx: TranslatorCtx = { chatId: "c-1", sessionId: "s-1" };
 

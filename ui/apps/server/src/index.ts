@@ -18,10 +18,8 @@ import { createImageStore, type ImageStore } from "./process-manager/jsonl/image
 import { createTmuxSession } from "./process-manager/tmux-session.ts";
 import {
   probeTmux,
-  formatTmuxUnavailableNotice,
 } from "./process-manager/tmux-availability.ts";
 import { createSessionIdStore } from "./process-manager/session-store.ts";
-import { createJsonlPathProbe } from "./process-manager/jsonl-path-probe.ts";
 import { createPaneProcessApi } from "./process-manager/pane-process.ts";
 import { ensureFolderTrusted } from "./process-manager/folder-trust.ts";
 import { ensureClaudeOnboarded } from "./process-manager/claude-onboarding.ts";
@@ -33,7 +31,6 @@ import { mountCwdRoute } from "./routes/cwd.ts";
 import { mountCwdValidateRoute } from "./routes/cwd-validate.ts";
 import { mountProjectsRoute } from "./routes/projects.ts";
 import { mountChatsRoute } from "./routes/chats.ts";
-import { mountDiscoverRoute } from "./routes/discover.ts";
 import { mountFileSearchRoute } from "./routes/file-search.ts";
 import { mountUploadImageRoute } from "./routes/upload-image.ts";
 import { mountChatImageRoute } from "./routes/chat-image.ts";
@@ -41,7 +38,6 @@ import { mountDiffRoute } from "./routes/diff.ts";
 import { mountGitStatusRoute } from "./routes/git-status.ts";
 import { mountGitActionsRoute } from "./routes/git-actions.ts";
 import { mountFabricMockupRoute } from "./routes/fabric-mockup.ts";
-import { mountFabricBoardRoute } from "./routes/fabric-board.ts";
 import { mountFabricRoute } from "./routes/fabric.ts";
 import { mountFabricArchiveRoute } from "./routes/fabric-archive.ts";
 import { mountSettingsRoute } from "./routes/settings.ts";
@@ -57,7 +53,6 @@ import {
   type CheckpointReactor,
 } from "./checkpointing/checkpoint-reactor.ts";
 import { createHeadWatcher, type HeadWatcher } from "./git/head-watcher.ts";
-import { createTurnWatcher, type TurnWatcher } from "./process-manager/turn-watcher.ts";
 import { reconcileGitContextOnAttach } from "./process-manager/reconcile-git-context.ts";
 import { runFirstSendHook } from "./process-manager/first-send-hook.ts";
 import type { ServerFrame } from "./chat-protocol/frames.ts";
@@ -145,7 +140,8 @@ export interface ChatDiffPanelSubstrate {
   checkpointStore: CheckpointStore;
   reactor: CheckpointReactor;
   headWatcher: HeadWatcher;
-  turnWatcher: TurnWatcher;
+  /** Per-chat assistant-turn counter; reset to 0 on (re-)attach. */
+  turnCounters: Map<string, number>;
   headWatcherSubscription: { unsubscribe(): void } | null;
 }
 
@@ -171,10 +167,7 @@ export function createChatDiffPanelSubstrate(
   const headWatcher = createHeadWatcher({
     emit: (frame) => broadcastAll(frame),
   });
-  const turnWatcher = createTurnWatcher({
-    onAssistantTurnComplete: (chatId, turn, cwd) =>
-      reactor.captureTurn(chatId, turn, cwd),
-  });
+  const turnCounters = new Map<string, number>();
 
   let headWatcherSubscription: { unsubscribe(): void } | null = null;
   if (config.root) {
@@ -189,7 +182,7 @@ export function createChatDiffPanelSubstrate(
     checkpointStore,
     reactor,
     headWatcher,
-    turnWatcher,
+    turnCounters,
     headWatcherSubscription,
   };
 }
@@ -224,7 +217,6 @@ export function mountAllRoutes(
   mountCwdValidateRoute(routes);
   mountProjectsRoute(routes, store, bridge);
   mountChatsRoute(routes, store, bridge);
-  mountDiscoverRoute(routes);
   mountFileSearchRoute(routes);
   mountUploadImageRoute(routes);
   mountChatImageRoute(routes, imageStore);
@@ -232,7 +224,6 @@ export function mountAllRoutes(
   mountGitStatusRoute(routes);
   mountGitActionsRoute(routes);
   mountFabricMockupRoute(routes);
-  mountFabricBoardRoute(routes);
   mountFabricRoute(routes, store);
   mountFabricArchiveRoute(routes, store);
   mountSettingsRoute(routes, config);
@@ -272,10 +263,8 @@ if (isEntrypoint) {
   // (`jsonl/bridge.ts`).
   const tmuxProbe = await probeTmux();
   if (!tmuxProbe.available) {
-    const notice = formatTmuxUnavailableNotice(tmuxProbe);
-    if (notice) {
-      console.warn(`[loom] ${notice}`);
-    }
+    // `probeTmux` attaches the install hint (docs/setup.md) to versionError.
+    console.warn(`[loom] ${tmuxProbe.versionError ?? "tmux: unavailable."}`);
   } else if (tmuxProbe.version) {
     console.log(`[loom] tmux probe: ${tmuxProbe.version}`);
   }
@@ -285,9 +274,6 @@ if (isEntrypoint) {
   });
   const sessionStore = createSessionIdStore({
     storagePath: path.join(os.homedir(), ".claude", "loom", "session-id-store.json"),
-  });
-  const pathProbe = createJsonlPathProbe({
-    storagePath: path.join(os.homedir(), ".claude", "loom", "tail-root.json"),
   });
   // Substrate-back-reference holder. The bridge needs lifecycle hooks
   // that touch the substrate; the substrate needs the bridge for
@@ -303,7 +289,7 @@ if (isEntrypoint) {
   const bridge = createJsonlTailBridge({
     tmux,
     sessionStore,
-    pathProbe,
+    tailRoot: path.join(os.homedir(), ".claude", "projects"),
     permissionGate,
     imageStore,
     paneProcess: createPaneProcessApi(),
@@ -348,11 +334,7 @@ if (isEntrypoint) {
       } catch (err) {
         console.warn(`[loom] reconcileGitContextOnAttach failed for ${chatId}: ${(err as Error).message}`);
       }
-      try {
-        substrateRef.turnWatcher.start(chatId, cwd);
-      } catch (err) {
-        console.warn(`[loom] turnWatcher.start failed for ${chatId}: ${(err as Error).message}`);
-      }
+      substrateRef.turnCounters.set(chatId, 0);
     },
     onFirstUserTurn: async (chatId) => {
       if (!substrateRef) return;
@@ -367,9 +349,12 @@ if (isEntrypoint) {
         console.warn(`[loom] runFirstSendHook failed for ${chatId}: ${(err as Error).message}`);
       }
     },
-    onAssistantTurnComplete: (chatId) => {
-      if (!substrateRef) return;
-      substrateRef.turnWatcher.observeEvent({ chatId, kind: "assistant-turn-complete" });
+    onAssistantTurnComplete: (chatId, cwd) => {
+      const counters = substrateRef?.turnCounters;
+      if (!counters?.has(chatId)) return;
+      const turn = counters.get(chatId)! + 1;
+      counters.set(chatId, turn);
+      void substrateRef!.reactor.captureTurn(chatId, turn, cwd);
     },
   });
   setEnvelopeBroadcaster((env) => bridge.routeHookEnvelope(env));

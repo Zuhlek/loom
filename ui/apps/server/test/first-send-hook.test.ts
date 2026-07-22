@@ -42,14 +42,12 @@ describe("first-send hook (T-015)", () => {
     // commits it on first send. No workaround mutation needed.
     expect(store.chats.get("c1")!.worktree_mode).toBeNull();
     const ckStore = createCheckpointStore();
-    const r = await runFirstSendHook({
+    await runFirstSendHook({
       store,
       chatId: "c1",
       defaultEnvMode: "local",
       checkpointStore: ckStore,
     });
-    expect(r.worktreeMode).toBe("local");
-    expect(r.checkpointRef).toBe("refs/loom-checkpoints/c1/0");
     expect(store.chats.get("c1")!.worktree_mode).toBe("local");
     expect(store.chats.get("c1")!.worktree_path).toBeNull();
     const showRef = git(cwd, ["show-ref", "--verify", "refs/loom-checkpoints/c1/0"]);
@@ -63,16 +61,17 @@ describe("first-send hook (T-015)", () => {
     store.chats.create({ id: "c2", cwd });
     expect(store.chats.get("c2")!.worktree_mode).toBeNull();
     const ckStore = createCheckpointStore();
-    const r = await runFirstSendHook({
+    await runFirstSendHook({
       store,
       chatId: "c2",
       defaultEnvMode: "worktree",
       checkpointStore: ckStore,
     });
-    expect(r.worktreeMode).toBe("worktree");
-    expect(r.worktreePath).toBeTruthy();
-    expect(fs.existsSync(r.worktreePath!)).toBe(true);
-    expect(store.chats.get("c2")!.branch).toBe("loom/c2");
+    const row = store.chats.get("c2")!;
+    expect(row.worktree_mode).toBe("worktree");
+    expect(row.worktree_path).toBeTruthy();
+    expect(fs.existsSync(row.worktree_path!)).toBe(true);
+    expect(row.branch).toBe("loom/c2");
     const showRef = git(cwd, ["show-ref", "--verify", "refs/loom-checkpoints/c2/0"]);
     expect(showRef.status).toBe(0);
     await store.close();
@@ -86,13 +85,12 @@ describe("first-send hook (T-015)", () => {
     const ckStore = createCheckpointStore();
     await runFirstSendHook({ store, chatId: "c3", defaultEnvMode: "local", checkpointStore: ckStore });
     const before = JSON.stringify(store.chats.get("c3"));
-    const r2 = await runFirstSendHook({
+    await runFirstSendHook({
       store,
       chatId: "c3",
       defaultEnvMode: "worktree",
       checkpointStore: ckStore,
     });
-    expect(r2.alreadyCommitted).toBe(true);
     // No mode flip
     expect(store.chats.get("c3")!.worktree_mode).toBe("local");
     expect(JSON.stringify(store.chats.get("c3"))).toBe(before);
@@ -106,7 +104,7 @@ describe("first-send hook (T-015)", () => {
     expect(store.chats.get("c4")!.worktree_mode).toBeNull();
     const ckStore = createCheckpointStore();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const r = await runFirstSendHook({
+    await runFirstSendHook({
       store,
       chatId: "c4",
       defaultEnvMode: "worktree",
@@ -115,8 +113,8 @@ describe("first-send hook (T-015)", () => {
         throw new Error("simulated");
       },
     });
-    expect(r.worktreeMode).toBe("local");
-    expect(r.worktreePath).toBeNull();
+    expect(store.chats.get("c4")!.worktree_mode).toBe("local");
+    expect(store.chats.get("c4")!.worktree_path).toBeNull();
     expect(warn).toHaveBeenCalled();
     await store.close();
   });
@@ -127,14 +125,13 @@ describe("first-send hook (T-015)", () => {
     store.chats.create({ id: "c5", cwd });
     expect(store.chats.get("c5")!.worktree_mode).toBeNull();
     const ckStore = createCheckpointStore();
-    const r = await runFirstSendHook({
+    await runFirstSendHook({
       store,
       chatId: "c5",
       defaultEnvMode: "local",
       checkpointStore: ckStore,
     });
-    expect(r.worktreeMode).toBe("local");
-    expect(r.checkpointRef).toBeNull();
+    expect(store.chats.get("c5")!.worktree_mode).toBe("local");
     await store.close();
   });
 });

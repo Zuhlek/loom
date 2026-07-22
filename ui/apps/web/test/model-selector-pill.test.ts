@@ -105,8 +105,8 @@ describe("T-010 ModelSelectorPill — Claude-only dropdown", () => {
 
   test("closes on Escape + outside click (popover pattern parity)", () => {
     const src = readFileSync(pillPath, "utf8");
-    expect(src).toMatch(/["']Escape["']/);
-    expect(src).toMatch(/mousedown|pointerdown/);
+    // Outside-click + Escape now come from the shared usePopoverClose hook.
+    expect(src).toMatch(/usePopoverClose/);
   });
 
   test("dropdown floats above the pill (bottom-full popover positioning)", () => {

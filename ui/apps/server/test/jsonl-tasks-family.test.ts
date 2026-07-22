@@ -11,10 +11,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  translateMany,
-  type TranslatorCtx,
-} from "../src/process-manager/jsonl/translator.ts";
+import type { TranslatorCtx } from "../src/process-manager/jsonl/translator.ts";
+import { translateMany } from "./helpers/translate.ts";
 import {
   createMaterializer,
   type Materializer,

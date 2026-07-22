@@ -125,8 +125,8 @@ describe("T-011 ModelSettingsPill — reasoning + context-window popup", () => {
 
   test("closes on Escape + outside click (popover pattern parity)", () => {
     const src = readFileSync(pillPath, "utf8");
-    expect(src).toMatch(/["']Escape["']/);
-    expect(src).toMatch(/mousedown|pointerdown/);
+    // Outside-click + Escape now come from the shared usePopoverClose hook.
+    expect(src).toMatch(/usePopoverClose/);
   });
 
   test("popup floats above the pill (bottom-full popover positioning)", () => {

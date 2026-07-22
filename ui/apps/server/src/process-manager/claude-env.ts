@@ -57,5 +57,3 @@ export function buildClaudeSpawnEnv(
   }
   return out;
 }
-
-export const __test__STRIP_KEYS = STRIP_KEYS;

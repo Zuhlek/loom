@@ -12,7 +12,6 @@ import {
 } from "../src/process-manager/jsonl/bridge.ts";
 import type { TmuxSessionApi } from "../src/process-manager/tmux-session.ts";
 import type { SessionIdStore } from "../src/process-manager/session-store.ts";
-import type { JsonlPathProbe, ResolvedTailRoot } from "../src/process-manager/jsonl-path-probe.ts";
 import type { ChatRow } from "../src/metadata-store/repos/chat.ts";
 
 function stubChatRow(chatId: string, mode: ChatRow["permission_mode"]): ChatRow {
@@ -77,9 +76,6 @@ function mkOpts(
   const storeDeletes: string[] = [];
   let seq = 0;
   const store: SessionIdStore = {
-    async get() {
-      return undefined;
-    },
     async getOrCreate(chatId, cwd) {
       return { sessionId: `sess-${chatId}-${++seq}`, cwd, createdAt: "x" };
     },
@@ -93,25 +89,11 @@ function mkOpts(
       return undefined;
     },
   };
-  const probe: JsonlPathProbe = {
-    async resolve(): Promise<ResolvedTailRoot> {
-      return {
-        tailRoot,
-        encodingScheme: "cwd-slash-encoded",
-        resolvedAt: "x",
-        claudeVersionAtProbe: "test",
-      };
-    },
-    async reprobe() {
-      return this.resolve();
-    },
-    encodeCwd: (c) => c.replace(/\//g, "-"),
-  };
   return {
     opts: {
       tmux,
       sessionStore: store,
-      pathProbe: probe,
+      tailRoot,
       paneProcess: {
         async paneRootPid() {
           return 12345;

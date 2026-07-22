@@ -165,8 +165,8 @@ export interface ChatState {
   activeTurnStartedAt: number | null;
   /**
    * Session-lifetime resilience state mirrored from the server bridge.
-   * Drives `SessionRecoveryBanner` and gates the legacy
-   * `ChatErrorBanner` (suppressed during recovery to avoid stacking).
+   * Drives `SessionRecoveryBanner` and gates the snackbar error
+   * surface (suppressed during recovery to avoid stacking).
    * Defaults to `"active"`; the server emits `session-state` frames
    * (or snapshot fields) when the SDK loop crashes and the bridge
    * starts auto-respawning.

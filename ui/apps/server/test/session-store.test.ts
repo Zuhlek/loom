@@ -19,10 +19,6 @@ beforeEach(() => {
 });
 
 describe("SessionIdStore", () => {
-  it("get returns undefined for an unknown chat", async () => {
-    expect(await store.get("c-unknown")).toBeUndefined();
-  });
-
   it("getOrCreate generates a fresh entry on first call and persists it", async () => {
     const a = await store.getOrCreate("c-1", "/tmp/cwd");
     expect(typeof a.sessionId).toBe("string");
@@ -44,7 +40,6 @@ describe("SessionIdStore", () => {
   it("delete removes the entry; subsequent getOrCreate produces a fresh sessionId", async () => {
     const a = await store.getOrCreate("c-1", "/tmp/cwd");
     await store.delete("c-1");
-    expect(await store.get("c-1")).toBeUndefined();
     const b = await store.getOrCreate("c-1", "/tmp/cwd");
     expect(b.sessionId).not.toBe(a.sessionId);
   });
@@ -53,13 +48,14 @@ describe("SessionIdStore", () => {
     const a = await store.getOrCreate("c-1", "/tmp/cwd");
     const b = await store.getOrCreate("c-2", "/tmp/cwd2");
     // Simulate restart: new instance against the same storagePath.
+    // getOrCreate on an existing chat returns the persisted entry unchanged.
     const fresh = createSessionIdStore({ storagePath });
-    const a2 = await fresh.get("c-1");
-    const b2 = await fresh.get("c-2");
-    expect(a2?.sessionId).toBe(a.sessionId);
-    expect(b2?.sessionId).toBe(b.sessionId);
-    expect(a2?.cwd).toBe("/tmp/cwd");
-    expect(b2?.cwd).toBe("/tmp/cwd2");
+    const a2 = await fresh.getOrCreate("c-1", "/tmp/ignored");
+    const b2 = await fresh.getOrCreate("c-2", "/tmp/ignored");
+    expect(a2.sessionId).toBe(a.sessionId);
+    expect(b2.sessionId).toBe(b.sessionId);
+    expect(a2.cwd).toBe("/tmp/cwd");
+    expect(b2.cwd).toBe("/tmp/cwd2");
   });
 
   it("concurrent getOrCreate for the same new chatId produces exactly one sessionId", async () => {
@@ -89,8 +85,9 @@ describe("SessionIdStore", () => {
     expect(typeof parsed["c-1"].createdAt).toBe("string");
   });
 
-  it("missing storage file is fine — store starts empty", async () => {
-    expect(await store.get("c-nonexistent")).toBeUndefined();
+  it("missing storage file is fine — first getOrCreate mints a fresh entry", async () => {
+    const a = await store.getOrCreate("c-nonexistent", "/tmp/cwd");
+    expect(a.sessionId.length).toBeGreaterThan(0);
   });
 
   // cleanup

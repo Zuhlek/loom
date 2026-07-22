@@ -17,10 +17,6 @@ import type { ServerFrame } from "../src/chat-protocol/frames.ts";
 import { __resetVcsKindCacheForTests } from "../src/git/vcs-kind.ts";
 import type { TmuxSessionApi } from "../src/process-manager/tmux-session.ts";
 import type { SessionIdStore } from "../src/process-manager/session-store.ts";
-import type {
-  JsonlPathProbe,
-  ResolvedTailRoot,
-} from "../src/process-manager/jsonl-path-probe.ts";
 import type { PaneProcessApi } from "../src/process-manager/pane-process.ts";
 
 function git(cwd: string, args: string[]) {
@@ -60,9 +56,6 @@ function fakeBridgeDeps() {
     },
   };
   const sessionStore: SessionIdStore = {
-    async get() {
-      return undefined;
-    },
     async getOrCreate(chatId, cwd) {
       return { sessionId: `sess-${chatId}`, cwd, createdAt: "x" };
     },
@@ -75,12 +68,6 @@ function fakeBridgeDeps() {
     },
   };
   const fakeTailRoot = fs.mkdtempSync(path.join(os.tmpdir(), "loom-smoke-tail-"));
-  const pathProbe: JsonlPathProbe = {
-    async resolve(): Promise<ResolvedTailRoot> {
-      return { tailRoot: fakeTailRoot, source: "default" };
-    },
-    async persist() {},
-  };
   const paneProcess: PaneProcessApi = {
     async paneOwnsFile() {
       return true;
@@ -92,7 +79,7 @@ function fakeBridgeDeps() {
       return false;
     },
   };
-  return { tmux, sessionStore, pathProbe, paneProcess, tailRoot: fakeTailRoot };
+  return { tmux, sessionStore, paneProcess, tailRoot: fakeTailRoot };
 }
 
 type Handler = (req: Request, url: URL) => Response | Promise<Response>;
@@ -113,13 +100,13 @@ describe("chat-diff-panel smoke gate", () => {
       defaultEnvMode: "local",
     };
 
-    const { tmux, sessionStore, pathProbe, paneProcess, tailRoot } = fakeBridgeDeps();
+    const { tmux, sessionStore, paneProcess, tailRoot } = fakeBridgeDeps();
     track(tailRoot);
     const frames: ServerFrame[] = [];
     const bridge = createJsonlTailBridge({
       tmux,
       sessionStore,
-      pathProbe,
+      tailRoot,
       paneProcess,
       cwdResolver: () => cwd,
     });
@@ -160,22 +147,19 @@ describe("chat-diff-panel smoke gate", () => {
     expect(store.chats.get(chatId)!.vcs_kind).toBe("git");
 
     // ── 3. First send ───────────────────────────────────────────────
-    const firstSend = await runFirstSendHook({
+    await runFirstSendHook({
       store,
       chatId,
       defaultEnvMode: config.defaultEnvMode,
       checkpointStore: substrate.checkpointStore,
     });
-    expect(firstSend.worktreeMode).toBe("local");
-    expect(firstSend.checkpointRef).toBe(`refs/loom-checkpoints/${chatId}/0`);
+    expect(store.chats.get(chatId)!.worktree_mode).toBe("local");
     expect(git(cwd, ["show-ref", "--verify", `refs/loom-checkpoints/${chatId}/0`]).status).toBe(0);
 
     // ── 4. Mock one assistant turn → reactor → ref 1 ────────────────
-    // Use the substrate's reactor + turn-watcher directly (production
-    // wires them through the bridge's onAssistantTurnComplete; the
-    // smoke avoids the tmux/jsonl tail path by driving captureTurn
-    // synchronously).
-    substrate.turnWatcher.start(chatId, cwd);
+    // Drive the reactor's captureTurn directly (production wires it
+    // through the bridge's onAssistantTurnComplete; the smoke avoids
+    // the tmux/jsonl tail path by capturing synchronously).
     fs.writeFileSync(path.join(cwd, "feature.txt"), "the agent's output\n");
     await substrate.reactor.captureTurn(chatId, 1, cwd);
     expect(git(cwd, ["show-ref", "--verify", `refs/loom-checkpoints/${chatId}/1`]).status).toBe(0);

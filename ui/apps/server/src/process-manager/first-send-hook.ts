@@ -13,14 +13,6 @@ export interface FirstSendHookArgs {
   createWorktreeImpl?: typeof defaultCreateWorktree;
 }
 
-export interface FirstSendHookResult {
-  worktreeMode: "local" | "worktree";
-  worktreePath: string | null;
-  branch: string | null;
-  checkpointRef: string | null;
-  alreadyCommitted: boolean;
-}
-
 async function readProjectHeadBranch(cwd: string): Promise<string | null> {
   try {
     const r = await executeGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"], {
@@ -34,7 +26,7 @@ async function readProjectHeadBranch(cwd: string): Promise<string | null> {
   }
 }
 
-export async function runFirstSendHook(args: FirstSendHookArgs): Promise<FirstSendHookResult> {
+export async function runFirstSendHook(args: FirstSendHookArgs): Promise<void> {
   const chat = args.store.chats.get(args.chatId);
   if (!chat) {
     throw new Error(`chat not found: ${args.chatId}`);
@@ -42,16 +34,7 @@ export async function runFirstSendHook(args: FirstSendHookArgs): Promise<FirstSe
   // The row's `worktree_mode` is `null` until this hook commits it.
   // Once present ("local" or "worktree"), the hook short-circuits.
   const raw = chat.worktree_mode;
-  const alreadyCommitted = raw === "local" || raw === "worktree";
-  if (alreadyCommitted) {
-    return {
-      worktreeMode: raw,
-      worktreePath: chat.worktree_path,
-      branch: chat.branch,
-      checkpointRef: null,
-      alreadyCommitted: true,
-    };
-  }
+  if (raw === "local" || raw === "worktree") return;
 
   const createWorktreeImpl = args.createWorktreeImpl ?? defaultCreateWorktree;
 
@@ -91,17 +74,9 @@ export async function runFirstSendHook(args: FirstSendHookArgs): Promise<FirstSe
   // Synthetic chat-start checkpoint. Capture-from-non-git-cwd returns
   // null silently — `vcs_kind === "unknown"` paths take that branch.
   const captureCwd = worktreePath ?? chat.cwd;
-  const ck = await args.checkpointStore.captureTurn({
+  await args.checkpointStore.captureTurn({
     chatId: args.chatId,
     cwd: captureCwd,
     turn: 0,
   });
-
-  return {
-    worktreeMode: mode,
-    worktreePath,
-    branch,
-    checkpointRef: ck?.ref ?? null,
-    alreadyCommitted: false,
-  };
 }

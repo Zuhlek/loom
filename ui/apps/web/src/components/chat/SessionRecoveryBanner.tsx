@@ -12,7 +12,7 @@
  *     button. The bridge has exhausted auto-attempts; the click
  *     emits `retry-session` and the schedule starts over.
  *
- * Distinct from `ChatErrorBanner`, which surfaces transient
+ * Distinct from the snackbar error surface, which shows transient
  * server-emitted error frames (e.g. malformed request payloads) that
  * don't break the session.
  */

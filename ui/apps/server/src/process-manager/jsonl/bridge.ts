@@ -8,7 +8,8 @@
  * Composition:
  *   - tmux: `TmuxSessionApi` — only path to the `claude` PTY.
  *   - sessionStore: `SessionIdStore` — chatId → sessionId persistence.
- *   - pathProbe: `JsonlPathProbe` — resolves the tail-root + cwd encoder.
+ *   - tailRoot: directory claude writes transcripts under
+ *     (`~/.claude/projects` in production; a tmpdir in tests).
  *   - tail: `JsonlTail` (per chat) — append-only line reader.
  *   - materializer: `Materializer` (per chat) — ClaudeEvent → ChatItem[].
  *
@@ -33,7 +34,6 @@ import { createBridgeLog, type BridgeLog } from "./bridge-log.ts";
 import type { TmuxSessionApi } from "../tmux-session.ts";
 import { TmuxUnavailableError } from "../tmux-availability.ts";
 import type { SessionIdStore } from "../session-store.ts";
-import type { JsonlPathProbe } from "../jsonl-path-probe.ts";
 import type { PaneProcessApi } from "../pane-process.ts";
 import { traceHook } from "../../hook-receiver/trace.ts";
 import type { PermissionGate } from "../../hook-receiver/permission-gate.ts";
@@ -60,15 +60,24 @@ import type { ChatRow } from "../../metadata-store/repos/chat.ts";
 
 export interface WsClient {
   send(text: string): void;
-  close?(): void;
 }
 
 export type TasksUpdateListener = (chatId: string, tasks: Task[]) => void;
 
+/**
+ * Encode a cwd the way claude names its per-project transcript
+ * directory: path separators AND whitespace runs collapse to a single
+ * `-` (`/Volumes/My Shared Files/repo` → `-Volumes-My-Shared-Files-repo`).
+ */
+export function encodeCwd(cwd: string): string {
+  return cwd.replace(/[\s/]+/g, "-");
+}
+
 export interface JsonlTailBridgeOptions {
   tmux: TmuxSessionApi;
   sessionStore: SessionIdStore;
-  pathProbe: JsonlPathProbe;
+  /** Transcript root, `~/.claude/projects` in production. */
+  tailRoot: string;
   /**
    * File-ownership identity check for the rotation poller. The bridge
    * adopts a candidate JSONL only when `paneProcess.paneOwnsFile`
@@ -419,8 +428,8 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     };
   }
 
-  function onTailLine(state: ChatState, rawLine: string, byteLen: number): void {
-    log.tailLine(state.chatId, { bytes: byteLen });
+  function onTailLine(state: ChatState, rawLine: string): void {
+    log.tailLine(state.chatId, { bytes: rawLine.length });
     const ctx: TranslatorCtx = {
       chatId: state.chatId,
       sessionId: state.sessionId,
@@ -582,9 +591,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     // history (server restart, cold tmux) and must be spawned with
     // `--resume`; spawning `--session-id` against an existing id makes claude
     // exit "session ID already in use" and the pane dies (the resume bug).
-    const resolved = await opts.pathProbe.resolve();
-    const encodedCwd = opts.pathProbe.encodeCwd(cwd);
-    const sessionDir = join(resolved.tailRoot, encodedCwd);
+    const sessionDir = join(opts.tailRoot, encodeCwd(cwd));
     const jsonlPath = join(sessionDir, `${sessionId}.jsonl`);
     const tailStrategy = "bound";
     const isResume = existsSync(jsonlPath);
@@ -659,7 +666,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       markReadyAndFlush(state!, "fallback");
     }, opts.readyFallbackMs ?? READY_FALLBACK_MS);
 
-    tail.onLine((line) => onTailLine(state!, line.text, line.text.length));
+    tail.onLine((line) => onTailLine(state!, line));
     tail.start({ filePath: jsonlPath });
     state.state = "live";
 
@@ -732,7 +739,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
         /* best-effort */
       }
     }
-    newTail.onLine((line) => onTailLine(state, line.text, line.text.length));
+    newTail.onLine((line) => onTailLine(state, line));
     newTail.start({ filePath: discovered.filePath });
     try {
       await oldTail.stop();
@@ -762,7 +769,6 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
    */
   function runtimeUnavailableFrame(
     chatId: string,
-    reason: "tmux",
     err: TmuxUnavailableError,
   ): ServerFrame {
     return {
@@ -772,24 +778,12 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
         message: err.message,
         code: "runtime-unavailable",
         details: {
-          reason,
+          reason: "tmux",
           actionable:
             "Install tmux >= 3.0 and ensure it is on PATH — see docs/setup.md.",
         },
       },
     };
-  }
-
-  /**
-   * Emit a runtime-unavailable frame to a single ws client (no
-   * broadcast — used at attach time before the chat state exists).
-   */
-  function emitRuntimeUnavailableTo(
-    client: WsClient,
-    chatId: string,
-    err: TmuxUnavailableError,
-  ): void {
-    sendTo(client, runtimeUnavailableFrame(chatId, "tmux", err));
   }
 
   /**
@@ -803,7 +797,21 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
   ): void {
     const state = chats.get(chatId);
     if (!state) return;
-    broadcast(state, runtimeUnavailableFrame(chatId, "tmux", err));
+    broadcast(state, runtimeUnavailableFrame(chatId, err));
+  }
+
+  /** Register a pending permission and broadcast it to attached clients. */
+  function pushPendingPermission(
+    state: ChatState,
+    chatId: string,
+    perm: PendingPermission,
+  ): void {
+    state.pendingPermissions.set(perm.id, perm);
+    broadcast(state, {
+      kind: "pending-permission",
+      "chat-id": chatId,
+      body: perm,
+    });
   }
 
   return {
@@ -818,7 +826,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
           // UI can render a setup banner and `bridge.hasSession`
           // resolves false (delegated to `tmux.exists` which also
           // short-circuits when unavailable).
-          emitRuntimeUnavailableTo(client, chatId, err);
+          sendTo(client, runtimeUnavailableFrame(chatId, err));
           return;
         }
         throw err;
@@ -1170,15 +1178,6 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
             return;
           }
           const steps = cycleStepsToReach(prev, mode);
-          if (steps != null && steps > CYCLE_ORDER.length - 1) {
-            // Tripwire: mod-wraparound math caps `steps` at
-            // `CYCLE_ORDER.length - 1`. Crossing that bound means
-            // claude's TUI cycle order has drifted from the version
-            // CYCLE_ORDER was measured against (v2.1.153).
-            console.warn(
-              `[loom] permission-mode cycle miscount for ${chatId} (${prev} -> ${mode}): steps=${steps} exceeds CYCLE_ORDER bound; claude TUI cycle may have changed`,
-            );
-          }
           if (steps == null || steps === 0) return;
           for (let i = 0; i < steps; i++) {
             try {
@@ -1316,19 +1315,13 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
             const data = body.data ?? {};
             const id =
               (data.id as string | undefined) ?? `perm-${Date.now()}`;
-            const perm: PendingPermission = {
+            pushPendingPermission(state, chatId, {
               id,
               toolName: (data.toolName as string | undefined) ?? "",
               input: (data.input as Record<string, unknown> | undefined) ?? {},
               title: data.title as string | undefined,
               displayName: data.displayName as string | undefined,
               description: data.description as string | undefined,
-            };
-            state.pendingPermissions.set(id, perm);
-            broadcast(state, {
-              kind: "pending-permission",
-              "chat-id": chatId,
-              body: perm,
             });
             return;
           }
@@ -1399,7 +1392,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
             | undefined;
           const payload = body?.payload ?? {};
           const id = (payload.id as string | undefined) ?? `pre-${Date.now()}`;
-          const perm: PendingPermission = {
+          pushPendingPermission(state, chatId, {
             id,
             toolName: body?.toolName ?? (payload.toolName as string) ?? "",
             input: (payload.input as Record<string, unknown> | undefined) ?? {},
@@ -1407,12 +1400,6 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
             displayName: payload.displayName as string | undefined,
             description: payload.description as string | undefined,
             toolUseId: payload.toolUseId as string | undefined,
-          };
-          state.pendingPermissions.set(id, perm);
-          broadcast(state, {
-            kind: "pending-permission",
-            "chat-id": chatId,
-            body: perm,
           });
           return;
         }

@@ -12,7 +12,6 @@ import {
 } from "../src/process-manager/jsonl/bridge.ts";
 import type { TmuxSessionApi } from "../src/process-manager/tmux-session.ts";
 import type { SessionIdStore } from "../src/process-manager/session-store.ts";
-import type { JsonlPathProbe, ResolvedTailRoot } from "../src/process-manager/jsonl-path-probe.ts";
 import { makeEnvelope } from "../src/chat-protocol/envelope.ts";
 
 function mkTmux(): TmuxSessionApi {
@@ -32,9 +31,6 @@ function mkOpts(): { opts: JsonlTailBridgeOptions; cleanup: () => void } {
   const tailRoot = join(root, "projects");
   mkdirSync(tailRoot, { recursive: true });
   const store: SessionIdStore = {
-    async get() {
-      return undefined;
-    },
     async getOrCreate(chatId, cwd) {
       return { sessionId: `sess-${chatId}`, cwd, createdAt: "x" };
     },
@@ -46,25 +42,11 @@ function mkOpts(): { opts: JsonlTailBridgeOptions; cleanup: () => void } {
       return undefined;
     },
   };
-  const probe: JsonlPathProbe = {
-    async resolve(): Promise<ResolvedTailRoot> {
-      return {
-        tailRoot,
-        encodingScheme: "cwd-slash-encoded",
-        resolvedAt: "x",
-        claudeVersionAtProbe: "test",
-      };
-    },
-    async reprobe() {
-      return this.resolve();
-    },
-    encodeCwd: (c) => c.replace(/\//g, "-"),
-  };
   return {
     opts: {
       tmux: mkTmux(),
       sessionStore: store,
-      pathProbe: probe,
+      tailRoot,
       paneProcess: {
         async paneRootPid() {
           return 12345;
