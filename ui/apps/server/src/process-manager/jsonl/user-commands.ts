@@ -15,12 +15,11 @@
  * these into every `slash-commands-update` frame so the composer can
  * autocomplete them.
  *
- * ponytail: covers the two scopes that hold the reported gap — user-global
- * `~/.claude/{skills,commands}` (where `weave` lives as a symlink into
- * `orchestrator/`) and project-local `<cwd>/.claude/{skills,commands}`.
- * Plugin-cache skills are intentionally NOT scanned: plugin commands are
- * model-invocable, so they already arrive via `skill_listing`. Add plugin
- * scanning only if a user-only plugin command turns up missing.
+ * Two scopes are scanned: user-global `~/.claude/{skills,commands}` (where
+ * `weave` lives as a symlink into `orchestrator/`) and project-local
+ * `<cwd>/.claude/{skills,commands}`. Plugin-cache skills are NOT scanned:
+ * plugin commands are model-invocable, so they already arrive via
+ * `skill_listing`.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";

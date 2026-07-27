@@ -241,9 +241,9 @@ function isPendingUserItem(it: ChatItem): it is UserMessageItem {
  * Text-gated so the F2(c') guarantee holds: an UNRELATED message's echo can
  * never steal a failed slot (different text → no match → it appends). Exact
  * match covers the no-image case; `startsWith` tolerates the server appending
- * `@<absPath>` image tokens to the text it echoes back.
- * ponytail: text match, not turn-id — the optimistic bubble has no server
- * turn id to key on until the echo itself arrives.
+ * `@<absPath>` image tokens to the text it echoes back. It keys on text rather
+ * than a turn id because the optimistic bubble has no server turn id to key on
+ * until the echo itself arrives.
  */
 function matchesFailedOptimistic(it: ChatItem, echoText: string): boolean {
   if (it.kind !== "user-message" || it.pending !== "failed") return false;

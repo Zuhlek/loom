@@ -146,10 +146,9 @@ export function mountDiffRoute(
   // section per repo, labelled by its path relative to the workspace root.
   // Empty-diff repos are omitted.
   //
-  // ponytail: a worktree-mode root instead diffs against the chat-start
-  // checkpoint (the chat's fork point), while /git/status intentionally stays
-  // on trunk so its ahead/behind vs trunk stays meaningful — the minor label
-  // divergence between the two panels is accepted.
+  // A worktree-mode root instead diffs against the chat-start checkpoint (the
+  // chat's fork point), while /git/status stays on trunk so its ahead/behind
+  // vs trunk stays meaningful — the two panels' base labels can differ.
   routes["/diff"] = async (_req, url) => {
     const worktreePath = url.searchParams.get("worktreePath") ?? "";
     if (!worktreePath) {

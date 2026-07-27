@@ -9,8 +9,6 @@ export function errorMessage(e: unknown): string {
     // developer-facing plumbing. Strip the prefix and git's `hint:` spam,
     // then surface the real rejection/error line so the UI reads cleanly
     // (e.g. "! [rejected] master -> master (fetch first)").
-    // ponytail: heuristic stderr pick, add explicit git-error→message
-    // mapping when a real case reads badly.
     const lines = e.stderr
       .split("\n")
       .map((l) => l.trim())
