@@ -220,7 +220,7 @@ export function mountAllRoutes(
   mountFileSearchRoute(routes);
   mountUploadImageRoute(routes);
   mountChatImageRoute(routes, imageStore);
-  mountDiffRoute(routes);
+  mountDiffRoute(routes, store, substrate.checkpointStore);
   mountGitStatusRoute(routes);
   mountGitActionsRoute(routes);
   mountFabricMockupRoute(routes);

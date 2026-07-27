@@ -380,11 +380,13 @@ export async function getGitStatus(
 
 export async function getDiff(
   worktreePath: string,
-  opts: { signal?: AbortSignal } = {},
+  opts: { signal?: AbortSignal; chatId?: string } = {},
 ): Promise<ApiDiffResponse> {
   // The diff base is resolved server-side (fork point of this branch/worktree),
-  // so the client sends only the path.
-  const qs = `worktreePath=${encodeURIComponent(worktreePath)}`;
+  // so the client sends only the path. `chatId` lets a worktree-mode chat diff
+  // against its start checkpoint instead.
+  let qs = `worktreePath=${encodeURIComponent(worktreePath)}`;
+  if (opts.chatId) qs += `&chatId=${encodeURIComponent(opts.chatId)}`;
   return apiFetch<ApiDiffResponse>(`/diff?${qs}`, { signal: opts.signal });
 }
 

@@ -1,8 +1,11 @@
-import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { jsonResponse } from "./_response.ts";
 import { discoverRepos } from "../git/discover-repos.ts";
+import { executeGit } from "../git/worktree.ts";
+import type { MetadataStore } from "../metadata-store/index.ts";
+import type { CheckpointStore } from "../checkpointing/checkpoint-store.ts";
 
 export interface DiffSection {
   kind: "whole";
@@ -12,13 +15,13 @@ export interface DiffSection {
 }
 
 /** True when `ref` resolves to a commit object in `repo`. */
-function refResolvesToCommit(repo: string, ref: string): boolean {
-  const probe = spawnSync(
-    "git",
-    ["-C", repo, "rev-parse", "--verify", "--quiet", `${ref}^{commit}`],
-    { encoding: "utf8" },
+async function refResolvesToCommit(repo: string, ref: string): Promise<boolean> {
+  const probe = await executeGit(
+    repo,
+    ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`],
+    { allowNonZeroExit: true },
   );
-  return probe.status === 0;
+  return probe.exitCode === 0;
 }
 
 /**
@@ -32,20 +35,20 @@ function refResolvesToCommit(repo: string, ref: string): boolean {
  * clone on a feature branch). Returns "HEAD" when nothing resolves, which
  * makes the merge-base below collapse to HEAD (uncommitted-only diff).
  */
-function resolveDefaultBranch(repo: string): string {
+async function resolveDefaultBranch(repo: string): Promise<string> {
   const candidates: string[] = [];
-  const sym = spawnSync(
-    "git",
-    ["-C", repo, "symbolic-ref", "refs/remotes/origin/HEAD"],
-    { encoding: "utf8" },
+  const sym = await executeGit(
+    repo,
+    ["symbolic-ref", "refs/remotes/origin/HEAD"],
+    { allowNonZeroExit: true },
   );
-  if (sym.status === 0) {
+  if (sym.exitCode === 0) {
     const m = sym.stdout.trim().match(/refs\/remotes\/origin\/(.+)$/);
     if (m) candidates.push(m[1]!, `origin/${m[1]!}`);
   }
   candidates.push("main", "master", "origin/main", "origin/master");
   for (const cand of candidates) {
-    if (refResolvesToCommit(repo, cand)) return cand;
+    if (await refResolvesToCommit(repo, cand)) return cand;
   }
   return "HEAD";
 }
@@ -63,12 +66,12 @@ function resolveDefaultBranch(repo: string): string {
  * Falls back to HEAD (uncommitted-only) when there is no merge-base: no trunk,
  * unrelated histories, or a branch that never diverged.
  */
-function diffBase(repo: string): string {
-  const trunk = resolveDefaultBranch(repo);
-  const mb = spawnSync("git", ["-C", repo, "merge-base", trunk, "HEAD"], {
-    encoding: "utf8",
+async function diffBase(repo: string): Promise<string> {
+  const trunk = await resolveDefaultBranch(repo);
+  const mb = await executeGit(repo, ["merge-base", trunk, "HEAD"], {
+    allowNonZeroExit: true,
   });
-  const base = mb.status === 0 ? mb.stdout.trim() : "";
+  const base = mb.exitCode === 0 ? mb.stdout.trim() : "";
   return base || "HEAD";
 }
 
@@ -79,20 +82,23 @@ function diffBase(repo: string): string {
  * just created are exactly what the user wants to see — so we append a
  * synthetic `--no-index` add-diff per untracked path. This is non-mutating (no
  * `git add -N`, so the user's index is untouched).
+ *
+ * `baseOverride`, when given, replaces the computed fork-point base — used to
+ * diff a worktree-mode root against its chat-start checkpoint.
  */
-function repoDiff(repo: string): string {
-  const ref = diffBase(repo);
+async function repoDiff(repo: string, baseOverride?: string): Promise<string> {
+  const ref = baseOverride ?? (await diffBase(repo));
   const tracked =
-    spawnSync("git", ["-C", repo, "diff", ref, "--unified=3"], {
-      encoding: "utf8",
-    }).stdout ?? "";
+    (await executeGit(repo, ["diff", ref, "--unified=3"], {
+      allowNonZeroExit: true,
+    })).stdout ?? "";
 
   const othersOut =
-    spawnSync(
-      "git",
-      ["-C", repo, "ls-files", "--others", "--exclude-standard", "-z"],
-      { encoding: "utf8" },
-    ).stdout ?? "";
+    (await executeGit(
+      repo,
+      ["ls-files", "--others", "--exclude-standard", "-z"],
+      { allowNonZeroExit: true },
+    )).stdout ?? "";
   const untrackedPaths = othersOut
     .split("\0")
     .filter(Boolean)
@@ -107,10 +113,10 @@ function repoDiff(repo: string): string {
     // `--no-index` exits 1 when the files differ; stdout still holds the
     // diff. The header comes out as `diff --git a/<rel> b/<rel>` with a
     // `new file mode` line, which the unified-diff parser handles.
-    const r = spawnSync(
-      "git",
-      ["-C", repo, "diff", "--no-index", "--unified=3", "--", "/dev/null", rel],
-      { encoding: "utf8" },
+    const r = await executeGit(
+      repo,
+      ["diff", "--no-index", "--unified=3", "--", "/dev/null", rel],
+      { allowNonZeroExit: true },
     );
     untracked += r.stdout ?? "";
   }
@@ -118,10 +124,20 @@ function repoDiff(repo: string): string {
   return tracked + untracked;
 }
 
+function canonicalize(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
 export function mountDiffRoute(
   routes: Record<string, (req: Request, url: URL) => Response | Promise<Response>>,
+  store: MetadataStore,
+  checkpointStore: CheckpointStore,
 ): void {
-  // GET /diff?worktreePath=<abs>
+  // GET /diff?worktreePath=<abs>&chatId=<id>
   //
   // One total diff for the workspace: the root repo plus every independent
   // nested repo beneath it. Each repo is diffed against its own fork point
@@ -129,16 +145,33 @@ export function mountDiffRoute(
   // — every chat on the same checkout sees the same consolidated diff. One
   // section per repo, labelled by its path relative to the workspace root.
   // Empty-diff repos are omitted.
+  //
+  // ponytail: a worktree-mode root instead diffs against the chat-start
+  // checkpoint (the chat's fork point), while /git/status intentionally stays
+  // on trunk so its ahead/behind vs trunk stays meaningful — the minor label
+  // divergence between the two panels is accepted.
   routes["/diff"] = async (_req, url) => {
     const worktreePath = url.searchParams.get("worktreePath") ?? "";
     if (!worktreePath) {
       return jsonResponse({ error: "missing worktreePath" }, 400);
     }
+    const chatId = url.searchParams.get("chatId");
+
+    // Root-repo base override: for a worktree-mode chat, diff the root against
+    // the chat-start checkpoint rather than the branch fork point. Nested repos
+    // keep their own fork-point base.
+    let rootBaseOverride: string | undefined;
+    if (chatId && store.chats.get(chatId)?.worktree_mode === "worktree") {
+      const startRef = await checkpointStore.resolveRef(chatId, "start", worktreePath);
+      if (startRef) rootBaseOverride = startRef;
+    }
+    const rootCanonical = canonicalize(worktreePath);
 
     const repos = discoverRepos(worktreePath);
     const sections: DiffSection[] = [];
     for (const repo of repos) {
-      const diff = repoDiff(repo);
+      const isRoot = canonicalize(repo) === rootCanonical;
+      const diff = await repoDiff(repo, isRoot ? rootBaseOverride : undefined);
       if (diff.trim().length === 0) continue;
       const label = path.relative(worktreePath, repo);
       sections.push({ kind: "whole", label, diff });

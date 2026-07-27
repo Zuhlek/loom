@@ -5,6 +5,10 @@ import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { mountDiffRoute } from "../src/routes/diff.ts";
+import { initMetadataStore } from "../src/metadata-store/index.ts";
+import { createCheckpointStore } from "../src/checkpointing/checkpoint-store.ts";
+import type { MetadataStore } from "../src/metadata-store/index.ts";
+import type { CheckpointStore } from "../src/checkpointing/checkpoint-store.ts";
 
 function git(cwd: string, args: string[]) {
   return spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -24,9 +28,13 @@ afterEach(() => {
 });
 
 type Handler = (req: Request, url: URL) => Response | Promise<Response>;
-function mount(): Record<string, Handler> {
+async function mount(
+  overrides: { store?: MetadataStore; checkpointStore?: CheckpointStore } = {},
+): Promise<Record<string, Handler>> {
   const routes: Record<string, Handler> = {};
-  mountDiffRoute(routes);
+  const store = overrides.store ?? (await initMetadataStore({ inMemoryOnly: true }));
+  const checkpointStore = overrides.checkpointStore ?? createCheckpointStore();
+  mountDiffRoute(routes, store, checkpointStore);
   return routes;
 }
 function call(handler: Handler, url: string) {
@@ -35,7 +43,7 @@ function call(handler: Handler, url: string) {
 
 describe("GET /diff — total branch/workspace diff", () => {
   test("missing worktreePath → 400", async () => {
-    const res = await call(mount()["/diff"]!, "http://x/diff");
+    const res = await call((await mount())["/diff"]!, "http://x/diff");
     expect(res.status).toBe(400);
     expect(((await res.json()) as any).error).toBe("missing worktreePath");
   });
@@ -70,7 +78,7 @@ describe("GET /diff — total branch/workspace diff", () => {
     git(clean, ["commit", "-q", "-m", "init"]);
 
     const res = await call(
-      mount()["/diff"]!,
+      (await mount())["/diff"]!,
       `http://x/diff?worktreePath=${encodeURIComponent(root)}`,
     );
     expect(res.status).toBe(200);
@@ -109,7 +117,7 @@ describe("GET /diff — total branch/workspace diff", () => {
     fs.writeFileSync(path.join(root, "a.txt"), "alpha edited\n");
 
     const res = await call(
-      mount()["/diff"]!,
+      (await mount())["/diff"]!,
       `http://x/diff?worktreePath=${encodeURIComponent(root)}`,
     );
     expect(res.status).toBe(200);
@@ -144,7 +152,7 @@ describe("GET /diff — total branch/workspace diff", () => {
     fs.writeFileSync(path.join(root, "a.txt"), "alpha edited after rename\n");
 
     const res = await call(
-      mount()["/diff"]!,
+      (await mount())["/diff"]!,
       `http://x/diff?worktreePath=${encodeURIComponent(root)}`,
     );
     expect(res.status).toBe(200);
@@ -182,7 +190,7 @@ describe("GET /diff — total branch/workspace diff", () => {
     fs.writeFileSync(path.join(root, "a.txt"), "alpha edited on feature\n");
 
     const res = await call(
-      mount()["/diff"]!,
+      (await mount())["/diff"]!,
       `http://x/diff?worktreePath=${encodeURIComponent(root)}`,
     );
     expect(res.status).toBe(200);
@@ -195,5 +203,54 @@ describe("GET /diff — total branch/workspace diff", () => {
     // …but main's post-fork commit must NOT appear (merge-base, not main-tip,
     // is the base — so no reverse-diff noise).
     expect(diff).not.toMatch(/b\.txt/);
+  });
+
+  test("worktree-mode chat diffs its root against the chat-start checkpoint, not the branch fork point", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "loom-diffroute-chatbase-"));
+    tmpDirs.push(root);
+
+    // Baseline + a second "parent branch work" commit — this simulates a
+    // worktree forked off a non-trunk branch that already carried work.
+    initRepo(root);
+    fs.writeFileSync(path.join(root, "a.txt"), "alpha\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "init"]);
+    fs.writeFileSync(path.join(root, "parent.txt"), "parent branch work\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "parent branch work"]);
+
+    // Capture the chat-start checkpoint HERE (fork point of the chat's work).
+    const chatId = "chat-scoped";
+    const checkpointStore = createCheckpointStore();
+    const captured = await checkpointStore.captureTurn({ chatId, cwd: root, turn: 0 });
+    expect(captured).not.toBeNull();
+
+    // Chat work after the checkpoint: one commit + one uncommitted edit.
+    fs.writeFileSync(path.join(root, "chat.txt"), "chat work\n");
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "chat work"]);
+    fs.writeFileSync(path.join(root, "a.txt"), "alpha edited in chat\n");
+
+    const store = await initMetadataStore({ inMemoryOnly: true });
+    store.chats.create({
+      id: chatId,
+      cwd: root,
+      worktree_mode: "worktree",
+      worktree_path: root,
+    });
+
+    const routes = await mount({ store, checkpointStore });
+    const res = await call(
+      routes["/diff"]!,
+      `http://x/diff?worktreePath=${encodeURIComponent(root)}&chatId=${chatId}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { sections: Array<{ diff: string }> };
+    const diff = body.sections[0]!.diff;
+    // Chat-work commit and the uncommitted edit both surface…
+    expect(diff).toMatch(/chat\.txt/);
+    expect(diff).toMatch(/alpha edited in chat/);
+    // …but the pre-checkpoint parent-branch commit does NOT.
+    expect(diff).not.toMatch(/parent\.txt/);
   });
 });

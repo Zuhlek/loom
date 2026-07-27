@@ -194,7 +194,7 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
       const controller = new AbortController();
       diffCtrlRef.current = controller;
       try {
-        const result = await getDiff(wt, { signal: controller.signal });
+        const result = await getDiff(wt, { signal: controller.signal, chatId });
         if (controller.signal.aborted) return;
         setSections(result.sections);
         setDiffError(null);
@@ -204,7 +204,7 @@ export function DiffPanelContainer(props: DiffPanelContainerProps) {
         setDiffError(errorText(err));
       }
     },
-    [],
+    [chatId],
   );
 
   const refresh = useCallback(async (): Promise<void> => {
