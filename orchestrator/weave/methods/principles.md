@@ -165,4 +165,20 @@ Findings triage — decide what each finding demands before writing it:
 - **Material and debatable** — affects behaviour, scope, public API, data, or a real trade-off: full finding for the gate.
 - **Debatable but trivial** — a taste-level call whose benefit is a few lines: not a finding. The status quo wins; omit it.
 
+A finding originating from a tune observation is always **material and debatable**, never mechanical. Exception to the P1 Review check: lines appended to `<repo>/CLAUDE.md ## Loom rules` by the tune flow are not flagged as tracing to no acceptance criterion.
+
 Project-level `spec.md ## Constraints` entries take precedence over the matching principle when both apply.
+
+---
+
+## Learned rules
+
+The ONLY section the orchestrator appends approved tune entries to. Entries land here after human approval at the review gate; Loom never edits or removes them — humans archive retired entries to `methods/rules-archive.md`. Entry form:
+
+```
+- [<scope>] WHEN <trigger condition>
+  THEN <rule, phrased as a prohibition where possible>.
+  Reason: <one line>.
+```
+
+Scope is mandatory: `[*]` (universal), `[type: <type-hint>]`, or `[repo: <name>, <name>]`.

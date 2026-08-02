@@ -3572,7 +3572,7 @@ globalThis["mermaid"] = globalThis.__esbuild_esm_mermaid_nm["mermaid"].default;
       <li><a href="#section-11">Workspace state &mdash; <code>pipeline.md</code></a></li>
       <li><a href="#section-12">Hooks</a></li>
       <li><a href="#section-13">Engineering principles &mdash; P1&ndash;P7</a></li>
-      <li><a href="#section-14">Learning loop &mdash; <code>/weave</code> &harr; <code>/tune</code></a></li>
+      <li><a href="#section-14">Learning loop &mdash; rule stores</a></li>
       <li><a href="#section-15">Types</a></li>
       <li><a href="#section-16">Evaluation harness</a></li>
       <li><a href="#section-17">Telemetry</a></li>
@@ -3593,11 +3593,9 @@ globalThis["mermaid"] = globalThis.__esbuild_esm_mermaid_nm["mermaid"].default;
 
     <section id="section-1">
       <h2>1. What loom is</h2>
-      <p>Four slash commands that work in tandem:</p>
+      <p>Two slash commands that work in tandem:</p>
       <ul>
         <li><code>/weave</code> &mdash; a five-phase software-lifecycle orchestrator (Spec &rarr; Design &rarr; Plan &rarr; Build &rarr; Review). Single entry point; runs the entire lifecycle in one Claude Code session, surfacing <code>AskUserQuestion</code> gates between phases.</li>
-        <li><code>/tune</code> &mdash; meta-curation skill. <code>/tune review</code> turns accumulated session learnings into committed knowledge (SKILL.md edits, type-file additions). It is the only path that mutates skill source.</li>
-        <li><code>/log</code> &mdash; thin reader/appender skill for the shared develop-log. Read directly by <code>/tune review</code>; written to indirectly by <code>/weave</code> phase agents.</li>
         <li><code>/explore-prototype</code> &mdash; Puppeteer-driven UX exploration. Produces a prototype-analysis seed that <code>/weave</code> can consume.</li>
       </ul>
       <p>Skill sources live under <code>loom/orchestrator/</code>. Skills are exposed via <code>setup-loom.sh</code>, which symlinks them into <code>~/.claude/skills/</code> and merges canonical hook entries into <code>~/.claude/settings.json</code>.</p>
@@ -3663,11 +3661,6 @@ flowchart LR
 &#9474;       &#9500;&#9472;&#9472; plan/   {phase.md, phase.signature.md, quality-check.md, quality-check.signature.md}
 &#9474;       &#9500;&#9472;&#9472; build/  {phase.md, phase.signature.md, quality-check.md, quality-check.signature.md, methods/}
 &#9474;       &#9492;&#9472;&#9472; review/ {phase.md, phase.signature.md}    &larr; no quality-check (Review IS the QC)
-&#9500;&#9472;&#9472; tune/                        &larr; /tune meta skill (curation)
-&#9474;   &#9492;&#9472;&#9472; SKILL.md
-&#9500;&#9472;&#9472; log/                         &larr; /log thin reader/appender
-&#9474;   &#9500;&#9472;&#9472; SKILL.md
-&#9474;   &#9492;&#9472;&#9472; develop-log.md            &larr; single flattened curation feed
 &#9500;&#9472;&#9472; explore-prototype/           &larr; sibling skill (Puppeteer UX exploration)
 &#9500;&#9472;&#9472; hooks/                       &larr; runtime instrumentation
 &#9474;   &#9500;&#9472;&#9472; resume-on-start.sh        &larr; SessionStart: surface active workspaces
@@ -3696,7 +3689,7 @@ flowchart LR
 &#9492;&#9472;&#9472; &lt;project&gt;/
     &#9500;&#9472;&#9472; pipeline.md                &larr; state contract
     &#9500;&#9472;&#9472; seed.md                    &larr; the user's input
-    &#9500;&#9472;&#9472; repo-context.md            &larr; seed-relevant slice from Spec
+    &#9500;&#9472;&#9472; repo-context.md            &larr; optional hand-curated input (user-maintained)
     &#9500;&#9472;&#9472; spec.md, decisions.md      &larr; Spec output
     &#9500;&#9472;&#9472; design.md                  &larr; Design output
     &#9500;&#9472;&#9472; plan.md, tasks/T-NNN.md    &larr; Plan output
@@ -3704,7 +3697,6 @@ flowchart LR
     &#9500;&#9472;&#9472; test-report.md, smoke-report.md
     &#9500;&#9472;&#9472; review.md, review-verdict.json
     &#9500;&#9472;&#9472; feedback.md                &larr; Review-emitted per-project learnings
-    &#9500;&#9472;&#9472; develop-log.md             &larr; project-local learning entries (mirrored globally)
     &#9500;&#9472;&#9472; quality-review.md          &larr; present only if QC ran
     &#9500;&#9472;&#9472; artifacts.json             &larr; refreshed by hook on every Write/Edit
     &#9492;&#9472;&#9472; superseded/&lt;timestamp&gt;/   &larr; go-back artifacts
@@ -3805,8 +3797,8 @@ flowchart TD
         <aside class="callout">
           <p><strong>Why this phase exists.</strong> A vague idea cannot be designed. Spec asks the branching questions that would otherwise be guessed later, captures the answers, and distills them into user stories with concrete EARS-format acceptance criteria. Without it, every downstream phase invents its own version of what you wanted.</p>
         </aside>
-        <p><strong>Reads:</strong> <code>seed.md</code>, <code>decisions.md</code>, repo digest. <strong>Methods:</strong> <code>grilling.md</code>, <code>categories.md</code>, <code>stories.md</code>.</p>
-        <p><strong>Writes:</strong> <code>spec.md</code>, <code>decisions.md</code>, <code>repo-context.md</code>.</p>
+        <p><strong>Reads:</strong> <code>seed.md</code>, <code>decisions.md</code>, <code>repo-context.md</code> (optional, user-maintained &mdash; hand-curated input, never written by any phase), repo digest. <strong>Methods:</strong> <code>grilling.md</code>, <code>categories.md</code>, <code>stories.md</code>.</p>
+        <p><strong>Writes:</strong> <code>spec.md</code>, <code>decisions.md</code>.</p>
 <pre class="mermaid">
 flowchart TD
     seed[Read seed + decisions] --&gt; repo[Repo pre-flight<br/>(first dispatch only)]
@@ -3901,7 +3893,7 @@ flowchart TD
           <p><strong>Why this phase exists.</strong> The agent that wrote the code is the worst auditor of it. Review starts fresh, with no memory of how Build went, and checks the result against intent, design, plan, evidence, code quality, principle compliance, safety, user feedback, and process learning. Each finding names the owner phase that should fix it.</p>
         </aside>
         <p><strong>Reads:</strong> everything (<code>spec.md</code>, <code>design.md</code>, <code>plan.md</code>, <code>board.md</code>, <code>test-report.md</code>, <code>smoke-report.md</code>, <code>tasks/T-*.done.md</code>, <code>principles.md</code>, the working-tree diff).</p>
-        <p>Emits finding-by-finding narrative (<code>review.md</code>) plus a machine-readable verdict (<code>review-verdict.json</code> &mdash; <code>verdict</code> is <code>FAIL</code> iff <code>blockers &gt; 0</code>). Counts in <code>review-verdict.json</code> must equal the <code>blockers</code>/<code>major</code>/<code>minor</code> in the RETURN block and the count of <code>## Note</code> findings in <code>review.md</code>. Also writes <code>feedback.md</code> &mdash; per-project learnings retained as project-scoped memory under <code>.loom/&lt;project&gt;/</code>.</p>
+        <p>Emits finding-by-finding narrative (<code>review.md</code>) plus a machine-readable verdict (<code>review-verdict.json</code> &mdash; <code>verdict</code> is <code>FAIL</code> iff <code>blockers &gt; 0</code>). Counts in <code>review-verdict.json</code> must equal the <code>blockers</code>/<code>major</code>/<code>minor</code> in the RETURN block and the count of <code>## Note</code> findings in <code>review.md</code>. <code>review.md</code> also carries a <code>## Tune proposals</code> section &mdash; at most 3 rule candidates per run, each with scope, target store, and a readable evidence path &mdash; that the orchestrator surfaces at the Review gate (see <a href="#section-14">&sect;14</a>). Also writes <code>feedback.md</code> &mdash; per-project learnings retained as project-scoped memory under <code>.loom/&lt;project&gt;/</code>.</p>
         <p>Review has no QC subagent &mdash; Review is itself the project-level QC.</p>
       </section>
     </section>
@@ -4054,41 +4046,13 @@ flowchart TD
     </section>
 
     <section id="section-14">
-      <h2>14. Learning loop &mdash; <code>/weave</code> &harr; <code>/tune</code></h2>
-      <p><code>/tune</code> is the curator. <code>/weave</code> follows its contract: write entries to the shared develop-log in the shape <code>/tune</code> expects.</p>
-<pre class="mermaid">
-sequenceDiagram
-    actor U as User
-    participant W as /weave phase agents
-    participant DL as ~/.claude/skills/develop-log.md
-    participant T as /tune review
-    W-&gt;&gt;DL: append entries (Spec/Design/Plan/Build/Review)
-    U-&gt;&gt;T: /tune review (periodic)
-    T-&gt;&gt;DL: read unapplied entries
-    T-&gt;&gt;T: group by Skill body line, identify 2+ occurrence patterns
-    T-&gt;&gt;U: AskUserQuestion: approve proposed SKILL.md / types/&lt;type&gt;.md changes
-    T-&gt;&gt;DL: mark approved entries [APPLIED]; prune old applied entries
-</pre>
-      <p>The develop-log is a single file: <code>~/.claude/skills/develop-log.md</code> (symlink to <code>orchestrator/develop-log.md</code>). Every <code>/weave</code> phase agent appends each entry exactly once. Entry headers use the forge category shape:</p>
-      <table>
-        <thead><tr><th>Producer</th><th>Header</th></tr></thead>
-        <tbody>
-          <tr><td>Spec / Design / Plan phase agent</td><td><code>## [YYYY-MM-DD] &mdash; &lt;project&gt; &mdash; Phase: &lt;phase&gt;</code></td></tr>
-          <tr><td>Build task step</td><td><code>## [YYYY-MM-DD] &mdash; &lt;project&gt; &mdash; Task: &lt;task-number&gt;</code></td></tr>
-          <tr><td>Build smoke / mutation step</td><td><code>## [YYYY-MM-DD] &mdash; &lt;project&gt; &mdash; Phase: build</code></td></tr>
-          <tr><td>Review process notes</td><td><code>## [YYYY-MM-DD] &mdash; &lt;project&gt; &mdash; Phase: review</code></td></tr>
-          <tr><td><code>/tune &lt;text&gt;</code></td><td><code>## [YYYY-MM-DD] &mdash; &lt;project&gt; &mdash; Feedback</code></td></tr>
-          <tr><td><code>/tune insights</code></td><td><code>## [YYYY-MM-DD] &mdash; (audit-recovered) &mdash; &lt;finding&gt;</code></td></tr>
-        </tbody>
-      </table>
-      <p>Every entry body carries a <code>**Skill:**</code> line (<code>weave</code> / <code>user-feedback</code> / <code>tune-insights</code> / <code>cross-skill</code>) &mdash; <code>/tune review</code> groups entries by that body line at read time.</p>
-      <p><code>/tune review</code> is the <strong>only</strong> path to <code>SKILL.md</code> or <code>types/*.md</code> changes. Its read targets are exactly three: <code>~/.claude/skills/weave/SKILL.md</code>, <code>~/.claude/skills/tune/SKILL.md</code>, and every file under <code>~/.claude/skills/types/</code>. Project sessions never edit those directly. <code>feedback.md</code> (Review-emitted) is project-scoped memory under <code>.loom/&lt;project&gt;/</code> and is NOT part of the curation feed; entries that should drive SKILL.md changes go to the shared develop-log.</p>
-      <p>The installer creates the develop-log symlink alongside the skill symlinks; see &sect; 18 for the sweep+auto-discover install model.</p>
+      <h2>14. Learning loop &mdash; rule stores</h2>
+      <p><strong>Two stores, one gate.</strong> Review distills rule candidates into <code>review.md ## Tune proposals</code>; the orchestrator surfaces each proposal at the Review gate and on approval appends the entry to its store: repo-scoped rules to <code>&lt;repo&gt;/CLAUDE.md ## Loom rules</code> (repo path = the <code>Repo</code> field in <code>pipeline.md</code>), overall rules to <code>weave/methods/principles.md ## Learned rules</code>. Both stores are append-only via that gate; retired entries and rejected proposals land in <code>weave/methods/rules-archive.md</code>.</p>
     </section>
 
     <section id="section-15">
       <h2>15. Types</h2>
-      <p><code>orchestrator/types/&lt;type&gt;.md</code> files capture domain-specific patterns. Read by <code>/weave</code> phases when the project's type hint matches. Curated only via <code>/tune review</code> &mdash; never edited mid-project.</p>
+      <p><code>orchestrator/types/&lt;type&gt;.md</code> files capture domain-specific patterns. Read by <code>/weave</code> phases when the project's type hint matches. Hand-maintained &mdash; never edited mid-project.</p>
       <p>Current files map domain &rarr; conventions (stack, monorepo layout, DB layer, deployment shape, security envelope) that the agents read as background context.</p>
     </section>
 
@@ -4129,7 +4093,7 @@ sequenceDiagram
 
     <section id="section-18">
       <h2>18. Setup &amp; install</h2>
-      <p><code>orchestrator/setup-loom.sh</code> is the installer. It auto-discovers every subdirectory of <code>orchestrator/</code> that contains a <code>SKILL.md</code> (plus the literal <code>types/</code> directory) and symlinks each into <code>~/.claude/skills/</code>; symlinks <code>~/.claude/skills/develop-log.md</code> to <code>orchestrator/develop-log.md</code>; symlinks <code>orchestrator/hooks/</code> into <code>~/.claude/loom-hooks/</code>; and merges the canonical hook entries inline (the JSON definition lives as a <code>LOOM_HOOKS_JSON</code> bash variable in the script itself, passed to <code>jq --argjson</code>) into <code>~/.claude/settings.json</code>.</p>
+      <p><code>orchestrator/setup-loom.sh</code> is the installer. It auto-discovers every subdirectory of <code>orchestrator/</code> that contains a <code>SKILL.md</code> (plus the literal <code>types/</code> directory) and symlinks each into <code>~/.claude/skills/</code>; symlinks <code>orchestrator/hooks/</code> into <code>~/.claude/loom-hooks/</code>; and merges the canonical hook entries inline (the JSON definition lives as a <code>LOOM_HOOKS_JSON</code> bash variable in the script itself, passed to <code>jq --argjson</code>) into <code>~/.claude/settings.json</code>.</p>
       <p><strong>Sweep-and-recreate:</strong> before linking, the installer walks <code>~/.claude/skills/</code> and removes any symlink whose target points inside the loom package's root directory. Symlinks pointing elsewhere (other packages, user customizations) survive. Then it recreates the canonical links. Re-runs converge on the same end state regardless of prior history &mdash; renamed or removed skills don't leave behind stale entries.</p>
       <p>The script self-validates: every hook command path must be executable before the installer exits with success.</p>
     </section>

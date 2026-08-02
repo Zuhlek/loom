@@ -16,11 +16,13 @@ I/O signature between `/weave` and the Review Audit Agent.
 | All phase artifacts | `.loom/<project>/{spec,design,plan,board,tests}.md` | yes | Read-only |
 | `test-report.md` | `.loom/<project>/test-report.md` | yes | Aggregated verification — canonical Build-evidence summary; the primary source the agent reads for test-evidence findings |
 | `smoke-report.md` | `.loom/<project>/smoke-report.md` | conditional | When Build ran smoke-test |
-| `tasks/T-*.done.md` | `.loom/<project>/tasks/T-NNN.done.md` | on-demand | Per-task done reports — open only when a finding references a specific task |
-| `tasks/T-*.test-log.txt` | `.loom/<project>/tasks/T-NNN.test-log.txt` | on-demand | Per-task test logs — open only when a finding references a specific task |
+| `tasks/T-*.done.md` | `.loom/<project>/tasks/T-NNN.done.md` | on-demand | Per-task done reports — open only when a finding references a specific task or the file is a tune proposal's evidence (open before proposing) |
+| `tasks/T-*.test-log.txt` | `.loom/<project>/tasks/T-NNN.test-log.txt` | on-demand | Per-task test logs — open only when a finding references a specific task or the file is a tune proposal's evidence (open before proposing) |
 | Repository diff | working tree | yes | Code under review |
 | `principles.md` | `methods/principles.md` (inlined into dispatch head) | yes | Engineering principles |
 | `type-guidance.md` | `.loom/<project>/type-guidance.md` | when typed | Domain guidance (materialized at project creation from the active `types/<type>.md`) |
+| Repo rule store | `<repo>/CLAUDE.md ## Loom rules`, `<repo>` = `pipeline.md.Repo` | when proposing | Read before writing tune proposals; missing `Repo` field or file ⇒ no repo store |
+| `rules-archive.md` | `methods/rules-archive.md` via the skill path (`~/.claude/skills/weave/methods/rules-archive.md`) | when proposing | Retired rules and gate-rejected proposals — read before proposing so none are re-proposed |
 
 ### State preconditions
 
@@ -71,6 +73,7 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 - Must list blockers and major issues or state none.
 - Must route unresolved work to an owner phase.
 - Follows the Finding Shape declared in `phase.md` (Severity, Evidence, Expected, Actual, Impact, Recommendation, Owner phase).
+- Carries a `## Tune proposals` section only when rule candidates exist: at most 3 proposals (entry + target store with reason + evidence path), the hygiene list, and both stores' entry counts (per `phase.md § Tune proposals`). Zero proposals ⇒ no section.
 
 #### `feedback.md`
 
@@ -93,11 +96,6 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 ```
 
 Counts are non-negative integers. `verdict` is `FAIL` whenever `blockers > 0`; otherwise `PASS`. Values must equal the counts in the RETURN block (`blockers`, `major`, `minor`, `note`) and the per-severity finding counts in `review.md`.
-
-#### Develop log (append-only, conditional)
-
-- Path: `~/.claude/skills/weave/../develop-log.md` on an installed setup (resolves through the `weave` symlink to `orchestrator/develop-log.md`).
-- At most 3 distilled process-learning entries per lifecycle run, each naming a candidate target (`phase-file: <path>` / `type-file: <type>` / `process`). A lesson states the insight itself, never a pointer. Consumed by the human-gated curation pass in `methods/develop-log-curation.md`; zero entries is valid.
 
 ## Throws
 

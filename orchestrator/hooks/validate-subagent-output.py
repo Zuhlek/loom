@@ -101,6 +101,24 @@ def artifact_paths(block_text: str) -> list[str]:
     return out
 
 
+def task_outcome_ids(block_text: str) -> set[str]:
+    """Extract the T-NNN ids named in the RETURN block's `task-outcomes`
+    array. Handles an inline flow list and a block-style list; the field
+    ends at the next column-0 `key:` line."""
+    lines = block_text.splitlines()
+    for idx, line in enumerate(lines):
+        m = re.match(r"^task-outcomes:\s*(.*)$", line)
+        if not m:
+            continue
+        chunk = [m.group(1)]
+        for follow in lines[idx + 1:]:
+            if re.match(r"^[A-Za-z][A-Za-z0-9_-]*:", follow):
+                break
+            chunk.append(follow)
+        return set(re.findall(r"\bT-\d+\b", "\n".join(chunk)))
+    return set()
+
+
 def find_active(start: Path) -> tuple[Path, str] | None:
     """Walk up from `start` looking for `.loom/.active`. Return
     `(workspace_root, project_name)` on first hit, else None. Mirrors the
@@ -141,6 +159,26 @@ def missing_artifacts(paths: list[str], workspace_root: Path, project: str) -> l
         if (project_dir / path).exists() or (workspace_root / path).exists():
             continue
         missing.append(path)
+    return missing
+
+
+def missing_rules_reports(project_dir: Path, task_ids: set[str]) -> list[str]:
+    """Return `tasks/T-NNN.done.md` names that belong to a task in `task_ids`
+    but lack a `rules:` line (mandatory field per
+    phases/build/methods/task.md § Done report schema). Only tasks named in
+    this session's `task-outcomes` are checked, so done reports that predate
+    the field (earlier sessions) never block a run."""
+    missing: list[str] = []
+    for task_id in sorted(task_ids):
+        path = project_dir / "tasks" / f"{task_id}.done.md"
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if not re.search(r"(?m)^rules:", text):
+            missing.append(f"tasks/{path.name}")
     return missing
 
 
@@ -385,6 +423,26 @@ def main() -> int:
                                 "fails deterministic validation: "
                                 + "; ".join(shown) + suffix
                             )
+
+        # Done-report field check on Build returns: reports written this
+        # session (tasks named in `task-outcomes`) must carry the mandatory
+        # `rules:` field. Reports from earlier sessions are not checked.
+        if phase == "build" and status in ("complete", "failed"):
+            cwd = payload.get("cwd")
+            if isinstance(cwd, str) and cwd:
+                active = find_active(Path(cwd))
+                if active:
+                    workspace_root, project = active
+                    missing_rules = missing_rules_reports(
+                        workspace_root / ".loom" / project,
+                        task_outcome_ids(last_return_block_span(text)),
+                    )
+                    if missing_rules:
+                        return block(
+                            f"build RETURN reports {status} but these done "
+                            "reports lack the mandatory rules: field: "
+                            + ", ".join(missing_rules)
+                        )
 
     return 0
 

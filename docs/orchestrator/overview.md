@@ -16,9 +16,13 @@ State file: `.loom/<project>/pipeline.md`
 | Design | Design Structuring Agent | `design.md`, optional `mockup/` |
 | Plan | Work Graph Agent | `plan.md` (decision record), `board.md`, `tests.md`, `tasks/T-*.md` |
 | Build | Build Phase Agent | implementation, task logs, done reports, `test-report.md` |
-| Review | Review Audit Agent | `review.md`, `review-verdict.json` (`feedback.md` only when the gate relays explicit user feedback) |
+| Review | Review Audit Agent | `review.md` (findings + `## Tune proposals`), `review-verdict.json` (`feedback.md` only when the gate relays explicit user feedback) |
 
 After every phase the orchestrator surfaces a rerun-or-continue decision to the user. Reruns are never automatic. Four of the five phases (Spec, Design, Plan, Build) additionally offer an opt-in Quality Check subagent that analyses artifacts for holes, blind spots, and contradictions to help the user decide whether a rerun is worth the token burn. Review is itself the project-level quality check and has no separate Quality Check subagent.
+
+## Rule stores
+
+Two stores, one gate. Repo-scoped rules live in `<repo>/CLAUDE.md ## Loom rules` (repo path = the `Repo` field in `pipeline.md`); overall rules live in `orchestrator/weave/methods/principles.md ## Learned rules`. Review distills rule candidates into `review.md ## Tune proposals`; the orchestrator appends approved entries after per-proposal approval at the Review gate — both stores are append-only, never rewritten. Retired entries and rejected proposals land in `orchestrator/weave/methods/rules-archive.md`.
 
 ## Dispatch hierarchy
 
@@ -40,7 +44,7 @@ Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatche
 | `orchestrator/hooks/` | Claude Code hooks |
 | `orchestrator/types/` | Domain guidance keyed by Type hint; the active type is materialized into each workspace as `.loom/<project>/type-guidance.md` at project creation |
 | `orchestrator/templates/` | Project templates (seed) |
-| `orchestrator/weave/methods/principles.md` | Engineering principles P1–P7 (inlined into Build/Review dispatch heads) |
+| `orchestrator/weave/methods/principles.md` | Engineering principles P1–P7 plus the append-only `## Learned rules` store (inlined into Build/Review dispatch heads) |
 
 ## Phase folder convention
 

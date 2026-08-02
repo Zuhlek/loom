@@ -81,7 +81,7 @@ Loom is five phases — **Spec → Design → Plan → Build → Review** — ea
    └─► Agent: Review phase                              [depth-1 subagent]
          reads:  spec.md, design.md, plan.md, board.md, repository
          inlined: principles.md (arrives in dispatch head)
-         writes: review.md, review-verdict.json
+         writes: review.md (findings + ## Tune proposals), review-verdict.json
 ```
 
 Phase agents may optionally be followed by their quality-check agent when the user opts in at the gate. Quality-check agents are dispatched the same way (depth-1 from `/weave`) and produce `quality-review.md` scoped to the just-completed phase.
@@ -151,6 +151,8 @@ The Build phase's `methods/` files are procedure references, not dispatch templa
 ## 5. State and observability
 
 `pipeline.md` is the canonical workspace state, updated by `/weave` between phases. Phase agents write their own artifacts under `.loom/<project>/`.
+
+Durable rules live in two append-only stores, both fed through the Review gate: repo-scoped rules in `<repo>/CLAUDE.md ## Loom rules` (repo path = the `Repo` field in `pipeline.md`) and overall rules in `weave/methods/principles.md ## Learned rules`. Review writes proposals into `review.md ## Tune proposals`; the orchestrator appends approved entries and never removes or rewords any — retired entries and rejected proposals land in `weave/methods/rules-archive.md`.
 
 Subagent transcripts land at `~/.claude/projects/<encoded-cwd>/<orchestrator-session>/subagents/agent-<uuid>.jsonl` with a sidecar `agent-<uuid>.meta.json` containing the `agentType`. The post-tool-use hook `orchestrator/lib/telemetry/tag-subagent-phase.py` writes a `.phase` sidecar tagging each subagent transcript with its lifecycle phase.
 

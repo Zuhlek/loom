@@ -167,7 +167,7 @@ Optional and deletable: the eval substrate under `orchestrator/lib/telemetry/` h
 
 Reruns are user-driven, never automatic — with one bounded exception for all-mechanical findings (below). The gate is a single `AskUserQuestion` with **up to 4 options** per phase. The `Refine` option preserves user-confirmed content and applies any pending Quality Check findings rather than re-deriving from scratch.
 
-**All-mechanical exception:** when a phase's pending findings (`quality-review.md`, or `review.md` at the Review gate) are ALL mechanical — every finding's recommendation states "apply, no decision needed" per `methods/principles.md § Review checklist` findings triage — the orchestrator dispatches one Targeted refine automatically instead of asking (for Review-gate findings: a Targeted Build refine dispatched with `Findings source: review.md`, followed by one Review re-dispatch). It then informs the user at the gate about what was applied. This exception never chains: if anything remains after that single pass, the gate is asked normally.
+**All-mechanical exception:** when a phase's pending findings (`quality-review.md`, or `review.md` at the Review gate) are ALL mechanical — every finding's recommendation states "apply, no decision needed" per `methods/principles.md § Review checklist` findings triage — the orchestrator dispatches one Targeted refine automatically instead of asking (for Review-gate findings: a Targeted Build refine dispatched with `Findings source: review.md`, followed by one Review re-dispatch). It then informs the user at the gate about what was applied. This exception never chains: if anything remains after that single pass, the gate is asked normally. It does NOT apply to tune proposals nor to findings originating from tune observations (those are never mechanical, per `methods/principles.md § Review checklist`) — both always surface at the gate.
 
 The gate summary leads with the phase's purpose — the first sentence of `phases/<phase>/phase.md` (e.g. "Clarify the seed into specified intent." for Spec). Gate summaries and continue-labels stay terse.
 
@@ -182,6 +182,18 @@ The gate summary leads with the phase's purpose — the first sentence of `phase
 | Review | Continue → mark lifecycle complete / Fix findings (when eligible, see below) / Refine / Go back to Build |
 
 `Continue` labels are phase-aware (the table above). Free-text user input is never auto-interpreted as `Continue` — the user must pick the option. The Plan gate's label spells out `modifies repository` so the user cannot continue into Build without seeing the consequence.
+
+### Tune proposals (Review gate)
+
+When `review.md` carries a `## Tune proposals` section, the gate summary names each proposal in ONE line and reports the hygiene list plus both stores' current entry counts. The Review gate's own options stay exactly as the table above — tune adds no option there, and there is no delete verb at the gate: archiving store entries is a human hand-edit, never an orchestrator command.
+
+When ≥ 1 proposal exists, make ONE `AskUserQuestion` call in the same step as the gate: one question per proposal (max 3), three options each — `Approve` / `Change target store or scope` / `Reject`. Then act per answer; the orchestrator's only write verb on the stores and the archive is append — it never removes, replaces, or rewords anything there:
+
+- **Approve** — append the entry to its target store. Repo store: `<repo>/CLAUDE.md ## Loom rules`, `<repo>` = the `Repo` field in `pipeline.md`; a missing field or file is reported as "no target" at the gate and the proposal stays in `review.md`. Overall store: `methods/principles.md ## Learned rules` — state explicitly that this change lands in the loom repo, not the work repo.
+- **Change target store or scope** — apply the user's stated store/scope to the entry, then append as above.
+- **Reject** — append the proposal to `methods/rules-archive.md` under its origin section.
+
+Before appending, check the entry form (three lines, scope present); a malformed entry is not appended but rejected back to the gate report.
 
 ### When the user picks `Fix findings` (Review gate)
 

@@ -34,6 +34,20 @@ summary: test run
 EOF
 }
 
+# mk_build_transcript <path> <status> <artifacts-inline> <task-outcomes-inline>
+mk_build_transcript() {
+    cat > "$1" <<EOF
+some preamble output
+
+phase: build
+status: $2
+artifacts: [$3]
+summary: test run
+task-outcomes: [$4]
+smoke: {ran: false}
+EOF
+}
+
 expect_block() {
     # $1 = hook output, $2 = reason substring, $3 = case label
     printf '%s' "$1" | grep -q '"decision": "block"' || fail "$3: expected a block, got: $1"
@@ -166,18 +180,18 @@ expect_pass "$(run_hook "$WS2" "$T")" "blocked plan return skips graph validatio
 T="$TMP/t-complete.txt"; mk_transcript "$T" plan complete "[plan.md]"
 
 WS3="$TMP/ws3"; mk_plan_workspace "$WS3"
-sed -i 's/satisfies-stories: \[US-001\]/satisfies-stories: []/' "$WS3/.loom/demo/tasks/T-001.md"
+sed -i.bak 's/satisfies-stories: \[US-001\]/satisfies-stories: []/' "$WS3/.loom/demo/tasks/T-001.md"
 out="$(run_hook "$WS3" "$T")"
 expect_block "$out" "satisfies-stories must list at least one" "empty satisfies-stories blocks"
 printf '%s' "$out" | grep -qF "US-001" || fail "story coverage: uncovered story not named"
 pass "uncovered active story blocks"
 
 WS4="$TMP/ws4"; mk_plan_workspace "$WS4"
-sed -i 's/blocked-by: \[\]/blocked-by: [T-099]/' "$WS4/.loom/demo/tasks/T-001.md"
+sed -i.bak 's/blocked-by: \[\]/blocked-by: [T-099]/' "$WS4/.loom/demo/tasks/T-001.md"
 expect_block "$(run_hook "$WS4" "$T")" "references missing task T-099" "dangling blocked-by blocks"
 
 WS5="$TMP/ws5"; mk_plan_workspace "$WS5"
-sed -i 's/blocked-by: \[\]/blocked-by: [T-002]/' "$WS5/.loom/demo/tasks/T-001.md"
+sed -i.bak 's/blocked-by: \[\]/blocked-by: [T-002]/' "$WS5/.loom/demo/tasks/T-001.md"
 cat > "$WS5/.loom/demo/tasks/T-002.md" <<'EOF'
 ---
 id: T-002
@@ -192,27 +206,27 @@ files-likely-touched: [src/thing.ts]
 EOF
 cat >> "$WS5/.loom/demo/board.md" <<'EOF'
 EOF
-sed -i 's/- T-001 Do the thing — touches: route, service/- T-001 Do the thing — touches: route, service\n- T-002 Second thing (blocked by T-001) — touches: service/' "$WS5/.loom/demo/board.md"
+sed -i.bak 's/- T-001 Do the thing — touches: route, service/- T-001 Do the thing — touches: route, service\n- T-002 Second thing (blocked by T-001) — touches: service/' "$WS5/.loom/demo/board.md"
 expect_block "$(run_hook "$WS5" "$T")" "contains a cycle" "blocked-by cycle blocks"
 
 WS6="$TMP/ws6"; mk_plan_workspace "$WS6"
-sed -i '/^type: AFK$/d' "$WS6/.loom/demo/tasks/T-001.md"
+sed -i.bak '/^type: AFK$/d' "$WS6/.loom/demo/tasks/T-001.md"
 expect_block "$(run_hook "$WS6" "$T")" "missing frontmatter fields" "missing frontmatter field blocks"
 
 WS7="$TMP/ws7"; mk_plan_workspace "$WS7"
-sed -i 's/^## Plan decisions$/## Decisions/' "$WS7/.loom/demo/plan.md"
+sed -i.bak 's/^## Plan decisions$/## Decisions/' "$WS7/.loom/demo/plan.md"
 expect_block "$(run_hook "$WS7" "$T")" "missing required section '## Plan decisions'" "missing plan.md section blocks"
 
 WS8="$TMP/ws8"; mk_plan_workspace "$WS8"
-sed -i 's/^## Review$/## Waiting/' "$WS8/.loom/demo/board.md"
+sed -i.bak 's/^## Review$/## Waiting/' "$WS8/.loom/demo/board.md"
 expect_block "$(run_hook "$WS8" "$T")" "board.md columns" "wrong board columns block"
 
 WS9="$TMP/ws9"; mk_plan_workspace "$WS9"
-sed -i 's/^\*\*Mutation Testing:\*\* no$/Mutation: maybe/' "$WS9/.loom/demo/tests.md"
+sed -i.bak 's/^\*\*Mutation Testing:\*\* no$/Mutation: maybe/' "$WS9/.loom/demo/tests.md"
 expect_block "$(run_hook "$WS9" "$T")" "Mutation Testing" "missing mutation declaration blocks"
 
 WS10="$TMP/ws10"; mk_plan_workspace "$WS10"
-sed -i 's/^- T-001 .*$/- (none)/' "$WS10/.loom/demo/board.md"
+sed -i.bak 's/^- T-001 .*$/- (none)/' "$WS10/.loom/demo/board.md"
 expect_block "$(run_hook "$WS10" "$T")" "appears on 0 board cards" "task missing from board blocks"
 
 # --------------------------------------------------------------------------- #
@@ -222,5 +236,52 @@ WS11="$TMP/ws11"; mk_plan_workspace "$WS11"
 rm "$WS11/.loom/demo/tasks/T-001.md"
 T="$TMP/t-spec.txt"; mk_transcript "$T" spec complete "[spec.md]"
 expect_pass "$(run_hook "$WS11" "$T")" "spec return does not run plan validation"
+
+# --------------------------------------------------------------------------- #
+# 6. build done reports must carry the rules: field
+# --------------------------------------------------------------------------- #
+WS12="$TMP/ws12"; mk_plan_workspace "$WS12"
+cat > "$WS12/.loom/demo/tasks/T-001.done.md" <<'EOF'
+task: T-001
+status: green
+attempts: 1
+duration-seconds: 5
+files-changed: [src/thing.ts]
+rules: none
+out-of-scope-edits: []
+EOF
+T="$TMP/t-build-rules.txt"
+mk_build_transcript "$T" complete "tasks/T-001.done.md" "{id: T-001, status: green}"
+expect_pass "$(run_hook "$WS12" "$T")" "build done report with rules: passes"
+
+WS13="$TMP/ws13"; mk_plan_workspace "$WS13"
+cat > "$WS13/.loom/demo/tasks/T-001.done.md" <<'EOF'
+task: T-001
+status: green
+attempts: 1
+EOF
+T="$TMP/t-build-norules.txt"
+mk_build_transcript "$T" complete "tasks/T-001.done.md" "{id: T-001, status: green}"
+expect_block "$(run_hook "$WS13" "$T")" "lack the mandatory rules: field" "build done report without rules: blocks"
+
+T="$TMP/t-build-failed.txt"
+mk_build_transcript "$T" failed "tasks/T-001.done.md" "{id: T-001, status: failed}"
+expect_block "$(run_hook "$WS13" "$T")" "build RETURN reports failed" "failed build return checks rules: too"
+
+WS14="$TMP/ws14"; mk_plan_workspace "$WS14"
+cat > "$WS14/.loom/demo/tasks/T-001.done.md" <<'EOF'
+task: T-001
+status: green
+attempts: 1
+EOF
+cat > "$WS14/.loom/demo/tasks/T-002.done.md" <<'EOF'
+task: T-002
+status: green
+attempts: 1
+rules: [aper-interfaces/** WHEN the full test suite runs]
+EOF
+T="$TMP/t-build-legacy.txt"
+mk_build_transcript "$T" complete "tasks/T-002.done.md" "{id: T-002, status: green}"
+expect_pass "$(run_hook "$WS14" "$T")" "done report outside task-outcomes is not checked"
 
 echo "all cases passed"

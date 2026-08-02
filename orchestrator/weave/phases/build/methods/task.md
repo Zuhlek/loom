@@ -11,6 +11,7 @@ Apply each principle in the inlined `methods/principles.md` (P1–P7), using its
 Copy this into your working notes for each task and tick as you go:
 
 ```
+- [ ] RULES matched (both stores' scope fields vs this task's files)
 - [ ] RED logged (a runtime assertion failure, not a compile error)
 - [ ] IMPLEMENT (smallest scoped diff; only files in files-likely-touched)
 - [ ] GREEN logged (test now passes)
@@ -23,7 +24,11 @@ Copy this into your working notes for each task and tick as you go:
 
 For task `T-NNN`:
 
+0. **Rules.** Read `<repo>/CLAUDE.md ## Loom rules` explicitly — resolve `<repo>` via `orchestrator/weave/lib/pipeline-parser.py field .loom/<project>/pipeline.md Repo`; an empty field, missing file, or missing section means zero repo rules. Do not rely on platform loading: the session cwd is a collection directory, so the repo's `CLAUDE.md` is not attached deterministically — only the explicit read counts. Match both stores' scope fields against the files this task touches (`files-likely-touched` plus any file actually edited): repo-store path globs match task file paths relative to the repo root; overall-store scopes (`## Learned rules`, inlined with `principles.md`) match `[*]` always, `[type: X]` against the `Type hint` field in `pipeline.md`, `[repo: a, b]` against the target repo's directory name. Matching entries go into the done report's `rules:` field.
+
 1. **Red phase.** Create stubs sufficient for tests to compile. Write behaviour tests from the task's test sketch (`tasks/T-NNN.md`). Run the tests and confirm every new test fails with a **runtime assertion error** — not a compile error, not a missing-import error. Append the red output to `tasks/T-NNN.test-log.txt` (pipe verbose runners through `tail -100`).
+
+   A `[fix]` task that pins a rule the current code already honours — adding a test case, lint line, or constraint for behaviour that is already correct — has no natural red: the check is green at writing. Its red is a **documented temporary revert**: reintroduce the rule violation, run the new check, append the failure to the test log, revert the violation, and record the revert–red–restore sequence in the done report.
 
 2. **Implement.** Make the smallest scoped change that satisfies the task acceptance criteria. Match prior art per `principles.md` P2. Do not touch files outside the declared scope without recording the reason in the done report. When the implementation takes a deliberate simplification with a known ceiling, leave a one-line `loom:shortcut <ceiling>; <trigger>` comment at the site, per the convention in `methods/principles.md`.
 
@@ -53,6 +58,7 @@ The next Build session reads it at step 2a of the work loop and resumes from the
 - **Red is runtime assertion failure**, not compile failure. A test that fails because the symbol does not exist is not red — stub the symbol first.
 - **Do not weaken or delete tests to pass.** Fix the implementation. If the test contract itself is wrong, record `status: hitl-block` in the done report and surface the contradiction; do not silently edit the test.
 - **Do not touch files outside the task's declared scope** without recording the reason in the done report under `out-of-scope-edits:`.
+- **A rule-pinning `[fix]` task that ends `failed` or `hitl-block` must not lose the rule.** Record its WHEN/THEN sentence — checkably phrased, with the missing check means named — in the done report so the re-dispatched Review proposes it as a normal tune proposal.
 - **Three-attempt cap is hard.** After the third failed green attempt, write `status: failed` and stop. The next session can pick up where this one left off.
 - **Tail-sized output.** Pipe verbose test runners through tail so the log stays consumable:
 
@@ -73,9 +79,12 @@ status: green | failed | hitl-block
 attempts: 1
 duration-seconds: 0
 files-changed: []
+rules: none                # MANDATORY: entries matched in step 0 (scope + WHEN clause each), or the literal none
 out-of-scope-edits: []     # path + one-line reason per edit
 notes: <optional one-paragraph remarks>
 ```
+
+`rules:` is never omitted — a hook blocks any Build return whose session-written done reports lack it.
 
 `status` semantics:
 

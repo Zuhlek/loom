@@ -24,3 +24,14 @@ Create `.loom/<project>/` from a seed.
 5. Run `orchestrator/weave/lib/pipeline-parser.py init <parent_dir> <project> [--seed ...] [--ticket ...] [--type-hint ...]`. The CLI takes the **parent directory** (typically the project root or the active workspace parent); it constructs `<parent_dir>/.loom/<project>/` itself and writes `pipeline.md` and `seed.md` into it. `Lifecycle state` is initialized to `active`. The CLI errors if `seed.md` already exists at the target — handle that as a recovery prompt for the user.
 6. Initial state (set by `init`): current phase `spec`, status `Pending`, lifecycle state `active`, resume point `spec:foundation`.
 7. Type guidance (set by `init`): when the type hint names a known `types/<type>.md`, the CLI also materializes it into the workspace as `.loom/<project>/type-guidance.md` so phase agents read domain guidance from their inherited cwd rather than a cross-tree skill path. Unknown or empty type hints produce no file — the `type-guidance.md` input is conditional, read only when present.
+8. **Target repo.** Determine the target repo from the file paths the (now fully inlined) seed references, and announce it to the user. Resolve its root with `git -C <path> rev-parse --show-toplevel` — the weave session cwd is a collection directory that contains `.loom/` but no `.git`, so a bare `git rev-parse` fails there, and Loom's own `.loom/`-based root walk stops at that same collection directory; use neither. Record the resolved root as the `Repo` field: `orchestrator/weave/lib/pipeline-parser.py update <parent_dir>/.loom/<project>/pipeline.md Repo <root>`. If no git repo resolves, skip the rest of this step — the run has no repo store, and the Review gate reports "no target". Otherwise, if `<root>/CLAUDE.md` lacks a `## Loom rules` section, append it (creating the file if absent) — once, announced to the user:
+
+   ```
+   ## Loom rules
+
+   <!-- Appended by Loom after human approval at the review gate. Entry form:
+   - [<scope>] WHEN <trigger condition>
+     THEN <rule, phrased as a prohibition where possible>.
+     Reason: <one line>.
+   Scope is a path glob relative to the repo root, e.g. [*] or [src/**]. -->
+   ```

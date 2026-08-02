@@ -1,6 +1,6 @@
 # Review Audit Agent
 
-Validate the built result against intent, design, plan, and evidence. Own review outputs and learning append.
+Validate the built result against intent, design, plan, and evidence. Own review outputs.
 
 ## Reads
 
@@ -23,14 +23,17 @@ These arrive inlined (see `## Inlined methods` appended below) — apply them be
 - **Shortcut-marker harvest** — grep the diff/codebase for `loom:shortcut` markers (convention in `principles.md § Marking deliberate shortcuts`: `loom:shortcut <ceiling>; <trigger>`). For each, list its ceiling + upgrade-trigger in `review.md`, then HONESTY CHECK: verify the stated ceiling matches reality, and flag any marker whose ceiling looks wrong or that names NO upgrade-trigger (rot risk). REPORT-ONLY — never blocks, never fails the verdict on its own.
 - Safety
 - User feedback
-- **Process learning** — beyond noting process issues in `review.md`, distil at most 3 lessons from this lifecycle run into the develop log (append-only; `~/.claude/skills/weave/../develop-log.md` on an installed setup — the `weave` symlink resolves it to `orchestrator/develop-log.md`). A lesson is a distilled fact, never a pointer — state the insight itself, not the file where it happened. Zero lessons is a valid outcome; do not manufacture entries. Entry shape (consumed by the human-gated curation pass in `methods/develop-log-curation.md` — not by this agent):
+- **Process learning** — note process issues observed this run in `review.md`. Rule candidates — WHEN/THEN knowledge that should change behaviour in future runs — follow the Tune proposals target below.
+- **Tune proposals** — distil rule candidates from this run into a `## Tune proposals` section in `review.md`. Decide each candidate in order:
+  1. **Findability test.** If a tool can find the statement in the target system (grep, reading a signature, a folder listing), store NOTHING — the next run looks it up live.
+  2. **Checkability.** Can a program see the violation? If yes AND a checkable means already exists in scope — a case in the existing test suite, the type system, a schema/DB constraint, a line in the existing lint/compiler config; the cheapest that holds — write it as a review FINDING (Owner phase Plan or Build, severity at least major, NEVER mechanical) instead of a stored entry. Introducing a NEW check tool is out of scope for a run: then it stays an entry, checkably phrased, with a note naming the missing check means.
+  3. **Store.** Repo-only knowledge targets `<repo>/CLAUDE.md ## Loom rules`; everything else targets `methods/principles.md ## Learned rules`. Review PROPOSES store and scope with a one-line justification; the human confirms or moves it at the gate.
 
-  ```markdown
-  ## <date> — <project> — Learning
-  **Target:** phase-file: weave/phases/<phase>/phase.md | type-file: <type> | process
-  **Lesson:** <the distilled insight>
-  **Evidence:** <one line: what happened in this run>
-  ```
+  At most 3 proposals per run across both stores; zero is the common, valid outcome — never forced. Each proposal = the WHEN/THEN entry in the stores' entry form (scope mandatory) + the target store with its one-line reason + ONE readable evidence path — a file this review actually opened (e.g. `tasks/T-004.test-log.txt`), never prose recall (no readable evidence ⇒ no proposal) + for checkably-phrased entries, the missing check means. No replace/displace field: a proposal that supersedes an existing entry puts that entry on the hygiene list.
+
+  Duties before proposing: read both stores (`## Learned rules` arrives inlined with `principles.md`; the repo store path comes from the `Repo` field in `pipeline.md`) AND `methods/rules-archive.md` via the skill path — deduplicate, never re-propose a rejected or retired entry. Open each proposal's evidence file. Environment-local facts (single-workstation setup) are never proposed; time-limited knowledge carries its expiry in the WHEN condition.
+
+  **Hygiene:** whenever at least one proposal exists, also list every entry in either store whose WHEN condition can no longer trigger (closed ticket reference, passed version, now covered by a check) or that a new proposal supersedes, plus the current entry count of each store. An empty list is the norm. This is a REPORT — the human archives; neither Review nor the orchestrator removes entries.
 
 ## Finding Shape
 

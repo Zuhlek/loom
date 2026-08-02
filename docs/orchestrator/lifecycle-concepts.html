@@ -168,7 +168,7 @@
       <a data-page="least-auth" href="#least-auth"><span class="n">9</span>Review can't author</a>
       <a data-page="quality" href="#quality"><span class="n">10</span>Opt-in Quality Check</a>
       <a data-page="digest" href="#digest"><span class="n">11</span>Repo pre-flight digest</a>
-      <a data-page="tune" href="#tune"><span class="n">12</span>The /tune learning loop</a>
+      <a data-page="tune" href="#tune"><span class="n">12</span>The tune learning loop</a>
     </nav>
   </aside>
 
@@ -1109,8 +1109,8 @@ Users can attach images to messages.
 
   tune: {
     eyebrow: "Cross-cutting · 12 of 12",
-    title: "The /tune learning loop — preventive process learning",
-    lede: "/tune curates Review findings and user corrections into edits to the phase prompts themselves. Loom learns from each project by updating its own behaviour rules — not by training, but by curated prompt-engineering against a structured audit trail.",
+    title: "The tune learning loop — preventive process learning",
+    lede: "Review distills rule candidates into tune proposals; the human approves each at the Review gate, and the entry lands in an append-only rule store. Loom learns from each project by updating its own behaviour rules — not by training, but by human-gated rule capture against a structured audit trail.",
     html: `
       <div class="card">
         <h3>The picture</h3>
@@ -1118,17 +1118,14 @@ Users can attach images to messages.
           <div class="flow-row">
             <div class="stack">
               <div class="node bad">Review findings<small>structured severity + owner</small></div>
-              <div class="node warn">User corrections<small>memory: feedback_*.md</small></div>
+              <div class="node warn">Run observations<small>process issues noted in review.md</small></div>
             </div>
             <span class="arrow">›</span>
-            <div class="node accent">/tune curation</div>
+            <div class="node accent">Tune proposals<small>approved at the Review gate</small></div>
             <span class="arrow">›</span>
             <div class="stack">
-              <div class="node good">Spec prompt</div>
-              <div class="node good">Design prompt</div>
-              <div class="node good">Plan prompt</div>
-              <div class="node good">Build prompt</div>
-              <div class="node good">Review prompt</div>
+              <div class="node good">CLAUDE.md ## Loom rules<small>repo-scoped</small></div>
+              <div class="node good">principles.md ## Learned rules<small>overall</small></div>
             </div>
             <span class="arrow dim">next project ›</span>
             <div class="node accent">Improved behaviour</div>
@@ -1138,15 +1135,15 @@ Users can attach images to messages.
 
       <div class="card">
         <h3>What it is, in plain language</h3>
-        <p>A mistake corrected in a conversation dies with that conversation. A mistake corrected in a phase prompt is gone forever. <code>/tune</code> turns Review findings and user feedback memories into prompt edits, with every change tied back to a citation. The framework gets cheaper to run as it ages.</p>
+        <p>A mistake corrected in a conversation dies with that conversation. A mistake captured as a stored rule is gone forever. Tune turns Review findings and run observations into WHEN/THEN rule entries, each approved by the human at the Review gate and tied back to readable evidence. The framework gets cheaper to run as it ages.</p>
       </div>
 
       <div class="card">
         <h3>Estimated benefits</h3>
         <div class="benefits">
           <span class="pill good">Compound improvement across projects — corrections don't recur</span>
-          <span class="pill good">Auditable rule changes — every behaviour change has a finding-ID citation</span>
-          <span class="pill good">Preventive, not reactive — the input is already structured, so curation is cheap</span>
+          <span class="pill good">Auditable rule changes — every entry carries a readable evidence path</span>
+          <span class="pill good">Preventive, not reactive — the input is already structured, so proposals are cheap</span>
           <span class="pill good">Meta-level context economy — distilled rules mean less per-project re-derivation</span>
         </div>
       </div>
