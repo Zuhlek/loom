@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Per ADR-002 as amended (docs/orchestrator/hooks.md § Session ownership),
-# the session-ownership store is written primarily by the UserPromptSubmit
+# Per docs/orchestrator/hooks.md § Session ownership, the
+# session-ownership store is written primarily by the UserPromptSubmit
 # hook (pin-on-weave.sh). This hook's only write is converting THIS
 # session's weave-intent marker into a pin once the orchestrator has
 # resolved the project name into `.loom/.active` — it never claims work

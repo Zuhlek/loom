@@ -48,7 +48,6 @@ export const PHASE_PATTERNS: Record<PhaseId, ReadonlyArray<string | RegExp>> = {
     /^orchestrator(\/|$)/,
     "events.jsonl",
     "develop-log.md",
-    "artifacts.json",
     /^\.locks?(\/|$)/,
   ],
   review: [

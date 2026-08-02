@@ -19,7 +19,6 @@ logs) but never fail the hook: telemetry must not break the run.
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import sys

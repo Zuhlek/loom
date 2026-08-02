@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Per ADR-002 as amended (docs/orchestrator/hooks.md § Session ownership),
-# this hook is read-only on the session-ownership store. Writes are owned
+# Per docs/orchestrator/hooks.md § Session ownership, this hook is
+# read-only on the session-ownership store. Writes are owned
 # by the UserPromptSubmit hook (pin-on-weave.sh) and the intent->pin
 # adoption in auto-advance.sh.
 #

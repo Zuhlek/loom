@@ -3663,17 +3663,16 @@ flowchart LR
 &#9500;&#9472;&#9472; explore-prototype/           &larr; sibling skill (Puppeteer UX exploration)
 &#9500;&#9472;&#9472; hooks/                       &larr; runtime instrumentation
 &#9474;   &#9500;&#9472;&#9472; resume-on-start.sh        &larr; SessionStart: surface active workspaces
-&#9474;   &#9500;&#9472;&#9472; validate-subagent-output.sh|.py  &larr; SubagentStop: validate RETURN blocks
+&#9474;   &#9500;&#9472;&#9472; validate-subagent-output.py  &larr; SubagentStop: validate RETURN blocks
 &#9474;   &#9500;&#9472;&#9472; auto-advance.sh           &larr; Stop: continue one unblocked workspace
-&#9474;   &#9492;&#9472;&#9472; refresh-artifacts.sh      &larr; PostToolUse(Write/Edit): rebuild artifacts.json
+&#9474;   &#9492;&#9472;&#9472; board-transition.py       &larr; PostToolUse(Write/Edit): live board mirror
 &#9500;&#9472;&#9472; lib/
-&#9474;   &#9492;&#9472;&#9472; telemetry/                &larr; run metrics, session store, artifact index
+&#9474;   &#9492;&#9472;&#9472; telemetry/                &larr; run metrics + session store
 &#9474;       &#9500;&#9472;&#9472; tag-subagent-phase.py         &larr; PostToolUse(Task): tag subagent transcripts
 &#9474;       &#9500;&#9472;&#9472; transcript-harvest.py
 &#9474;       &#9500;&#9472;&#9472; render-metrics.py
 &#9474;       &#9500;&#9472;&#9472; run-outcome.py
-&#9474;       &#9500;&#9472;&#9472; session-store.sh
-&#9474;       &#9492;&#9472;&#9472; artifacts.sh
+&#9474;       &#9492;&#9472;&#9472; session-store.sh
 &#9492;&#9472;&#9472; types/                       &larr; shared team knowledge (committed)
 </code></pre>
       <p>Runtime workspace, created the first time <code>/weave &lt;project&gt;</code> runs:</p>
@@ -3694,7 +3693,6 @@ flowchart LR
     &#9500;&#9472;&#9472; review.md, review-verdict.json
     &#9500;&#9472;&#9472; feedback.md                &larr; Review-emitted per-project learnings
     &#9500;&#9472;&#9472; quality-review.md          &larr; present only if QC ran
-    &#9500;&#9472;&#9472; artifacts.json             &larr; refreshed by hook on every Write/Edit
     &#9492;&#9472;&#9472; superseded/&lt;timestamp&gt;/   &larr; go-back artifacts
 </code></pre>
     </section>
@@ -3935,7 +3933,7 @@ sequenceDiagram
           </tr>
           <tr>
             <td>2. Hook floor</td>
-            <td><code>hooks/validate-subagent-output.sh</code> (and <code>.py</code>)</td>
+            <td><code>hooks/validate-subagent-output.py</code></td>
             <td>Cheap transcript-level guard. Validates the <code>status</code> enum and the presence of <code>summary</code> + (<code>artifacts</code> | <code>output</code>) top-level keys.</td>
             <td>Fires on every <code>SubagentStop</code> event.</td>
           </tr>
@@ -3949,7 +3947,7 @@ sequenceDiagram
       </table>
 <pre class="mermaid">
 flowchart TD
-    sub([SubagentStop event]) --&gt; hook[validate-subagent-output.sh]
+    sub([SubagentStop event]) --&gt; hook[validate-subagent-output.py]
     hook --&gt; find[Scan transcript for last PHASE: line]
     find --&gt;|none| pass[(exit 0)]
     find --&gt;|found| chk[Validate phase + status + required keys]
@@ -3999,7 +3997,7 @@ flowchart TD
             <td>Surface active <code>.loom/*/pipeline.md</code> workspaces at session entry so the user knows what's resumable.</td>
           </tr>
           <tr>
-            <td><code>validate-subagent-output.sh</code> (wrapping <code>.py</code>)</td>
+            <td><code>validate-subagent-output.py</code></td>
             <td><code>SubagentStop</code></td>
             <td>Validate phase RETURN blocks against the hook-floor schema (status enum + required top-level keys). Emits <code>decision: block</code> on mismatch.</td>
           </tr>
@@ -4007,11 +4005,6 @@ flowchart TD
             <td><code>auto-advance.sh</code></td>
             <td><code>Stop</code></td>
             <td>If exactly one active workspace is unblocked when the user's session ends, surface it so the next session picks up cleanly.</td>
-          </tr>
-          <tr>
-            <td><code>refresh-artifacts.sh</code></td>
-            <td><code>PostToolUse(Write / Edit / MultiEdit)</code></td>
-            <td>Rebuild <code>.loom/&lt;project&gt;/artifacts.json</code> after any file write inside the workspace, so the UI / curator have a fresh artifact index.</td>
           </tr>
           <tr>
             <td><code>tag-subagent-phase.py</code></td>
@@ -4063,7 +4056,6 @@ flowchart TD
           <tr><td><code>render-metrics.py</code></td><td>Folds usage rows into <code>metrics.md</code>: fixed sections, six fixed buckets, three mermaid charts.</td></tr>
           <tr><td><code>run-outcome.py</code></td><td>Derives <code>outcome.json</code> &mdash; lifecycle state, final phase, review verdict, task counts.</td></tr>
           <tr><td><code>session-store.sh</code></td><td>Sourced by SessionStart/Stop hooks to record session ownership.</td></tr>
-          <tr><td><code>artifacts.sh</code></td><td>Sourced by <code>refresh-artifacts.sh</code> to rebuild <code>.loom/&lt;project&gt;/artifacts.json</code> after Write/Edit/MultiEdit.</td></tr>
         </tbody>
       </table>
       <p>Measurement covers the whole lifecycle, the orchestrator session included &mdash; on a representative run the orchestrator is around a third of total spend, so leaving it out understates cost badly. Two limits are inherent: the orchestrator session is still open when the file is written, so its trailing turns go uncounted; and durations do not add across buckets, because the orchestrator&#39;s span encloses the subagent spans it dispatched.</p>

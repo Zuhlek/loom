@@ -169,7 +169,7 @@ Rules, binding on every dispatch:
 
 The orchestrator has two telemetry duties, both in the Phase Cycle: write `.loom/.active` at step 1, and re-run the renderer at step 4. Neither the orchestrator nor any phase agent ever authors a figure — the numbers come from the session transcripts on disk.
 
-Hook wiring: `docs/orchestrator/hooks.md`. Measurement contract and row schema: `docs/orchestrator/metrics.md`. Note that `session-store.sh` and `artifacts.sh` also live under `lib/telemetry/` and are load-bearing for session resume and the artifact index — the directory is not wholly removable.
+Hook wiring: `docs/orchestrator/hooks.md`. Measurement contract and row schema: `docs/orchestrator/metrics.md`. Note that `session-store.sh` also lives under `lib/telemetry/` and is load-bearing for session pinning and resume — the directory is not wholly removable.
 
 ## Refine-or-Continue Decision (Human-In-The-Loop)
 

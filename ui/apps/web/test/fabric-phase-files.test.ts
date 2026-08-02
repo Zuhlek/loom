@@ -60,7 +60,6 @@ describe("classifyPath", () => {
     expect(classifyPath("orchestrator/log/build.md")).toBe("build");
     expect(classifyPath("events.jsonl")).toBe("build");
     expect(classifyPath("develop-log.md")).toBe("build");
-    expect(classifyPath("artifacts.json")).toBe("build");
     expect(classifyPath(".locks/T-001.lock/owner")).toBe("build");
     expect(classifyPath(".lock/owner")).toBe("build");
   });
