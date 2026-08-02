@@ -148,20 +148,5 @@ out="$(echo "{\"session_id\":\"a/b\",\"cwd\":\"$TMP/case13\",\"stop_hook_active\
 grep -q 'LOOM_PIN_REJECTED_SID' "$TMP/case13.err" || fail "case 13: missing sid rejection marker"
 pass "case 13: path-separator session_id rejected, silent"
 
-# Case 14 — intent marker + .active names a harness-driven eval run
-# (.eval-run present): must NOT adopt it, stay silent, preserve the marker.
-LOOM_ROOT="$TMP/case14/.loom"
-make_pipeline "$LOOM_ROOT/baseline-123-1/pipeline.md" "Pending" "build"
-: > "$LOOM_ROOT/baseline-123-1/.eval-run"
-mkdir -p "$LOOM_ROOT/.sessions"
-: > "$LOOM_ROOT/.sessions/sess-I.weave-intent"
-printf 'baseline-123-1\n' > "$LOOM_ROOT/.active"
-out="$(echo "{\"session_id\":\"sess-I\",\"cwd\":\"$TMP/case14\",\"stop_hook_active\":false}" | bash "$HOOK" 2>"$TMP/case14.err")"
-[ -z "$out" ] || fail "case 14: must not adopt an eval run, got: $out"
-[ ! -f "$LOOM_ROOT/.sessions/sess-I.txt" ] || fail "case 14: must not pin to an eval run"
-[ -f "$LOOM_ROOT/.sessions/sess-I.weave-intent" ] || fail "case 14: intent marker must be preserved"
-grep -q 'LOOM_SKIP_EVAL_RUN' "$TMP/case14.err" || fail "case 14: missing eval-skip marker"
-pass "case 14: weave-intent + eval-run .active → not adopted, silent"
-
 echo
 echo "all cases passed"

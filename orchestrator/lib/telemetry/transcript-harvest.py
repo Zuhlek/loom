@@ -10,6 +10,21 @@ sibling `agent-<uuid>.phase` sidecar (written by the PostToolUse hook in
 dispatch description — and counts the row's quality signals from its
 tool_result entries.
 
+The `/weave` orchestrator's OWN session is reduced the same way into one
+`agent_kind: orchestrator` row per contributing session, so a run's totals
+cover the whole lifecycle rather than dispatched subagents alone. That
+transcript sits beside the subagents directory:
+
+    <projects-root>/<encoded-cwd>/<session>.jsonl      orchestrator
+    <projects-root>/<encoded-cwd>/<session>/subagents/ subagents
+
+It spans every phase, so it carries `phase: "orchestrator"` rather than
+being attributed to one. Two consequences worth knowing when reading the
+numbers: the session is still open while the run is being measured, so the
+orchestrator row misses its own trailing turns; and a session driving more
+than one project in sequence attributes its whole cost to each project it
+touched.
+
 Measurement contract (schema_version 2):
 - Claude Code writes ONE transcript row PER CONTENT BLOCK of the same API
   response; each row repeats that response's (cumulative) `usage`. Token
@@ -31,16 +46,10 @@ Usage:
                                                           [--dry-run]
 
 By default the workspace is `.loom/<project>/` relative to the repo root.
-Pass `--workspace` for a filed run (e.g. `analytics/<version>/<run-id>/`).
 Pass `--session UUID` (repeatable) to bypass the dispatch-text project
 match and pull transcripts out of exactly those Claude Code session dirs —
-the reliable key. `.eval-orchestrator-pointer` holds one session UUID per
-line; pass every line.
-
-Orchestrator-side inference (the `/weave` session itself) is not emitted
-as a row — only dispatched subagents are. Whole-run authoritative totals
-(incl. orchestrator cost) come from the `claude --print --output-format
-json` result captured by run-baseline.sh into run-meta.json.
+the reliable key. `.session-pointer` holds one session UUID per line; pass
+every line.
 """
 from __future__ import annotations
 
@@ -301,6 +310,12 @@ def sum_usage_and_durations(rows: list[dict]) -> tuple[dict[str, int] | None, in
 
 VALID_PHASES = ("spec", "design", "plan", "build", "review")
 
+# The orchestrator drives every phase, so its row is not attributable to
+# one. It gets its own bucket, which render-metrics.py renders as a sixth
+# row beside the five phases.
+ORCHESTRATOR_PHASE = "orchestrator"
+ORCHESTRATOR_LABEL = "Weave orchestrator"
+
 
 def canonical_agent_label(phase: str | None) -> str:
     if phase in VALID_PHASES:
@@ -407,12 +422,13 @@ def quality_counts(rows: list[dict]) -> dict[str, int]:
 def build_row(phase: str | None, phase_source: str | None, agent_label: str,
               tokens: dict | None, wall_ms: int, autonomous_ms: int | None,
               status: str, quality: dict | None,
-              model: str | None, cost_usd: float | None) -> dict:
+              model: str | None, cost_usd: float | None,
+              agent_kind: str = "subagent") -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "phase": phase,
         "phase_source": phase_source,
-        "agent_kind": "subagent",
+        "agent_kind": agent_kind,
         "agent_label": agent_label,
         "model": model,
         "tokens": tokens,
@@ -469,6 +485,20 @@ def find_subagent_transcripts(projects_root: Path, cwd: Path,
     return transcripts
 
 
+def orchestrator_transcript_for(subagent_transcript: Path) -> Path:
+    """Map a subagent transcript to its parent session's own transcript.
+
+        <base>/<session>/subagents/agent-<uuid>.jsonl   (in)
+        <base>/<session>.jsonl                          (out)
+
+    Deriving it from a MATCHED subagent — rather than scanning session dirs
+    independently — is what keeps the orchestrator row scoped to sessions
+    that actually drove this project.
+    """
+    session_dir = subagent_transcript.parent.parent
+    return session_dir.parent / f"{session_dir.name}.jsonl"
+
+
 def read_rows(path: Path) -> list[dict]:
     rows: list[dict] = []
     try:
@@ -509,6 +539,45 @@ def atomic_write_text(path: Path, text: str) -> None:
         except OSError:
             pass
         raise
+
+
+def orchestrator_rows(matched_subagents: list[Path]) -> list[dict]:
+    """One row per session that contributed a matched subagent transcript.
+
+    Reduced through the same path as a subagent row, so the token
+    deduplication and duration contracts hold identically. A session whose
+    own transcript is missing or unreadable is skipped rather than emitted
+    as a crash sentinel — an absent orchestrator transcript means the
+    harvest ran against a moved or pruned projects root, not that the
+    orchestrator died.
+    """
+    seen: set[Path] = set()
+    rows: list[dict] = []
+    for sub in sorted(matched_subagents):
+        transcript = orchestrator_transcript_for(sub)
+        if transcript in seen or not transcript.is_file():
+            continue
+        seen.add(transcript)
+        raw = read_rows(transcript)
+        if not raw:
+            continue
+        tokens, wall_ms, autonomous_ms, model, cost_usd = sum_usage_and_durations(raw)
+        if tokens is None:
+            continue
+        rows.append(build_row(
+            phase=ORCHESTRATOR_PHASE,
+            phase_source="session",
+            agent_label=ORCHESTRATOR_LABEL,
+            tokens=tokens,
+            wall_ms=wall_ms,
+            autonomous_ms=autonomous_ms,
+            status="ok",
+            quality=quality_counts(raw),
+            model=model,
+            cost_usd=cost_usd,
+            agent_kind="orchestrator",
+        ))
+    return rows
 
 
 def harvest(project: str, workspace: Path, projects_root: Path,
@@ -556,6 +625,8 @@ def harvest(project: str, workspace: Path, projects_root: Path,
                         autonomous_ms, status, quality, model, cost_usd)
         rows_out.append(row)
 
+    rows_out.extend(orchestrator_rows(matched))
+
     if not dry_run and rows_out:
         out_path = workspace / "usage.jsonl"
         atomic_write_text(out_path, "".join(json.dumps(r) + "\n" for r in rows_out))
@@ -566,6 +637,7 @@ def harvest(project: str, workspace: Path, projects_root: Path,
         "candidates_scanned": len(transcripts),
         "rows": rows_out,
         "matched_paths": [str(p) for p in matched],
+        "rows_written": len(rows_out),
         "dry_run": dry_run,
         "workspace": str(workspace),
     }
@@ -576,8 +648,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("project", help="Project name (e.g. baseline-1778870535-1)")
     ap.add_argument("--workspace", default=None,
                     help="Target dir to write usage.jsonl into. "
-                         "Defaults to <repo>/.loom/<project>/. Pass the filed "
-                         "location when backfilling a moved workspace.")
+                         "Defaults to <repo>/.loom/<project>/.")
     ap.add_argument("--projects-root", default=str(Path.home() / ".claude" / "projects"),
                     help="Claude Code projects root (default: ~/.claude/projects).")
     ap.add_argument("--cwd", default=str(REPO_ROOT),
@@ -616,8 +687,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  phase={ph!s:<8} label={lbl:<45} status={r['status']} cost={cost}")
     if summary.get("note"):
         print(f"note:       {summary['note']}")
-    if not args.dry_run and summary["matched"]:
-        print(f"wrote:      {workspace / 'usage.jsonl'}  ({summary['matched']} row(s))")
+    written = summary.get("rows_written", 0)
+    if not args.dry_run and written:
+        print(f"wrote:      {workspace / 'usage.jsonl'}  ({written} row(s))")
     return 0
 
 

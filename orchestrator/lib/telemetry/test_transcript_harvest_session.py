@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Tests for the `--session UUID` bypass in transcript-harvest.py.
+"""Tests for transcript-harvest.py: the `--session UUID` bypass, phase
+attribution, quality counting, and orchestrator-row emission.
 
-The session pointer is how analyse.py finds the right Claude Code session
-for a filed run after the fabric has been moved. Without `--session`, the
-harvester falls back to matching `<project>` against transcript dispatch
-text — fine while the fabric still mentions `.loom/<project>` somewhere
-nearby, but the explicit pointer is the reliable key.
+`.session-pointer` is how a refresh finds the right Claude Code sessions
+for a project. Without `--session`, the harvester falls back to matching
+`<project>` against transcript dispatch text — fine while the fabric still
+mentions `.loom/<project>` somewhere nearby, but the explicit pointer is
+the reliable key.
 """
 from __future__ import annotations
 
@@ -379,6 +380,89 @@ class HarvestQualityIntegrationTests(unittest.TestCase):
         row = summary["rows"][0]
         self.assertEqual(row["status"], "crashed")
         self.assertIsNone(row["quality"])
+
+
+class OrchestratorRowTests(unittest.TestCase):
+    """The orchestrator's own session is the largest single cost in a run
+    and was invisible until it got its own row. It lives beside the
+    subagents dir as `<session>.jsonl`."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="harvest-orch-"))
+        self.projects_root = self.tmp / "projects"
+        self.cwd = Path("/repo/loom")
+        encoded = HARVEST.encode_cwd_for_projects_dir(self.cwd)
+        self.base = self.projects_root / encoded
+        self.session_id = "11111111-1111-1111-1111-111111111111"
+        self.subagents_dir = self.base / self.session_id / "subagents"
+        self.workspace = self.tmp / "workspace"
+        self.workspace.mkdir(parents=True)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _harvest(self):
+        return HARVEST.harvest(
+            project="any", workspace=self.workspace,
+            projects_root=self.projects_root, cwd=self.cwd,
+            dry_run=True, session_id=self.session_id,
+        )
+
+    def test_maps_subagent_transcript_to_session_transcript(self) -> None:
+        sub = self.base / self.session_id / "subagents" / "agent-1.jsonl"
+        self.assertEqual(
+            HARVEST.orchestrator_transcript_for(sub),
+            self.base / f"{self.session_id}.jsonl",
+        )
+
+    def test_orchestrator_row_emitted_beside_subagent_rows(self) -> None:
+        transcript = self.subagents_dir / "agent-1.jsonl"
+        _write_transcript(transcript, input_tokens=100)
+        _write_phase_sidecar(transcript, phase="build")
+        _write_transcript(self.base / f"{self.session_id}.jsonl", input_tokens=900)
+
+        rows = self._harvest()["rows"]
+        self.assertEqual(len(rows), 2)
+        orch = [r for r in rows if r["agent_kind"] == "orchestrator"]
+        self.assertEqual(len(orch), 1)
+        self.assertEqual(orch[0]["phase"], "orchestrator")
+        self.assertEqual(orch[0]["phase_source"], "session")
+        self.assertEqual(orch[0]["agent_label"], "Weave orchestrator")
+        self.assertEqual(orch[0]["status"], "ok")
+        self.assertEqual(orch[0]["tokens"]["input_tokens"], 900)
+
+    def test_no_orchestrator_row_when_session_transcript_absent(self) -> None:
+        transcript = self.subagents_dir / "agent-1.jsonl"
+        _write_transcript(transcript)
+        _write_phase_sidecar(transcript, phase="spec")
+
+        rows = self._harvest()["rows"]
+        self.assertEqual([r["agent_kind"] for r in rows], ["subagent"],
+                         msg="a missing session transcript is skipped, not "
+                             "emitted as a crash sentinel")
+
+    def test_orchestrator_row_emitted_once_for_many_subagents(self) -> None:
+        for name, phase in (("agent-1.jsonl", "spec"), ("agent-2.jsonl", "build"),
+                            ("agent-3.jsonl", "review")):
+            t = self.subagents_dir / name
+            _write_transcript(t)
+            _write_phase_sidecar(t, phase=phase)
+        _write_transcript(self.base / f"{self.session_id}.jsonl")
+
+        rows = self._harvest()["rows"]
+        self.assertEqual(sum(1 for r in rows if r["agent_kind"] == "orchestrator"), 1)
+        self.assertEqual(len(rows), 4)
+
+    def test_row_count_reported_includes_orchestrator(self) -> None:
+        transcript = self.subagents_dir / "agent-1.jsonl"
+        _write_transcript(transcript)
+        _write_phase_sidecar(transcript, phase="plan")
+        _write_transcript(self.base / f"{self.session_id}.jsonl")
+
+        summary = self._harvest()
+        self.assertEqual(summary["matched"], 1, msg="matched counts subagents")
+        self.assertEqual(summary["rows_written"], 2,
+                         msg="rows_written counts what actually lands on disk")
 
 
 if __name__ == "__main__":

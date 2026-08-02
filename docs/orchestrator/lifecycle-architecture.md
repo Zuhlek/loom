@@ -156,7 +156,7 @@ Durable rules live in two append-only stores, both fed through the Review gate: 
 
 Subagent transcripts land at `~/.claude/projects/<encoded-cwd>/<orchestrator-session>/subagents/agent-<uuid>.jsonl` with a sidecar `agent-<uuid>.meta.json` containing the `agentType`. The post-tool-use hook `orchestrator/lib/telemetry/tag-subagent-phase.py` writes a `.phase` sidecar tagging each subagent transcript with its lifecycle phase.
 
-`orchestrator/lib/telemetry/transcript-harvest.py` walks one orchestrator session's `subagents/` directory and emits one row per dispatched subagent for `analyze.py`. Because all Loom subagents are depth-1 from `/weave` (see 1.1), the harvester sees every dispatched session. There is no hidden depth-2+ band.
+`orchestrator/lib/telemetry/transcript-harvest.py` walks one orchestrator session's `subagents/` directory and emits one row per dispatched subagent, plus one row for the orchestrator's own session transcript (`<session>.jsonl`, the sibling of that `subagents/` directory) so a run's totals cover the whole lifecycle rather than dispatched agents alone. Because all Loom subagents are depth-1 from `/weave` (see 1.1), the harvester sees every dispatched session. There is no hidden depth-2+ band.
 
 Each row carries `cache_creation_input_tokens`, `cache_read_input_tokens`, `input_tokens`, `output_tokens`, and wall / autonomous duration. Multiply at base rates to estimate Anthropic spend:
 
@@ -164,7 +164,7 @@ Each row carries `cache_creation_input_tokens`, `cache_read_input_tokens`, `inpu
 cache_creation * 1.25  +  cache_read * 0.10  +  input * 1.00  +  output * 5.00   (USD per 1M tokens)
 ```
 
-The Build phase is one row per dispatch; that row's `cache_read` carries the bulk of the work-loop's input cost.
+The Build phase is one row per dispatch; that row's `cache_read` carries the bulk of the work-loop's input cost. `render-metrics.py` folds the rows into the workspace's `metrics.md` (see `docs/orchestrator/metrics.md`).
 
 ---
 

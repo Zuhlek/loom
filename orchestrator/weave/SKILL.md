@@ -98,7 +98,11 @@ A user cancelling the gate is a pause: `Spec depth` remains `pending`, the orche
       convenience fields; keep them plausible, they gate nothing.)
    f. On Refine: re-dispatch the same phase agent in a fresh Task session per
       the Refine-or-Continue Decision section.
-4. On Review continue: set Lifecycle state = complete, report and exit.
+4. On Review continue: set Lifecycle state = complete, run
+   `python3 orchestrator/lib/telemetry/render-metrics.py <project>` so
+   `metrics.md` includes the Review agent's own row, report and exit. A
+   non-zero exit is reported, never fatal — telemetry must not fail a run
+   that otherwise completed.
 ```
 
 The orchestrator runs the lifecycle to completion in one `/weave` invocation. It does not exit between phases — the Refine-or-Continue gate is a regular `AskUserQuestion`, not a session boundary. It exits only when `Lifecycle state` becomes `complete`, the user cancels at a gate (a pause — `pipeline.md` is preserved and a later `/weave` resumes from the current phase), or a hard failure occurs (malformed RETURN blocked by the hook, workspace unresolvable, etc.).
@@ -161,7 +165,11 @@ Rules, binding on every dispatch:
 
 ### Telemetry
 
-Optional and deletable: the eval substrate under `orchestrator/lib/telemetry/` harvests cost/usage post-hoc from session transcripts after `/weave` finishes — nothing is emitted live during a run. The orchestrator's only telemetry duty is writing `.loom/.active` (Phase Cycle step 1). Hook wiring: `docs/orchestrator/hooks.md`; harvest/analysis workflow: `docs/orchestrator/evaluation.md`; each script under `lib/telemetry/` self-documents. A packager can `rm -rf orchestrator/lib/telemetry/` and every non-analysis `/weave` operation continues to function.
+`orchestrator/lib/telemetry/` measures what a run costs. The PostToolUse hook (`tag-subagent-phase.py`) fires after every dispatched subagent and refreshes three files in the workspace: `usage.jsonl` (one row per phase agent plus one for this orchestrator session), `outcome.json`, and `metrics.md` — the Review-owned measurement artifact whose contract lives in `phases/review/phase.signature.md ## Writes`.
+
+The orchestrator has two telemetry duties, both in the Phase Cycle: write `.loom/.active` at step 1, and re-run the renderer at step 4. Neither the orchestrator nor any phase agent ever authors a figure — the numbers come from the session transcripts on disk.
+
+Hook wiring: `docs/orchestrator/hooks.md`. Measurement contract and row schema: `docs/orchestrator/metrics.md`. Note that `session-store.sh` and `artifacts.sh` also live under `lib/telemetry/` and are load-bearing for session resume and the artifact index — the directory is not wholly removable.
 
 ## Refine-or-Continue Decision (Human-In-The-Loop)
 

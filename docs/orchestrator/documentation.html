@@ -3574,10 +3574,9 @@ globalThis["mermaid"] = globalThis.__esbuild_esm_mermaid_nm["mermaid"].default;
       <li><a href="#section-13">Engineering principles &mdash; P1&ndash;P7</a></li>
       <li><a href="#section-14">Learning loop &mdash; rule stores</a></li>
       <li><a href="#section-15">Types</a></li>
-      <li><a href="#section-16">Evaluation harness</a></li>
-      <li><a href="#section-17">Telemetry</a></li>
-      <li><a href="#section-18">Setup &amp; install</a></li>
-      <li><a href="#section-19">Sibling skill &mdash; <code>/explore-prototype</code></a></li>
+      <li><a href="#section-16">Run metrics</a></li>
+      <li><a href="#section-17">Setup &amp; install</a></li>
+      <li><a href="#section-18">Sibling skill &mdash; <code>/explore-prototype</code></a></li>
     </ol>
   </nav>
 
@@ -3668,16 +3667,13 @@ flowchart LR
 &#9474;   &#9500;&#9472;&#9472; auto-advance.sh           &larr; Stop: continue one unblocked workspace
 &#9474;   &#9492;&#9472;&#9472; refresh-artifacts.sh      &larr; PostToolUse(Write/Edit): rebuild artifacts.json
 &#9500;&#9472;&#9472; lib/
-&#9474;   &#9492;&#9472;&#9472; telemetry/                &larr; optional; rm -rf for slim profile
+&#9474;   &#9492;&#9472;&#9472; telemetry/                &larr; run metrics, session store, artifact index
 &#9474;       &#9500;&#9472;&#9472; tag-subagent-phase.py         &larr; PostToolUse(Task): tag subagent transcripts
 &#9474;       &#9500;&#9472;&#9472; transcript-harvest.py
-&#9474;       &#9500;&#9472;&#9472; eval-aggregate.py
-&#9474;       &#9500;&#9472;&#9472; retag-sidecars.py
+&#9474;       &#9500;&#9472;&#9472; render-metrics.py
+&#9474;       &#9500;&#9472;&#9472; run-outcome.py
 &#9474;       &#9500;&#9472;&#9472; session-store.sh
 &#9474;       &#9492;&#9472;&#9472; artifacts.sh
-&#9500;&#9472;&#9472; evaluation/                  &larr; non-interactive baseline runs + analysis
-&#9474;   &#9500;&#9472;&#9472; run-baseline.sh, analyze.py, answer-queue.py, ...
-&#9474;   &#9492;&#9472;&#9472; analytics/&lt;version&gt;/   &larr; versioned run storage
 &#9492;&#9472;&#9472; types/                       &larr; shared team knowledge (committed)
 </code></pre>
       <p>Runtime workspace, created the first time <code>/weave &lt;project&gt;</code> runs:</p>
@@ -4020,7 +4016,7 @@ flowchart TD
           <tr>
             <td><code>tag-subagent-phase.py</code></td>
             <td><code>PostToolUse(Task)</code></td>
-            <td>Tag each dispatched subagent's transcript with the active phase (reads <code>.loom/.active</code>). Feeds telemetry harvesting (<a href="#section-17">&sect;17</a>).</td>
+            <td>Tag each dispatched subagent's transcript with the active phase (reads <code>.loom/.active</code>). Feeds telemetry harvesting (<a href="#section-16">&sect;16</a>).</td>
           </tr>
         </tbody>
       </table>
@@ -4057,49 +4053,32 @@ flowchart TD
     </section>
 
     <section id="section-16">
-      <h2>16. Evaluation harness</h2>
-      <p><code>orchestrator/evaluation/</code> drives non-interactive <code>/weave</code> runs against canned seeds + answers, captures per-subagent cost/usage, and renders an analysis dashboard. The harness wraps <code>/weave</code> from outside &mdash; the orchestrator itself stays interactive-only.</p>
-      <table>
-        <thead><tr><th>Surface</th><th>Purpose</th></tr></thead>
-        <tbody>
-          <tr><td><code>run-baseline.sh</code></td><td>Drives N non-interactive runs with a canned seed + <code>.answers.yaml</code> file.</td></tr>
-          <tr><td><code>baseline-seed.md</code>, <code>baseline-answers.yaml</code></td><td>Vendored fixtures used by the baseline runner.</td></tr>
-          <tr><td><code>answer-queue.py</code></td><td>CLI for <code>peek</code> / <code>pop</code> on the <code>.answers.yaml</code> queue. Strict YAML subset. Staged under <code>.loom/&lt;project&gt;/.answers.yaml</code> before the Spec dispatch.</td></tr>
-          <tr><td><code>analyze.py</code></td><td>Harvests pending runs and renders <code>analysis.html</code>.</td></tr>
-          <tr><td><code>SCHEMA.md</code></td><td>Canonical <code>usage.jsonl</code> row definition.</td></tr>
-          <tr><td><code>analytics/&lt;version&gt;/</code></td><td>Versioned run storage. Each subdir is one snapshot of N runs.</td></tr>
-          <tr><td><code>check-usage-jsonl.py</code></td><td>Validator for harvest schema.</td></tr>
-        </tbody>
-      </table>
-      <p>Workflow: <code>pnpm run eval:run</code> (creates <code>.loom/&lt;baseline-project&gt;/</code>) &rarr; strip <code>app/</code> &rarr; <code>mv</code> to <code>analytics/&lt;version&gt;/</code> &rarr; <code>pnpm run eval:analyse</code> (harvest transcripts &rarr; <code>usage.jsonl</code> &rarr; <code>analysis.html</code>). The <code>--answers</code> flag is staged by the harness, not accepted by <code>/weave</code> directly.</p>
-    </section>
-
-    <section id="section-17">
-      <h2>17. Telemetry</h2>
-      <p>Telemetry lives under <code>orchestrator/lib/telemetry/</code> &mdash; physically separated from core so a slim deployment can <code>rm -rf orchestrator/lib/telemetry/</code> without breaking the framework. The orchestrator remains functional without telemetry; you just lose per-subagent cost rows and phase-tagged transcripts.</p>
+      <h2>16. Run metrics</h2>
+      <p><code>orchestrator/lib/telemetry/</code> measures what a run costs. Every <code>/weave</code> run carries a <code>metrics.md</code> in its workspace &mdash; per-phase cost, tokens and duration, with charts &mdash; refreshed as the run goes rather than assembled afterwards.</p>
       <table>
         <thead><tr><th>File</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td><code>tag-subagent-phase.py</code></td><td><code>PostToolUse(Task)</code> hook. Tags each subagent transcript with the active phase from <code>.loom/.active</code>.</td></tr>
-          <tr><td><code>transcript-harvest.py</code></td><td>Walks <code>subagents/</code> session directories, produces <code>usage.jsonl</code> (one row per subagent).</td></tr>
-          <tr><td><code>eval-aggregate.py</code></td><td>Pools usage rows by phase, renders per-project <code>usage.md</code> summary.</td></tr>
-          <tr><td><code>retag-sidecars.py</code></td><td>Repair tool: retag <code>.phase</code> sidecars after phase boundaries shift.</td></tr>
+          <tr><td><code>tag-subagent-phase.py</code></td><td><code>PostToolUse(Agent|Task)</code> hook. Tags each subagent transcript with the active phase from <code>.loom/.active</code>, then refreshes the workspace&#39;s <code>usage.jsonl</code>, <code>outcome.json</code> and <code>metrics.md</code>.</td></tr>
+          <tr><td><code>transcript-harvest.py</code></td><td>Walks <code>subagents/</code> session directories and produces <code>usage.jsonl</code> &mdash; one row per dispatched phase agent, plus one for the orchestrator&#39;s own session.</td></tr>
+          <tr><td><code>render-metrics.py</code></td><td>Folds usage rows into <code>metrics.md</code>: fixed sections, six fixed buckets, three mermaid charts.</td></tr>
+          <tr><td><code>run-outcome.py</code></td><td>Derives <code>outcome.json</code> &mdash; lifecycle state, final phase, review verdict, task counts.</td></tr>
           <tr><td><code>session-store.sh</code></td><td>Sourced by SessionStart/Stop hooks to record session ownership.</td></tr>
           <tr><td><code>artifacts.sh</code></td><td>Sourced by <code>refresh-artifacts.sh</code> to rebuild <code>.loom/&lt;project&gt;/artifacts.json</code> after Write/Edit/MultiEdit.</td></tr>
         </tbody>
       </table>
-      <p>Telemetry produces post-hoc cost/usage data. No live evaluation row is emitted during a <code>/weave</code> run &mdash; figures are extracted from the session transcripts on disk after the run finishes.</p>
+      <p>Measurement covers the whole lifecycle, the orchestrator session included &mdash; on a representative run the orchestrator is around a third of total spend, so leaving it out understates cost badly. Two limits are inherent: the orchestrator session is still open when the file is written, so its trailing turns go uncounted; and durations do not add across buckets, because the orchestrator&#39;s span encloses the subagent spans it dispatched.</p>
+      <p><code>metrics.md</code> is owned by the Review phase and written by no agent. Review verifies it exists and cites its path; it never types a figure into <code>review.md</code>. Contract: <code>phases/review/phase.signature.md &sect; Writes</code>; row schema: <code>docs/orchestrator/metrics.md</code>.</p>
     </section>
 
-    <section id="section-18">
-      <h2>18. Setup &amp; install</h2>
+    <section id="section-17">
+      <h2>17. Setup &amp; install</h2>
       <p><code>orchestrator/setup-loom.sh</code> is the installer. It auto-discovers every subdirectory of <code>orchestrator/</code> that contains a <code>SKILL.md</code> (plus the literal <code>types/</code> directory) and symlinks each into <code>~/.claude/skills/</code>; symlinks <code>orchestrator/hooks/</code> into <code>~/.claude/loom-hooks/</code>; and merges the canonical hook entries inline (the JSON definition lives as a <code>LOOM_HOOKS_JSON</code> bash variable in the script itself, passed to <code>jq --argjson</code>) into <code>~/.claude/settings.json</code>.</p>
       <p><strong>Sweep-and-recreate:</strong> before linking, the installer walks <code>~/.claude/skills/</code> and removes any symlink whose target points inside the loom package's root directory. Symlinks pointing elsewhere (other packages, user customizations) survive. Then it recreates the canonical links. Re-runs converge on the same end state regardless of prior history &mdash; renamed or removed skills don't leave behind stale entries.</p>
       <p>The script self-validates: every hook command path must be executable before the installer exits with success.</p>
     </section>
 
-    <section id="section-19">
-      <h2>19. Sibling skill &mdash; <code>/explore-prototype</code></h2>
+    <section id="section-18">
+      <h2>18. Sibling skill &mdash; <code>/explore-prototype</code></h2>
       <p><code>/explore-prototype</code> is a Puppeteer-driven UX exploration skill. It produces <code>.loom/&lt;project&gt;/prototype-analysis.md</code>, which feeds into Spec when the seed references an existing prototype. Separate slash command, separate skill, not part of the five-phase lifecycle.</p>
     </section>
 

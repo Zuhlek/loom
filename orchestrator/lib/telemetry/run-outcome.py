@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """run-outcome — derive and write a run's `outcome.json` from its fabric.
 
-Single source of truth for the outcome contract (SCHEMA.md § outcome.json):
-lifecycle state and final phase from `pipeline.md`, review verdict from
-`review-verdict.json` (falling back to the `**PASS|FAIL**` line in
-`review.md`), and task counts from `board.md`.
+Single source of truth for the outcome contract (see
+`docs/orchestrator/metrics.md`): lifecycle state and final phase from
+`pipeline.md`, review verdict from `review-verdict.json` (falling back to
+the `**PASS|FAIL**` line in `review.md`), and task counts from `board.md`.
 
-Consumers:
-- `analyze.py` imports this module (via importlib) at dashboard time,
-- `run-baseline.sh` invokes the CLI after each eval iteration,
-- `tag-subagent-phase.py` invokes the CLI after each subagent returns, so
-  REGULAR `/weave` runs carry the same artifact as eval runs.
+`tag-subagent-phase.py` invokes the CLI after each subagent returns;
+`render-metrics.py` reads the result into the Outcome section of
+`metrics.md`.
 
 CLI:
   python3 orchestrator/lib/telemetry/run-outcome.py <run-dir>
@@ -217,8 +215,7 @@ def write_outcome(run_dir: Path) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Derive and write <run-dir>/outcome.json")
-    ap.add_argument("run_dir", help="Run directory (e.g. .loom/<project>/ or "
-                                    "analytics/<version>/<run-id>/)")
+    ap.add_argument("run_dir", help="Run directory (e.g. .loom/<project>/)")
     args = ap.parse_args(argv)
     run_dir = Path(args.run_dir)
     if not run_dir.is_dir():

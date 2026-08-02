@@ -12,7 +12,7 @@ I/O signature for the top-level Loom orchestrator. The orchestrator coordinates 
 
 | Name | Source | Required | Description |
 | --- | --- | --- | --- |
-| `$ARGUMENTS` | Slash command argument | optional | Project name, ticket ID, or free text used to resolve or create a workspace. Unknown flags are silently ignored — the eval harness pre-stages `.loom/<project>/.answers.yaml` via `evaluation/answer-queue.py` rather than passing an orchestrator flag |
+| `$ARGUMENTS` | Slash command argument | optional | Project name, ticket ID, or free text used to resolve or create a workspace. Unknown flags are silently ignored |
 | `pipeline.md` | `.loom/<project>/pipeline.md` | required when resuming | Canonical state file; absence implies new workspace |
 | `seed.md` | `.loom/<project>/seed.md` | required for new projects | Raw user input that seeds the Spec phase |
 | Phase agent body | `phases/<current-phase>/phase.md` | required at dispatch | Body half of the phase agent dispatch prompt |

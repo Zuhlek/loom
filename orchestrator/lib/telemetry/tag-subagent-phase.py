@@ -4,11 +4,14 @@
 Per dispatched subagent this hook:
 1. writes an `agent-<uuid>.phase` sidecar next to the subagent's transcript,
    tagging it with the phase the `/weave` orchestrator is currently driving;
-2. appends the parent session's UUID to `.loom/<project>/.eval-orchestrator-pointer`
+2. appends the parent session's UUID to `.loom/<project>/.session-pointer`
    (one UUID per line — retries and multi-day sessions accumulate);
-3. refreshes the project's usage artifacts — `usage.jsonl` (transcript
-   harvest), `usage.md` (aggregate), `outcome.json` — so EVERY `/weave`
-   run carries a live usage summary, not just eval-harness runs.
+3. refreshes the project's measurement artifacts — `usage.jsonl` (transcript
+   harvest), `metrics.md` (render), `outcome.json` — so every `/weave` run
+   carries a current cost/usage summary as it goes.
+
+Because the hook fires AFTER the dispatched subagent returns, the refresh
+that follows the Review agent includes the Review agent's own row.
 
 Failures are reported on stderr (visible with `claude --debug` and in hook
 logs) but never fail the hook: telemetry must not break the run.
@@ -116,10 +119,10 @@ def append_pointer(pointer_path: Path, session_id: str) -> list[str]:
 
 
 def refresh_artifacts(cwd: Path, project: str, session_ids: list[str]) -> None:
-    """Re-derive usage.jsonl / usage.md / outcome.json for the project.
+    """Re-derive usage.jsonl / metrics.md / outcome.json for the project.
 
     Runs after every subagent completes so the workspace always carries a
-    current usage summary — for regular /weave runs and eval runs alike."""
+    current measurement summary."""
     workspace = cwd / ".loom" / project
     harvest_cmd = [sys.executable, str(TELEMETRY_DIR / "transcript-harvest.py"),
                    project, "--workspace", str(workspace), "--cwd", str(cwd)]
@@ -127,8 +130,8 @@ def refresh_artifacts(cwd: Path, project: str, session_ids: list[str]) -> None:
         harvest_cmd += ["--session", sid]
     steps = (
         ("harvest", harvest_cmd, 30),
-        ("aggregate", [sys.executable, str(TELEMETRY_DIR / "eval-aggregate.py"),
-                       project, "--loom-root", str(cwd / ".loom")], 15),
+        ("render", [sys.executable, str(TELEMETRY_DIR / "render-metrics.py"),
+                    project, "--loom-root", str(cwd / ".loom")], 15),
         ("outcome", [sys.executable, str(TELEMETRY_DIR / "run-outcome.py"),
                      str(workspace)], 15),
     )
@@ -168,7 +171,7 @@ def main() -> int:
         # No active loom project in this repo — nothing to tag.
         return 0
 
-    pointer_path = cwd_path / ".loom" / project / ".eval-orchestrator-pointer"
+    pointer_path = cwd_path / ".loom" / project / ".session-pointer"
     session_ids = append_pointer(pointer_path, session_id)
 
     phase = read_dispatch_phase(payload) or read_current_phase(

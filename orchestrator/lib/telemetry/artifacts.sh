@@ -17,7 +17,7 @@ _kind_for_path() {
         tests.md) echo "tests markdown false" ;;
         test-report.md) echo "test-report markdown false" ;;
         usage.jsonl) echo "usage jsonl false" ;;
-        usage.md) echo "usage markdown false" ;;
+        metrics.md) echo "metrics markdown true" ;;
         smoke-report.md) echo "smoke-report markdown false" ;;
         review.md) echo "review markdown true" ;;
         feedback.md) echo "feedback markdown false" ;;

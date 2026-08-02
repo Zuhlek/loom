@@ -106,14 +106,6 @@ if [ -z "$pinned_project" ]; then
     if [ -z "$active" ] || [ ! -d "$loom_root/$active" ]; then
         exit 0
     fi
-    # Never adopt a harness-driven eval run: run-baseline.sh points
-    # .loom/.active at the eval project while driving it to completion in a
-    # single invocation, so an interactive session that happened to declare
-    # weave-intent must not pin itself to it.
-    if [ -f "$loom_root/$active/.eval-run" ]; then
-        printf 'LOOM_SKIP_EVAL_RUN=%s\n' "$active" >&2
-        exit 0
-    fi
     session_store_write "$loom_root" "$session_id" "$active" 2>/dev/null || exit 0
     rm -f "$intent" 2>/dev/null || true
     pinned_project="$active"

@@ -55,6 +55,7 @@ export const PHASE_PATTERNS: Record<PhaseId, ReadonlyArray<string | RegExp>> = {
     "review.md",
     "quality-review.md",
     "feedback.md",
+    "metrics.md",
   ],
 };
 

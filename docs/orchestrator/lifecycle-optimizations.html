@@ -577,7 +577,7 @@
 ============================================================ -->
 <section id="p01-dives">
   <h2>Phase 0 &amp; 1 deep-dives <span class="count">— what's already in Loom, what's the gap</span></h2>
-  <p class="lede">The two phases on the critical path. Phase 0 is largely covered by the evaluation harness already. Phase 1 is recommendations for how Loom itself should run — none of these are wired in yet.</p>
+  <p class="lede">The two phases on the critical path. Phase 0 is largely covered by the per-run metrics artifact already. Phase 1 is recommendations for how Loom itself should run — none of these are wired in yet.</p>
 
   <div class="p01-subhead">Phase 0 — Measure <span class="sub">3 items · 1 done · 1 partial · 1 todo</span></div>
   <div class="p01-grid">
@@ -588,14 +588,14 @@
         <h4>Per-phase / per-subagent token attribution</h4>
         <span class="status done">done</span>
       </div>
-      <div class="p01-idea">Every subagent dispatch is tagged with its phase via the <code>.phase</code> sidecar; <code>analyze.py</code> sums <code>input · output · cache_creation · cache_read</code> per phase. The dashboard already renders one chart per metric per phase.</div>
+      <div class="p01-idea">Every subagent dispatch is tagged with its phase via the <code>.phase</code> sidecar; <code>render-metrics.py</code> sums <code>input · output · cache_creation · cache_read</code> per phase. Each run&#39;s <code>metrics.md</code> renders the per-phase table and charts.</div>
       <div class="mermaid">flowchart LR
   A[Subagent dispatch] --> B[PostToolUse hook<br/>writes agent-uuid.phase]
   B --> C[Transcript harvest]
   C --> D[usage.jsonl row<br/>phase + tokens + status]
-  D --> E[analyze.py METRICS<br/>sum per phase]
-  E --> F[analysis.html<br/>per-phase charts]</div>
-      <div class="p01-win"><strong>Win delivered.</strong> Every later phase can be measured against this baseline. The harness has 3 baseline runs filed; phase deltas are visible.</div>
+  D --> E[render-metrics.py<br/>sum per phase]
+  E --> F[metrics.md<br/>per-phase charts]</div>
+      <div class="p01-win"><strong>Win delivered.</strong> Every run carries its own per-phase breakdown, orchestrator session included.</div>
     </div>
 
     <div class="p01-card">
@@ -604,7 +604,7 @@
         <h4>Cache-hit-rate KPI</h4>
         <span class="status done">done</span>
       </div>
-      <div class="p01-idea">Derived metric in <code>analyze.py</code>: <code>cache_read / (cache_read + cache_creation + input_tokens)</code>, computed per phase and re-derived from component sums for the Total view (ratios don't add). Surfaced as a column in the per-phase tables and the summary table with three thresholds.</div>
+      <div class="p01-idea">Derived metric in <code>render-metrics.py</code>: <code>cache_read / (cache_read + cache_creation + input_tokens)</code>, computed per phase and re-derived from component sums for the run total (ratios don't add). Surfaced as a column in the per-phase table and as a chart.</div>
       <div class="mermaid">flowchart LR
   A[usage.jsonl row] --> B[cache_read · cache_creation · input_tokens]
   B --> C[Per-phase sums]
@@ -628,7 +628,7 @@
       <div class="p01-idea">The schema is bespoke (<code>usage.jsonl</code>). Adopting OpenTelemetry's <code>gen_ai.*</code> semantic conventions lets Loom traces drop into Datadog, Honeycomb, Arize, Langfuse without a custom adapter per vendor.</div>
       <div class="mermaid">flowchart LR
   subgraph now [Today]
-    A[usage.jsonl bespoke] --> B[Custom dashboard only]
+    A[usage.jsonl bespoke] --> B[metrics.md only]
   end
   subgraph next [With OTel]
     C[gen_ai.usage.input_tokens<br/>gen_ai.system<br/>gen_ai.operation.name] --> D[Datadog]
@@ -686,7 +686,7 @@
   </div>
 
   <div class="rollout-note">
-    <strong>Reading the gap.</strong> Phase 0 is nearly done — 3.1 has shipped (the <code>cache_hit_rate</code> column is live in <code>analysis.html</code> with a 60% / 80% threshold); only the OpenTelemetry adapter (low priority) remains. Phase 1 is two items (1.1 + 1.7), captured as the seed <code>docs/seeds/phase-1-cache-discipline.md</code>. The seed implements both against the same KPI so the A/B vs baseline isolates one effect.
+    <strong>Reading the gap.</strong> Phase 0 is nearly done — 3.1 has shipped (the <code>cache_hit_rate</code> column is live in <code>metrics.md</code>, per phase and as a chart); only the OpenTelemetry adapter (low priority) remains. Phase 1 is two items (1.1 + 1.7), captured as the seed <code>docs/seeds/phase-1-cache-discipline.md</code>. The seed implements both against the same KPI so the A/B vs baseline isolates one effect.
   </div>
 </section>
 

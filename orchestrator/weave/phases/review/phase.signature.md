@@ -83,7 +83,7 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 #### `review-verdict.json`
 
 - Path: `.loom/<project>/review-verdict.json`.
-- Single-object JSON written atomically. Read by the evaluation harness as the canonical machine-readable verdict — `review.md` prose is for humans and is not parsed.
+- Single-object JSON written atomically. Read by `lib/telemetry/run-outcome.py` as the canonical machine-readable verdict — `review.md` prose is for humans and is not parsed.
 
 ```json
 {
@@ -96,6 +96,25 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 ```
 
 Counts are non-negative integers. `verdict` is `FAIL` whenever `blockers > 0`; otherwise `PASS`. Values must equal the counts in the RETURN block (`blockers`, `major`, `minor`, `note`) and the per-severity finding counts in `review.md`.
+
+#### `metrics.md`
+
+- Path: `.loom/<project>/metrics.md`.
+- **Machine-generated. Review owns it; Review never writes it.** The bytes come from `lib/telemetry/render-metrics.py`, refreshed by the PostToolUse telemetry hook after every subagent returns. The Review agent's duty is the verification step in `phase.md § On completion`: confirm the file exists, and return `blocked` if it does not.
+- Never hand-edit a figure into it and never restate one of its numbers in `review.md`. A cost or token count that an agent typed is a number nobody can reproduce; the file is the citable source.
+- Fixed layout, identical on every run — sections in this order, all present whether or not they carry data:
+
+| Section | Content |
+| --- | --- |
+| `## Run totals` | Estimated cost, lifecycle wall span, phase-agent autonomous time, the four token buckets, cache hit rate, models, row counts, coverage |
+| `## Cost by phase` | mermaid `xychart-beta` bar |
+| `## Cost share` | mermaid `pie` |
+| `## Cache efficiency` | mermaid `xychart-beta` bar |
+| `## Per-phase detail` | One row per bucket — `spec`, `design`, `plan`, `build`, `review`, `orchestrator` — always all six |
+| `## Outcome` | Lifecycle state, final phase, verdict counts, task counts (from `outcome.json`) |
+| `## Crashed invocations` | Table, header-only when there are none |
+
+- Measurement scope: the whole `/weave` lifecycle, orchestrator session included. Two limits are inherent and are not defects — the orchestrator session is still open when the file is written, so its own trailing turns are uncounted; and durations are not additive across buckets, because the orchestrator's span encloses the subagent spans it dispatched.
 
 ## Throws
 

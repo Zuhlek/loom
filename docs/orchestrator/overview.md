@@ -40,7 +40,7 @@ Every subagent in the Loom tree spawns from `/weave`. The orchestrator dispatche
 | `orchestrator/weave/phases/<phase>/methods/` | Phase-internal procedure files (when present) — read inline by the phase agent, not dispatched as subagents (e.g. Build's `task`, `smoke`, `mutation`) |
 | `orchestrator/weave/phases/<phase>/quality-check.md` | Opt-in Quality Check agent body — present for `spec`, `design`, `plan`, `build`. Spec/Design/Build have narrow in-phase scope; Plan has comprehensive cross-phase scope. Review has none because Review is itself the project-level quality check |
 | `orchestrator/weave/phases/<phase>/quality-check.signature.md` | Quality Check agent signature (one per phase QC) |
-| `orchestrator/lib/` | Shared shell helpers (`atomic-write.sh`) plus the deletable telemetry/eval substrate under `lib/telemetry/`; the pipeline parser lives at `orchestrator/weave/lib/pipeline-parser.py` |
+| `orchestrator/lib/` | Shared shell helpers (`atomic-write.sh`) plus `lib/telemetry/` — run measurement (`metrics.md`), the session-ownership store, and the artifact index; the pipeline parser lives at `orchestrator/weave/lib/pipeline-parser.py` |
 | `orchestrator/hooks/` | Claude Code hooks |
 | `orchestrator/types/` | Domain guidance keyed by Type hint; the active type is materialized into each workspace as `.loom/<project>/type-guidance.md` at project creation |
 | `orchestrator/templates/` | Project templates (seed) |

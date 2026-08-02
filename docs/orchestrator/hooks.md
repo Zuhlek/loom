@@ -10,7 +10,7 @@ Claude Code hooks keep Loom workspaces resumable and observable.
 | `auto-advance.sh` | Stop | Nudges the owning session when its pinned workspace is unblocked; also converts this session's weave-intent marker into a pin once `.loom/.active` resolves. Silent for unpinned sessions |
 | `refresh-artifacts.sh` | PostToolUse (Write/Edit/MultiEdit) | Rebuilds the workspace `artifacts.json` index after a file write |
 | `board-transition.py` | PostToolUse (Write/Edit/MultiEdit) | Live board mirror during Build — best-effort; the orchestrator's end-of-Build reconciliation stays authoritative |
-| `lib/telemetry/tag-subagent-phase.py` | PostToolUse (Agent/Task) | Telemetry: tags each dispatched subagent's transcript with the active phase |
+| `lib/telemetry/tag-subagent-phase.py` | PostToolUse (Agent/Task) | Tags each dispatched subagent's transcript with the active phase, then refreshes the workspace's `usage.jsonl` / `outcome.json` / `metrics.md` (see `metrics.md` doc) |
 
 ## Session ownership
 

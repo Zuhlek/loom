@@ -12,16 +12,6 @@ Engineering follow-ups for the `/weave` orchestrator. Listed in priority order.
 
 RETURN-block schema enforcement runs solely in `hooks/validate-subagent-output.py` as a `SubagentStop` hook. Malformed returns surface as visible `decision: block` reasons; the orchestrator does not maintain a parallel extractor. Plan structural invariants are enforced there as of item 1; Build structural invariants remain open (see above).
 
-## 3. Eval thresholds with fail conditions
-
-`evaluation/analyze.py` measures Build outcomes but does not fail the eval on them.
-
-**Fix in `evaluation/analyze.py`:**
-
-- Fail if `tasks.done != tasks.planned`.
-- Track output tokens per phase.
-- Track retry counts and deterministic-gate failures (depends on items 1–2).
-
 ## Deferred (need refinement, not adoption)
 
 - **Hard summary word caps.** Direction is right, but a hard cap on rerun summaries can starve recovery. Better as: "artifacts MUST be paths" (enforceable) + "summary SHOULD be ≤ N words" (soft).
