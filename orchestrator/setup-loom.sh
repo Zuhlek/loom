@@ -22,6 +22,7 @@
 #   CLAUDE_SKILLS_DIR (default ~/.claude/skills)
 #   CLAUDE_HOOKS_LINK (default ~/.claude/loom-hooks)
 #   CLAUDE_SETTINGS   (default ~/.claude/settings.json)
+#   LOOM_RULES_DIR    (default ~/.claude/loom/rules)
 
 set -euo pipefail
 
@@ -29,10 +30,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
 HOOKS_LINK="${CLAUDE_HOOKS_LINK:-$HOME/.claude/loom-hooks}"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+RULES_DIR="${LOOM_RULES_DIR:-$HOME/.claude/loom/rules}"
 
 mkdir -p "$SKILLS_DIR"
 mkdir -p "$(dirname "$HOOKS_LINK")"
 mkdir -p "$(dirname "$SETTINGS")"
+mkdir -p "$RULES_DIR"
 
 # Canonical loom hook wiring. Single source of truth — piped into jq via
 # `--argjson loom`, and printed to stderr as the no-jq fallback. `$ROOT`
@@ -85,6 +88,19 @@ LOOM_HOOKS_JSON="$(cat <<JSON
     ]
   }
 }
+JSON
+)"
+
+# The repo rule store lives outside every project tree (see
+# `weave/SKILL.md § Tune proposals`), so no project-scoped permission can
+# reach it. Without these grants an autonomous Build prompts on every rule
+# read. Scoped to the rules dir only — never the whole home directory.
+LOOM_PERMS_JSON="$(cat <<JSON
+[
+  "Read(/$RULES_DIR/**)",
+  "Write(/$RULES_DIR/**)",
+  "Edit(/$RULES_DIR/**)"
+]
 JSON
 )"
 
@@ -161,13 +177,15 @@ fi
 if ! command -v jq >/dev/null 2>&1; then
     echo "warn       jq not found; copy the following hook settings manually into $SETTINGS:" >&2
     printf '%s\n' "$LOOM_HOOKS_JSON" >&2
+    echo "warn       and add these entries to permissions.allow:" >&2
+    printf '%s\n' "$LOOM_PERMS_JSON" >&2
     exit 0
 fi
 
 tmp="$SETTINGS.tmp.$$"
 trap 'rm -f "$tmp"' EXIT
 
-jq --argjson loom "$LOOM_HOOKS_JSON" '
+jq --argjson loom "$LOOM_HOOKS_JSON" --argjson perms "$LOOM_PERMS_JSON" '
   # Anchored to path segments that only loom owns: the loom-hooks symlink
   # dir, a direct orchestrator/hooks/ reference, and the one telemetry
   # script referenced by absolute path. The leading slash keeps "heirloom
@@ -195,6 +213,13 @@ jq --argjson loom "$LOOM_HOOKS_JSON" '
     | .hooks.PreToolUse       = merge_event("PreToolUse")
     | .hooks.PostToolUse      = merge_event("PostToolUse")
     | .hooks |= with_entries(select((.value | type == "array" and length == 0) | not))
+
+  # Rule-store grants: append only the ones not already present, so the
+  # users own allow-list keeps its order and nothing is duplicated on
+  # a re-run.
+    | .permissions = (.permissions // {})
+    | .permissions.allow =
+        ((.permissions.allow // []) + ($perms - (.permissions.allow // [])))
 ' "$SETTINGS" > "$tmp"
 
 mv "$tmp" "$SETTINGS"
@@ -220,4 +245,5 @@ if [ "$missing" -gt 0 ]; then
     exit 1
 fi
 
+echo "ready      $RULES_DIR (repo rule stores; read/write granted)"
 echo "done       loom hook wiring resolves cleanly"

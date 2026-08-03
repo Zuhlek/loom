@@ -6,7 +6,7 @@ Claude Code hooks keep Loom workspaces resumable and observable.
 | --- | --- | --- |
 | `pin-on-weave.sh` | UserPromptSubmit | Pins the firing session to the project it engages via `/weave <project>`; records a weave-intent marker when the name still needs resolving. Primary writer of the session-ownership store |
 | `resume-on-start.sh` | SessionStart | Surfaces the pinned workspace's `pipeline.md` status to its owning session — silent for unpinned sessions |
-| `validate-subagent-output.py` | SubagentStop | Validates phase RETURN blocks; on a Plan `complete` return additionally enforces the deterministic work-graph invariants (`phases/plan/phase.signature.md § Deterministic validation`) |
+| `validate-subagent-output.py` | SubagentStop | Validates phase RETURN blocks; on a Plan `complete` return additionally enforces the deterministic work-graph invariants (`phases/plan/phase.signature.md § Deterministic validation`); on a Build return blocks any session-written done report missing the mandatory `rules:` field, the evidence that both rule stores were matched in `phases/build/methods/task.md` step 0 |
 | `auto-advance.sh` | Stop | Nudges the owning session when its pinned workspace is unblocked; also converts this session's weave-intent marker into a pin once `.loom/.active` resolves. Silent for unpinned sessions |
 | `board-transition.py` | PostToolUse (Write/Edit/MultiEdit) | Live board mirror during Build — best-effort; the orchestrator's end-of-Build reconciliation stays authoritative |
 | `lib/telemetry/tag-subagent-phase.py` | PostToolUse (Agent/Task) | Tags each dispatched subagent's transcript with the active phase, then refreshes the workspace's `usage.jsonl` / `outcome.json` / `metrics.md` (see `metrics.md` doc) |

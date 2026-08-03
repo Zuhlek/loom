@@ -22,7 +22,9 @@ After every phase the orchestrator surfaces a rerun-or-continue decision to the 
 
 ## Rule stores
 
-Two stores, one gate. Repo-scoped rules live in `<repo>/CLAUDE.md ## Loom rules` (repo path = the `Repo` field in `pipeline.md`); overall rules live in `orchestrator/weave/methods/principles.md ## Learned rules`. Review distills rule candidates into `review.md ## Tune proposals`; the orchestrator appends approved entries after per-proposal approval at the Review gate — both stores are append-only, never rewritten. Retired entries and rejected proposals land in `orchestrator/weave/methods/rules-archive.md`.
+Two stores, one gate. Repo-scoped rules live in `~/.claude/loom/rules/<slug>.md` — machine-local and untracked, `<slug>` = the `Repo` field in `pipeline.md` with every `/` replaced by `-`. Overall rules live in `orchestrator/weave/methods/principles.md ## Learned rules`, tracked with loom. Review distills rule candidates into `review.md ## Tune proposals`; the orchestrator appends approved entries after per-proposal approval at the Review gate — both stores are append-only, never rewritten, and the repo store file is created on first use. Retired and rejected entries land in the repo store's own `## Archive` section, or in `orchestrator/weave/methods/rules-archive.md ## overall` for the overall store.
+
+Loom writes no rule state into a target repo: a work repo's git status is never touched by the tune flow, and nothing about a work repo is tracked in the loom repo.
 
 ## Dispatch hierarchy
 

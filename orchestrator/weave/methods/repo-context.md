@@ -7,7 +7,7 @@ Optional, user-maintained, hand-curated context file. Spec reads it before Found
 - **Shape:** plain markdown, < 200 lines. Anything longer drifts in practice and stops being read in full.
 - **What goes in it:** the things grep cannot tell the agent — *why* the codebase is structured the way it is, naming conventions and idioms the team enforces, where load-bearing logic lives, integration points, and any "if you're touching X, also consider Y" cross-cutting concerns.
 - **What does NOT go in it:** restatements of file contents, lists of files (grep does that), per-task notes (those belong in `tasks/T-NNN.md`), or anything that changes between projects against the same repo (that belongs in `seed.md` for the project).
-- **Not a rule store:** repo-wide durable rules belong in `<repo>/CLAUDE.md ## Loom rules` (the tune store), not here — `repo-context.md` stays the hand-curated project input for Spec's Foundation. A repo-wide rule a human writes here is a tune candidate: move it through the Review gate into the store.
+- **Not a rule store:** repo-wide durable rules belong in the repo store `~/.claude/loom/rules/<slug>.md` (the tune store; `<slug>` = the `Repo` field with `/` → `-`), not here — `repo-context.md` stays the hand-curated project input for Spec's Foundation. A repo-wide rule a human writes here is a tune candidate: move it through the Review gate into the store.
 
 ## When the Spec agent reads it
 

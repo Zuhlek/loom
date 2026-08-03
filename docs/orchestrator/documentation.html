@@ -4036,7 +4036,9 @@ flowchart TD
 
     <section id="section-14">
       <h2>14. Learning loop &mdash; rule stores</h2>
-      <p><strong>Two stores, one gate.</strong> Review distills rule candidates into <code>review.md ## Tune proposals</code>; the orchestrator surfaces each proposal at the Review gate and on approval appends the entry to its store: repo-scoped rules to <code>&lt;repo&gt;/CLAUDE.md ## Loom rules</code> (repo path = the <code>Repo</code> field in <code>pipeline.md</code>), overall rules to <code>weave/methods/principles.md ## Learned rules</code>. Both stores are append-only via that gate; retired entries and rejected proposals land in <code>weave/methods/rules-archive.md</code>.</p>
+      <p><strong>Two stores, one gate.</strong> Review distills rule candidates into <code>review.md ## Tune proposals</code>; the orchestrator surfaces each proposal at the Review gate and on approval appends the entry to its store: repo-scoped rules to <code>~/.claude/loom/rules/&lt;slug&gt;.md ## Rules</code> (machine-local and untracked &mdash; <code>&lt;slug&gt;</code> is the <code>Repo</code> field in <code>pipeline.md</code> with every <code>/</code> replaced by <code>-</code>), overall rules to <code>weave/methods/principles.md ## Learned rules</code> (tracked with loom). Both stores are append-only via that gate; the orchestrator's one non-append action is creating a repo store file that does not exist yet. Retired and rejected entries land in the repo store's own <code>## Archive</code> section, or in <code>weave/methods/rules-archive.md ## overall</code>.</p>
+
+      <p><strong>Loom writes no rule state into a target repo.</strong> The tune flow never edits, creates, or dirties a file inside the codebase under work &mdash; its memory of that codebase is machine-local, and nothing about a work repo is tracked in the loom repo either. A repo that never earns a rule has no store file at all.</p>
     </section>
 
     <section id="section-15">

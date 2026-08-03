@@ -21,8 +21,8 @@ I/O signature between `/weave` and the Review Audit Agent.
 | Repository diff | working tree | yes | Code under review |
 | `principles.md` | `methods/principles.md` (inlined into dispatch head) | yes | Engineering principles |
 | `type-guidance.md` | `.loom/<project>/type-guidance.md` | when typed | Domain guidance (materialized at project creation from the active `types/<type>.md`) |
-| Repo rule store | `<repo>/CLAUDE.md ## Loom rules`, `<repo>` = `pipeline.md.Repo` | when proposing | Read before writing tune proposals; missing `Repo` field or file ⇒ no repo store |
-| `rules-archive.md` | `methods/rules-archive.md` via the skill path (`~/.claude/skills/weave/methods/rules-archive.md`) | when proposing | Retired rules and gate-rejected proposals — read before proposing so none are re-proposed |
+| Repo rule store | `~/.claude/loom/rules/<slug>.md`, `<slug>` = `pipeline.md.Repo` with `/` → `-` | when proposing | Both its sections (`## Rules`, `## Archive`) read before writing tune proposals; empty `Repo` ⇒ no repo store (greenfield work with no target directory), missing file ⇒ empty store (not an error) |
+| `rules-archive.md` | `methods/rules-archive.md ## overall` via the skill path (`~/.claude/skills/weave/methods/rules-archive.md`) | when proposing | Retired and gate-rejected entries of the OVERALL store — read before proposing so none are re-proposed; repo-origin entries live in the repo store's own `## Archive` |
 
 ### State preconditions
 
