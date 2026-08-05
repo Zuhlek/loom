@@ -209,10 +209,12 @@ Two questions place a rule — does it apply beyond this repo, and would a teamm
 paths: ["src/templating/**"]
 ---
 Never register a formula in two places — the registry is generated.
-Evidence: tasks/T-004.test-log.txt
+Reason: the generator overwrites hand-added entries on the next build.
 ```
 
 One rule per file, named for its subject (`formula-registry.md`, not `rules-3.md`). A second rule with the same `paths:` is appended to that file rather than starting a new one.
+
+**Self-contained text.** For the three targets outside the loom repo (`.claude/rules/*.md`, `CLAUDE.local.md`, `~/.claude/CLAUDE.md`) the written rule names only things that exist in the target repo — trigger, rule, reason. NO loom vocabulary: no phase names (Spec/Design/Plan/Build/Review), no `tasks/T-NNN.*`, no `spec.md`/`design.md`/`plan.md`/`decisions.md`/`review.md`, no acceptance-criteria or task IDs, no `.loom/` path. A reader who has never run loom must be able to act on it. The proposal's evidence path is gate justification and stays in `review.md` — it is NOT written into the file; only a concrete example that names target-repo files (`record.actions.ts:8`) may be inlined. `## Learned rules` is loom's own file and is exempt: loom vocabulary is its subject matter.
 
 When `review.md` carries a `## Tune proposals` section, the gate summary names each proposal in ONE line, with its target file. The Review gate's own options stay exactly as the table above — tune adds no option there, and there is no delete verb: removing a rule is deleting a file, which is a human hand-edit.
 

@@ -72,7 +72,7 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 - Must list blockers and major issues or state none.
 - Must route unresolved work to an owner phase.
 - Follows the Finding Shape declared in `phase.md` (Severity, Evidence, Expected, Actual, Impact, Recommendation, Owner phase).
-- Carries a `## Tune proposals` section only when rule candidates exist: at most 3 proposals (rule text + target file and `paths:` with reason + evidence path) plus the hygiene list (per `phase.md § Tune proposals`). Zero proposals ⇒ no section.
+- Carries a `## Tune proposals` section only when rule candidates exist: at most 3 proposals (rule text + target file and `paths:` with reason + evidence path) plus the hygiene list (per `phase.md § Tune proposals`). The rule text is self-contained — free of loom vocabulary and workspace paths; the evidence path sits beside it here and is not written into the target file. Zero proposals ⇒ no section.
 
 #### `feedback.md`
 
