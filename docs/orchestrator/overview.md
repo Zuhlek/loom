@@ -22,9 +22,14 @@ After every phase the orchestrator surfaces a rerun-or-continue decision to the 
 
 ## Rule stores
 
-Two stores, one gate. Repo-scoped rules live in `~/.claude/loom/rules/<slug>.md` — machine-local and untracked, `<slug>` = the `Repo` field in `pipeline.md` with every `/` replaced by `-`. Overall rules live in `orchestrator/weave/methods/principles.md ## Learned rules`, tracked with loom. Review distills rule candidates into `review.md ## Tune proposals`; the orchestrator appends approved entries after per-proposal approval at the Review gate — both stores are append-only, never rewritten, and the repo store file is created on first use. Retired and rejected entries land in the repo store's own `## Archive` section, or in `orchestrator/weave/methods/rules-archive.md ## overall` for the overall store.
+Rules live where Claude Code already looks for memory, so every session in a repo obeys them — not just loom runs. Two questions place a rule: does it apply beyond this repo, and would a teammate want it.
 
-Loom writes no rule state into a target repo: a work repo's git status is never touched by the tune flow, and nothing about a work repo is tracked in the loom repo.
+| | Team | Personal |
+| --- | --- | --- |
+| Every project | `orchestrator/weave/methods/principles.md ## Learned rules` | `~/.claude/CLAUDE.md` |
+| This repo | `<repo>/.claude/rules/<topic>.md` | `<repo>/CLAUDE.local.md` |
+
+`.claude/rules/*.md` carries `paths:` frontmatter — a list of globs — and loads only when Claude works on a matching file. The other three are always in context. Review distills candidates into `review.md ## Tune proposals`; the orchestrator writes each one the human approves at the Review gate. Rejected proposals are dropped, and removing a rule is deleting its file.
 
 ## Dispatch hierarchy
 

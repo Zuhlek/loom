@@ -11,7 +11,7 @@ Apply each principle in the inlined `methods/principles.md` (P1–P7), using its
 Copy this into your working notes for each task and tick as you go:
 
 ```
-- [ ] RULES matched (both stores' scope fields vs this task's files)
+- [ ] RULES matched (repo rules + inlined `## Learned rules` vs this task's files)
 - [ ] RED logged (a runtime assertion failure, not a compile error)
 - [ ] IMPLEMENT (smallest scoped diff; only files in files-likely-touched)
 - [ ] GREEN logged (test now passes)
@@ -24,7 +24,7 @@ Copy this into your working notes for each task and tick as you go:
 
 For task `T-NNN`:
 
-0. **Rules.** Read the repo store `~/.claude/loom/rules/<slug>.md ## Rules` explicitly — resolve `<slug>` from `orchestrator/weave/lib/pipeline-parser.py field .loom/<project>/pipeline.md Repo` by replacing every `/` with `-`; an empty `Repo` field or a missing file means zero repo rules (both are normal, neither is an error). The explicit read is the ONLY way these rules reach you: the store is outside every project tree, so no platform memory mechanism loads it, ambiently or otherwise. Skipping it means building against rules the human approved and you never saw. Match both stores' scope fields against the files this task touches (`files-likely-touched` plus any file actually edited): repo-store path globs match task file paths relative to the repo root; overall-store scopes (`## Learned rules`, inlined with `principles.md`) match `[*]` always, `[type: X]` against the `Type hint` field in `pipeline.md`, `[repo: a, b]` against the target repo's directory name. Matching entries go into the done report's `rules:` field.
+0. **Rules.** Read `<repo>/.claude/rules/*.md` and `<repo>/CLAUDE.local.md` explicitly — resolve `<repo>` via `orchestrator/weave/lib/pipeline-parser.py field .loom/<project>/pipeline.md Repo`; an empty field, missing directory or missing file means no repo rules, all normal. The explicit read is the ONLY way they reach you: your cwd is the collection directory, not the repo, so Claude Code's memory loading never fires for them. Skipping it means building against rules the human approved and you never saw. Then match against the files this task touches (`files-likely-touched` plus any file actually edited): a rules file applies when its `paths:` frontmatter matches one of them, or when it has no `paths:`; `CLAUDE.local.md` always applies; the inlined `## Learned rules` apply on `[*]` and on `[type: X]` matching `pipeline.md`'s `Type hint`. Matching rules go into the done report's `rules:` field.
 
 1. **Red phase.** Create stubs sufficient for tests to compile. Write behaviour tests from the task's test sketch (`tasks/T-NNN.md`). Run the tests and confirm every new test fails with a **runtime assertion error** — not a compile error, not a missing-import error. Append the red output to `tasks/T-NNN.test-log.txt` (pipe verbose runners through `tail -100`).
 

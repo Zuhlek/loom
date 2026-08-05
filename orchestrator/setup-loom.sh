@@ -22,7 +22,6 @@
 #   CLAUDE_SKILLS_DIR (default ~/.claude/skills)
 #   CLAUDE_HOOKS_LINK (default ~/.claude/loom-hooks)
 #   CLAUDE_SETTINGS   (default ~/.claude/settings.json)
-#   LOOM_RULES_DIR    (default ~/.claude/loom/rules)
 
 set -euo pipefail
 
@@ -30,12 +29,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
 HOOKS_LINK="${CLAUDE_HOOKS_LINK:-$HOME/.claude/loom-hooks}"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
-RULES_DIR="${LOOM_RULES_DIR:-$HOME/.claude/loom/rules}"
 
 mkdir -p "$SKILLS_DIR"
 mkdir -p "$(dirname "$HOOKS_LINK")"
 mkdir -p "$(dirname "$SETTINGS")"
-mkdir -p "$RULES_DIR"
 
 # Canonical loom hook wiring. Single source of truth — piped into jq via
 # `--argjson loom`, and printed to stderr as the no-jq fallback. `$ROOT`
@@ -91,15 +88,14 @@ LOOM_HOOKS_JSON="$(cat <<JSON
 JSON
 )"
 
-# The repo rule store lives outside every project tree (see
-# `weave/SKILL.md § Tune proposals`), so no project-scoped permission can
-# reach it. Without these grants an autonomous Build prompts on every rule
-# read. Scoped to the rules dir only — never the whole home directory.
+# Three of the four rule locations sit inside the target repo, which a run
+# already writes to. The fourth is the user's global memory file, outside
+# every project tree — without these it prompts at the Review gate. One
+# file, not a directory glob.
 LOOM_PERMS_JSON="$(cat <<JSON
 [
-  "Read(/$RULES_DIR/**)",
-  "Write(/$RULES_DIR/**)",
-  "Edit(/$RULES_DIR/**)"
+  "Read(/$HOME/.claude/CLAUDE.md)",
+  "Edit(/$HOME/.claude/CLAUDE.md)"
 ]
 JSON
 )"
@@ -245,5 +241,4 @@ if [ "$missing" -gt 0 ]; then
     exit 1
 fi
 
-echo "ready      $RULES_DIR (repo rule stores; read/write granted)"
 echo "done       loom hook wiring resolves cleanly"

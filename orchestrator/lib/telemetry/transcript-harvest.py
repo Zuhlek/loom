@@ -2,13 +2,25 @@
 """transcript-harvest — produce a workspace's usage.jsonl from Claude Code
 session transcripts.
 
-Walks every `agent-<uuid>.jsonl` under the parent session's (or sessions')
-`subagents/` directory, reduces each transcript's per-turn SDK `usage`
-blocks into one `agent_kind: subagent` row, tags the row's phase from the
-sibling `agent-<uuid>.phase` sidecar (written by the PostToolUse hook in
-`tag-subagent-phase.py`) — falling back to the `agent-<uuid>.meta.json`
-dispatch description — and counts the row's quality signals from its
-tool_result entries.
+Walks every `agent-<uuid>.jsonl` under the session directories for this
+cwd, reduces each transcript's per-turn SDK `usage` blocks into one
+`agent_kind: subagent` row, tags the row's phase, and counts the row's
+quality signals from its tool_result entries.
+
+Phase attribution reads four sources, in order of authority:
+
+    sidecar   `agent-<uuid>.phase`, written by the PostToolUse hook
+    dispatch  the `Active phase:` stamp in the subagent's own prompt
+    parent    inherited via `meta.json`'s `parentAgentId`
+    meta      the dispatch description, pattern-matched
+
+Only the first requires the hook to have run. The `dispatch` source is the
+load-bearing one: `/weave` stamps `Active project:` and `Active phase:` into
+every dispatch prompt, so the transcript describes itself. A run whose
+session never executed the hook — started before install, or driven by a
+harness that doesn't load the user's hook config — still measures correctly,
+where before it was invisible and a bystander session could be measured in
+its place.
 
 The `/weave` orchestrator's OWN session is reduced the same way into one
 `agent_kind: orchestrator` row per contributing session, so a run's totals
@@ -46,10 +58,13 @@ Usage:
                                                           [--dry-run]
 
 By default the workspace is `.loom/<project>/` relative to the repo root.
-Pass `--session UUID` (repeatable) to bypass the dispatch-text project
-match and pull transcripts out of exactly those Claude Code session dirs —
-the reliable key. `.session-pointer` holds one session UUID per line; pass
-every line.
+Pass `--session UUID` (repeatable) to vouch for a session whose transcripts
+should be included regardless of their own project evidence.
+`.session-pointer` holds one session UUID per line; pass every line.
+
+`--session` WIDENS the match, it does not narrow the search: every session
+under the cwd is scanned either way, and transcripts that carry the project
+stamp are picked up whether or not the pointer knows about their session.
 """
 from __future__ import annotations
 
@@ -77,11 +92,17 @@ SCHEMA_VERSION = 2
 PRICING_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-fable-5":   (10.0, 50.0),
     "claude-mythos-5":  (10.0, 50.0),
+    "claude-opus-5":    (5.0, 25.0),
     "claude-opus-4":    (5.0, 25.0),
     "claude-sonnet-5":  (3.0, 15.0),
     "claude-sonnet-4":  (3.0, 15.0),
     "claude-haiku-4-5": (1.0, 5.0),
 }
+
+# A model id may carry a context-window suffix (`claude-opus-5[1m]`). Prefix
+# matching handles those without a table entry each. A model absent from the
+# table yields cost_usd=None — which render-metrics.py must surface as
+# "unpriced", never fold into a 0.00 that reads as free.
 
 CACHE_READ_MULT = 0.10
 CACHE_WRITE_5M_MULT = 1.25
@@ -185,17 +206,18 @@ def _content_text(row: dict) -> str:
 
 
 def _wall_ms_from_rows(rows: list[dict]) -> int:
-    first_ts = last_ts = None
-    for r in rows:
-        ts = _parse_iso(r.get("timestamp"))
-        if ts is None:
-            continue
-        if first_ts is None:
-            first_ts = ts
-        last_ts = ts
-    if first_ts is None or last_ts is None or last_ts < first_ts:
+    """Span from the earliest to the latest timestamped row.
+
+    Deliberately min/max rather than first/last: a transcript's rows are NOT
+    guaranteed chronological. Sidechain interleaving and resumed sessions
+    write rows out of order, and a first/last read of such a file understates
+    the span — or returns 0 when the last row predates the first.
+    """
+    stamps = [ts for ts in (_parse_iso(r.get("timestamp")) for r in rows)
+              if ts is not None]
+    if not stamps:
         return 0
-    return _ms_between(first_ts, last_ts)
+    return _ms_between(min(stamps), max(stamps))
 
 
 def _autonomous_ms_from_rows(rows: list[dict]) -> int:
@@ -205,13 +227,21 @@ def _autonomous_ms_from_rows(rows: list[dict]) -> int:
     (assistant rows included), so segments never overlap and the sum is
     guaranteed <= wall clock. (The previous algorithm re-used the same
     anchor for every assistant row of a multi-block response and could
-    exceed wall by 2x.)"""
+    exceed wall by 2x.)
+
+    Rows are sorted by timestamp first, because file order is not
+    chronological in sidechained or resumed transcripts — partitioning the
+    file as if it were would drop every segment that appears out of order.
+    The sort is stable, so equal timestamps keep their file order.
+    """
+    stamped = sorted(
+        ((ts, r) for ts, r in ((_parse_iso(r.get("timestamp")), r) for r in rows)
+         if ts is not None),
+        key=lambda pair: pair[0],
+    )
     total_ms = 0
     anchor: _dt.datetime | None = None
-    for r in rows:
-        ts = _parse_iso(r.get("timestamp"))
-        if ts is None:
-            continue
+    for ts, r in stamped:
         if r.get("type") == "assistant" and anchor is not None and ts > anchor:
             total_ms += _ms_between(anchor, ts)
         anchor = ts
@@ -343,6 +373,55 @@ def read_phase_sidecar(transcript_path: Path) -> str | None:
     return None
 
 
+_REMINDER_RE = re.compile(r"<system-reminder>(.*?)</system-reminder>", re.DOTALL)
+_ACTIVE_PROJECT_RE = re.compile(r"^Active project:[ \t]*(\S+)[ \t]*$", re.MULTILINE)
+_ACTIVE_PHASE_RE = re.compile(r"^Active phase:[ \t]*([A-Za-z]+)[ \t]*$", re.MULTILINE)
+
+
+def read_dispatch_context(rows: list[dict]) -> tuple[str | None, str | None]:
+    """Return `(project, phase)` from the dispatch prompt's `<system-reminder>`.
+
+    `/weave` stamps every dispatch with
+
+        <system-reminder>
+        Active project: <project>
+        Active phase: <phase>
+        ...
+        </system-reminder>
+
+    which lands verbatim in the subagent's own first user row. That makes the
+    transcript self-describing: attribution does not depend on the PostToolUse
+    hook having run, on `pipeline.md` write-discipline, or on the dispatch
+    description wording.
+
+    This matters because the hook is not guaranteed to fire. A session started
+    before the hook was installed, or driven by a harness that does not load
+    the user's hook config, produces subagent transcripts with no `.phase`
+    sidecar and no `.session-pointer` entry — and the run would otherwise be
+    invisible to measurement even though the evidence is sitting in the file.
+    """
+    text: list[str] = []
+    for row in rows[:5]:
+        if row.get("type") != "user":
+            continue
+        chunk = _content_text(row)
+        if chunk:
+            text.append(chunk)
+    if not text:
+        return None, None
+    project = phase = None
+    for block in _REMINDER_RE.findall("\n".join(text)):
+        match_project = _ACTIVE_PROJECT_RE.search(block)
+        match_phase = _ACTIVE_PHASE_RE.search(block)
+        if match_project:
+            project = match_project.group(1).strip().strip("`")
+        if match_phase:
+            candidate = match_phase.group(1).strip().lower()
+            if candidate in VALID_PHASES:
+                phase = candidate
+    return project, phase
+
+
 _META_PHASE_RE = re.compile(
     r"\b(spec|design|plan|build|review)\b[\s-]*phase|"
     r"phase[\s:-]*\b(spec|design|plan|build|review)\b",
@@ -374,6 +453,58 @@ def read_phase_from_meta(transcript_path: Path) -> str | None:
         return None
     phase = (match.group(1) or match.group(2) or "").lower()
     return phase if phase in VALID_PHASES else None
+
+
+def agent_id_for(transcript_path: Path) -> str:
+    """`.../agent-<uuid>.jsonl` -> `<uuid>`."""
+    stem = transcript_path.stem
+    return stem[len("agent-"):] if stem.startswith("agent-") else stem
+
+
+def read_meta(transcript_path: Path) -> dict:
+    """Parse `agent-<uuid>.meta.json`, or `{}` when absent or malformed."""
+    meta_path = transcript_path.parent / (transcript_path.stem + ".meta.json")
+    if not meta_path.is_file():
+        return {}
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+MAX_PARENT_HOPS = 8
+
+
+def resolve_via_parent(agent_id: str, by_agent_id: dict[str, dict]) -> dict | None:
+    """Walk `parentAgentId` up to the nearest ancestor with its own attribution.
+
+    A phase agent may itself dispatch helpers (a Spec agent spawning research
+    agents). Those nested transcripts carry no dispatch stamp of their own —
+    `/weave` never wrote one, their parent did — so on their own they are
+    unattributable. Their `meta.json` does carry `parentAgentId`, which is
+    enough to inherit both the project and the phase from the dispatch that
+    ultimately caused them.
+
+    Bounded by MAX_PARENT_HOPS and a visited set so a malformed or cyclic
+    parent chain cannot hang the harvest.
+    """
+    seen: set[str] = {agent_id}
+    current = by_agent_id.get(agent_id)
+    for _ in range(MAX_PARENT_HOPS):
+        if current is None:
+            return None
+        parent_id = current["meta"].get("parentAgentId")
+        if not isinstance(parent_id, str) or parent_id in seen:
+            return None
+        seen.add(parent_id)
+        parent = by_agent_id.get(parent_id)
+        if parent is None:
+            return None
+        if parent["dispatch_project"] or parent["dispatch_phase"]:
+            return parent
+        current = parent
+    return None
 
 
 def quality_counts(rows: list[dict]) -> dict[str, int]:
@@ -583,7 +714,24 @@ def orchestrator_rows(matched_subagents: list[Path]) -> list[dict]:
 def harvest(project: str, workspace: Path, projects_root: Path,
             cwd: Path, dry_run: bool = False,
             session_id=None) -> dict:
-    transcripts = find_subagent_transcripts(projects_root, cwd, session_id)
+    """Reduce every transcript belonging to `project` into usage.jsonl rows.
+
+    A transcript belongs to the project when ANY of these holds:
+
+      1. its session is named in `session_id` (the `.session-pointer` bypass —
+         the hook vouched for that session);
+      2. its dispatch stamp says `Active project: <project>`;
+      3. an ancestor transcript matched (nested helper agents);
+      4. its dispatch text mentions `.loom/<project>` (legacy fallback).
+
+    Rules 2 and 3 are what make measurement survive a run the PostToolUse hook
+    never saw. Sessions are therefore always scanned in full, and `session_id`
+    only WIDENS the match — it never narrows the search, because a pointer that
+    is missing the session that actually drove the run would otherwise silence
+    the whole run.
+    """
+    wanted_sessions = _normalize_session_ids(session_id)
+    transcripts = find_subagent_transcripts(projects_root, cwd, None)
     if not transcripts:
         return {
             "project": project,
@@ -592,38 +740,76 @@ def harvest(project: str, workspace: Path, projects_root: Path,
             "rows": [],
             "dry_run": dry_run,
             "workspace": str(workspace),
-            "note": (f"no transcripts under {projects_root}/<cwd-encoding>/{session_id}"
-                     if session_id
-                     else f"no transcripts under {projects_root}/<cwd-encoding>"),
+            "note": f"no transcripts under {projects_root}/<cwd-encoding>",
         }
 
-    rows_out: list[dict] = []
-    matched: list[Path] = []
+    # ---- Pass 1: reduce each transcript and collect its attribution evidence.
+    records: list[dict] = []
     for t in sorted(transcripts):
         raw = read_rows(t)
         if not raw:
             continue
-        if session_id is None and not transcript_mentions_project(raw, project):
-            continue
-        matched.append(t)
-
-        phase = read_phase_sidecar(t)
-        phase_source: str | None = "sidecar" if phase else None
-        if phase is None:
-            phase = read_phase_from_meta(t)
-            phase_source = "meta" if phase else None
-        agent_label = canonical_agent_label(phase)
+        dispatch_project, dispatch_phase = read_dispatch_context(raw)
         tokens, wall_ms, autonomous_ms, model, cost_usd = sum_usage_and_durations(raw)
-        if tokens is None:
+        records.append({
+            "path": t,
+            "agent_id": agent_id_for(t),
+            "session": t.parent.parent.name,
+            "meta": read_meta(t),
+            "sidecar_phase": read_phase_sidecar(t),
+            "dispatch_project": dispatch_project,
+            "dispatch_phase": dispatch_phase,
+            "mentions_project": transcript_mentions_project(raw, project),
+            "tokens": tokens,
+            "wall_ms": wall_ms,
+            "autonomous_ms": autonomous_ms,
+            "model": model,
+            "cost_usd": cost_usd,
+            "quality": quality_counts(raw),
+        })
+
+    by_agent_id = {r["agent_id"]: r for r in records}
+
+    # ---- Pass 2: resolve membership and phase, inheriting through parents.
+    rows_out: list[dict] = []
+    matched: list[Path] = []
+    for rec in records:
+        ancestor = resolve_via_parent(rec["agent_id"], by_agent_id)
+        in_pointer = (wanted_sessions is not None
+                      and rec["session"] in wanted_sessions)
+        belongs = (
+            in_pointer
+            or rec["dispatch_project"] == project
+            or (ancestor is not None and ancestor["dispatch_project"] == project)
+            or rec["mentions_project"]
+        )
+        if not belongs:
+            continue
+        matched.append(rec["path"])
+
+        phase, phase_source = rec["sidecar_phase"], "sidecar"
+        if phase is None:
+            phase, phase_source = rec["dispatch_phase"], "dispatch"
+        if phase is None and ancestor is not None:
+            phase, phase_source = ancestor["dispatch_phase"], "parent"
+        if phase is None:
+            phase, phase_source = read_phase_from_meta(rec["path"]), "meta"
+        if phase is None:
+            phase_source = None
+
+        if rec["tokens"] is None:
             status = "crashed"
         elif phase is None:
             status = "untagged"
         else:
             status = "ok"
-        quality = None if status == "crashed" else quality_counts(raw)
-        row = build_row(phase, phase_source, agent_label, tokens, wall_ms,
-                        autonomous_ms, status, quality, model, cost_usd)
-        rows_out.append(row)
+        rows_out.append(build_row(
+            phase, phase_source, canonical_agent_label(phase),
+            rec["tokens"], rec["wall_ms"],
+            None if status == "crashed" else rec["autonomous_ms"],
+            status, None if status == "crashed" else rec["quality"],
+            rec["model"], rec["cost_usd"],
+        ))
 
     rows_out.extend(orchestrator_rows(matched))
 
@@ -655,9 +841,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="The cwd to look under in projects-root (default: repo root).")
     ap.add_argument("--session", action="append", default=None,
                     help="Claude Code session UUID; repeatable (the pointer "
-                         "file holds one per line). When set, transcripts are "
-                         "pulled from exactly those session dirs and the "
-                         "dispatch-text project match is bypassed.")
+                         "file holds one per line). Vouches for those sessions' "
+                         "transcripts regardless of their own project evidence. "
+                         "Widens the match only — every session under --cwd is "
+                         "scanned either way.")
     ap.add_argument("--dry-run", action="store_true",
                     help="Parse and report; do not write usage.jsonl.")
     args = ap.parse_args(argv)
@@ -682,9 +869,17 @@ def main(argv: list[str] | None = None) -> int:
         print("rows:")
         for r in summary["rows"]:
             ph = r["phase"] or "-"
-            lbl = (r["agent_label"] or "-")[:45]
-            cost = f"${r['cost_usd']:.4f}" if isinstance(r.get("cost_usd"), float) else "-"
-            print(f"  phase={ph!s:<8} label={lbl:<45} status={r['status']} cost={cost}")
+            src = r["phase_source"] or "-"
+            lbl = (r["agent_label"] or "-")[:32]
+            cost = (f"${r['cost_usd']:.4f}"
+                    if isinstance(r.get("cost_usd"), (int, float)) else "UNPRICED")
+            print(f"  phase={ph!s:<13} via={src:<8} label={lbl:<32} "
+                  f"status={r['status']:<9} cost={cost}")
+        unpriced = [r for r in summary["rows"] if r.get("cost_usd") is None]
+        if unpriced:
+            models = sorted({r.get("model") or "unknown" for r in unpriced})
+            print(f"warning:    {len(unpriced)} row(s) unpriced — no pricing entry "
+                  f"for {', '.join(models)}")
     if summary.get("note"):
         print(f"note:       {summary['note']}")
     written = summary.get("rows_written", 0)

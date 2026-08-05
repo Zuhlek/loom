@@ -14,9 +14,26 @@ Fixed-shape contract — the reason this renderer has no conditional prose:
   omission and never an em dash. Unexpected phase keys append after the six
   rather than being folded away, so attribution gaps stay visible.
 - The metric set is constant: estimated cost, wall ms, autonomous ms, the
-  four token buckets, cache hit rate, and the three quality counters.
+  four token buckets, cache hit rate, the three quality counters, and the
+  unpriced-row count.
+
+`unpriced` is what keeps the cost columns honest. A row whose model has no
+pricing entry carries `cost_usd: null`, which contributes 0.0000 to the sum —
+indistinguishable from a row that genuinely cost nothing. Counting those rows
+turns a silently-wrong "this run was free" into a visible "this many rows
+could not be priced", so cost reads as a lower bound rather than a fact.
 - Tables and charts only. No sentences, so two runs differ in their numbers
   and nothing else.
+- Every data table ends in a `**Total**` row. Cost, tokens and the quality
+  counters are column sums; the two duration columns are not, because the
+  orchestrator span encloses the subagent spans it dispatched — the totals
+  row carries the same lifecycle-span / phase-agent-autonomous pair as
+  `## Run totals`, so the two sections can never disagree.
+
+Numbers are formatted for a reader, not for a parser: `$162.28` over
+`162.2791`, `43h 11m` over `155518702`, `97.1%` over `0.9710`, thousands
+separators on token counts. Exact ms and fractional cents live in
+`usage.jsonl`, which is the machine-readable copy.
 
 Charts are mermaid, which the loom UI renders natively (`MermaidBlock.tsx`)
 and GitHub renders inline. Degenerate data — an all-zero run, a single
@@ -89,6 +106,7 @@ def _empty_bucket() -> dict:
         "read_errors": 0,
         "bash_failures": 0,
         "cost_usd": 0.0,
+        "unpriced": 0,
     }
 
 
@@ -105,11 +123,44 @@ def _cache_hit_rate(tokens: dict[str, int]) -> float:
 # Rendering primitives
 # --------------------------------------------------------------------------
 
-def _table(headers: list[str], rows: list[list[str]]) -> str:
+def _usd(value: float) -> str:
+    return f"${value:,.2f}"
+
+
+def _num(value: int) -> str:
+    return f"{value:,}"
+
+
+def _pct(rate: float) -> str:
+    return f"{rate * 100:.1f}%"
+
+
+def _share(value: float, total: float) -> str:
+    return _pct(value / total) if total > 0 else "0.0%"
+
+
+def _dur(ms: int) -> str:
+    """Human-scaled duration. A run's wall time is eight digits of raw ms —
+    unreadable, and a column of them hides the one row that matters."""
+    seconds = max(0, int(ms)) / 1000
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, seconds = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m" if hours else f"{minutes}m {seconds:02d}s"
+
+
+def _table(headers: list[str], rows: list[list[str]], align: str = "") -> str:
     """Header and separator always render, even with zero data rows — an
-    empty table is valid markdown and keeps the section shape constant."""
+    empty table is valid markdown and keeps the section shape constant.
+
+    `align` is one character per column, `r` for right, anything else left.
+    Numeric columns right-align so magnitudes stack and a 10× difference is
+    visible without reading the digits."""
+    align = align.ljust(len(headers), "l")
     out = ["| " + " | ".join(headers) + " |",
-           "| " + " | ".join("---" for _ in headers) + " |"]
+           "| " + " | ".join("---:" if a == "r" else "---"
+                             for a in align[:len(headers)]) + " |"]
     for r in rows:
         out.append("| " + " | ".join(r) + " |")
     return "\n".join(out)
@@ -194,6 +245,13 @@ def aggregate(project: str, loom_root: Path) -> str:
         cost = r.get("cost_usd")
         if isinstance(cost, (int, float)) and not isinstance(cost, bool):
             bucket["cost_usd"] += float(cost)
+        else:
+            # `cost_usd: null` means the row's model has no pricing entry —
+            # NOT that it was free. Counting it here keeps the money columns
+            # numeric (the fixed-shape contract) while making the gap visible;
+            # without this an unpriced run renders a confident 0.0000 and the
+            # file silently reports the run as costless.
+            bucket["unpriced"] += 1
 
     # Cost and tokens are additive across buckets: each row's API calls are
     # distinct spend. Durations are NOT — the orchestrator's span encloses
@@ -204,11 +262,13 @@ def aggregate(project: str, loom_root: Path) -> str:
     run_tokens = _empty_tokens()
     run_autonomous = 0
     run_cost = 0.0
+    run_unpriced = 0
     for key in ordered:
         b = per_bucket[key]
         for k in TOKEN_KEYS:
             run_tokens[k] += b["tokens"][k]
         run_cost += b["cost_usd"]
+        run_unpriced += b["unpriced"]
         if key != "orchestrator":
             run_autonomous += b["autonomous_ms"]
 
@@ -228,55 +288,74 @@ def aggregate(project: str, loom_root: Path) -> str:
     # ---- Run totals -------------------------------------------------------
     lines += ["## Run totals", ""]
     coverage = "5 phase agents + orchestrator" if has_orchestrator else "phase agents only"
-    lines.append(_table(["Metric", "Value"], [
-        ["Estimated cost (USD)", f"{run_cost:.4f}"],
-        ["Wall ms (lifecycle span)", str(run_wall)],
-        ["Autonomous ms (phase agents)", str(run_autonomous)],
-        ["Input tokens", str(run_tokens["input_tokens"])],
-        ["Output tokens", str(run_tokens["output_tokens"])],
-        ["Cache creation tokens", str(run_tokens["cache_creation_input_tokens"])],
-        ["Cache read tokens", str(run_tokens["cache_read_input_tokens"])],
-        ["Cache hit rate", f"{_cache_hit_rate(run_tokens):.4f}"],
-        ["Model(s)", ", ".join(models) if models else "—"],
-        ["Measured rows", str(len(rows))],
-        ["Untagged rows", str(untagged)],
-        ["Coverage", coverage],
-    ]))
+    lines.append(_table(
+        ["Cost (est.)", "Wall", "Autonomous", "Cache hit", "Input", "Output",
+         "Cache write", "Cache read"],
+        [[_usd(run_cost), _dur(run_wall), _dur(run_autonomous),
+          _pct(_cache_hit_rate(run_tokens)),
+          _num(run_tokens["input_tokens"]), _num(run_tokens["output_tokens"]),
+          _num(run_tokens["cache_creation_input_tokens"]),
+          _num(run_tokens["cache_read_input_tokens"])]],
+        align="rrrrrrrr"))
+    lines.append("")
+    lines.append(_table(
+        ["Model(s)", "Coverage", "Measured rows", "Untagged rows", "Unpriced rows"],
+        [[", ".join(models) if models else "—", coverage,
+          _num(len(rows)), _num(untagged), _num(run_unpriced)]],
+        align="llrrr"))
     lines.append("")
 
     # ---- Charts -----------------------------------------------------------
     lines += ["## Cost by phase", "",
-              _bar_chart("Estimated cost (USD) per phase", "USD", ordered, costs), ""]
+              _bar_chart("Estimated cost (USD) per phase", "USD", ordered, costs,
+                         decimals=2), ""]
     lines += ["## Cost share", "",
               _pie_chart("Share of estimated run cost", ordered, costs), ""]
     lines += ["## Cache efficiency", "",
-              _bar_chart("Cache hit rate per phase", "rate", ordered, rates,
-                         decimals=4), ""]
+              _bar_chart("Cache hit rate per phase", "%", ordered,
+                         [r * 100 for r in rates], decimals=1), ""]
 
     # ---- Per-phase detail -------------------------------------------------
-    lines += ["## Per-phase detail", ""]
-    detail_rows = []
-    for key in ordered:
-        b = per_bucket[key]
-        detail_rows.append([
-            key,
-            f"{b['cost_usd']:.4f}",
-            str(b["wall_ms"]),
-            str(b["autonomous_ms"]),
-            str(b["tokens"]["input_tokens"]),
-            str(b["tokens"]["output_tokens"]),
-            str(b["tokens"]["cache_creation_input_tokens"]),
-            str(b["tokens"]["cache_read_input_tokens"]),
-            f"{_cache_hit_rate(b['tokens']):.4f}",
-            str(b["error_results"]),
-            str(b["read_errors"]),
-            str(b["bash_failures"]),
-        ])
+    # Split in two: thirteen columns in one table wraps into an unreadable
+    # smear in every renderer that has to fit a terminal or a sidebar.
+    lines += ["## Per-phase detail", "", "### Cost & time", ""]
     lines.append(_table(
-        ["Phase", "Cost (USD)", "Wall ms", "Autonomous ms", "input", "output",
-         "cache_create", "cache_read", "hit rate", "errors", "read-err",
-         "bash-fail"],
-        detail_rows))
+        ["Phase", "Cost", "Share", "Wall", "Autonomous"],
+        [[key,
+          _usd(per_bucket[key]["cost_usd"]),
+          _share(per_bucket[key]["cost_usd"], run_cost),
+          _dur(per_bucket[key]["wall_ms"]),
+          _dur(per_bucket[key]["autonomous_ms"])] for key in ordered]
+        # Durations are not column sums — see the module docstring; these are
+        # the lifecycle span and the phase-agent autonomous total.
+        + [["**Total**", _usd(run_cost), _share(run_cost, run_cost),
+            _dur(run_wall), _dur(run_autonomous)]],
+        align="lrrrr"))
+    lines += ["", "### Tokens & quality", ""]
+    lines.append(_table(
+        ["Phase", "Input", "Output", "Cache write", "Cache read", "Hit rate",
+         "Errors", "Read fails", "Bash fails", "Unpriced"],
+        [[key,
+          _num(per_bucket[key]["tokens"]["input_tokens"]),
+          _num(per_bucket[key]["tokens"]["output_tokens"]),
+          _num(per_bucket[key]["tokens"]["cache_creation_input_tokens"]),
+          _num(per_bucket[key]["tokens"]["cache_read_input_tokens"]),
+          _pct(_cache_hit_rate(per_bucket[key]["tokens"])),
+          _num(per_bucket[key]["error_results"]),
+          _num(per_bucket[key]["read_errors"]),
+          _num(per_bucket[key]["bash_failures"]),
+          _num(per_bucket[key]["unpriced"])] for key in ordered]
+        + [["**Total**",
+            _num(run_tokens["input_tokens"]),
+            _num(run_tokens["output_tokens"]),
+            _num(run_tokens["cache_creation_input_tokens"]),
+            _num(run_tokens["cache_read_input_tokens"]),
+            _pct(_cache_hit_rate(run_tokens)),
+            _num(sum(per_bucket[k]["error_results"] for k in ordered)),
+            _num(sum(per_bucket[k]["read_errors"] for k in ordered)),
+            _num(sum(per_bucket[k]["bash_failures"] for k in ordered)),
+            _num(run_unpriced)]],
+        align="lrrrrrrrrr"))
     lines.append("")
 
     # ---- Outcome ----------------------------------------------------------
@@ -298,27 +377,30 @@ def aggregate(project: str, loom_root: Path) -> str:
         value = outcome.get(key) if isinstance(outcome, dict) else None
         return "—" if value is None else str(value)
 
-    lines.append(_table(["Field", "Value"], [
-        ["Lifecycle state", _o("lifecycle_state")],
-        ["Final phase", _o("final_phase")],
-        ["Review verdict", str(verdict.get("status", "—"))],
-        ["Blockers", str(verdict.get("blockers", "—"))],
-        ["Major", str(verdict.get("major", "—"))],
-        ["Minor", str(verdict.get("minor", "—"))],
-        ["Note", str(verdict.get("note", "—"))],
-        ["Tasks planned", str(tasks.get("planned", "—"))],
-        ["Tasks done", str(tasks.get("done", "—"))],
-    ]))
+    lines.append(_table(
+        ["Lifecycle state", "Final phase", "Verdict", "Tasks done"],
+        [[_o("lifecycle_state"), _o("final_phase"),
+          str(verdict.get("status", "—")),
+          f"{tasks.get('done', '—')} / {tasks.get('planned', '—')}"]],
+        align="lllr"))
+    lines.append("")
+    lines.append(_table(
+        ["Blockers", "Major", "Minor", "Note"],
+        [[str(verdict.get("blockers", "—")), str(verdict.get("major", "—")),
+          str(verdict.get("minor", "—")), str(verdict.get("note", "—"))]],
+        align="rrrr"))
     lines.append("")
 
     # ---- Crashed invocations ---------------------------------------------
     lines += ["## Crashed invocations", ""]
-    lines.append(_table(["Phase", "Agent", "Wall ms"], [
-        [str(r.get("phase") or "—"),
-         str(r.get("agent_label") or "—"),
-         str(_int(r.get("duration_wall_ms")))]
-        for r in crashed
-    ]))
+    lines.append(_table(
+        ["Phase", "Agent", "Wall"],
+        [[str(r.get("phase") or "—"),
+          str(r.get("agent_label") or "—"),
+          _dur(_int(r.get("duration_wall_ms")))] for r in crashed]
+        + [["**Total**", _num(len(crashed)),
+            _dur(sum(_int(r.get("duration_wall_ms")) for r in crashed))]],
+        align="llr"))
     lines.append("")
 
     return "\n".join(lines)

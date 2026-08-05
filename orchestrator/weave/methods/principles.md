@@ -173,7 +173,7 @@ Project-level `spec.md ## Constraints` entries take precedence over the matching
 
 ## Learned rules
 
-The ONLY section the orchestrator appends approved tune entries to. Entries land here after human approval at the review gate; Loom never edits or removes them — humans archive retired entries to `methods/rules-archive.md`. Entry form:
+Rules that hold for every project, shipped with loom and inlined into Build and Review dispatches. Entries land here after human approval at the review gate; Loom never edits or removes them — retiring one is a human hand-edit. Rules that hold for a single codebase do not belong here: they go to that repo's `.claude/rules/` (`SKILL.md § Tune proposals`). Entry form:
 
 ```
 - [<scope>] WHEN <trigger condition>
@@ -181,4 +181,19 @@ The ONLY section the orchestrator appends approved tune entries to. Entries land
   Reason: <one line>.
 ```
 
-Scope is mandatory: `[*]` (universal), `[type: <type-hint>]`, or `[repo: <name>, <name>]`.
+Scope is mandatory: `[*]` (every run) or `[type: <type-hint>]` (runs whose `Type hint` matches).
+
+- [*] WHEN an out-of-lifecycle change lands after Build has written test-report.md,
+  smoke-report.md or tasks/T-NNN.done.md
+  THEN the as-built reconciliation SHALL NOT be declared complete until those evidence
+  artifacts are reconciled too — never only the planning artifacts (spec/design/plan/tests
+  and the task cards).
+  Reason: evidence artifacts are what Review and future runs read first for "what was
+  verified"; a reconciliation that skips them leaves the most-read record the most wrong.
+
+- [*] WHEN the Review agent verifies metrics.md
+  THEN it SHALL NOT treat the file's existence as sufficient — it SHALL compare the last
+  usage.jsonl append and the phase buckets it carries against pipeline.md's History, and
+  report any completed subagent invocation that produced no usage row.
+  Reason: a metrics.md that exists but stopped recording mid-run reads as a full cost
+  record, and the phases it silently drops are the late ones (review, fix rounds).

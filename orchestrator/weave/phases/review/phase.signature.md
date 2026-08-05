@@ -21,8 +21,7 @@ I/O signature between `/weave` and the Review Audit Agent.
 | Repository diff | working tree | yes | Code under review |
 | `principles.md` | `methods/principles.md` (inlined into dispatch head) | yes | Engineering principles |
 | `type-guidance.md` | `.loom/<project>/type-guidance.md` | when typed | Domain guidance (materialized at project creation from the active `types/<type>.md`) |
-| Repo rule store | `~/.claude/loom/rules/<slug>.md`, `<slug>` = `pipeline.md.Repo` with `/` → `-` | when proposing | Both its sections (`## Rules`, `## Archive`) read before writing tune proposals; empty `Repo` ⇒ no repo store (greenfield work with no target directory), missing file ⇒ empty store (not an error) |
-| `rules-archive.md` | `methods/rules-archive.md ## overall` via the skill path (`~/.claude/skills/weave/methods/rules-archive.md`) | when proposing | Retired and gate-rejected entries of the OVERALL store — read before proposing so none are re-proposed; repo-origin entries live in the repo store's own `## Archive` |
+| Repo rules | `<repo>/.claude/rules/*.md` and `<repo>/CLAUDE.local.md`, `<repo>` = `pipeline.md.Repo` | when proposing | Read before writing tune proposals, to deduplicate; empty `Repo` ⇒ no repo-scoped target (greenfield work), missing file or directory ⇒ no rules yet (not an error) |
 
 ### State preconditions
 
@@ -73,7 +72,7 @@ Success criteria: `status: complete` in RETURN AND counts of `blockers` / `major
 - Must list blockers and major issues or state none.
 - Must route unresolved work to an owner phase.
 - Follows the Finding Shape declared in `phase.md` (Severity, Evidence, Expected, Actual, Impact, Recommendation, Owner phase).
-- Carries a `## Tune proposals` section only when rule candidates exist: at most 3 proposals (entry + target store with reason + evidence path), the hygiene list, and both stores' entry counts (per `phase.md § Tune proposals`). Zero proposals ⇒ no section.
+- Carries a `## Tune proposals` section only when rule candidates exist: at most 3 proposals (rule text + target file and `paths:` with reason + evidence path) plus the hygiene list (per `phase.md § Tune proposals`). Zero proposals ⇒ no section.
 
 #### `feedback.md`
 
@@ -106,13 +105,13 @@ Counts are non-negative integers. `verdict` is `FAIL` whenever `blockers > 0`; o
 
 | Section | Content |
 | --- | --- |
-| `## Run totals` | Estimated cost, lifecycle wall span, phase-agent autonomous time, the four token buckets, cache hit rate, models, row counts, coverage |
+| `## Run totals` | Estimated cost, lifecycle wall span, phase-agent autonomous time, the four token buckets, cache hit rate, then models, row counts, coverage |
 | `## Cost by phase` | mermaid `xychart-beta` bar |
 | `## Cost share` | mermaid `pie` |
 | `## Cache efficiency` | mermaid `xychart-beta` bar |
-| `## Per-phase detail` | One row per bucket — `spec`, `design`, `plan`, `build`, `review`, `orchestrator` — always all six |
+| `## Per-phase detail` | `### Cost & time` and `### Tokens & quality`, one row per bucket in each — `spec`, `design`, `plan`, `build`, `review`, `orchestrator` — always all six, plus a `**Total**` row |
 | `## Outcome` | Lifecycle state, final phase, verdict counts, task counts (from `outcome.json`) |
-| `## Crashed invocations` | Table, header-only when there are none |
+| `## Crashed invocations` | Table, header plus `**Total**` row when there are none |
 
 - Measurement scope: the whole `/weave` lifecycle, orchestrator session included. Two limits are inherent and are not defects — the orchestrator session is still open when the file is written, so its own trailing turns are uncounted; and durations are not additive across buckets, because the orchestrator's span encloses the subagent spans it dispatched.
 

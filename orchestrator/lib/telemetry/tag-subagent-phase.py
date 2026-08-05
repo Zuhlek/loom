@@ -92,19 +92,25 @@ def write_sidecar(target: Path, record: dict) -> None:
     tmp.replace(target)
 
 
+def read_pointer(pointer_path: Path) -> list[str]:
+    """Session UUIDs already recorded for this project, one per line."""
+    if not pointer_path.exists():
+        return []
+    try:
+        return [l.strip() for l in
+                pointer_path.read_text(encoding="utf-8").splitlines()
+                if l.strip()]
+    except OSError as exc:
+        _warn(f"could not read pointer {pointer_path}: {exc}")
+        return []
+
+
 def append_pointer(pointer_path: Path, session_id: str) -> list[str]:
     """Append the session UUID to the pointer file (one per line, unique).
 
     Retried eval attempts and resumed interactive sessions each get a line;
     the harvester reads every line. Returns the full list."""
-    lines: list[str] = []
-    if pointer_path.exists():
-        try:
-            lines = [l.strip() for l in
-                     pointer_path.read_text(encoding="utf-8").splitlines()
-                     if l.strip()]
-        except OSError as exc:
-            _warn(f"could not read pointer {pointer_path}: {exc}")
+    lines = read_pointer(pointer_path)
     if session_id not in lines:
         lines.append(session_id)
         try:
@@ -171,9 +177,24 @@ def main() -> int:
         return 0
 
     pointer_path = cwd_path / ".loom" / project / ".session-pointer"
-    session_ids = append_pointer(pointer_path, session_id)
+    known_sessions = read_pointer(pointer_path)
 
-    phase = read_dispatch_phase(payload) or read_current_phase(
+    # `.loom/.active` is repo-global, so this hook fires for EVERY Agent
+    # dispatch in this repo — including ones from an unrelated conversation
+    # the user happens to be having in the same directory. Only a dispatch
+    # carrying `Active phase:` is provably a /weave dispatch; anything else is
+    # attributable only if its session has already proven itself that way.
+    #
+    # Without this gate a bystander session lands in .session-pointer and its
+    # ad-hoc agents get tagged with whatever phase pipeline.md happens to name
+    # — which is how a run's metrics.md ends up measuring, in full confidence,
+    # a completely different conversation.
+    dispatch_phase = read_dispatch_phase(payload)
+    if dispatch_phase is None and session_id not in known_sessions:
+        return 0
+
+    session_ids = append_pointer(pointer_path, session_id)
+    phase = dispatch_phase or read_current_phase(
         cwd_path / ".loom" / project / "pipeline.md"
     )
 

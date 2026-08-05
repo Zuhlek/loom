@@ -193,50 +193,34 @@ The gate summary leads with the phase's purpose — the first sentence of `phase
 
 ### Tune proposals (Review gate)
 
-The two stores:
+Rules live in the files Claude Code already loads as memory. Loom invents no location and no format: every rule is a plain markdown file that any Claude session in that repo picks up, whether or not it came from loom.
 
-| Store | Path | Tracked? |
+Two questions place a rule — does it apply beyond this repo, and would a teammate want it:
+
+| | Team | Personal |
 | --- | --- | --- |
-| Repo | `~/.claude/loom/rules/<slug>.md`, `<slug>` = the `Repo` field in `pipeline.md` with every `/` replaced by `-` (`/Users/me/dev/ticktack` → `-Users-me-dev-ticktack.md`) | no — machine-local |
-| Overall | `methods/principles.md ## Learned rules` | yes — in the loom repo |
+| **Every project** | `methods/principles.md ## Learned rules` (ships with loom) | `~/.claude/CLAUDE.md` |
+| **This repo** | `<repo>/.claude/rules/<topic>.md` | `<repo>/CLAUDE.local.md` |
 
-Loom never writes rule state into the target repo. The repo store is created on first use and holds that repo's active rules AND its archive, so nothing about a work repo is ever tracked in loom.
-
-When `review.md` carries a `## Tune proposals` section, the gate summary names each proposal in ONE line and reports the hygiene list plus both stores' current entry counts, and names the repo store's path so the human can find it. A store file that does not exist counts as **0 entries** — a normal state, never a read failure. The Review gate's own options stay exactly as the table above — tune adds no option there, and there is no delete verb at the gate: archiving store entries is a human hand-edit, never an orchestrator command.
-
-When ≥ 1 proposal exists, make ONE `AskUserQuestion` call in the same step as the gate: one question per proposal (max 3), three options each — `Approve` / `Change target store or scope` / `Reject`. Then act per answer; the orchestrator's only write verb on the stores and the archive is append — it never removes, replaces, or rewords anything there. The one exception: when a repo store file does not exist yet, the orchestrator creates it from the template below and then appends into it. `orchestrator/setup-loom.sh` creates `~/.claude/loom/rules/` and grants read/write on it, so neither a `mkdir` nor a permission prompt belongs in a run.
-
-- **Approve** — append the entry to its target store. Repo store: the path above; an empty `Repo` field is reported as "no target" at the gate and the proposal stays in `review.md`. A missing *file* is not "no target" — it is an empty store, created on this append. Overall store: `methods/principles.md ## Learned rules` — state explicitly that this change lands in the loom repo, not the work repo.
-- **Change target store or scope** — apply the user's stated store/scope to the entry, then append as above.
-- **Reject** — append the proposal to its origin's archive: repo-origin proposals to the repo store's own `## Archive` section, overall-origin proposals to `methods/rules-archive.md ## overall`.
-
-Before appending, check the entry form (three lines, scope present); a malformed entry is not appended but rejected back to the gate report.
-
-Repo store template — written once, on creation, before the first entry:
+`<repo>` is the `Repo` field in `pipeline.md`. Only `.claude/rules/*.md` carries a scope: `paths:` frontmatter, a list of globs relative to the repo root, and the file loads only when Claude works on a matching file. The other three are always in context, so a rule that belongs there has no scope of its own.
 
 ```
-# Loom rules — <repo basename>
-
-Repo: <the absolute Repo path>
-Machine-local and untracked, by design: Loom writes nothing about this repo into the repo.
-
-## Rules
-
-<!-- Appended by Loom after human approval at the Review gate. Entry form:
-- [<scope>] WHEN <trigger condition>
-  THEN <rule, phrased as a prohibition where possible>.
-  Reason: <one line>.
-Scope is a path glob relative to the repo root, e.g. [*] or [src/**].
-[*] here means "every path in THIS repo" — it is not the universal scope
-of principles.md ## Learned rules. -->
-
-## Archive
-
-<!-- Retired rules and gate-rejected proposals for this repo. Append-only:
-the orchestrator appends rejections, humans move retired entries down here
-by hand. Never loaded into any prompt — Review reads it before proposing so
-that nothing retired or rejected is proposed again. -->
+---
+paths: ["src/templating/**"]
+---
+Never register a formula in two places — the registry is generated.
+Evidence: tasks/T-004.test-log.txt
 ```
+
+One rule per file, named for its subject (`formula-registry.md`, not `rules-3.md`). A second rule with the same `paths:` is appended to that file rather than starting a new one.
+
+When `review.md` carries a `## Tune proposals` section, the gate summary names each proposal in ONE line, with its target file. The Review gate's own options stay exactly as the table above — tune adds no option there, and there is no delete verb: removing a rule is deleting a file, which is a human hand-edit.
+
+When ≥ 1 proposal exists, make ONE `AskUserQuestion` call in the same step as the gate: one question per proposal (max 3), three options each — `Approve` / `Change target file or paths` / `Reject`.
+
+- **Approve** — write the rule to its target file, creating the file (and `.claude/rules/`) if absent. For the `## Learned rules` and `~/.claude/CLAUDE.md` targets, append; state explicitly when a change lands in the loom repo rather than the work repo. An empty `Repo` field means the two repo-scoped targets do not exist — report "no target" at the gate and leave the proposal in `review.md`.
+- **Change target file or paths** — apply the user's stated file/globs, then write as above.
+- **Reject** — the proposal is dropped. Nothing is recorded.
 
 ### When the user picks `Fix findings` (Review gate)
 

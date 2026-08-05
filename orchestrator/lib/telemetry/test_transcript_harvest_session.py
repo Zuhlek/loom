@@ -464,5 +464,179 @@ class OrchestratorRowTests(unittest.TestCase):
                          msg="rows_written counts what actually lands on disk")
 
 
+def _reminder(project: str, phase: str) -> str:
+    return ("<system-reminder>\n"
+            f"Active project: {project}\n"
+            f"Active phase: {phase}\n"
+            "Current task: T-001\n"
+            "</system-reminder>")
+
+
+def _write_stamped_transcript(path: Path, *, project: str, phase: str,
+                              input_tokens: int = 100,
+                              model: str = "claude-opus-5") -> None:
+    """A subagent transcript carrying the dispatch stamp /weave writes, and
+    NO `.phase` sidecar — i.e. what a run the hook never saw looks like."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {"type": "user", "timestamp": "2026-05-16T10:00:00Z",
+         "message": {"content": [
+             {"type": "text", "text": f"# {phase} Phase Agent\n\n{_reminder(project, phase)}"}
+         ]}},
+        {"type": "assistant", "timestamp": "2026-05-16T10:00:05Z",
+         "message": {"model": model, "id": "msg_1", "usage": {
+             "input_tokens": input_tokens, "output_tokens": 10,
+             "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}}},
+    ]
+    with path.open("w", encoding="utf-8") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+
+
+class DispatchContextTests(unittest.TestCase):
+    """`Active project:` / `Active phase:` land verbatim in the subagent's own
+    first user row. Reading them is what makes a transcript self-describing,
+    so measurement survives a session the PostToolUse hook never ran in."""
+
+    def test_parses_project_and_phase(self) -> None:
+        rows = [{"type": "user", "message": {"content": [
+            {"type": "text", "text": "preamble\n" + _reminder("proj-x", "build")}]}}]
+        self.assertEqual(HARVEST.read_dispatch_context(rows), ("proj-x", "build"))
+
+    def test_returns_none_without_a_reminder(self) -> None:
+        rows = [{"type": "user", "message": {"content": [
+            {"type": "text", "text": "just a dispatch"}]}}]
+        self.assertEqual(HARVEST.read_dispatch_context(rows), (None, None))
+
+    def test_rejects_a_phase_outside_the_enum(self) -> None:
+        rows = [{"type": "user", "message": {"content": [
+            {"type": "text", "text": _reminder("proj-x", "deploy")}]}}]
+        project, phase = HARVEST.read_dispatch_context(rows)
+        self.assertEqual(project, "proj-x")
+        self.assertIsNone(phase)
+
+
+class HookLessSessionTests(unittest.TestCase):
+    """The regression this whole path exists for: a /weave run whose session
+    never executed the hook. No `.phase` sidecar, no `.session-pointer` entry
+    — and before the dispatch stamp was read, no rows at all."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="harvest-hookless-"))
+        self.projects_root = self.tmp / "projects"
+        self.cwd = Path("/repo/loom")
+        encoded = HARVEST.encode_cwd_for_projects_dir(self.cwd)
+        self.base = self.projects_root / encoded
+        self.unseen = "99999999-9999-9999-9999-999999999999"
+        self.workspace = self.tmp / "workspace"
+        self.workspace.mkdir(parents=True)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _harvest(self, session_id=None):
+        return HARVEST.harvest(
+            project="proj-x", workspace=self.workspace,
+            projects_root=self.projects_root, cwd=self.cwd,
+            dry_run=True, session_id=session_id,
+        )
+
+    def test_stamped_transcript_matches_without_pointer_or_sidecar(self) -> None:
+        _write_stamped_transcript(
+            self.base / self.unseen / "subagents" / "agent-a1.jsonl",
+            project="proj-x", phase="build")
+        rows = self._harvest()["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["phase"], "build")
+        self.assertEqual(rows[0]["phase_source"], "dispatch")
+        self.assertEqual(rows[0]["status"], "ok")
+
+    def test_a_pointer_naming_another_session_does_not_hide_the_run(self) -> None:
+        """A pointer that missed the real session must widen, never narrow."""
+        _write_stamped_transcript(
+            self.base / self.unseen / "subagents" / "agent-a1.jsonl",
+            project="proj-x", phase="build")
+        rows = self._harvest(session_id="00000000-0000-0000-0000-000000000000")
+        self.assertEqual([r["phase"] for r in rows["rows"]], ["build"])
+
+    def test_stamp_for_another_project_is_not_claimed(self) -> None:
+        _write_stamped_transcript(
+            self.base / self.unseen / "subagents" / "agent-a1.jsonl",
+            project="some-other-project", phase="build")
+        self.assertEqual(self._harvest()["matched"], 0)
+
+    def test_sidecar_outranks_the_dispatch_stamp(self) -> None:
+        t = self.base / self.unseen / "subagents" / "agent-a1.jsonl"
+        _write_stamped_transcript(t, project="proj-x", phase="build")
+        _write_phase_sidecar(t, phase="review", project="proj-x")
+        row = self._harvest()["rows"][0]
+        self.assertEqual(row["phase"], "review")
+        self.assertEqual(row["phase_source"], "sidecar")
+
+    def test_nested_agent_inherits_phase_from_its_parent(self) -> None:
+        subagents = self.base / self.unseen / "subagents"
+        _write_stamped_transcript(subagents / "agent-parent1.jsonl",
+                                  project="proj-x", phase="spec")
+        # A helper the Spec agent spawned: no stamp of its own, only a parent.
+        _write_transcript(subagents / "agent-child1.jsonl", mentions_project=None)
+        (subagents / "agent-child1.meta.json").write_text(json.dumps(
+            {"description": "Research VAT rules", "parentAgentId": "parent1"}),
+            encoding="utf-8")
+
+        rows = self._harvest()["rows"]
+        child = [r for r in rows if r["phase_source"] == "parent"]
+        self.assertEqual(len(child), 1, msg="nested agent should inherit, not go untagged")
+        self.assertEqual(child[0]["phase"], "spec")
+
+    def test_parent_cycle_does_not_hang(self) -> None:
+        subagents = self.base / self.unseen / "subagents"
+        for name, parent in (("a", "b"), ("b", "a")):
+            _write_transcript(subagents / f"agent-{name}.jsonl", mentions_project="proj-x")
+            (subagents / f"agent-{name}.meta.json").write_text(
+                json.dumps({"description": "x", "parentAgentId": parent}),
+                encoding="utf-8")
+        self.assertEqual(len(self._harvest()["rows"]), 2)
+
+
+class PricingTests(unittest.TestCase):
+    def test_opus_5_is_priced(self) -> None:
+        self.assertEqual(HARVEST._pricing_for("claude-opus-5"), (5.0, 25.0))
+
+    def test_context_window_suffix_still_prices(self) -> None:
+        """Model ids can carry a `[1m]` suffix; longest-prefix match covers it."""
+        self.assertEqual(HARVEST._pricing_for("claude-opus-5[1m]"), (5.0, 25.0))
+
+    def test_unknown_model_yields_none_not_zero(self) -> None:
+        usage = {"input_tokens": 1000, "output_tokens": 1000}
+        self.assertIsNone(HARVEST._usage_cost_usd(usage, "claude-unknown-9"))
+
+
+class OutOfOrderTimestampTests(unittest.TestCase):
+    """Sidechained and resumed transcripts are not written in timestamp
+    order. Reading first/last instead of min/max understated the span — and
+    returned 0 whenever the last row predated the first."""
+
+    def _row(self, ts: str, kind: str = "assistant") -> dict:
+        return {"type": kind, "timestamp": ts,
+                "message": {"usage": {"input_tokens": 1, "output_tokens": 1}}}
+
+    def test_wall_spans_min_to_max_regardless_of_file_order(self) -> None:
+        rows = [
+            self._row("2026-05-16T10:00:30Z"),
+            self._row("2026-05-16T10:00:00Z"),   # earlier row, written later
+            self._row("2026-05-16T10:00:10Z"),
+        ]
+        self.assertEqual(HARVEST._wall_ms_from_rows(rows), 30_000)
+
+    def test_autonomous_never_exceeds_wall_on_shuffled_rows(self) -> None:
+        rows = [
+            self._row("2026-05-16T10:00:20Z"),
+            self._row("2026-05-16T10:00:00Z", "user"),
+            self._row("2026-05-16T10:00:10Z"),
+        ]
+        self.assertLessEqual(HARVEST._autonomous_ms_from_rows(rows),
+                             HARVEST._wall_ms_from_rows(rows))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
