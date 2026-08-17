@@ -147,13 +147,13 @@ describe("chat-diff-panel smoke gate", () => {
     expect(store.chats.get(chatId)!.vcs_kind).toBe("git");
 
     // ── 3. First send ───────────────────────────────────────────────
-    await runFirstSendHook({
+    const firstSend = await runFirstSendHook({
       store,
       chatId,
-      defaultEnvMode: config.defaultEnvMode,
       checkpointStore: substrate.checkpointStore,
     });
-    expect(store.chats.get(chatId)!.worktree_mode).toBe("local");
+    expect(firstSend.worktreeMode).toBe("local");
+    expect(firstSend.checkpointRef).toBe(`refs/loom-checkpoints/${chatId}/0`);
     expect(git(cwd, ["show-ref", "--verify", `refs/loom-checkpoints/${chatId}/0`]).status).toBe(0);
 
     // ── 4. Mock one assistant turn → reactor → ref 1 ────────────────

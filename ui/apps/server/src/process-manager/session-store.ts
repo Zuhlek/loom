@@ -25,6 +25,17 @@ export interface SessionEntry {
 }
 
 export interface SessionIdStore {
+  /**
+   * Read-only lookup — `undefined` when no entry is persisted yet. Distinct
+   * from `getOrCreate` because the spawn path needs to ask "has this chat run
+   * before?" WITHOUT minting an id as a side effect: a reattach keeps the
+   * persisted cwd, a first spawn takes the resolver's (see resolve-spawn-cwd).
+   *
+   * Optional so the many test doubles that predate this call keep satisfying
+   * the interface; callers use `get?.(…)` and treat an absent implementation
+   * as "nothing persisted", which is the pre-existing fresh-spawn behaviour.
+   */
+  get?(chatId: string): Promise<SessionEntry | undefined>;
   getOrCreate(chatId: string, cwd: string): Promise<SessionEntry>;
   delete(chatId: string): Promise<void>;
   /**
@@ -100,6 +111,11 @@ export function createSessionIdStore(opts: SessionIdStoreOptions): SessionIdStor
   }
 
   return {
+    async get(chatId) {
+      const state = await ensureLoaded();
+      return state[chatId];
+    },
+
     async getOrCreate(chatId, cwd) {
       const state = await ensureLoaded();
       const existing = state[chatId];

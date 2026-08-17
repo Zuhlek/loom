@@ -567,19 +567,56 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
           broadcastRuntimeUnavailable(state.chatId, err);
           return;
         }
+        const message = (err as Error).message;
         console.warn(
-          `[loom] queued turn flush failed for ${state.chatId}: ${(err as Error).message}`,
+          `[loom] queued turn flush failed for ${state.chatId}: ${message}`,
         );
+        // Nobody is awaiting this send, so without failTurn the failure
+        // reaches the client as nothing at all — the turn we broadcast as
+        // `running` at enqueue time would never end.
+        failTurn(state.chatId, `Failed to send message: ${message}`);
       });
     }
   }
 
   async function ensureChatState(chatId: string): Promise<ChatState> {
     let state = chats.get(chatId);
-    if (state) return state;
+    // A registry hit is only usable while its pane is still alive. Panes die
+    // under us (claude crashes, a stray `tmux kill-session`, a host restart),
+    // and returning the bound state anyway pins the chat to a dead session
+    // for the life of the server: every send fails with an opaque `send-keys`
+    // error and no reload or re-attach can recover it. Respawn instead,
+    // carrying the attached clients onto the fresh state so open tabs keep
+    // receiving frames.
+    let carriedClients: WsClient[] = [];
+    if (state) {
+      if (await paneAlive(chatId)) return state;
+      console.warn(`[loom] chat ${chatId} lost its pane; respawning`);
+      carriedClients = [...state.clients];
+      state.clients.clear();
+      await teardownState(state);
+      state = undefined;
+    }
 
-    const resolvedCwd = await Promise.resolve(opts.cwdResolver(chatId));
-    const entry = await opts.sessionStore.getOrCreate(chatId, resolvedCwd);
+    // The cwd resolver is what turns a chat's worktree_mode into a real
+    // directory, so it must run before a pane is spawned — but NOT for a
+    // pane that already exists: tmux pinned its cwd at `new-session -c`
+    // and re-resolving would only make the row disagree with the
+    // directory the agent is actually editing. Reattach takes the
+    // persisted cwd; a fresh spawn takes the resolver's.
+    const persisted = await opts.sessionStore.get?.(chatId);
+    const reattaching = persisted !== undefined && (await paneAlive(chatId));
+    const resolvedCwd = reattaching
+      ? persisted!.cwd
+      : await Promise.resolve(opts.cwdResolver(chatId));
+    let entry = await opts.sessionStore.getOrCreate(chatId, resolvedCwd);
+    // A persisted entry otherwise pins the cwd it was first created with:
+    // a worktree that only materialised on a later spawn would leave the
+    // pane in the parent repo, editing files outside its worktree.
+    if (entry.cwd !== resolvedCwd) {
+      console.warn(`[loom] chat ${chatId} cwd moved ${entry.cwd} → ${resolvedCwd}`);
+      entry = await opts.sessionStore.upsert(chatId, entry.sessionId, resolvedCwd);
+    }
     let sessionId = entry.sessionId;
     const cwd = entry.cwd;
     const resolvedPermissionMode: WirePermissionMode = opts.permissionModeResolver
@@ -695,6 +732,14 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       strategy: tailStrategy,
     });
 
+    // Re-seat clients carried over from a respawn and give each a snapshot:
+    // the fresh session has an empty timeline and an idle turn-state, so a tab
+    // still showing the dead session's items has to be told.
+    for (const client of carriedClients) {
+      state.clients.add(client);
+      sendTo(client, buildSnapshotFrame(state));
+    }
+
     return state;
   }
 
@@ -738,9 +783,23 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       }
       return;
     }
+    // Ownership probe, skipped when the gate is ALREADY known-degraded (it
+    // would answer allow-all anyway).
+    if (!opts.paneProcess.gateDegraded()) {
+      const paneRoot = await opts.paneProcess.paneRootPid(state.chatId);
+      if (paneRoot === null) return;
+      const owned = await opts.paneProcess.paneOwnsFile(paneRoot, discovered.filePath);
+      if (!owned) return;
+    }
+    // Fail-closed on a degraded gate — evaluated AFTER the probe, not instead
+    // of it. `gateDegraded()` only learns lsof is missing BY attempting it, so
+    // on an lsof-less host the first candidate of every run passes the
+    // pre-check and then receives the allow-all answer. Adopting on that
+    // one-shot hole is enough to bind a chat to a bystander's transcript for
+    // good, since the swap also persists that session id as the chat's own.
     if (opts.paneProcess.gateDegraded()) {
-      // Ownership gate can't be trusted — only adopt a file we can
-      // independently prove is ours via its inner sessionId.
+      // Only adopt a file we can independently prove is ours via its inner
+      // sessionId.
       const sessionConfirmsOwnership =
         discovered.sessionId !== null && discovered.sessionId === state.sessionId;
       if (!sessionConfirmsOwnership) {
@@ -755,11 +814,6 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
         }
         return;
       }
-    } else {
-      const paneRoot = await opts.paneProcess.paneRootPid(state.chatId);
-      if (paneRoot === null) return;
-      const owned = await opts.paneProcess.paneOwnsFile(paneRoot, discovered.filePath);
-      if (!owned) return;
     }
     // Rotation detected and ownership confirmed. Swap the tail.
     const oldTail = state.tail;
@@ -836,6 +890,11 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     const state = chats.get(chatId);
     if (!state) return;
     broadcast(state, runtimeUnavailableFrame(chatId, err));
+    // The runtime is gone, so no `Stop` hook can ever arrive to end the
+    // turn — end it here (see `failTurn`). No dead-pane escalation: the
+    // runtime-unavailable frame already tells the user to install tmux, and
+    // a Retry that shells out to the missing binary can't help.
+    failTurn(chatId, err.message, { escalateOnDeadPane: false });
   }
 
   /** Register a pending permission and broadcast it to attached clients. */
@@ -852,7 +911,114 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     });
   }
 
-  return {
+  /**
+   * End the active turn with `turn-state error`. This is the ONLY producer
+   * of a non-`idle` turn terminator, and every input-path failure must go
+   * through it: the client seeds `running` optimistically on send and
+   * otherwise leaves that state only on claude's `Stop` hook, so a failure
+   * that means claude is not there (dead pane, tmux gone, failed
+   * `send-keys`) would strand the WorkingChip counting forever with the
+   * stop button unable to clear it.
+   *
+   * Clearing `turnStartedAtMs` matters as much as the frame: the snapshot
+   * derives `turnState` from it, so without this a reload would re-arm the
+   * same stuck chip.
+   */
+  function failTurn(
+    chatId: string,
+    message: string,
+    failOpts?: { escalateOnDeadPane?: boolean },
+  ): void {
+    const state = chats.get(chatId);
+    if (!state) return;
+    state.turnStartedAtMs = null;
+    broadcast(state, {
+      kind: "turn-state",
+      "chat-id": chatId,
+      body: { state: "error", lastError: message },
+    });
+    if (failOpts?.escalateOnDeadPane !== false) void escalateIfPaneDead(chatId);
+  }
+
+  /**
+   * Follow a turn failure with `session-state failed` when the pane is
+   * actually gone. Ending the turn stops the stuck WorkingChip but leaves a
+   * chat that fails every subsequent send with no way back: the pane is
+   * dead and `ensureChatState` keeps returning the state bound to it. The
+   * `failed` lifecycle is what renders `SessionRecoveryBanner`'s Retry,
+   * whose `retry-session` respawns the pane — until now nothing emitted a
+   * non-`active` lifecycle, so that button was unreachable.
+   *
+   * Fire-and-forget (one `tmux has-session` shell-out) so the input path
+   * stays synchronous; a still-live pane escalates to nothing.
+   */
+  async function escalateIfPaneDead(chatId: string): Promise<void> {
+    if (await paneAlive(chatId)) return;
+    const state = chats.get(chatId);
+    if (!state || state.state === "disposed") return;
+    broadcast(state, {
+      kind: "session-state",
+      "chat-id": chatId,
+      body: { lifecycle: "failed" },
+    });
+  }
+
+  /**
+   * `tmux has-session` for this chat, treating a probe failure as dead. Note
+   * this reports false whenever the tmux runtime itself is unavailable, which
+   * is the answer callers want: nothing can reach claude either way.
+   */
+  async function paneAlive(chatId: string): Promise<boolean> {
+    try {
+      return await opts.tmux.exists(chatId);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Tear down the live pieces of a chat state (tail, timers, queued turns),
+   * kill its pane, and drop it from the registry. Shared by `dispose` (the
+   * chat is going away) and `retrySession` (the chat is about to respawn):
+   * `ensureChatState` short-circuits on a registry hit, so a retry that
+   * leaves the entry behind reuses a state bound to the pane it just
+   * killed and every later send fails against a dead session.
+   *
+   * Leaves `state.clients` alone — `retrySession` re-seats the same clients
+   * on the fresh state, while `dispose` clears them itself.
+   */
+  async function teardownState(state: ChatState): Promise<void> {
+    // Stop the rotation poller first so it cannot resurrect the tail
+    // mid-teardown.
+    state.state = "disposed";
+    if (state.rotationPoll) {
+      clearInterval(state.rotationPoll);
+      state.rotationPoll = undefined;
+    }
+    // Cancel the cold-start fallback so it can't fire post-teardown and
+    // try to flush into a killed pane.
+    if (state.readyFallbackTimer) {
+      clearTimeout(state.readyFallbackTimer);
+      state.readyFallbackTimer = undefined;
+    }
+    // Drop any turns that never made it to claude — the pane is gone.
+    state.pendingTurns = [];
+    try {
+      await state.tail.stop();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await opts.tmux.kill(state.chatId);
+    } catch {
+      /* ignore — idempotent */
+    }
+    state.pendingPermissions.clear();
+    state.pendingQuestions.clear();
+    chats.delete(state.chatId);
+  }
+
+  const api: JsonlTailBridge = {
     async attach(chatId, client) {
       let state: ChatState;
       try {
@@ -915,35 +1081,8 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
         decision: "deny",
         reason: "Loom: session disposed before the permission request was answered.",
       });
-      // Stop the rotation poller first so it cannot resurrect the
-      // tail mid-dispose.
-      state.state = "disposed";
-      if (state.rotationPoll) {
-        clearInterval(state.rotationPoll);
-        state.rotationPoll = undefined;
-      }
-      // Cancel the cold-start fallback so it can't fire post-dispose and
-      // try to flush into a killed pane.
-      if (state.readyFallbackTimer) {
-        clearTimeout(state.readyFallbackTimer);
-        state.readyFallbackTimer = undefined;
-      }
-      // Drop any turns that never made it to claude — the pane is gone.
-      state.pendingTurns = [];
-      try {
-        await state.tail.stop();
-      } catch {
-        /* ignore */
-      }
-      try {
-        await opts.tmux.kill(chatId);
-      } catch {
-        /* ignore — idempotent */
-      }
+      await teardownState(state);
       state.clients.clear();
-      state.pendingPermissions.clear();
-      state.pendingQuestions.clear();
-      chats.delete(chatId);
     },
 
     // ─── User input ──────────────────────────────────────────────────────────
@@ -1019,6 +1158,7 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
           broadcastRuntimeUnavailable(chatId, err);
           return;
         }
+        failTurn(chatId, `Failed to send message: ${(err as Error).message}`);
         throw err;
       }
     },
@@ -1031,6 +1171,10 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
           broadcastRuntimeUnavailable(chatId, err);
           return;
         }
+        // The Escape never landed, so claude (if alive at all) will not
+        // report the turn ending. Fail it here or the stop button becomes a
+        // no-op the user cannot escape from.
+        failTurn(chatId, `Failed to interrupt: ${(err as Error).message}`);
         throw err;
       }
     },
@@ -1311,15 +1455,29 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
     },
 
     async retrySession(chatId) {
-      await opts.tmux.kill(chatId);
-      await opts.sessionStore.delete(chatId);
-      const state = chats.get(chatId);
-      if (state) {
-        state.materializer.reset();
-        state.turnStartedAtMs = null;
-        broadcast(state, buildSnapshotFrame(state));
+      const old = chats.get(chatId);
+      // Re-seat the SAME clients on the fresh state so Retry recovers the
+      // chat in place; a reload would otherwise be the only way back.
+      const clients = old ? [...old.clients] : [];
+      if (old) {
+        opts.permissionGate?.rejectAll(chatId, {
+          decision: "deny",
+          reason: "Loom: session retried before the permission request was answered.",
+        });
+        old.clients.clear();
+        await teardownState(old);
+      } else {
+        await opts.tmux.kill(chatId);
       }
-      // The next ensureChatState call will mint a fresh sessionId.
+      // Dropping the stored id makes the respawn below mint a fresh one, so
+      // it spawns with `--session-id` rather than resuming the dead session.
+      await opts.sessionStore.delete(chatId);
+      // `attach` re-runs the whole spawn + snapshot + hook path, and the
+      // fresh state reports `turnState: "idle"`, which clears the stuck
+      // WorkingChip on every re-seated client.
+      for (const client of clients) {
+        await api.attach(chatId, client);
+      }
     },
 
     // ─── Subscriptions ───────────────────────────────────────────────────────
@@ -1467,4 +1625,5 @@ export function createJsonlTailBridge(opts: JsonlTailBridgeOptions): JsonlTailBr
       };
     },
   };
+  return api;
 }

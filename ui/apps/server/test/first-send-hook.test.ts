@@ -33,105 +33,66 @@ function makeGitRepo(): string {
   return root;
 }
 
+// Mode + worktree_path are committed at spawn time (resolve-spawn-cwd);
+// see worktree-optin-spawn.test.ts. The hook records the branch and
+// writes checkpoint ref 0.
 describe("first-send hook (T-015)", () => {
-  test("defaultEnvMode=local + null worktree_mode → commits local, writes ref 0", async () => {
+  test("local chat → records project HEAD branch, writes ref 0", async () => {
     const cwd = track(makeGitRepo());
     const store = await initMetadataStore({ inMemoryOnly: true });
-    const chat = store.chats.create({ id: "c1", cwd });
-    // Brand-new chats start with worktree_mode === null — the hook
-    // commits it on first send. No workaround mutation needed.
-    expect(store.chats.get("c1")!.worktree_mode).toBeNull();
-    const ckStore = createCheckpointStore();
-    await runFirstSendHook({
-      store,
-      chatId: "c1",
-      defaultEnvMode: "local",
-      checkpointStore: ckStore,
-    });
-    expect(store.chats.get("c1")!.worktree_mode).toBe("local");
-    expect(store.chats.get("c1")!.worktree_path).toBeNull();
-    const showRef = git(cwd, ["show-ref", "--verify", "refs/loom-checkpoints/c1/0"]);
-    expect(showRef.status).toBe(0);
+    store.chats.create({ id: "c1", cwd, worktree_mode: "local" });
+    const r = await runFirstSendHook({ store, chatId: "c1", checkpointStore: createCheckpointStore() });
+    expect(r.worktreeMode).toBe("local");
+    expect(r.branch).toBe("main");
+    expect(store.chats.get("c1")!.branch).toBe("main");
+    expect(r.checkpointRef).toBe("refs/loom-checkpoints/c1/0");
+    expect(git(cwd, ["show-ref", "--verify", "refs/loom-checkpoints/c1/0"]).status).toBe(0);
     await store.close();
   });
 
-  test("defaultEnvMode=worktree → creates worktree, commits worktree, ref 0 written", async () => {
+  test("worktree chat → checkpoint captured inside the worktree, branch left alone", async () => {
     const cwd = track(makeGitRepo());
+    const wt = path.join(cwd, ".loom-worktrees", "c2");
+    expect(git(cwd, ["worktree", "add", "-b", "loom/c2", wt]).status).toBe(0);
     const store = await initMetadataStore({ inMemoryOnly: true });
-    store.chats.create({ id: "c2", cwd });
-    expect(store.chats.get("c2")!.worktree_mode).toBeNull();
-    const ckStore = createCheckpointStore();
-    await runFirstSendHook({
-      store,
-      chatId: "c2",
-      defaultEnvMode: "worktree",
-      checkpointStore: ckStore,
-    });
-    const row = store.chats.get("c2")!;
-    expect(row.worktree_mode).toBe("worktree");
-    expect(row.worktree_path).toBeTruthy();
-    expect(fs.existsSync(row.worktree_path!)).toBe(true);
-    expect(row.branch).toBe("loom/c2");
-    const showRef = git(cwd, ["show-ref", "--verify", "refs/loom-checkpoints/c2/0"]);
-    expect(showRef.status).toBe(0);
+    store.chats.create({ id: "c2", cwd, worktree_mode: "worktree" });
+    store.chats.update("c2", { worktree_path: wt, branch: "loom/c2" });
+
+    const r = await runFirstSendHook({ store, chatId: "c2", checkpointStore: createCheckpointStore() });
+    expect(r.worktreePath).toBe(wt);
+    expect(r.branch).toBe("loom/c2");
+    expect(r.checkpointRef).toBe("refs/loom-checkpoints/c2/0");
+    expect(git(wt, ["show-ref", "--verify", "refs/loom-checkpoints/c2/0"]).status).toBe(0);
     await store.close();
   });
 
-  test("second invocation is idempotent (no second update or capture)", async () => {
+  test("second invocation does not re-write the branch", async () => {
     const cwd = track(makeGitRepo());
     const store = await initMetadataStore({ inMemoryOnly: true });
-    store.chats.create({ id: "c3", cwd });
-    expect(store.chats.get("c3")!.worktree_mode).toBeNull();
+    store.chats.create({ id: "c3", cwd, worktree_mode: "local" });
     const ckStore = createCheckpointStore();
-    await runFirstSendHook({ store, chatId: "c3", defaultEnvMode: "local", checkpointStore: ckStore });
+    await runFirstSendHook({ store, chatId: "c3", checkpointStore: ckStore });
     const before = JSON.stringify(store.chats.get("c3"));
-    await runFirstSendHook({
-      store,
-      chatId: "c3",
-      defaultEnvMode: "worktree",
-      checkpointStore: ckStore,
-    });
-    // No mode flip
-    expect(store.chats.get("c3")!.worktree_mode).toBe("local");
+    await runFirstSendHook({ store, chatId: "c3", checkpointStore: ckStore });
     expect(JSON.stringify(store.chats.get("c3"))).toBe(before);
     await store.close();
   });
 
-  test("worktree creation throws → fallback to local + notice", async () => {
-    const cwd = track(makeGitRepo());
+  test("non-git cwd → no branch, no ref written", async () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "loom-fs-bare-")));
     const store = await initMetadataStore({ inMemoryOnly: true });
-    store.chats.create({ id: "c4", cwd });
-    expect(store.chats.get("c4")!.worktree_mode).toBeNull();
-    const ckStore = createCheckpointStore();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await runFirstSendHook({
-      store,
-      chatId: "c4",
-      defaultEnvMode: "worktree",
-      checkpointStore: ckStore,
-      createWorktreeImpl: async () => {
-        throw new Error("simulated");
-      },
-    });
-    expect(store.chats.get("c4")!.worktree_mode).toBe("local");
-    expect(store.chats.get("c4")!.worktree_path).toBeNull();
-    expect(warn).toHaveBeenCalled();
+    store.chats.create({ id: "c5", cwd, worktree_mode: "local" });
+    const r = await runFirstSendHook({ store, chatId: "c5", checkpointStore: createCheckpointStore() });
+    expect(r.branch).toBeNull();
+    expect(r.checkpointRef).toBeNull();
     await store.close();
   });
 
-  test("non-git cwd → worktree_mode=local, no ref written", async () => {
-    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "loom-fs-bare-")));
+  test("missing chat throws", async () => {
     const store = await initMetadataStore({ inMemoryOnly: true });
-    store.chats.create({ id: "c5", cwd });
-    expect(store.chats.get("c5")!.worktree_mode).toBeNull();
-    const ckStore = createCheckpointStore();
-    await runFirstSendHook({
-      store,
-      chatId: "c5",
-      defaultEnvMode: "local",
-      checkpointStore: ckStore,
-    });
-    expect(store.chats.get("c5")!.worktree_mode).toBe("local");
+    await expect(
+      runFirstSendHook({ store, chatId: "nope", checkpointStore: createCheckpointStore() }),
+    ).rejects.toThrow(/chat not found/);
     await store.close();
   });
 });

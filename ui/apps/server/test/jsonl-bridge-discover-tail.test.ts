@@ -448,6 +448,55 @@ describe("JsonlTailBridge — directory-scan discovery (rotation via pane-PID fi
     await env.bridge.dispose("chat-1");
   });
 
+  it("rotation refused when the gate only reveals its degradation DURING the ownership probe", async () => {
+    // The real lsof-less gate: `gateDegraded()` answers false until
+    // `paneOwnsFile` has actually tried lsof and hit ENOENT, at which point it
+    // both flips the flag AND answers allow-all. The first candidate of every
+    // run therefore passes a pre-probe check and gets adopted — enough to bind
+    // the chat to a bystander's transcript permanently, since the swap also
+    // persists that session id as the chat's own.
+    env = makeEnv({ rotationPollMs: 30 });
+    let lsofAttempted = false;
+    env.pane.gateDegraded = () => lsofAttempted;
+    env.pane.paneOwnsFile = async () => {
+      lsofAttempted = true;
+      return true; // allow-all, exactly as the real gate degrades to
+    };
+
+    const ws = makeWs();
+    await env.bridge.attach("chat-1", ws);
+
+    const bystanderPath = join(env.sessionDir, "bystander.jsonl");
+    writeFileSync(
+      bystanderPath,
+      JSON.stringify({
+        type: "user",
+        uuid: "ev-bystander-race",
+        timestamp: "2026-05-24T13:00:00.000Z",
+        sessionId: "someone-else",
+        message: { role: "user", content: "content from another session" },
+      }) + "\n",
+      "utf8",
+    );
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    const appended = ws.sent
+      .map((s) => {
+        try {
+          return JSON.parse(s);
+        } catch {
+          return null;
+        }
+      })
+      .filter((f) => f && f.kind === "item-append");
+    expect(
+      appended.some((f) => f.body?.item?.text === "content from another session"),
+    ).toBe(false);
+    expect(env.store.__map["chat-1"]!.sessionId).toBe("persisted-chat-1");
+    await env.bridge.dispose("chat-1");
+  });
+
   it("rotation still adopted under a degraded gate when the newer file's inner sessionId matches the bound one", async () => {
     env = makeEnv({ rotationPollMs: 30 });
     env.pane.gateDegraded = () => true;

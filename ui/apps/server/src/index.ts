@@ -55,6 +55,7 @@ import {
 import { createHeadWatcher, type HeadWatcher } from "./git/head-watcher.ts";
 import { reconcileGitContextOnAttach } from "./process-manager/reconcile-git-context.ts";
 import { runFirstSendHook } from "./process-manager/first-send-hook.ts";
+import { resolveAndPersistSpawnCwd } from "./process-manager/resolve-spawn-cwd.ts";
 import type { ServerFrame } from "./chat-protocol/frames.ts";
 
 function parseRootFlag(argv: string[]): string | undefined {
@@ -97,9 +98,24 @@ function compareSemverDesc(a: string, b: string): number {
  *   1. $LOOM_CLAUDE_BIN (explicit override)
  *   2. `claude` on $PATH
  *   3. ~/.claude/local/claude (official local installer)
- *   4. Newest VS Code extension bundle: ~/.vscode/extensions/anthropic.claude-code-*<platform>/resources/native-binary/claude
+ *   4. Newest editor extension bundle, over every known extensions root:
+ *      <root>/anthropic.claude-code-*<platform>/resources/native-binary/claude
  * Falls back to bare "claude" so we still surface a clean error if nothing works.
+ *
+ * The extension roots differ per editor flavour, and getting this wrong is not
+ * a soft failure: tmux exits 0 when it cannot exec the command, so a bare
+ * "claude" that isn't on PATH produces a pane that dies instantly and a chat
+ * whose every send fails with an opaque `send-keys` error.
  */
+const EXTENSION_ROOTS: readonly string[] = [
+  path.join(".vscode", "extensions"),
+  // Remote / server flavours keep extensions outside ~/.vscode: plain VS Code
+  // Remote-SSH uses ~/.vscode-server, code-server (Coder CDE workspaces) uses
+  // ~/.local/share/code-server.
+  path.join(".vscode-server", "extensions"),
+  path.join(".local", "share", "code-server", "extensions"),
+];
+
 export function resolveClaudeBin(): string {
   const env = process.env.LOOM_CLAUDE_BIN;
   if (env) {
@@ -113,27 +129,38 @@ export function resolveClaudeBin(): string {
   const local = path.join(os.homedir(), ".claude", "local", "claude");
   if (isExecutableFile(local)) return local;
 
-  try {
-    const extDir = path.join(os.homedir(), ".vscode", "extensions");
-    if (fs.existsSync(extDir)) {
-      const matches = fs
-        .readdirSync(extDir)
-        .filter((name) => name.startsWith("anthropic.claude-code-"))
-        .map((name) => {
-          const rest = name.slice("anthropic.claude-code-".length);
-          const dash = rest.indexOf("-");
-          const version = dash >= 0 ? rest.slice(0, dash) : rest;
-          return { name, version };
-        })
-        .sort((a, b) => compareSemverDesc(a.version, b.version));
-      for (const m of matches) {
-        const candidate = path.join(extDir, m.name, "resources", "native-binary", "claude");
-        if (isExecutableFile(candidate)) return candidate;
-      }
-    }
-  } catch {}
+  for (const root of EXTENSION_ROOTS) {
+    const bundled = findBundledClaude(path.join(os.homedir(), root));
+    if (bundled) return bundled;
+  }
 
   return "claude";
+}
+
+/**
+ * Newest `anthropic.claude-code-*` bundle under one extensions root, or null.
+ * Directory names carry the version (`anthropic.claude-code-2.1.220-linux-x64`),
+ * so the newest wins regardless of install order.
+ */
+function findBundledClaude(extDir: string): string | null {
+  try {
+    if (!fs.existsSync(extDir)) return null;
+    const matches = fs
+      .readdirSync(extDir)
+      .filter((name) => name.startsWith("anthropic.claude-code-"))
+      .map((name) => {
+        const rest = name.slice("anthropic.claude-code-".length);
+        const dash = rest.indexOf("-");
+        const version = dash >= 0 ? rest.slice(0, dash) : rest;
+        return { name, version };
+      })
+      .sort((a, b) => compareSemverDesc(a.version, b.version));
+    for (const m of matches) {
+      const candidate = path.join(extDir, m.name, "resources", "native-binary", "claude");
+      if (isExecutableFile(candidate)) return candidate;
+    }
+  } catch {}
+  return null;
 }
 
 export interface ChatDiffPanelSubstrate {
@@ -249,6 +276,16 @@ if (isEntrypoint) {
   const imageStore = createImageStore();
   const claudeBin = resolveClaudeBin();
   console.log(`[loom] using claude binary: ${claudeBin}`);
+  // `resolveClaudeBin` falls back to a bare "claude" when nothing resolved.
+  // tmux exits 0 for a command it cannot exec, so this would otherwise show up
+  // only as panes that die on spawn and sends that fail with an opaque
+  // `send-keys` error — warn at boot instead, next to the tmux probe notice.
+  if (claudeBin === "claude" && !findOnPath("claude")) {
+    console.warn(
+      `[loom] claude binary not found on PATH — every chat will fail to spawn. ` +
+        `Install the CLI or set LOOM_CLAUDE_BIN=/abs/path/to/claude.`,
+    );
+  }
 
   // JsonlTailBridge is the only bridge after the cutover. The
   // pre-cutover SDK bridge and the `LOOM_BRIDGE` env switch are
@@ -293,10 +330,9 @@ if (isEntrypoint) {
     permissionGate,
     imageStore,
     paneProcess: createPaneProcessApi(),
-    cwdResolver: async (chatId: string) => {
-      const chat = store.chats.get(chatId);
-      return chat?.cwd ?? process.cwd();
-    },
+    // Worktree opt-in materialises here: the pane's cwd has to be final
+    // before tmux spawns it, and this is the last hook before that.
+    cwdResolver: (chatId: string) => resolveAndPersistSpawnCwd(store, config, chatId),
     // Record folder trust before a Full-access spawn so claude's
     // --dangerously-skip-permissions trust dialog never blocks the pane
     // (folder-trust.ts). Bridge calls this for bypassPermissions only.
@@ -342,7 +378,6 @@ if (isEntrypoint) {
         await runFirstSendHook({
           store,
           chatId,
-          defaultEnvMode: config.defaultEnvMode,
           checkpointStore: substrateRef.checkpointStore,
         });
       } catch (err) {

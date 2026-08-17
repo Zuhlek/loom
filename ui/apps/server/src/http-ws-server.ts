@@ -420,7 +420,14 @@ export async function startServer(opts: ServerOptions = {}): Promise<ServerHandl
             send(makeError(undefined, "retry-session: missing chat-id"));
             return;
           }
-          opts.bridge.retrySession(chatId);
+          // Same crash class as user-turn: a retry respawns the pane, so it
+          // can reject (tmux new-session failing) — catch it rather than let
+          // it bubble to an unhandled rejection.
+          try {
+            await opts.bridge.retrySession(chatId);
+          } catch (err) {
+            send(makeError(chatId, errorMessage(err) || "retry-session failed"));
+          }
           return;
         }
         if (envelope.kind === "detach") {
