@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Read and update the canonical `pipeline.md` state file for a Loom workspace.
-
-CLI subcommands: read, field, update, append-history, init, validate. All
-reads/writes of `pipeline.md` fields by `/weave` go through this script."""
+"""pipeline.md CLI. The orchestrator mutates pipeline.md only through this tool."""
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import re
+import shutil
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,16 +17,11 @@ SECTION_ORDER = [
     "Project name",
     "Ticket ID",
     "Type hint",
-    "Repo",
-    "Spec depth",
     "Current phase",
     "Phase status",
     "Lifecycle state",
-    "Produced artifacts",
+    "Develop-log",
     "Pending user input",
-    "Quality findings",
-    "Next valid action",
-    "Resume point",
     "History",
 ]
 
@@ -36,19 +29,26 @@ FENCED_FIELDS = {
     "Project name",
     "Ticket ID",
     "Type hint",
-    "Repo",
-    "Spec depth",
     "Current phase",
     "Phase status",
     "Lifecycle state",
-    "Next valid action",
-    "Resume point",
+    "Develop-log",
 }
 
-VALID_PHASES = {"spec", "design", "plan", "build", "review"}
+PHASES = ["spec", "design", "plan", "build", "review"]
 VALID_STATUSES = {"Pending", "blocked", "failed", "complete"}
 VALID_LIFECYCLE_STATES = {"active", "complete"}
-VALID_SPEC_DEPTHS = {"pending", "light", "standard", "deep"}
+VALID_DEVELOP_LOG = {"local", "global"}
+
+# Artifacts each phase owns inside the workspace. goback archives these for
+# every phase after the target.
+PHASE_ARTIFACTS = {
+    "spec": ["spec.md", "decisions.md"],
+    "design": ["design.md", "mockup"],
+    "plan": ["plan.md"],
+    "build": ["build-report.md", "smoke-screenshots"],
+    "review": ["review.md"],
+}
 
 
 @dataclass
@@ -61,15 +61,6 @@ class Section:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def read_pipeline(path: Path) -> str:
-    """Read `pipeline.md`, raising a clean SystemExit on a missing/unreadable
-    file instead of a raw traceback (mirrors the init_workspace guard idiom)."""
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError as e:
-        raise SystemExit(f"cannot read {path}: {e}")
 
 
 def atomic_write(path: Path, content: str) -> None:
@@ -100,15 +91,6 @@ def read_fenced(body: str) -> str:
     return match.group(1).strip()
 
 
-def read_list(body: str) -> list[str]:
-    out: list[str] = []
-    for line in body.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("- "):
-            out.append(stripped[2:].strip())
-    return out
-
-
 def read_history(body: str) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for line in body.splitlines():
@@ -124,7 +106,7 @@ def read_history(body: str) -> list[dict[str, str]]:
 
 
 def parse(path: Path) -> dict[str, object]:
-    text = read_pipeline(path)
+    text = path.read_text(encoding="utf-8")
     sections = split_sections(text)
     result: dict[str, object] = {}
     for name in SECTION_ORDER:
@@ -132,8 +114,6 @@ def parse(path: Path) -> dict[str, object]:
         body = read_body(text, section) if section else ""
         if name in FENCED_FIELDS:
             result[name] = read_fenced(body)
-        elif name == "Produced artifacts":
-            result[name] = read_list(body)
         elif name == "History":
             result[name] = read_history(body)
         else:
@@ -141,19 +121,16 @@ def parse(path: Path) -> dict[str, object]:
     return result
 
 
-def render_field(name: str, value: str | list[str]) -> str:
+def render_field(name: str, value: str) -> str:
     if name in FENCED_FIELDS:
         return f"```text\n{str(value).strip()}\n```\n"
-    if name == "Produced artifacts":
-        items = value if isinstance(value, list) else [line.strip() for line in str(value).splitlines() if line.strip()]
-        return "".join(f"- {item}\n" for item in items)
     if name == "History":
         return str(value).rstrip() + "\n"
     return str(value).strip("\n") + "\n"
 
 
-def replace_field(path: Path, name: str, value: str | list[str]) -> None:
-    text = read_pipeline(path)
+def replace_field(path: Path, name: str, value: str) -> None:
+    text = path.read_text(encoding="utf-8")
     sections = split_sections(text)
     replacement = f"## {name}\n{render_field(name, value)}"
     section = sections.get(name)
@@ -166,7 +143,7 @@ def replace_field(path: Path, name: str, value: str | list[str]) -> None:
 
 def append_history(path: Path, phase: str, status: str, note: str, timestamp: str | None = None) -> None:
     timestamp = timestamp or now_iso()
-    text = read_pipeline(path)
+    text = path.read_text(encoding="utf-8")
     sections = split_sections(text)
     row = f"| {timestamp} | {phase} | {status} | {note.replace('|', '/')} |\n"
     section = sections.get("History")
@@ -184,7 +161,7 @@ def append_history(path: Path, phase: str, status: str, note: str, timestamp: st
     atomic_write(path, text)
 
 
-def initial_pipeline(project: str, ticket: str, type_hint: str) -> str:
+def initial_pipeline(project: str, ticket: str, type_hint: str, develop_log: str) -> str:
     return f"""# Pipeline - {project}
 
 ## Project name
@@ -202,11 +179,6 @@ def initial_pipeline(project: str, ticket: str, type_hint: str) -> str:
 {type_hint}
 ```
 
-## Spec depth
-```text
-pending
-```
-
 ## Current phase
 ```text
 spec
@@ -222,21 +194,12 @@ Pending
 active
 ```
 
-## Produced artifacts
+## Develop-log
+```text
+{develop_log}
+```
 
 ## Pending user input
-
-## Quality findings
-
-## Next valid action
-```text
-Run /weave to advance
-```
-
-## Resume point
-```text
-spec:foundation
-```
 
 ## History
 
@@ -246,37 +209,16 @@ spec:foundation
 """
 
 
-def materialize_type_guidance(workspace: Path, type_hint: str) -> None:
-    """Copy the active type's domain-guidance file into the workspace as
-    `type-guidance.md` so phase agents read it from their inherited cwd, not
-    from the cross-tree `orchestrator/types/<type>.md` skill path.
-
-    The source is resolved relative to this script's real location
-    (`<orchestrator>/types/`) via `__file__`, so it is cwd-independent and
-    works through the `~/.claude/skills/weave` install symlink. Silently skips
-    when no type hint is given or the type is unknown — the `<type>.md` input
-    is conditional, and agents read it only when present.
-    """
-    name = type_hint.strip()
-    if not name:
-        return
-    source = Path(__file__).resolve().parents[2] / "types" / f"{name}.md"
-    if not source.is_file():
-        return
-    atomic_write(workspace / "type-guidance.md", source.read_text(encoding="utf-8"))
-
-
-def init_workspace(parent_dir: Path, project: str, seed: str, ticket: str, type_hint: str) -> None:
+def init_workspace(parent_dir: Path, project: str, seed: str, ticket: str, type_hint: str, develop_log: str) -> None:
     workspace = parent_dir / ".loom" / project
     if (workspace / "seed.md").exists():
         raise SystemExit(
             f"refusing to init: {workspace / 'seed.md'} already exists. "
-            "the workspace is already bootstrapped — resolve manually or use a different project name."
+            "the workspace is already bootstrapped - resolve manually or use a different project name."
         )
     workspace.mkdir(parents=True, exist_ok=True)
-    atomic_write(workspace / "pipeline.md", initial_pipeline(project, ticket, type_hint))
+    atomic_write(workspace / "pipeline.md", initial_pipeline(project, ticket, type_hint, develop_log))
     atomic_write(workspace / "seed.md", seed.rstrip() + "\n")
-    materialize_type_guidance(workspace, type_hint)
 
 
 def validate_record(record: dict[str, object]) -> list[str]:
@@ -284,84 +226,157 @@ def validate_record(record: dict[str, object]) -> list[str]:
     phase = str(record.get("Current phase", ""))
     status = str(record.get("Phase status", ""))
     lifecycle = str(record.get("Lifecycle state", ""))
-    spec_depth = str(record.get("Spec depth", ""))
-    if phase and phase not in VALID_PHASES:
+    develop_log = str(record.get("Develop-log", ""))
+    if phase and phase not in PHASES:
         errors.append(f"invalid phase: {phase}")
     if status and status not in VALID_STATUSES:
         errors.append(f"invalid status: {status}")
     if lifecycle and lifecycle not in VALID_LIFECYCLE_STATES:
         errors.append(f"invalid lifecycle state: {lifecycle}")
-    if spec_depth and spec_depth not in VALID_SPEC_DEPTHS:
-        errors.append(f"invalid spec depth: {spec_depth}")
+    if develop_log and develop_log not in VALID_DEVELOP_LOG:
+        errors.append(f"invalid develop-log: {develop_log}")
     missing = [name for name in SECTION_ORDER if name not in record]
     for name in missing:
         errors.append(f"missing section: {name}")
     return errors
 
 
+def require(path: Path, condition: bool, message: str) -> None:
+    if not condition:
+        raise SystemExit(f"{path}: {message}")
+
+
+def current_phase(path: Path) -> str:
+    record = parse(path)
+    phase = str(record.get("Current phase", ""))
+    require(path, phase in PHASES, f"invalid current phase: {phase!r}")
+    require(path, str(record.get("Lifecycle state", "")) == "active", "lifecycle is not active")
+    return phase
+
+
+def cmd_advance(path: Path) -> None:
+    phase = current_phase(path)
+    require(path, phase != "review", "review is the last phase - use complete")
+    next_phase = PHASES[PHASES.index(phase) + 1]
+    replace_field(path, "Phase status", "complete")
+    append_history(path, phase, "complete", "phase accepted")
+    replace_field(path, "Current phase", next_phase)
+    replace_field(path, "Phase status", "Pending")
+    replace_field(path, "Pending user input", "")
+    append_history(path, next_phase, "Pending", "advanced")
+    print(next_phase)
+
+
+def cmd_rerun(path: Path) -> None:
+    phase = current_phase(path)
+    replace_field(path, "Phase status", "Pending")
+    replace_field(path, "Pending user input", "")
+    append_history(path, phase, "Pending", "rerun requested")
+    print(phase)
+
+
+def cmd_goback(path: Path, target: str) -> None:
+    phase = current_phase(path)
+    require(path, target in PHASES, f"invalid target phase: {target!r}")
+    require(path, PHASES.index(target) < PHASES.index(phase), f"target {target} is not before {phase}")
+    workspace = path.parent
+    stamp = now_iso().replace(":", "-")
+    archive = workspace / "superseded" / stamp
+    moved = []
+    for later in PHASES[PHASES.index(target) + 1 :]:
+        for name in PHASE_ARTIFACTS[later]:
+            source = workspace / name
+            if source.exists():
+                archive.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source), str(archive / name))
+                moved.append(name)
+    replace_field(path, "Current phase", target)
+    replace_field(path, "Phase status", "Pending")
+    replace_field(path, "Pending user input", "")
+    append_history(path, target, "Pending", f"went back from {phase}; archived: {', '.join(moved) or 'nothing'}")
+    print(target)
+
+
+def cmd_complete(path: Path) -> None:
+    phase = current_phase(path)
+    require(path, phase == "review", f"complete only from review, not {phase}")
+    replace_field(path, "Phase status", "complete")
+    replace_field(path, "Lifecycle state", "complete")
+    append_history(path, "review", "complete", "lifecycle complete")
+    print("complete")
+
+
+def cmd_block(path: Path, question: str) -> None:
+    phase = current_phase(path)
+    replace_field(path, "Phase status", "blocked")
+    replace_field(path, "Pending user input", question)
+    append_history(path, phase, "blocked", "waiting for user input")
+    print(phase)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_read = sub.add_parser("read", help="print the whole pipeline.md as JSON")
-    p_read.add_argument("path")
+    for name in ("read", "field", "update", "validate", "advance", "rerun", "goback", "complete", "block", "append-history"):
+        p = sub.add_parser(name)
+        p.add_argument("path")
+        if name == "field":
+            p.add_argument("name")
+        elif name == "update":
+            p.add_argument("name")
+            p.add_argument("value", nargs="?")
+            p.add_argument("--stdin", action="store_true")
+        elif name == "goback":
+            p.add_argument("target")
+        elif name == "block":
+            p.add_argument("question")
+        elif name == "append-history":
+            p.add_argument("phase")
+            p.add_argument("status")
+            p.add_argument("note")
+            p.add_argument("--timestamp")
 
-    p_field = sub.add_parser("field", help="print a single pipeline.md field value")
-    p_field.add_argument("path")
-    p_field.add_argument("name")
-
-    p_update = sub.add_parser("update", help="set a single pipeline.md field value")
-    p_update.add_argument("path")
-    p_update.add_argument("name")
-    p_update.add_argument("value", nargs="?")
-    p_update.add_argument("--stdin", action="store_true")
-
-    p_history = sub.add_parser("append-history", help="append a row to the History table")
-    p_history.add_argument("path")
-    p_history.add_argument("phase")
-    p_history.add_argument("status")
-    p_history.add_argument("note")
-    p_history.add_argument("--timestamp")
-
-    p_init = sub.add_parser("init", help="bootstrap a new workspace (pipeline.md + seed.md)")
+    p_init = sub.add_parser("init")
     p_init.add_argument("parent_dir")
     p_init.add_argument("project")
     p_init.add_argument("--seed", default="")
     p_init.add_argument("--ticket", default="")
     p_init.add_argument("--type-hint", default="")
-
-    p_validate = sub.add_parser("validate", help="check pipeline.md for schema errors")
-    p_validate.add_argument("path")
+    p_init.add_argument("--develop-log", default="local", choices=sorted(VALID_DEVELOP_LOG))
 
     args = parser.parse_args()
 
     if args.cmd == "read":
         print(json.dumps(parse(Path(args.path)), indent=2))
-        return 0
-    if args.cmd == "field":
+    elif args.cmd == "field":
         value = parse(Path(args.path)).get(args.name, "")
-        if isinstance(value, list):
-            print("\n".join(value))
-        else:
-            print(value)
-        return 0
-    if args.cmd == "update":
+        print(value if isinstance(value, str) else json.dumps(value))
+    elif args.cmd == "update":
         value = sys.stdin.read() if args.stdin else (args.value or "")
         replace_field(Path(args.path), args.name, value)
-        return 0
-    if args.cmd == "append-history":
+    elif args.cmd == "append-history":
         append_history(Path(args.path), args.phase, args.status, args.note, args.timestamp)
-        return 0
-    if args.cmd == "init":
-        init_workspace(Path(args.parent_dir), args.project, args.seed, args.ticket, args.type_hint)
-        return 0
-    if args.cmd == "validate":
+    elif args.cmd == "init":
+        init_workspace(Path(args.parent_dir), args.project, args.seed, args.ticket, args.type_hint, args.develop_log)
+    elif args.cmd == "validate":
         errors = validate_record(parse(Path(args.path)))
         if errors:
             print("\n".join(errors), file=sys.stderr)
             return 1
-        return 0
-    return 2
+    elif args.cmd == "advance":
+        cmd_advance(Path(args.path))
+    elif args.cmd == "rerun":
+        cmd_rerun(Path(args.path))
+    elif args.cmd == "goback":
+        cmd_goback(Path(args.path), args.target)
+    elif args.cmd == "complete":
+        cmd_complete(Path(args.path))
+    elif args.cmd == "block":
+        cmd_block(Path(args.path), args.question)
+    else:
+        return 2
+    return 0
 
 
 if __name__ == "__main__":

@@ -1,48 +1,34 @@
 # Loom
 
-Phase-based development framework for AI-agent software work. Two subsystems:
+Phase-based development framework for AI-agent software work. One skill: `/weave`.
 
-| Path | What it is |
+## How it works
+
+`/weave` resolves or creates a workspace at `.loom/<project>/` in the target repo, then runs five phases in order, each as a fresh subagent: Spec (clarify the seed into `spec.md` + `decisions.md`), Design (`design.md`), Plan (`plan.md` with the task graph), Build (implementation + `build-report.md`), Review (`review.md`). After every phase the user decides at a gate: continue, rerun, or go back. Reruns are never automatic.
+
+`pipeline.md` is the canonical state file per workspace. The orchestrator mutates it only through `orchestrator/weave/lib/pipeline-parser.py` (init, advance, rerun, goback, complete, block). `goback` archives later-phase artifacts to `superseded/<timestamp>/`.
+
+Each phase dispatch is the phase file sent verbatim plus a short context block (project, workspace path, skill root, type, develop-log mode, date). Phase agents return a fenced RETURN block (phase, status, artifacts, summary); a malformed return is redispatched once.
+
+Every phase appends a one-line learning to `<workspace>/develop-log.md`; projects initialized with `--develop-log global` also append to `~/.claude/develop-log.md`. `<workspace>/repo-context.md` is an optional, user-maintained context file; nothing in loom writes it.
+
+## Layout
+
+| Path | Purpose |
 | --- | --- |
-| `orchestrator/` | Claude Code skill that drives the lifecycle (`/weave` — Spec → Design → Plan → Build → Review). |
-| `ui/` | Dev stack — Fastify server + Vite/React web app for browsing `.loom/` projects. |
+| `orchestrator/weave/SKILL.md` | `/weave` orchestrator |
+| `orchestrator/weave/phases/<phase>.md` | One self-contained file per phase agent |
+| `orchestrator/weave/lib/pipeline-parser.py` | pipeline.md CLI; `test_pipeline_parser.py` checks it |
+| `orchestrator/weave/principles.md` | Engineering rules read by Build and Review |
+| `orchestrator/weave/types/<type>.md` | Domain guidance loaded when a project has a type hint |
+| `orchestrator/install.sh` | Links `~/.claude/skills/weave` to this repo (junction on Windows) |
 
-## Setup
-
-First-time setup on any machine (local or a cloud/coder workspace):
-
-```bash
-pnpm bootstrap         # symlink /weave (+ skills) into ~/.claude and wire the hooks
-```
-
-This runs `orchestrator/setup-loom.sh`: it symlinks the `weave`, `explore-prototype`,
-and `types` skills into `~/.claude/skills/`, links `~/.claude/loom-hooks`, and merges
-loom's hook wiring into `~/.claude/settings.json`. It is idempotent — safe to re-run.
-Requires `jq` and `python3` on PATH (without `jq` it prints the hook settings for you
-to paste manually). After it completes, **start a new Claude Code session** and `/weave`
-is available.
-
-> Note: the verb is `pnpm bootstrap`, not `pnpm setup` — `setup` is a reserved pnpm
-> built-in (it configures pnpm's own global bin dir) and cannot be overridden.
-
-## Verbs
-
-All scripts run from the repo root.
+## Install
 
 ```bash
-# UI dev stack (forwards into ui/)
-pnpm dev               # server :3737 + vite :5173 (proxies /api, /ws)
-pnpm dev:server        # server only
-pnpm dev:web           # vite only
-pnpm start             # production-mode server, no HMR
-pnpm test              # vitest run
-pnpm build:web         # vite production build
-pnpm install-hooks     # install Claude Code hooks under ~/.claude/loom-hooks/
-pnpm reset-state       # clear .loom workspaces
+./orchestrator/install.sh
 ```
 
-## Workspace
+Re-run after moving the repo. No hooks, no settings changes. The parser needs Python 3.
 
-`.loom/<project>/` is where every `/weave` invocation puts its artifacts. `pipeline.md` is the canonical state file per project. The orchestrator's Phase Cycle reads it on every dispatch.
-
-Every run also carries `metrics.md` — what the lifecycle cost, per phase, with charts. It is machine-generated from the session transcripts and refreshed as the run goes; see `docs/orchestrator/metrics.md`.
+Verify: `python orchestrator/weave/lib/test_pipeline_parser.py` prints `ok`.
