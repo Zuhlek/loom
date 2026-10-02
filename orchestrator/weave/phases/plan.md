@@ -50,8 +50,6 @@ Existing `plan.md` is the starting point. Keep task IDs; never renumber. Move in
 
 ## Finish
 
-Append one line `## [<date>] <project> - plan: <one-line learning>` to `<workspace>/develop-log.md`; when Develop-log is global, also to `~/.claude/develop-log.md`.
-
 End with:
 
 ```yaml

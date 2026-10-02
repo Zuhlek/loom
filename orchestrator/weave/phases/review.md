@@ -28,8 +28,6 @@ Existing `review.md` is the starting point; re-audit only what changed or what a
 
 ## Finish
 
-Append one line `## [<date>] <project> - review: <one-line learning>` to `<workspace>/develop-log.md`; when Develop-log is global, also to `~/.claude/develop-log.md`.
-
 End with:
 
 ```yaml

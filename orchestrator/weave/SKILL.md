@@ -44,7 +44,6 @@ Phases in order: spec, design, plan, build, review. Phase files live in `phases/
    Workspace: <absolute path of .loom/<project>>
    Skill root: <absolute path of this skill directory>
    Type: <type hint | none>
-   Develop-log: <local | global>
    Date: <YYYY-MM-DD>
    Answer: <answer to a pending question | omit line>
    </context>
@@ -62,7 +61,7 @@ After each completed phase, ask via AskUserQuestion. Lead with the phase's purpo
 
 Options:
 
-- `Continue` with a phase-aware label: Spec "enter Design", Design "enter Plan", Plan "start autonomous Build (modifies repository)", Build "enter Review", Review "mark lifecycle complete". On pick: `lib/pipeline-parser.py advance pipeline.md`, or `complete` after Review, then continue the cycle.
+- `Continue` with a phase-aware label: Spec "enter Design", Design "enter Plan", Plan "start autonomous Build (modifies repository)", Build "enter Review", Review "mark lifecycle complete". On pick: append `## [<date>] <project> - <phase>: <RETURN summary>` to `<workspace>/develop-log.md` (also to `~/.claude/develop-log.md` when pipeline.md `Develop-log` is `global`), then `lib/pipeline-parser.py advance pipeline.md`, or `complete` after Review, and continue the cycle.
 - `Rerun phase`: `lib/pipeline-parser.py rerun pipeline.md`, then redispatch. The agent treats its existing artifacts as the starting point.
 - `Go back to <prior phase>` (every phase except Spec): `lib/pipeline-parser.py goback pipeline.md <target>`. The CLI archives later-phase artifacts to `superseded/<timestamp>/`.
 

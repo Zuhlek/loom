@@ -23,8 +23,6 @@ Existing `design.md` is the starting point. Keep accepted ADR blocks unless the 
 
 ## Finish
 
-Append one line `## [<date>] <project> - design: <one-line learning>` to `<workspace>/develop-log.md`; when Develop-log is global, also to `~/.claude/develop-log.md`.
-
 End with:
 
 ```yaml

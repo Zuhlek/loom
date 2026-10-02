@@ -49,8 +49,6 @@ Write `build-report.md`: one PASS/FAIL/SKIPPED line with reason per smoke check,
 
 ## Finish
 
-Append one line `## [<date>] <project> - build: <one-line learning>` to `<workspace>/develop-log.md`; when Develop-log is global, also to `~/.claude/develop-log.md`.
-
 End with:
 
 ```yaml

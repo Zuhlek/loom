@@ -76,8 +76,6 @@ Existing `spec.md` and `decisions.md` are the starting point. Keep answered deci
 
 ## Finish
 
-Append one line `## [<date>] <project> - spec: <one-line learning>` to `<workspace>/develop-log.md`; when Develop-log is global, also to `~/.claude/develop-log.md`.
-
 End with:
 
 ```yaml
