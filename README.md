@@ -14,6 +14,8 @@ Each phase dispatch is the phase file sent verbatim plus a short context block (
 
 The orchestrator appends each accepted phase's one-line summary to `<workspace>/develop-log.md`; projects initialized with `--develop-log global` also append to `~/.claude/develop-log.md`. On completion it offers to commit the run's changes (one-sentence message, current branch, never a push or new branch); phases themselves never commit. `<workspace>/repo-context.md` is an optional, user-maintained context file; nothing in loom writes it.
 
+`.loom/` workspaces are part of the target repo: commit and push them with the run's changes, never gitignore them.
+
 ## Layout
 
 | Path | Purpose |
