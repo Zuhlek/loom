@@ -6,10 +6,12 @@ Read first: `<workspace>/repo-context.md` when present (user-maintained; treat i
 
 ## Work loop
 
-1. Foundation before branching. Foundation builds the model of the user's world: existing situation, what "done" means, constraints the repo cannot answer. No decisions yet. Exit when two questions in a row add nothing, or the user signals enough.
-2. Branching explores the decision space: scope, approach, implementation choices. Ask until no decision-relevant questions remain or the user stops. The user can always stop; you stop on your own only when the open questions left would not change the plan.
-3. After each answered question, check prior answers: if a new answer would flip an earlier recommendation, re-ask that question with the new context. Record the supersession in `decisions.md`.
-4. Update `spec.md` after each answered decision, not at the end.
+You run as a subagent with no direct line to the user. Questions reach the user only through the orchestrator: return `blocked` with a question batch (see Questions), the answers arrive in the next dispatch's `Answers:` context block. One dispatch = one round.
+
+1. Foundation before branching. Foundation builds the model of the user's world: existing situation, what "done" means, constraints the repo cannot answer. No decisions yet. Foundation ends when a further round would add nothing.
+2. Branching explores the decision space: scope, approach, implementation choices. Keep returning rounds until no decision-relevant questions remain or the user stops. The user can always stop; you stop on your own only when the open questions left would not change the plan.
+3. After each answered round, check prior answers: if a new answer would flip an earlier recommendation, re-ask that question in the next round with the new context. Record the supersession in `decisions.md`.
+4. Update `spec.md` after each answered round, not at the end.
 5. When scope is resolved, distill user stories (see below) and finish `spec.md`.
 
 ## Questions
@@ -27,9 +29,10 @@ Self-check before presenting any question:
 
 Categories, cheapest first: Y/N (two paths), Choice (3-5 options), Architecture (needs a structure sketch, include a small diagram), Background (user may lack the concept, explain it first), Open (free text, use sparingly). Prefer demoting to a cheaper category.
 
-Every question is asked via AskUserQuestion and carries this briefing, recommendation last so the user is not pre-anchored:
+Batch 1-4 questions per round. Before returning, record every question in `decisions.md` with its full briefing, recommendation last so the user is not pre-anchored:
 
-```
+```markdown
+## Q3 [Y/N]: Use TypeScript?
 What's the issue: <plain language, reference file:line when grounded in code>
 Current behavior / cause: <observable facts>
 Options:
@@ -37,18 +40,31 @@ Options:
   (B) ...
 Recommendation: <pick> - <reason>
 Why not the others: <one-line trade-off>
+**Answer:** <filled once answered>
+**Status:** open | answered | superseded by Q7 | deferred
 ```
 
-Mark the recommended option label with `(Recommended)`. Any free-text reply is the answer unless it starts with `push back:` (re-examine the framing) or `stop` (end grilling, write what is resolved).
+For Architecture and Background questions, the briefing additionally explains the concept dummy-proof: plain language, no jargon, a small ASCII sketch of the structures or flows being chosen between. The user must be able to decide from `decisions.md` alone.
 
-Record every question and answer in `decisions.md`:
+Then return the batch:
 
-```markdown
-## Q3 [Y/N]: Use TypeScript?
-<briefing as asked>
-**Answer:** YES
-**Status:** answered | superseded by Q7 | deferred
+```yaml
+RETURN
+phase: spec
+status: blocked
+artifacts: spec.md, decisions.md
+summary: <one line: what this round resolves>
+questions:
+  - id: Q3
+    ask: <the question, self-contained, one or two sentences>
+    options:
+      - "<name> - <one-line outcome> [Effort S, Risk Low]"
+      - "<name> - <one-line outcome> [Effort M, Risk Med]"
+    recommended: <option name> - <short reason>
+    details: decisions.md Q3   # only when the chat version needs the full briefing (Architecture/Background)
 ```
+
+The orchestrator shows each question in chat as multiple choice and returns the answers in the next dispatch's `Answers:` block, one `Qn (<condensed question>): <answer>` line each. `details:` is spec-only; other phases own no `decisions.md` and must make `ask` fully self-contained. On that dispatch: fill `**Answer:**`, set `**Status:** answered`, apply the work loop. Any answer is the decision unless it starts with `push back:` (re-examine the framing) or `stop` (end the rounds, write what is resolved).
 
 ## User stories
 
@@ -84,5 +100,5 @@ phase: spec
 status: complete | blocked | failed
 artifacts: spec.md, decisions.md
 summary: <one line>
-pending-user-input: <only when blocked>
+questions: <only when blocked, format under Questions>
 ```

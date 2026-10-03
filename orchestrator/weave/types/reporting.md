@@ -179,9 +179,8 @@ ReportOrder → ExecutionBuilder → Execution(s)
 
 ## Triage Bias
 
-- **Standard track** by default — reporting changes often touch multiple packages (engine + API + UI)
-- **Quick track** only for isolated bug fixes in a single file/package
-- **Deep track** for: new BuildingBlock types, new rendering formats, execution pipeline changes, new API services
+- **Full** by default — reporting changes often touch multiple packages (engine + API + UI), and always for new BuildingBlock types, new rendering formats, execution pipeline changes, new API services
+- **Quick** only for isolated bug fixes in a single file/package
 
 ## Exploration Checklist
 

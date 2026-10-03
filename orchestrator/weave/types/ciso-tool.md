@@ -66,7 +66,7 @@ When reviewing a scope, check systematically:
 
 ## Triage Bias
 
-- Model data changes (YAML/MD only) → standard track (schema verification + naming decisions)
-- UI/frontend changes → standard track with possible mockup
-- Scope reviews → quick track (analysis output, not implementation)
-- New scope creation → deep track (architectural decisions, threat modeling)
+- Model data changes (YAML/MD only) → full (schema verification + naming decisions)
+- UI/frontend changes → full, with possible mockup
+- Scope reviews → quick (analysis output, not implementation)
+- New scope creation → full (architectural decisions, threat modeling)

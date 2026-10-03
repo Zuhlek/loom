@@ -58,5 +58,5 @@ phase: plan
 status: complete | blocked | failed
 artifacts: plan.md
 summary: <one line>
-pending-user-input: <only when blocked>
+questions: <only when blocked; spec-phase format, ask self-contained, no details:>
 ```

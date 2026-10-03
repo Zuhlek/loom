@@ -123,9 +123,8 @@ Entry point: `index.ts` — re-exports all public APIs.
 
 ## Triage Bias
 
-- **Quick track:** Isolated bug fixes in a single mapper, model, or config change
-- **Standard track:** New data provider (touches Model + Mapping + FileHandlers + workflow), BuildingBlock changes, DataSource method additions
-- **Deep track:** New workflow package, cross-package message format changes, cinnamon-workflow integration patterns, architectural changes to the staging/merge pipeline
+- **Quick:** Isolated bug fixes in a single mapper, model, or config change
+- **Full:** New data provider (touches Model + Mapping + FileHandlers + workflow), BuildingBlock changes, DataSource method additions, new workflow packages, cross-package message format changes, cinnamon-workflow integration patterns, architectural changes to the staging/merge pipeline
 
 ## Exploration Checklist
 

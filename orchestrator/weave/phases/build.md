@@ -6,7 +6,7 @@ Read first: `plan.md`, `spec.md ## Constraints`, `<skill root>/principles.md`. C
 
 ## Pre-flight
 
-Compare `plan.md ## Verification environment` against what you can execute here. If the declared harness is not runnable (missing runtime, GUI-only gate on a headless host), return `blocked` naming the mismatch. Never substitute a different harness silently.
+Compare `plan.md ## Verification environment` against what you can execute here. If the declared harness is not runnable (missing runtime, GUI-only gate on a headless host), return `blocked` with the mismatch as a question per the spec phase's `questions` block, options when there is a real choice. Never substitute a different harness silently.
 
 ## Work loop
 
@@ -57,5 +57,5 @@ phase: build
 status: complete | blocked | failed
 artifacts: plan.md, build-report.md
 summary: <one line: tasks done/failed/blocked, smoke result>
-pending-user-input: <only when blocked>
+questions: <only when blocked; spec-phase format, ask self-contained, no details:>
 ```

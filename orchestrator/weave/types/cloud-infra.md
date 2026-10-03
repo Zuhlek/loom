@@ -26,8 +26,8 @@ When analyzing infrastructure for changes (especially VNet, subnet, or resource 
 
 ## Triage Bias
 
-- Deep track projects: Explore broadly across ALL relevant repos during Analyze phase. Don't shortcut initial exploration.
+- Full-mode projects: Explore broadly across ALL relevant repos during Spec. Don't shortcut initial exploration.
 
 ## Architecture Mockups
 
-- **Failure mode analysis (deep track):** Architecture mockups for deep track projects must include detailed failure mode analysis: what happens if each phase fails partway, rollback procedures, retry safety guarantees, and state corruption risks. Brief bullet points are insufficient for production infra.
+- **Failure mode analysis:** Architecture mockups must include detailed failure mode analysis: what happens if each phase fails partway, rollback procedures, retry safety guarantees, and state corruption risks. Brief bullet points are insufficient for production infra.

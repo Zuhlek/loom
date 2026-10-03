@@ -131,8 +131,8 @@ cinnamon-api / cinnamon-base (shared, no framework deps)
 
 ## Triage Bias
 
-- Backend-only changes (new DB methods, calculation logic) → standard track
-- Full-stack features (model + DB + API + UI page) → standard track with task breakdown by layer
-- UI-only changes (new page, component tweaks) → standard track
-- Calculation engine changes (Booker, Valuator, ACICalculator) → standard track, requires test coverage
-- Cross-package refactors or new shared packages → deep track
+- Backend-only changes (new DB methods, calculation logic) → full
+- Full-stack features (model + DB + API + UI page) → full, task breakdown by layer
+- UI-only changes (new page, component tweaks) → full
+- Calculation engine changes (Booker, Valuator, ACICalculator) → full, requires test coverage
+- Cross-package refactors or new shared packages → full

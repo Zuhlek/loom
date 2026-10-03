@@ -7,7 +7,6 @@ import json
 import os
 import re
 import shutil
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +16,7 @@ SECTION_ORDER = [
     "Project name",
     "Ticket ID",
     "Type hint",
+    "Mode",
     "Current phase",
     "Phase status",
     "Lifecycle state",
@@ -26,18 +26,22 @@ SECTION_ORDER = [
 ]
 
 PHASES = ["spec", "design", "plan", "build", "review"]
+QUICK_PHASES = ["quick"]
+# Empty mode = pipeline.md written before the Mode field existed; treated as full.
+VALID_MODES = {"", "full", "quick"}
 VALID_STATUSES = {"Pending", "blocked", "failed", "complete"}
 VALID_LIFECYCLE_STATES = {"active", "complete"}
 VALID_DEVELOP_LOG = {"local", "global"}
 
-# Artifacts each phase owns inside the workspace. goback archives these for
-# every phase after the target.
+# Artifacts each phase owns inside the workspace. goback and escalate archive
+# these for every superseded phase.
 PHASE_ARTIFACTS = {
     "spec": ["spec.md", "decisions.md"],
     "design": ["design.md", "mockup"],
     "plan": ["plan.md"],
     "build": ["build-report.md", "smoke-screenshots"],
     "review": ["review.md"],
+    "quick": ["build-report.md", "smoke-screenshots"],
 }
 
 
@@ -134,7 +138,8 @@ def append_history(path: Path, phase: str, status: str, note: str) -> None:
     atomic_write(path, text)
 
 
-def initial_pipeline(project: str, ticket: str, type_hint: str, develop_log: str) -> str:
+def initial_pipeline(project: str, ticket: str, type_hint: str, develop_log: str, mode: str) -> str:
+    start_phase = QUICK_PHASES[0] if mode == "quick" else PHASES[0]
     return f"""# Pipeline - {project}
 
 ## Project name
@@ -146,8 +151,11 @@ def initial_pipeline(project: str, ticket: str, type_hint: str, develop_log: str
 ## Type hint
 {type_hint}
 
+## Mode
+{mode}
+
 ## Current phase
-spec
+{start_phase}
 
 ## Phase status
 Pending
@@ -161,11 +169,11 @@ active
 ## Pending user input
 
 ## History
-- {now_iso()} spec Pending project-created
+- {now_iso()} {start_phase} Pending project-created
 """
 
 
-def init_workspace(parent_dir: Path, project: str, seed: str, ticket: str, type_hint: str, develop_log: str) -> None:
+def init_workspace(parent_dir: Path, project: str, seed: str, ticket: str, type_hint: str, develop_log: str, mode: str = "full") -> None:
     workspace = parent_dir / ".loom" / project
     if (workspace / "seed.md").exists():
         raise SystemExit(
@@ -173,7 +181,7 @@ def init_workspace(parent_dir: Path, project: str, seed: str, ticket: str, type_
             "the workspace is already bootstrapped - resolve manually or use a different project name."
         )
     workspace.mkdir(parents=True, exist_ok=True)
-    atomic_write(workspace / "pipeline.md", initial_pipeline(project, ticket, type_hint, develop_log))
+    atomic_write(workspace / "pipeline.md", initial_pipeline(project, ticket, type_hint, develop_log, mode))
     atomic_write(workspace / "seed.md", seed.rstrip() + "\n")
 
 
@@ -183,17 +191,17 @@ def validate_record(record: dict[str, object]) -> list[str]:
     status = str(record.get("Phase status", ""))
     lifecycle = str(record.get("Lifecycle state", ""))
     develop_log = str(record.get("Develop-log", ""))
-    if phase and phase not in PHASES:
+    mode = str(record.get("Mode", ""))
+    if phase and phase not in PHASES + QUICK_PHASES:
         errors.append(f"invalid phase: {phase}")
+    if mode not in VALID_MODES:
+        errors.append(f"invalid mode: {mode}")
     if status and status not in VALID_STATUSES:
         errors.append(f"invalid status: {status}")
     if lifecycle and lifecycle not in VALID_LIFECYCLE_STATES:
         errors.append(f"invalid lifecycle state: {lifecycle}")
     if develop_log and develop_log not in VALID_DEVELOP_LOG:
         errors.append(f"invalid develop-log: {develop_log}")
-    missing = [name for name in SECTION_ORDER if name not in record]
-    for name in missing:
-        errors.append(f"missing section: {name}")
     return errors
 
 
@@ -202,18 +210,36 @@ def require(path: Path, condition: bool, message: str) -> None:
         raise SystemExit(f"{path}: {message}")
 
 
-def current_phase(path: Path) -> str:
+def phase_sequence(record: dict[str, object]) -> list[str]:
+    return QUICK_PHASES if str(record.get("Mode", "")) == "quick" else PHASES
+
+
+def load_active(path: Path) -> tuple[str, list[str]]:
     record = parse(path)
+    seq = phase_sequence(record)
     phase = str(record.get("Current phase", ""))
-    require(path, phase in PHASES, f"invalid current phase: {phase!r}")
+    require(path, phase in seq, f"invalid current phase for this mode: {phase!r}")
     require(path, str(record.get("Lifecycle state", "")) == "active", "lifecycle is not active")
-    return phase
+    return phase, seq
+
+
+def archive_artifacts(workspace: Path, phases: list[str]) -> list[str]:
+    archive = workspace / "superseded" / now_iso().replace(":", "-")
+    moved = []
+    for ph in phases:
+        for name in PHASE_ARTIFACTS[ph]:
+            source = workspace / name
+            if source.exists():
+                archive.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source), str(archive / name))
+                moved.append(name)
+    return moved
 
 
 def cmd_advance(path: Path) -> None:
-    phase = current_phase(path)
-    require(path, phase != "review", "review is the last phase - use complete")
-    next_phase = PHASES[PHASES.index(phase) + 1]
+    phase, seq = load_active(path)
+    require(path, phase != seq[-1], f"{phase} is the last phase - use complete")
+    next_phase = seq[seq.index(phase) + 1]
     replace_field(path, "Phase status", "complete")
     append_history(path, phase, "complete", "phase accepted")
     replace_field(path, "Current phase", next_phase)
@@ -224,7 +250,7 @@ def cmd_advance(path: Path) -> None:
 
 
 def cmd_rerun(path: Path) -> None:
-    phase = current_phase(path)
+    phase, _ = load_active(path)
     replace_field(path, "Phase status", "Pending")
     replace_field(path, "Pending user input", "")
     append_history(path, phase, "Pending", "rerun requested")
@@ -232,20 +258,10 @@ def cmd_rerun(path: Path) -> None:
 
 
 def cmd_goback(path: Path, target: str) -> None:
-    phase = current_phase(path)
-    require(path, target in PHASES, f"invalid target phase: {target!r}")
-    require(path, PHASES.index(target) < PHASES.index(phase), f"target {target} is not before {phase}")
-    workspace = path.parent
-    stamp = now_iso().replace(":", "-")
-    archive = workspace / "superseded" / stamp
-    moved = []
-    for later in PHASES[PHASES.index(target) + 1 :]:
-        for name in PHASE_ARTIFACTS[later]:
-            source = workspace / name
-            if source.exists():
-                archive.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(source), str(archive / name))
-                moved.append(name)
+    phase, seq = load_active(path)
+    require(path, target in seq, f"invalid target phase: {target!r}")
+    require(path, seq.index(target) < seq.index(phase), f"target {target} is not before {phase}")
+    moved = archive_artifacts(path.parent, seq[seq.index(target) + 1 :])
     replace_field(path, "Current phase", target)
     replace_field(path, "Phase status", "Pending")
     replace_field(path, "Pending user input", "")
@@ -254,16 +270,28 @@ def cmd_goback(path: Path, target: str) -> None:
 
 
 def cmd_complete(path: Path) -> None:
-    phase = current_phase(path)
-    require(path, phase == "review", f"complete only from review, not {phase}")
+    phase, seq = load_active(path)
+    require(path, phase == seq[-1], f"complete only from {seq[-1]}, not {phase}")
     replace_field(path, "Phase status", "complete")
     replace_field(path, "Lifecycle state", "complete")
-    append_history(path, "review", "complete", "lifecycle complete")
+    append_history(path, phase, "complete", "lifecycle complete")
     print("complete")
 
 
+def cmd_escalate(path: Path) -> None:
+    phase, seq = load_active(path)
+    require(path, seq == QUICK_PHASES, f"escalate only from quick mode, not from {phase}")
+    moved = archive_artifacts(path.parent, QUICK_PHASES)
+    replace_field(path, "Mode", "full")
+    replace_field(path, "Current phase", PHASES[0])
+    replace_field(path, "Phase status", "Pending")
+    replace_field(path, "Pending user input", "")
+    append_history(path, PHASES[0], "Pending", f"escalated from quick; archived: {', '.join(moved) or 'nothing'}")
+    print(PHASES[0])
+
+
 def cmd_block(path: Path, question: str) -> None:
-    phase = current_phase(path)
+    phase, _ = load_active(path)
     replace_field(path, "Phase status", "blocked")
     replace_field(path, "Pending user input", question)
     append_history(path, phase, "blocked", "waiting for user input")
@@ -274,15 +302,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    for name in ("field", "update", "advance", "rerun", "goback", "complete", "block"):
+    for name in ("field", "advance", "rerun", "goback", "complete", "block", "escalate"):
         p = sub.add_parser(name)
         p.add_argument("path")
         if name == "field":
             p.add_argument("name")
-        elif name == "update":
-            p.add_argument("name")
-            p.add_argument("value", nargs="?")
-            p.add_argument("--stdin", action="store_true")
         elif name == "goback":
             p.add_argument("target")
         elif name == "block":
@@ -295,17 +319,15 @@ def main() -> int:
     p_init.add_argument("--ticket", default="")
     p_init.add_argument("--type-hint", default="")
     p_init.add_argument("--develop-log", default="local", choices=sorted(VALID_DEVELOP_LOG))
+    p_init.add_argument("--mode", default="full", choices=["full", "quick"])
 
     args = parser.parse_args()
 
     if args.cmd == "field":
         value = parse(Path(args.path)).get(args.name, "")
         print(value if isinstance(value, str) else json.dumps(value))
-    elif args.cmd == "update":
-        value = sys.stdin.read() if args.stdin else (args.value or "")
-        replace_field(Path(args.path), args.name, value)
     elif args.cmd == "init":
-        init_workspace(Path(args.parent_dir), args.project, args.seed, args.ticket, args.type_hint, args.develop_log)
+        init_workspace(Path(args.parent_dir), args.project, args.seed, args.ticket, args.type_hint, args.develop_log, args.mode)
     elif args.cmd == "advance":
         cmd_advance(Path(args.path))
     elif args.cmd == "rerun":
@@ -316,6 +338,8 @@ def main() -> int:
         cmd_complete(Path(args.path))
     elif args.cmd == "block":
         cmd_block(Path(args.path), args.question)
+    elif args.cmd == "escalate":
+        cmd_escalate(Path(args.path))
     else:
         return 2
     return 0

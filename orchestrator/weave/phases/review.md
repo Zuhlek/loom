@@ -36,5 +36,5 @@ phase: review
 status: complete | blocked | failed
 artifacts: review.md
 summary: <verdict, counts, one line>
-pending-user-input: <only when blocked>
+questions: <only when blocked; spec-phase format, ask self-contained, no details:>
 ```
