@@ -74,4 +74,13 @@ Free text at a gate is never auto-interpreted as Continue. If the user asks to s
 
 ## Completion
 
-After `complete` on Review (or on Quick), report the final summary and exit. A later /weave on the same project reports the lifecycle as done.
+After `complete` on Review (or on Quick), report the final summary. When the run changed the repository, offer via AskUserQuestion: `Commit` or `Leave changes` (worktree untouched). Never commit without that pick.
+
+On `Commit`:
+
+- Stage only the run's changes: the files named in the task evidence (`plan.md`) or `build-report.md`. The `.loom/` workspace and anything else on the worktree stay unstaged; name them and say what should be staged and what not.
+- Commit on the current branch. Never create a branch, never push, no PR.
+- Message: one short sentence as the title, no body, no attribution tags, no long hyphens.
+- Afterwards confirm the state: what was committed, what was left.
+
+Then exit. A later /weave on the same project reports the lifecycle as done.

@@ -12,7 +12,7 @@ Phase agents never talk to the user directly. A phase with open questions return
 
 Each phase dispatch is the phase file sent verbatim plus a short context block (project, workspace path, skill root, type, date, pending answers, optional rerun instruction). Phase agents return a fenced RETURN block (phase, status, artifacts, summary); a malformed return is redispatched once.
 
-The orchestrator appends each accepted phase's one-line summary to `<workspace>/develop-log.md`; projects initialized with `--develop-log global` also append to `~/.claude/develop-log.md`. `<workspace>/repo-context.md` is an optional, user-maintained context file; nothing in loom writes it.
+The orchestrator appends each accepted phase's one-line summary to `<workspace>/develop-log.md`; projects initialized with `--develop-log global` also append to `~/.claude/develop-log.md`. On completion it offers to commit the run's changes (one-sentence message, current branch, never a push or new branch); phases themselves never commit. `<workspace>/repo-context.md` is an optional, user-maintained context file; nothing in loom writes it.
 
 ## Layout
 
