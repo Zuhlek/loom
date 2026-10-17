@@ -78,7 +78,7 @@ After `complete` on Review (or on Quick), report the final summary. When the run
 
 On `Commit`:
 
-- Stage only the run's changes: the files named in the task evidence (`plan.md`) or `build-report.md`. The `.loom/` workspace and anything else on the worktree stay unstaged; name them and say what should be staged and what not.
+- Stage only the run's changes: the files named in the task evidence (`plan.md`) or `build-report.md`, plus the project's `.loom/<project>/` workspace, which belongs on the remote. Anything else on the worktree stays unstaged; name it and say what should be staged and what not.
 - Commit on the current branch. Never create a branch, never push, no PR.
 - Message: one short sentence as the title, no body, no attribution tags, no long hyphens.
 - Afterwards confirm the state: what was committed, what was left.
