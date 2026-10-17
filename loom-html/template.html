@@ -1,0 +1,754 @@
+<title>Loom Workspace View</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky header = project + lifecycle stepper; one view per phase below; content column ~980px */
+:root{
+  --bg:#f6f7f9; --surface:#fff; --sunk:#eef1f5; --fg:#161a22; --muted:#5d6676; --line:#dfe3ea; --line-strong:#c4cad5;
+  --accent:#2b4fd8; --accent-soft:#e9eefd;
+  --ok:#1d7f47; --ok-soft:#e2f3e9; --warn:#a65f00; --warn-soft:#fbf0dc; --bad:#c03a2b; --bad-soft:#fbe7e4; --note:#687083; --note-soft:#eceef2;
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1217; --surface:#161a21; --sunk:#1c212a; --fg:#e6e9ef; --muted:#98a1b2; --line:#2a303b; --line-strong:#3a4250;
+  --accent:#8aa2ff; --accent-soft:#1c2444; --ok:#52c585; --ok-soft:#14301f; --warn:#e3a33a; --warn-soft:#33270f; --bad:#ff7d6e; --bad-soft:#3a1c19; --note:#9aa3b4; --note-soft:#232833; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1217; --surface:#161a21; --sunk:#1c212a; --fg:#e6e9ef; --muted:#98a1b2; --line:#2a303b; --line-strong:#3a4250;
+  --accent:#8aa2ff; --accent-soft:#1c2444; --ok:#52c585; --ok-soft:#14301f; --warn:#e3a33a; --warn-soft:#33270f; --bad:#ff7d6e; --bad-soft:#3a1c19; --note:#9aa3b4; --note-soft:#232833; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:14.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+img{max-width:100%}
+a{color:inherit}
+h1,h2,h3,h4{margin:0;line-height:1.3}
+h1{font-size:25px;font-weight:650;letter-spacing:-.015em}
+h2{font-size:17px;font-weight:600}
+h3{font-size:14.5px;font-weight:600}
+p{margin:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+/* header + stepper */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar{display:flex;align-items:center;gap:12px;padding:10px 24px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px;color:var(--muted)}
+.brand svg{color:var(--accent)}
+.proj{font-family:var(--mono);font-size:13px;font-weight:500}
+.topbar .sp{flex:1}
+.stepper{display:flex;align-items:stretch;gap:0;padding:0 24px;overflow-x:auto}
+.stepper>:first-child{margin-left:auto} .stepper>:last-child{margin-right:auto}
+.step{display:flex;flex-direction:column;gap:1px;padding:8px 14px 10px;text-decoration:none;border-bottom:2px solid transparent;min-width:max-content;position:relative}
+.step .l{display:flex;align-items:center;gap:7px;font-weight:550;font-size:13.5px}
+.step .m{font-size:11.5px;color:var(--muted);padding-left:17px;font-variant-numeric:tabular-nums}
+.step[aria-current="page"]{border-bottom-color:var(--accent)}
+.step[aria-current="page"] .l{color:var(--accent)}
+.step:hover{background:var(--sunk)}
+.conn{align-self:center;width:18px;height:1px;background:var(--line-strong);flex:none;margin-top:-12px}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;border:2px solid var(--line-strong);background:var(--surface)}
+.dot.done{background:var(--ok);border-color:var(--ok)}
+.dot.doing{background:var(--accent-soft);border-color:var(--accent)}
+.dot.blocked{background:var(--warn);border-color:var(--warn)}
+.dot.home{border-radius:3px;border-color:var(--fg);background:var(--fg)}
+.subtabs{display:flex;justify-content:center;gap:4px;padding:8px 24px;border-top:1px solid var(--line);background:var(--bg)}
+.subtabs a{font-size:13px;padding:4px 10px;border-radius:6px;text-decoration:none;color:var(--muted)}
+.subtabs a[aria-current="page"]{background:var(--surface);color:var(--fg);font-weight:550;box-shadow:0 0 0 1px var(--line)}
+
+/* one left edge for everything: views fill the width, columns come from grids, never from text widths */
+main{padding-inline:32px;padding-block:28px 96px}
+.view{display:flex;flex-direction:column;gap:28px;min-width:0}
+.head{display:flex;flex-direction:column;gap:8px}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted)}
+.lede{font-size:14.5px;color:var(--muted)}
+.g2{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:28px;align-items:start}
+.g2e{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
+.stack{display:flex;flex-direction:column;gap:28px;min-width:0}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(520px,100%),1fr));gap:16px}
+.cards>*{min-width:0}
+.block{display:flex;flex-direction:column;gap:12px;min-width:0}
+.bh{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.hint{font-size:12.5px;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;min-width:0}
+.pad{padding:16px 20px}
+.scroll{overflow-x:auto}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+
+/* rendered markdown */
+.md{min-width:0;font-size:14px}
+.md>*+*{margin-top:9px}
+.md ul,.md ol{padding-left:20px;margin-bottom:0}
+.md li+li{margin-top:3px}
+.md li>ul,.md li>ol{margin-top:3px}
+.md code{font-family:var(--mono);font-size:.85em;background:var(--sunk);padding:1px 4px;border-radius:4px;overflow-wrap:anywhere}
+.md pre{background:var(--sunk);border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:12px;line-height:1.5;margin:0}
+.md pre code{background:none;padding:0;overflow-wrap:normal}
+.md table{border-collapse:collapse;font-size:13px;width:100%}
+.md .tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+.md th,.md td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+.md th{background:var(--sunk);font-weight:600;font-size:12.5px}
+.md tr:last-child td{border-bottom:0}
+.md h3,.md h4{margin-top:16px;font-size:14px}
+.md del{color:var(--muted)}
+.md strong{font-weight:600}
+.md blockquote{margin:0;padding-left:12px;border-left:3px solid var(--line-strong);color:var(--muted)}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:550;padding:1px 8px;border-radius:999px;white-space:nowrap;line-height:1.6}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.note{background:var(--note-soft);color:var(--note)}
+.pill.acc{background:var(--accent-soft);color:var(--accent)} .pill.out{box-shadow:inset 0 0 0 1px var(--line-strong);color:var(--muted)}
+.id{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+a.ref{font-family:var(--mono);font-size:.84em;text-decoration:none;color:var(--accent);background:var(--accent-soft);padding:0 3px;border-radius:4px;white-space:nowrap}
+a.ref:hover{text-decoration:underline}
+.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%,40%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:0 0 0 0 transparent}}
+@media (prefers-reduced-motion:reduce){.flash{animation:none}}
+
+/* overview */
+.stats{display:flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.stat{flex:1 1 140px;padding:12px 16px;display:flex;flex-direction:column;gap:1px;text-decoration:none;border-right:1px solid var(--line)}
+.stat:last-child{border-right:0}
+.stat:hover{background:var(--sunk)}
+.stat b{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--muted)}
+.journal{display:flex;flex-direction:column}
+.jr{display:grid;grid-template-columns:86px minmax(0,1fr);gap:14px;padding:12px 18px;border-top:1px solid var(--line)}
+.jr:first-child{border-top:0}
+.jr .ph{display:flex;flex-direction:column;gap:2px}
+.jr .ph b{font-size:13px;font-weight:600;text-transform:capitalize}
+.jr .ph span{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.jr .tx{font-size:13.5px}
+.gantt{display:grid;grid-template-columns:64px minmax(0,1fr) 92px;gap:9px 12px;align-items:center;font-size:12.5px}
+.gantt .lab{color:var(--muted);text-transform:capitalize}
+.gantt .track{position:relative;height:16px;background:var(--sunk);border-radius:4px}
+.gantt .bar{position:absolute;top:0;bottom:0;border-radius:4px;background:var(--ok);min-width:3px}
+.gantt .bar.again{background:repeating-linear-gradient(135deg,var(--ok) 0 4px,color-mix(in srgb,var(--ok) 55%,transparent) 4px 7px)}
+.gantt .ask{position:absolute;top:-3px;width:2px;height:22px;background:var(--warn);border-radius:1px}
+.gantt .dur{font-family:var(--mono);font-size:11.5px;color:var(--muted);text-align:right}
+.gantt .axis{position:relative;height:14px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.gantt .axis span{position:absolute;transform:translateX(-50%)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--muted);align-items:center}
+.legend i{display:inline-block;width:14px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.shot{display:flex;flex-direction:column;gap:6px;cursor:zoom-in;background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit}
+.shot img{width:100%;max-width:100%;border:1px solid var(--line);border-radius:8px;background:var(--surface);display:block}
+.shot .cap{font-size:12.5px;color:var(--muted)}
+.shot .cap b{font-family:var(--mono);font-weight:500;color:var(--fg);font-size:12px;margin-right:6px}
+details.more{border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+details.more>summary{cursor:pointer;padding:12px 18px;font-weight:550;font-size:13.5px;list-style:none;display:flex;gap:10px;align-items:center}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"›";color:var(--muted);transition:transform .15s}
+details.more[open]>summary::before{transform:rotate(90deg)}
+details.more>summary .hint{margin-left:auto;font-weight:400}
+details.more>.body{padding:0 18px 16px}
+.hist{font-size:12.5px}
+.hist td{font-family:var(--mono);font-size:12px}
+
+/* intent */
+.sec{display:flex;flex-direction:column;gap:10px}
+.callout{border-radius:10px;padding:14px 18px;background:var(--sunk);display:flex;flex-direction:column;gap:6px}
+.callout.warn{background:var(--warn-soft)}
+.callout h3{font-size:13px}
+.inlist .md ul>li::marker{color:var(--ok)}
+.outlist .md ul>li::marker{color:var(--bad)}
+
+/* stories */
+.story{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 20px;display:flex;flex-direction:column;gap:10px;scroll-margin-top:170px}
+.story.sup{background:transparent;border-style:dashed;padding-block:10px;gap:4px}
+.story .top{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.story .top h3{flex:1 1 280px}
+.story .as{color:var(--muted);font-size:13.5px}
+ol.ac{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+ol.ac li{display:grid;grid-template-columns:22px 58px minmax(0,1fr);gap:6px}
+ol.ac .n{font-family:var(--mono);font-size:11px;color:var(--muted);padding-top:2px}
+.ears{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--accent);padding-top:2.5px}
+.story .foot{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);align-items:center}
+.mx{border-collapse:collapse;font-size:12.5px;width:100%}
+.mx th,.mx td{border-bottom:1px solid var(--line);padding:6px 6px;text-align:center;white-space:nowrap}
+.mx th{font-weight:500;color:var(--muted);font-family:var(--mono);font-size:11px}
+.mx td:first-child,.mx th:first-child{text-align:left;padding-left:16px;white-space:normal;width:40%}
+.mx tr:last-child td{border-bottom:0}
+.mx tr.sup td{color:var(--muted);opacity:.6}
+.mx .on{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent)}
+
+/* decisions */
+.seg{align-self:flex-start;display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:2px;background:var(--surface);flex-wrap:wrap}
+.seg button{font:inherit;font-size:12.5px;border:0;background:transparent;padding:4px 10px;border-radius:6px;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--sunk);color:var(--fg);font-weight:550}
+.q{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;display:flex;flex-direction:column;gap:14px;scroll-margin-top:170px}
+.q.sup{opacity:.7;border-style:dashed}
+.q .qh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.q .qh h3{flex:1 1 320px;font-size:15px}
+.qgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+.qgrid>div{display:flex;flex-direction:column;gap:14px;min-width:0}
+.qtype{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-strong);border-radius:4px;padding:0 5px;white-space:nowrap}
+.answer{background:var(--accent-soft);border-radius:9px;padding:11px 14px;display:flex;flex-direction:column;gap:4px}
+.answer .lbl{font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;color:var(--accent);display:flex;gap:8px;align-items:center}
+.answer .lbl .pill{text-transform:none;letter-spacing:0}
+.opts{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.opt{display:grid;grid-template-columns:26px minmax(0,1fr);gap:10px;padding:10px 14px;border-top:1px solid var(--line);font-size:13.5px}
+.opt:first-child{border-top:0}
+.opt .k{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:11.5px;font-weight:600;box-shadow:inset 0 0 0 1.5px var(--line-strong);color:var(--muted)}
+.opt.pick{background:var(--accent-soft)}
+.opt.pick .k{background:var(--accent);color:var(--surface);box-shadow:none}
+.opt .t{display:flex;flex-direction:column;gap:3px;min-width:0}
+.opt .nm{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.opt .nm b{font-weight:600}
+.opt .ds{color:var(--muted)}
+.er{font-family:var(--mono);font-size:10.5px;padding:0 5px;border-radius:4px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.sketch pre{font-size:11.5px}
+details.brief>summary{cursor:pointer;font-size:12.5px;color:var(--muted);list-style:none}
+details.brief>summary::-webkit-details-marker{display:none}
+details.brief>summary::before{content:"› ";}
+details.brief[open]>summary::before{content:"⌄ ";}
+details.brief .body{display:grid;grid-template-columns:140px minmax(0,1fr);gap:8px 14px;margin-top:10px;font-size:13.5px}
+details.brief .body>.k{color:var(--muted);font-size:12.5px;padding-top:1px}
+.dlist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+details.d{border-top:1px solid var(--line);scroll-margin-top:170px}
+details.d:first-child{border-top:0}
+details.d>summary{cursor:pointer;list-style:none;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;padding:10px 16px;align-items:start;font-size:13.5px}
+details.d>summary::-webkit-details-marker{display:none}
+details.d>summary .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+details.d[open]>summary .clamp{display:block}
+details.d.sup>summary{color:var(--muted)}
+details.d .why{padding:0 16px 12px 66px;font-size:13px;color:var(--muted)}
+details.d .why b{color:var(--fg);font-weight:550}
+
+/* design */
+.withtoc{display:grid;grid-template-columns:190px minmax(0,1fr);gap:32px;align-items:start}
+.toc{position:sticky;top:170px;display:flex;flex-direction:column;gap:2px;font-size:12.5px}
+.toc a{color:var(--muted);text-decoration:none;padding:3px 0;border-radius:5px;line-height:1.35}
+.toc a:hover{background:var(--sunk);color:var(--fg)}
+.adr{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 18px;display:flex;flex-direction:column;gap:8px;scroll-margin-top:170px}
+.adr .ah{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.adr .ah h3{flex:1 1 260px}
+.adr details>summary{cursor:pointer;font-size:12.5px;color:var(--muted)}
+.adr dl{display:grid;grid-template-columns:100px minmax(0,1fr);gap:6px 12px;margin:8px 0 0;font-size:13.5px}
+.adr dt{color:var(--muted);font-size:12.5px}
+.adr dd{margin:0;min-width:0}
+.dsec{display:flex;flex-direction:column;gap:10px;scroll-margin-top:170px}
+
+/* plan */
+.graph{display:grid;grid-template-columns:auto minmax(0,1fr);background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.graph svg{display:block}
+.graph .rows{display:flex;flex-direction:column;min-width:0}
+.grow{height:38px;display:flex;align-items:center;gap:10px;padding-right:14px;text-decoration:none;border-top:1px solid var(--line);min-width:0;font-size:13.5px}
+.grow:first-child{border-top:0}
+.grow:hover{background:var(--sunk)}
+.grow .tt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grow .refs{display:flex;gap:4px;flex:none}
+.n-done{fill:var(--ok)} .n-blocked{fill:var(--warn)} .n-failed{fill:var(--bad)} .n-doing{fill:var(--accent)} .n-todo{fill:var(--surface);stroke:var(--line-strong);stroke-width:2}
+.edge{fill:none;stroke:var(--line-strong);stroke-width:1.5}
+.task{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 20px;display:flex;flex-direction:column;gap:12px;scroll-margin-top:170px}
+.task .th{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.task .th h3{flex:1 1 300px}
+.planlay{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:28px;align-items:start}
+.planlay>.side{position:sticky;top:130px;max-height:calc(100vh - 150px);overflow:auto;display:flex;flex-direction:column;gap:12px;min-width:0}
+.task .tm{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);align-items:center}
+.fields{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 14px;font-size:13.5px}
+.fields>.k{color:var(--muted);font-size:12.5px;padding-top:2px}
+.ev{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.ev .eh{font-size:12.5px;color:var(--muted)}
+.ev .eh strong{color:var(--fg)}
+.runs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px}
+.runs .arrow{color:var(--muted)}
+.tbar{display:inline-flex;width:70px;height:7px;border-radius:4px;overflow:hidden;background:var(--sunk);vertical-align:middle;margin-right:6px}
+.tbar i{display:block;height:100%}
+.tbar .p{background:var(--ok)} .tbar .f{background:var(--bad)}
+details.tail>summary{cursor:pointer;font-size:12.5px;color:var(--muted)}
+details.tail pre{margin-top:6px}
+
+/* build */
+.checks{display:flex;flex-direction:column}
+.check{display:grid;grid-template-columns:80px minmax(0,1fr);gap:12px;padding:11px 18px;border-top:1px solid var(--line);font-size:13.5px;align-items:start}
+.check:first-child{border-top:0}
+.check .what{font-weight:550}
+.check .md{color:var(--fg)}
+.roll{display:flex;flex-direction:column}
+.roll .r{display:grid;grid-template-columns:70px 62px minmax(0,1fr);gap:10px;padding:9px 18px;border-top:1px solid var(--line);font-size:13.5px;align-items:baseline}
+.roll .r:first-child{border-top:0}
+.roll .r.sup3{grid-template-columns:70px minmax(0,2fr) minmax(0,3fr)}
+
+/* review */
+.verdict{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:16px 20px;border-radius:12px}
+.verdict.pass{background:var(--ok-soft)} .verdict.fail{background:var(--bad-soft)}
+.verdict .big{font-size:26px;font-weight:700;letter-spacing:.02em}
+.verdict.pass .big{color:var(--ok)} .verdict.fail .big{color:var(--bad)}
+.verdict .sev{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.finding{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 20px;display:flex;flex-direction:column;gap:10px;scroll-margin-top:170px}
+.finding .fh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.finding .fh h3{flex:1 1 300px}
+.ea{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.ea>div{background:var(--sunk);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+
+#lightbox{position:fixed;inset:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;cursor:zoom-out}
+#lightbox img{max-width:100%;max-height:85vh;border-radius:8px;border:1px solid var(--line);box-shadow:0 10px 40px rgba(0,0,0,.25)}
+#lightbox p{font-size:13px;color:var(--muted);max-width:90ch;text-align:center}
+
+@media (max-width:1100px){
+  .g2,.g2e,.qgrid,.planlay{grid-template-columns:minmax(0,1fr)}
+  .planlay>.side{position:static}
+}
+@media (max-width:860px){
+  .topbar,.stepper,.subtabs{padding-inline:16px}
+  main{padding-inline:16px;padding-block:20px 64px}
+  .withtoc{grid-template-columns:minmax(0,1fr)}
+  .toc{display:none}
+  .jr,.fields,details.brief .body,.adr dl{grid-template-columns:minmax(0,1fr);gap:2px}
+  .gantt{grid-template-columns:52px minmax(0,1fr) 70px}
+  .check{grid-template-columns:minmax(0,1fr);gap:4px}
+  .roll .r{grid-template-columns:62px minmax(0,1fr)}
+  .roll .r .pill{grid-row:span 2}
+  details.d .why{padding-left:16px}
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+
+<header class="top">
+  <div class="topbar">
+    <span class="brand"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 2v14M7 2v14M11 2v14M15 2v14"/><path d="M1 6h16M1 12h16" stroke-dasharray="2.5 1.5"/></svg>loom</span>
+    <span class="proj" id="proj"></span>
+    <span id="state"></span>
+    <span class="sp"></span>
+    <span class="hint" id="span"></span>
+  </div>
+  <nav class="stepper" id="stepper" aria-label="Lifecycle"></nav>
+  <nav class="subtabs" id="subtabs" hidden></nav>
+</header>
+<main id="main"></main>
+<div id="lightbox" hidden><img alt=""><p></p></div>
+
+{{FILES}}
+
+<script>
+(() => {
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const F = {};
+document.querySelectorAll('script[data-file]').forEach(s => F[s.dataset.file] = s.textContent.replace(/\r\n/g, '\n'));
+const SHOTS = {};
+$('#shots').content.querySelectorAll('img').forEach(i => SHOTS[i.dataset.shot] = i.src);
+
+const stripReturn = s => (s || '').replace(/```ya?ml\s*\nRETURN[\s\S]*?```/g, '');
+const md = s => {
+  if (!window.marked) return '<pre>' + esc(s) + '</pre>';
+  return marked.parse(stripReturn(s), { gfm: true }).replace(/<table>/g, '<div class="tw"><table>').replace(/<\/table>/g, '</table></div>');
+};
+const mdi = s => window.marked ? marked.parseInline(s || '', { gfm: true }) : esc(s);
+
+function sections(text, level) {
+  const mark = '#'.repeat(level) + ' ', out = { pre: [], list: [] };
+  let fence = false, cur = null;
+  for (const l of (text || '').split('\n')) {
+    if (/^\s*```/.test(l)) fence = !fence;
+    if (!fence && l.startsWith(mark)) { cur = { title: l.slice(mark.length).trim(), body: [] }; out.list.push(cur); continue; }
+    (cur ? cur.body : out.pre).push(l);
+  }
+  out.pre = out.pre.join('\n').replace(/^# .*\n?/m, '').trim();
+  out.list.forEach(s => s.body = s.body.join('\n').trim());
+  return out;
+}
+const find = (secs, re) => secs.list.find(s => re.test(s.title));
+
+// top-level "- key: text" items with their indented continuation lines
+function items(body) {
+  const res = [];
+  for (const l of body.split('\n')) {
+    if (/^- /.test(l)) res.push([l.slice(2)]);
+    else if (res.length && (/^\s+\S/.test(l) || /^\s*$/.test(l) || /^```/.test(l))) res[res.length - 1].push(l.replace(/^  /, ''));
+  }
+  return res.map(a => a.join('\n').trim());
+}
+
+const tz = { timeZone: 'Europe/Zurich' };
+const hhmm = d => d.toLocaleTimeString('de-CH', { ...tz, hour: '2-digit', minute: '2-digit' });
+const day = d => d.toLocaleDateString('de-CH', { ...tz, day: '2-digit', month: '2-digit', year: 'numeric' });
+const dur = ms => { const m = Math.round(ms / 60000), h = Math.floor(m / 60); return h ? `${h}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`; };
+
+/* ---------- pipeline: lifecycle, never shown as a file ---------- */
+const pipe = F['pipeline.md'] || '';
+const pf = name => ((pipe.match(new RegExp('^## ' + name + '\\n([^#\\n]*)', 'm')) || [])[1] || '').trim();
+const hist = [...pipe.matchAll(/^- (\d{4}-\S+Z) (\w+) (\S+) (.*)$/gm)].map(m => ({ t: new Date(m[1]), phase: m[2], status: m[3], note: m[4] }));
+const PHASES = ['spec', 'design', 'plan', 'build', 'review'];
+const segs = []; let cur = null;
+for (const h of hist) {
+  if (h.status === 'Pending') { if (cur && !cur.end) { cur.end = h.t; cur.left = true; } cur ={ phase: h.phase, start: h.t, note: h.note, asks: [], end: null }; segs.push(cur); }
+  else if (cur && h.status === 'blocked') cur.asks.push(h.t);
+  else if (cur && h.status === 'complete') cur.end = h.t;
+}
+const phaseInfo = Object.fromEntries(PHASES.map(p => {
+  const s = segs.filter(x => x.phase === p);
+  const state = !s.length ? 'todo' : s.every(x => x.end) ? 'done' : s[s.length - 1].asks.length ? 'blocked' : 'doing';
+  return [p, { segs: s, state, total: s.reduce((a, x) => a + ((x.end || new Date()) - x.start), 0), asks: s.reduce((a, x) => a + x.asks.length, 0) }];
+}));
+const logs = [...(F['develop-log.md'] || '').matchAll(/^## \[(.+?)\] .+? - (\w+): (.*)$/gm)].map(m => ({ phase: m[2], text: m[3] }));
+{ const seen = {}; logs.forEach(l => { const i = seen[l.phase] = (seen[l.phase] ?? -1) + 1; l.at = phaseInfo[l.phase]?.segs.filter(s => !s.left)[i]?.end; }); }
+
+/* ---------- parse artifacts ---------- */
+const seed = F['seed.md'] || '';
+const spec = sections(F['spec.md'], 2);
+const dec = sections(F['decisions.md'], 2);
+const design = sections(F['design.md'], 2);
+const plan = sections(F['plan.md'], 2);
+const build = sections(F['build-report.md'], 2);
+const reviewFiles = [...Object.keys(F).filter(k => /^superseded\/.+\/review\.md$/.test(k)).sort(), 'review.md'].filter(k => F[k]);
+
+const stories = sections(find(spec, /^User stories/)?.body, 3).list.map(s => {
+  const [, id, title] = s.title.match(/^(US-\d+):\s*(.*)$/) || [, s.title, ''];
+  const status = (s.body.match(/\*\*Status:\*\*\s*(.*)/) || [])[1] || '';
+  const ac = (s.body.split(/\*\*Acceptance criteria:\*\*/)[1] || '').split('\n').map(l => l.match(/^\d+\.\s+(.*)$/)).filter(Boolean).map(m => m[1]);
+  return { id, title, story: (s.body.match(/\*\*Story:\*\*\s*(.*)/) || [])[1] || '', status, sup: /^superseded/.test(status), ac };
+});
+
+const tasksSec = find(plan, /^Tasks/);
+const tasks = [...(tasksSec?.body || '').matchAll(/^- (T-\d+) \[(\w+)\] (.*?) \(blocked-by: (.*?)\) \(stories: (.*?)\)(.*)$/gm)].map(m => ({
+  id: m[1], status: m[2], title: m[3].replace(/\s*\(HITL\)\s*$/, ''), hitl: /\(HITL\)/.test(m[3] + m[6]),
+  deps: m[4].split(/,\s*/).filter(x => /^T-/.test(x)), stories: m[5].split(/,\s*/).filter(Boolean)
+}));
+const taskDetail = Object.fromEntries(sections(tasksSec?.body, 3).list.map(s => [s.title.split(' ')[0], s.body]));
+
+/* ---------- small renderers ---------- */
+const STATUS = { done: 'ok', blocked: 'warn', failed: 'bad', doing: 'acc', todo: 'out' };
+const pill = (cls, text) => `<span class="pill ${cls}">${esc(text)}</span>`;
+const ref = id => `<a class="ref" href="#${id}">${id}</a>`;
+const block = (title, inner, extra = '') => `<div class="block"><div class="bh"><h2>${title}</h2>${extra}</div>${inner}</div>`;
+const testsOf = s => { const m = (s || '').match(/Tests:\s+(?:(\d+) failed, )?(?:\d+ skipped, )?(\d+) passed, (\d+) total/); return m ? { f: +(m[1] || 0), p: +m[2], t: +m[3] } : null; };
+const tbar = r => `<span class="tbar"><i class="p" style="width:${r.p / r.t * 100}%"></i><i class="f" style="width:${r.f / r.t * 100}%"></i></span>`;
+function ears(t) {
+  const m = t.match(/^(WHEN|WHILE|IF|WHERE)\b/);
+  const key = m ? m[1] : /^the system shall/i.test(t) ? 'ALWAYS' : '';
+  return { key, html: mdi(m ? t.slice(m[1].length).trim() : t).replace(/\b(SHALL|shall)\b/, '<b>$1</b>') };
+}
+
+/* ---------- views ---------- */
+const views = {};
+const title1 = seed.split('\n').find(l => l.trim()) || '';
+const projName = pf('Project name');
+$('#proj').textContent = projName;
+$('#state').innerHTML = pf('Lifecycle state') === 'complete' ? pill('ok', 'Complete') : pill('acc', `${pf('Current phase')} · ${pf('Phase status')}`);
+if (segs.length) $('#span').textContent = `${day(segs[0].start)} ${hhmm(segs[0].start)} to ${hhmm(segs[segs.length - 1].end || new Date())}`;
+
+// overview
+{
+  const qs = dec.list.filter(s => /^Q\d+/.test(s.title));
+  const dRows = ((find(dec, /Rückfrage|without asking/i)?.body) || '').split('\n').filter(l => /^\|\s*D\d+/.test(l));
+  const adrs = sections(find(design, /^Architecture decisions/)?.body, 3).list;
+  const cur = sections(F['review.md'], 2), verdict = (find(cur, /^Verdict/)?.body || '').split('\n')[0];
+  const done = tasks.filter(t => t.status === 'done').length, blocked = tasks.filter(t => t.status === 'blocked').length;
+  const t0 = segs[0]?.start, t1 = segs.reduce((a, s) => Math.max(a, +(s.end || new Date())), 0), span = t1 - t0;
+  const pct = d => ((d - t0) / span * 100).toFixed(2);
+  const ticks = []; if (span) { const step = span > 4 * 3600e3 ? 3600e3 : 1800e3; for (let t = Math.ceil(+t0 / step) * step; t < t1; t += step) ticks.push(t); }
+  const rows = PHASES.map(p => {
+    const i = phaseInfo[p];
+    const bars = i.segs.map((s, n) => {
+      const e = +(s.end || new Date());
+      return `<div class="bar${n ? ' again' : ''}" style="left:${pct(s.start)}%;width:${((e - s.start) / span * 100).toFixed(2)}%" title="${hhmm(s.start)} to ${hhmm(new Date(e))}"></div>` +
+        s.asks.map(a => `<i class="ask" style="left:${pct(a)}%" title="questions at ${hhmm(a)}"></i>`).join('');
+    }).join('');
+    const meta = i.segs.length > 1 ? `${dur(i.total)} · ${i.segs.length}×` : i.segs.length ? dur(i.total) : '';
+    return `<span class="lab">${p}</span><div class="track">${bars}</div><span class="dur">${meta}</span>`;
+  }).join('') + `<span></span><div class="axis">${ticks.map(t => `<span style="left:${pct(t)}%">${hhmm(new Date(t))}</span>`).join('')}</div><span></span>`;
+
+  const what = find(spec, /^What we/);
+  const deferred = find(cur, /^Deferred/);
+  const shotKeys = Object.keys(SHOTS);
+  views.overview = `
+  <div class="head">
+    <span class="eyebrow">Overview</span>
+    <h1>${esc(title1)}</h1>
+    <div class="meta"><span>Mode ${esc(pf('Mode') || 'full')}</span>${t0 ? `<span>${day(t0)}, ${hhmm(t0)} to ${hhmm(new Date(t1))}</span><span>${dur(span)} in total</span>` : ''}</div>
+  </div>
+  <div class="stats">
+    <a class="stat" href="#stories"><b>${stories.filter(s => !s.sup).length}</b><span>user stories${stories.some(s => s.sup) ? `, ${stories.filter(s => s.sup).length} superseded` : ''}</span></a>
+    <a class="stat" href="#decisions"><b>${qs.length}</b><span>questions to you${dRows.length ? `, ${dRows.length} decided alone` : ''}</span></a>
+    <a class="stat" href="#design"><b>${adrs.length}</b><span>architecture decisions</span></a>
+    <a class="stat" href="#plan"><b>${done} / ${tasks.length}</b><span>tasks done${blocked ? `, ${blocked} blocked` : ''}</span></a>
+    <a class="stat" href="#review"><b style="color:var(--${/^PASS/.test(verdict) ? 'ok' : 'bad'})">${esc(verdict.split(':')[0] || '-')}</b><span>${esc((verdict.split(':')[1] || '').trim())}</span></a>
+  </div>
+  <div class="g2"><div class="stack">
+  ${what ? block('What we are building', `<div class="panel pad md">${md(what.body)}</div>`, '<span class="hint">from spec.md</span>') : ''}
+  ${block('Run', `<div class="panel pad"><div class="gantt">${rows}</div></div><div class="legend"><span><i style="background:var(--ok)"></i>phase running or waiting at its gate</span><span><i style="background:repeating-linear-gradient(135deg,var(--ok) 0 4px,color-mix(in srgb,var(--ok) 55%,transparent) 4px 7px)"></i>second pass after going back</span><span><i style="background:var(--warn);width:3px"></i>questions sent to you</span></div>`)}
+  ${shotKeys.length ? block('Screens', `<div class="thumbs">${shotKeys.slice(0, 4).map(k => `<button class="shot" data-shot="${k}"><img src="${SHOTS[k]}" alt="${k}"><span class="cap"><b>${k}</b></span></button>`).join('')}</div>`, `<a class="hint" href="#build-screens">all ${shotKeys.length} in Build</a>`) : ''}
+  </div><div class="stack">
+  ${block('Phase by phase', `<div class="panel journal">${logs.map(l => `<div class="jr"><div class="ph"><b>${esc(l.phase)}</b><span>${l.at ? hhmm(l.at) : ''}</span></div><div class="tx">${mdi(l.text)}</div></div>`).join('')}</div>`, '<span class="hint">what each phase reported when it finished</span>')}
+  ${deferred ? block('Left open', `<div class="panel pad md">${md(deferred.body)}</div>`, '<span class="hint">deferred scope from the review</span>') : ''}
+  </div></div>
+  <details class="more"><summary>Original request<span class="hint">seed.md</span></summary><div class="body md">${md(seed.split('\n').map(l => /^[A-ZÄÖÜ][A-ZÄÖÜ ,\-]{3,}$/.test(l.trim()) ? '#### ' + l : l).join('\n'))}</div></details>
+  <details class="more"><summary>Lifecycle record<span class="hint">pipeline.md, kept for the agent</span></summary><div class="body"><div class="panel scroll"><table class="md hist" style="width:100%"><thead><tr><th>Time</th><th>Phase</th><th>Status</th><th>Note</th></tr></thead><tbody>${hist.map(h => `<tr><td>${hhmm(h.t)}</td><td>${h.phase}</td><td>${esc(h.status)}</td><td>${esc(h.note)}</td></tr>`).join('')}</tbody></table></div></div></details>`;
+}
+
+// spec: intent
+{
+  const sec = (re, cls = '') => { const s = find(spec, re); return s ? `<div class="sec ${cls}" id="sec-${s.title.toLowerCase().replace(/[^a-z]+/g, '-')}"><h2>${esc(s.title)}</h2><div class="panel pad md">${md(s.body)}</div></div>` : ''; };
+  const amb = find(spec, /^Open ambiguity/);
+  views.intent = `
+  <div class="head"><span class="eyebrow">Spec · Intent</span><h1>What and why</h1>${spec.pre ? `<p class="lede">${mdi(spec.pre)}</p>` : ''}</div>
+  <div class="g2e"><div class="stack">${sec(/^What we/)}${sec(/^Users and value/)}${sec(/^Constraints/)}</div>
+  <div class="stack">${sec(/^Scope/, 'inlist')}${sec(/^Out of scope/, 'outlist')}
+  ${amb ? `<div class="callout"><h3>Open ambiguity</h3><div class="md">${md(amb.body)}</div></div>` : ''}</div></div>`;
+}
+
+// spec: stories
+{
+  const byStory = id => tasks.filter(t => t.stories.includes(id)).map(t => t.id);
+  const act = stories.filter(s => !s.sup);
+  const matrix = tasks.length ? `<div class="panel scroll"><table class="mx"><thead><tr><th>Story</th>${tasks.map(t => `<th>${t.id.replace('T-0', '')}</th>`).join('')}</tr></thead><tbody>${stories.map(s => `<tr class="${s.sup ? 'sup' : ''}"><td>${ref(s.id)} ${esc(s.title)}</td>${tasks.map(t => `<td>${t.stories.includes(s.id) ? '<span class="on"></span>' : ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
+  views.stories = `
+  <div class="head"><span class="eyebrow">Spec · Stories</span><h1>User stories</h1><p class="lede">${act.length} active${stories.length > act.length ? `, ${stories.length - act.length} superseded` : ''}. Each criterion is one testable sentence.</p></div>
+  ${matrix ? block('Which task builds which story', matrix, '<span class="hint">from the plan’s task list</span>') : ''}
+  <div class="cards">${stories.filter(s => !s.sup).map(s => s.sup
+    ? `<div class="story sup" id="${s.id}"><div class="top"><span class="id">${s.id}</span><h3>${esc(s.title)}</h3>${pill('out', 'superseded')}</div><span class="as">${mdi(s.status.replace(/^superseded\s*/, ''))}</span></div>`
+    : `<div class="story" id="${s.id}"><div class="top"><span class="id">${s.id}</span><h3>${esc(s.title)}</h3>${pill('ok', s.status)}</div><p class="as">${mdi(s.story)}</p>
+      <ol class="ac">${s.ac.map((a, i) => { const e = ears(a); return `<li><span class="n">${i + 1}</span><span class="ears">${e.key}</span><span>${e.html}</span></li>`; }).join('')}</ol>
+      ${byStory(s.id).length ? `<div class="foot">Built in ${byStory(s.id).map(ref).join(' ')}</div>` : ''}</div>`).join('')}</div>
+  ${stories.some(s => s.sup) ? block('Superseded', `<div class="panel roll">${stories.filter(s => s.sup).map(s => `<div class="r sup3" id="${s.id}"><span class="id">${s.id}</span><b style="font-weight:550">${esc(s.title)}</b><span class="md hint">${mdi(s.status.replace(/^superseded\s*/, ''))}</span></div>`).join('')}</div>`) : ''}`;
+}
+
+// spec: decisions
+{
+  const MARKS = ["What's the issue:", 'Current behavior / cause:', 'Options:', 'Recommendation:', 'Why not the others:', '**Answer:**', '**Status:**'];
+  function parseQ(body) {
+    const f = {}; let key = '_', fence = false;
+    for (const l of body.split('\n')) {
+      if (/^\s*```/.test(l)) fence = !fence;
+      const m = !fence && MARKS.find(k => l.startsWith(k));
+      if (m) { key = m; f[key] = [l.slice(m.length).trim()]; } else (f[key] = f[key] || []).push(l);
+    }
+    for (const k in f) f[k] = f[k].join('\n').trim();
+    return f;
+  }
+  const sketches = t => (t.match(/```[\s\S]*?```/g) || []);
+  const noSketch = t => t.replace(/```[\s\S]*?```/g, '').trim();
+  const cards = dec.list.map(s => {
+    const m = s.title.match(/^(Q\d+) \[(.+?)\]:\s*(.*)$/);
+    if (!m) return /Rückfrage|without asking/i.test(s.title) ? '' : `<div class="callout warn"><h3>${esc(s.title)}</h3><div class="md">${md(s.body)}</div></div>`;
+    const [, id, type, title] = m, f = parseQ(s.body);
+    const opts = (f['Options:'] || '').split('\n').map(l => l.match(/^\s*\(([A-Z])\)\s*\[(.*?)\]\s*(.*)$/)).filter(Boolean).map(o => {
+      const nd = o[3].match(/^(.*?) [–-] (.*)$/);
+      return { k: o[1], name: nd ? nd[1] : o[3], desc: nd ? nd[2] : '', effort: (o[2].match(/Effort\s+([^,\]]+)/) || [])[1], risk: (o[2].match(/Risk\s+([^,\]]+)/) || [])[1] };
+    });
+    const ans = f['**Answer:**'] || '', status = f['**Status:**'] || '';
+    const rec = ((f['Recommendation:'] || '').match(/^\(([A-Z])\)/) || [])[1];
+    let pick = (ans.match(/^\(([A-Z])\)/) || [])[1];
+    if (!pick) pick = opts.find(o => ans.toLowerCase().startsWith(o.name.split(/[ ,]/)[0].toLowerCase() + ','))?.k || opts.find(o => ans.toLowerCase().startsWith(o.name.toLowerCase()))?.k;
+    const kind = pick ? (pick === rec ? pill('ok', 'as recommended') : pill('warn', 'not the recommendation')) : /^push back/i.test(ans) ? pill('warn', 'pushed back') : pill('warn', 'own direction');
+    const sup = /^superseded/i.test(status);
+    const sk = [f['_'], f["What's the issue:"], f['Current behavior / cause:']].flatMap(x => sketches(x || ''));
+    return `<article class="q${sup ? ' sup' : ''}" id="${id}" data-status="${sup ? 'superseded' : 'answered'}" data-type="${esc(type)}">
+      <div class="qh"><span class="id">${id}</span><span class="qtype">${esc(type)}</span><h3>${mdi(title)}</h3>${sup ? pill('out', status) : pill('ok', status || 'open')}</div>
+      <div class="qgrid"><div>
+      <div class="answer"><span class="lbl">Answer ${ans ? kind : ''}</span><div class="md">${md(ans || '_open_')}</div></div>
+      ${sk.length ? `<div class="sketch md">${md(sk.join('\n\n'))}</div>` : ''}
+      <details class="brief"><summary>Briefing</summary><div class="body">
+        ${[['Issue', "What's the issue:"], ['Today', 'Current behavior / cause:'], ['Recommendation', 'Recommendation:'], ['Why not the others', 'Why not the others:']].map(([l, k]) => f[k] ? `<span class="k">${l}</span><div class="md">${md(noSketch(f[k]))}</div>` : '').join('')}
+        ${f['_'] && noSketch(f['_']) ? `<span class="k">Context</span><div class="md">${md(noSketch(f['_']))}</div>` : ''}
+      </div></details>
+      </div><div>
+      ${opts.length ? `<div class="opts">${opts.map(o => `<div class="opt${o.k === pick ? ' pick' : ''}"><span class="k">${o.k}</span><div class="t"><div class="nm"><b>${mdi(o.name)}</b>${o.effort ? `<span class="er">Effort ${esc(o.effort)}</span>` : ''}${o.risk ? `<span class="er">Risk ${esc(o.risk)}</span>` : ''}${o.k === rec ? pill('acc', 'recommended') : ''}</div>${o.desc ? `<span class="ds">${mdi(o.desc)}</span>` : ''}</div></div>`).join('')}</div>` : ''}
+      </div></div>
+    </article>`;
+  }).join('');
+  const dsec = find(dec, /Rückfrage|without asking/i);
+  const dRows = (dsec?.body || '').split('\n').filter(l => /^\|\s*D\d+/.test(l)).map(l => l.trim().replace(/^\|\s*|\s*\|$/g, '').split(/\s+\|\s+/));
+  const dIntro = (dsec?.body || '').split('\n').filter(l => l.trim() && !l.trim().startsWith('|')).join('\n');
+  const dlist = dRows.map(([id, what, why]) => {
+    const sup = /^~~/.test(what);
+    return `<details class="d${sup ? ' sup' : ''}" id="${id}"><summary><span class="id">${id}</span><span class="clamp">${mdi(what)}</span>${sup ? pill('out', 'superseded') : '<span></span>'}</summary>${why && why !== '–' ? `<div class="why"><b>Why:</b> ${mdi(why)}</div>` : ''}</details>`;
+  }).join('');
+  views.decisions = `
+  <div class="head"><span class="eyebrow">Spec · Decisions</span><h1>Decisions</h1>${dec.pre ? `<p class="lede">${mdi(dec.pre)}</p>` : ''}</div>
+  <div class="seg" id="qfilter" role="group" aria-label="Filter questions"><button aria-pressed="true" data-f="all">All</button><button aria-pressed="false" data-f="answered">Answered</button><button aria-pressed="false" data-f="superseded">Superseded</button></div>
+  <div class="block">${cards}</div>
+  ${dsec ? block(esc(dsec.title), `${dIntro ? `<p class="hint">${mdi(dIntro)}</p>` : ''}<div class="dlist">${dlist}</div>`) : ''}`;
+}
+
+// design
+{
+  const toc = [], body = design.list.map((s, i) => {
+    const id = 'design-' + i; toc.push(`<a href="#${id}">${esc(s.title)}</a>`);
+    if (/^Architecture decisions/.test(s.title)) {
+      const adrs = sections(s.body, 3).list.map(a => {
+        const [, id, t] = a.title.match(/^(ADR-\d+):\s*(.*)$/) || [, '', a.title];
+        const g = k => (a.body.match(new RegExp('^- \\*\\*' + k + ':\\*\\*\\s*(.*)$', 'm')) || [])[1] || '';
+        return `<div class="adr" id="${id}"><div class="ah"><span class="id">${id}</span><h3>${mdi(t)}</h3></div><div class="md">${md(g('Decision'))}</div>
+          <details><summary>Context, rationale, alternatives</summary><dl>${['Context', 'Rationale', 'Alternatives'].map(k => g(k) ? `<dt>${k}</dt><dd class="md">${md(g(k))}</dd>` : '').join('')}</dl></details></div>`;
+      }).join('');
+      return `<div class="dsec" id="${id}"><h2>${esc(s.title)}</h2><div class="cards">${adrs}</div></div>`;
+    }
+    if (/^Open ambiguity/.test(s.title)) return `<div class="dsec" id="${id}"><div class="callout"><h3>${esc(s.title)}</h3><div class="md">${md(s.body)}</div></div></div>`;
+    return `<div class="dsec" id="${id}"><h2>${esc(s.title)}</h2><div class="panel pad md">${md(s.body)}</div></div>`;
+  }).join('');
+  views.design = `
+  <div class="head"><span class="eyebrow">Design</span><h1>Solution structure</h1>${design.pre ? `<p class="lede">${mdi(design.pre)}</p>` : ''}</div>
+  <div class="withtoc"><nav class="toc">${toc.join('')}</nav><div class="block" style="gap:28px">${body}</div></div>`;
+}
+
+// plan
+{
+  const ROW = 38, X = 26, layer = {};
+  const L = t => layer[t.id] ?? (layer[t.id] = t.deps.length ? 1 + Math.max(...t.deps.map(d => L(tasks.find(x => x.id === d) || { id: d, deps: [] }))) : 0);
+  tasks.forEach(L);
+  const order = [...tasks].sort((a, b) => layer[a.id] - layer[b.id] || a.id.localeCompare(b.id));
+  const row = Object.fromEntries(order.map((t, i) => [t.id, i]));
+  const lanes = []; let edges = '';
+  order.forEach(t => t.deps.forEach(d => {
+    if (row[d] == null) return;
+    const a = row[d], b = row[t.id], ya = a * ROW + ROW / 2, yb = b * ROW + ROW / 2;
+    if (b - a === 1) { edges += `<path class="edge" d="M${X} ${ya}V${yb}"/>`; return; }
+    let lane = 0; while ((lanes[lane] || []).some(([s, e]) => !(b <= s || a >= e))) lane++;
+    (lanes[lane] = lanes[lane] || []).push([a, b]);
+    const k = X - 9 - lane * 6;
+    edges += `<path class="edge" d="M${X} ${ya}C${k} ${ya} ${k} ${ya} ${k} ${ya + 10}V${yb - 10}C${k} ${yb} ${k} ${yb} ${X} ${yb}"/>`;
+  }));
+  const W = X + 12, H = order.length * ROW;
+  const nodes = order.map((t, i) => `<circle class="n-${t.status}" cx="${X}" cy="${i * ROW + ROW / 2}" r="6"/>`).join('');
+  const graph = `<div class="graph"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">${edges}${nodes}</svg><div class="rows">${order.map(t => `<a class="grow" href="#${t.id}"><span class="id">${t.id}</span>${pill(STATUS[t.status] || 'out', t.status)}<span class="tt">${esc(t.title)}</span>${t.hitl ? pill('warn', 'HITL') : ''}<span class="refs">${t.deps.length > 1 ? `<span class="hint">after ${t.deps.join(', ')}</span>` : ''}</span></a>`).join('')}</div></div>`;
+
+  const fieldRe = /^- (stories|files|acceptance|tests):\s?/;
+  const cards = tasks.map(t => {
+    const body = taskDetail[t.id] || '';
+    const at = body.search(/^\*\*/m);
+    const specPart = at >= 0 ? body.slice(0, at) : body, evPart = at >= 0 ? body.slice(at) : '';
+    const f = {}; let key = null;
+    for (const l of specPart.split('\n')) { const m = l.match(fieldRe); if (m) { key = m[1]; f[key] = [l.replace(fieldRe, '')]; } else if (key) f[key].push(l.replace(/^  /, '')); }
+    const evs = evPart ? evPart.split(/\n(?=\*\*)/).map(e => {
+      const [head, ...rest] = e.split('\n'); const txt = rest.join('\n');
+      const red = (txt.match(/Red:\s*\n```[^\n]*\n([\s\S]*?)```/) || [])[1], green = (txt.match(/Green:\s*\n```[^\n]*\n([\s\S]*?)```/) || [])[1];
+      const rr = testsOf(red), gr = testsOf(green), other = txt.replace(/(Red|Green):\s*\n```[\s\S]*?```/g, '').trim();
+      return `<div class="ev"><div class="eh md">${mdi(head)}</div>${other ? `<div class="md">${md(other)}</div>` : ''}
+        ${rr || gr ? `<div class="runs">${rr ? `<span>${tbar(rr)}red ${rr.f} failed of ${rr.t}</span><span class="arrow">→</span>` : ''}${gr ? `<span>${tbar(gr)}green ${gr.p} of ${gr.t}</span>` : ''}</div>` : ''}
+        ${red || green ? `<details class="tail"><summary>Test output</summary><div class="md">${red ? md('```\n' + red + '```') : ''}${green ? md('```\n' + green + '```') : ''}</div></details>` : ''}</div>`;
+    }).join('') : '';
+    const att = (body.match(/attempts: (\d+)/) || [])[1];
+    return `<div class="task" id="${t.id}"><div class="th"><span class="id">${t.id}</span><h3>${esc(t.title)}</h3>${t.hitl ? pill('warn', 'HITL') : ''}${pill(STATUS[t.status] || 'out', t.status)}</div>
+      <div class="tm"><span>Stories ${t.stories.map(ref).join(' ')}</span>${t.deps.length ? `<span>After ${t.deps.map(ref).join(' ')}</span>` : ''}${att ? `<span>${att} attempt${att > 1 ? 's' : ''}</span>` : ''}</div>
+      <div class="fields">${['files', 'acceptance', 'tests'].filter(k => f[k]).map(k => `<span class="k">${k[0].toUpperCase() + k.slice(1)}</span><div class="md">${md(f[k].join('\n').trim())}</div>`).join('')}</div>${evs}</div>`;
+  }).join('');
+  const ap = find(plan, /^Approach/), ve = find(plan, /^Verification/);
+  const [veLabel, ...veRest] = (ve?.body || '').split(' - ');
+  views.plan = `
+  <div class="head"><span class="eyebrow">Plan</span><h1>Tasks</h1></div>
+  <div class="planlay">
+  <div class="stack">${ap ? block('Approach', `<div class="panel pad md">${md(ap.body)}</div>`) : ''}
+  <div class="block"><div class="bh"><h2>Tasks in detail</h2></div><div class="stack" style="gap:16px">${cards}</div></div></div>
+  <div class="side">${ve ? block('Verification', `<div class="callout"><h3>${pill('acc', veLabel.trim())}</h3><div class="md">${md(veRest.join(' - '))}</div></div>`) : ''}
+  ${block('Order of work', graph, '<span class="hint">arcs skip a step</span>')}</div></div>`;
+}
+
+// build
+{
+  const smoke = find(build, /^Smoke/), roll = find(build, /^Tasks/);
+  const caps = {};
+  const checks = smoke ? items(smoke.body).map(it => {
+    const m = it.match(/^(.*?):\s*(PASS|FAIL|SKIPPED)\s*-\s*([\s\S]*)$/);
+    if (!m) return `<div class="check"><span></span><div class="md">${md(it)}</div></div>`;
+    const [, what, st, rest] = m;
+    rest.replace(/^\s*- `([^`]+)`(?: and `([^`]+)`)?:\s*(.*)$/gm, (_, a, b, c) => { caps[a] = c; if (b) caps[b] = c; });
+    return `<div class="check">${pill(st === 'PASS' ? 'ok' : st === 'FAIL' ? 'bad' : 'warn', st)}<div><span class="what">${esc(what)}</span><div class="md">${md(rest)}</div></div></div>`;
+  }).join('') : '';
+  const shots = Object.keys(SHOTS);
+  const rollRows = roll ? items(roll.body).map(it => {
+    const m = it.match(/^(T-\d+) (\w+):\s*([\s\S]*)$/);
+    return m ? `<div class="r"><a class="id" href="#${m[1]}">${m[1]}</a>${pill(STATUS[m[2]] || 'out', m[2])}<span class="md">${mdi(m[3])}</span></div>` : `<div class="r"><span></span><span></span><span class="md">${mdi(it)}</span></div>`;
+  }).join('') : '';
+  const rest = build.list.filter(s => s !== smoke && s !== roll);
+  views.build = `
+  <div class="head"><span class="eyebrow">Build</span><h1>Build report</h1>${build.pre ? `<p class="lede">${mdi(build.pre)}</p>` : ''}</div>
+  <div class="g2"><div class="stack">${smoke ? block('Smoke checks', `<div class="panel checks">${checks}</div>`) : ''}
+  ${shots.length ? `<div class="block" id="build-screens"><div class="bh"><h2>Screens</h2><span class="hint">smoke-screenshots, captions from the smoke check</span></div><div class="thumbs">${shots.map(k => `<button class="shot" data-shot="${k}"><img src="${SHOTS[k]}" alt="${k}" loading="lazy"><span class="cap"><b>${k}</b>${mdi(caps[k] || '')}</span></button>`).join('')}</div></div>` : ''}</div>
+  <div class="stack">${roll ? block('Tasks', `<div class="panel roll">${rollRows}</div>`) : ''}${rest.map(s => block(esc(s.title), `<div class="panel pad md">${md(s.body)}</div>`)).join('')}</div></div>
+  `;
+}
+
+// review
+{
+  const passes = reviewFiles.map((k, i) => {
+    const r = sections(F[k], 2), pre = i === reviewFiles.length - 1 ? '' : 'p' + (i + 1) + '-';
+    const v = find(r, /^Verdict/), vb = v?.body || '', first = vb.split('\n')[0];
+    const vm = first.match(/^(PASS|FAIL)\b/), counts = [...first.matchAll(/(\d+)\s+(blocker|major|minor|notes?)/g)];
+    const findings = sections(find(r, /^Findings/)?.body, 3).list.map(f => {
+      const m = f.title.match(/^(F-\d+)\s+(.*?)\s*\(([^,)]+)(?:,\s*([^)]+))?\)\s*$/) || [, '', f.title, '', ''];
+      const [, id, t, sev, state] = m;
+      const g = {}; items(f.body).forEach(it => { const mm = it.match(/^\*\*(.+?)\*\*:\s*([\s\S]*)$/); if (mm) g[mm[1]] = mm[2]; });
+      const sc = { blocker: 'bad', major: 'bad', minor: 'warn', note: 'note' }[sev] || 'note';
+      return `<div class="finding" id="${pre}${id}"><div class="fh"><span class="id">${id}</span><h3>${mdi(t)}</h3>${pill(sc, sev)}${state ? pill(/resolved|fixed/.test(state) ? 'ok' : 'out', state) : ''}</div>
+        <div class="ea">${[['Expected', g.Expected], ['Actual', g.Actual], ['Recommendation', g.Recommendation]].filter(x => x[1]).map(([l, v]) => `<div><span class="lbl">${l}</span><div class="md">${md(v)}</div></div>`).join('')}</div>
+        <div class="tm hint" style="display:flex;gap:16px;flex-wrap:wrap">${g['Owner phase'] ? `<span>Owner: ${mdi(g['Owner phase'])}</span>` : ''}${g.Impact ? `<span>Impact: ${mdi(g.Impact.split('\n')[0])}</span>` : ''}</div>
+        ${g.Evidence ? `<details class="tail"><summary>Evidence</summary><div class="md">${md(g.Evidence)}</div></details>` : ''}</div>`;
+    }).join('');
+    const others = r.list.filter(s => !/^(Verdict|Findings)/.test(s.title));
+    const when = (k.match(/superseded\/([^/]+)\//) || [])[1];
+    return { label: when ? `Pass ${i + 1} · replaced ${hhmm(new Date(when.replace(/T(\d\d)-(\d\d)-(\d\d)Z/, 'T$1:$2:$3Z')))}` : `Pass ${i + 1} · current`, html: `
+      ${r.pre ? `<p class="lede">${mdi(r.pre)}</p>` : ''}
+      <div class="verdict ${vm && vm[1] === 'FAIL' ? 'fail' : 'pass'}"><span class="big">${vm ? vm[1] : '?'}</span><div class="sev">${counts.map(c => pill(+c[1] ? ({ blocker: 'bad', major: 'bad', minor: 'warn' }[c[2]] || 'note') : 'out', `${c[1]} ${c[2]}`)).join('')}</div></div>
+      <details class="more"><summary>What the review checked and re-ran</summary><div class="body md">${md(vb.split('\n').slice(1).join('\n'))}</div></details>
+      ${findings ? block('Findings', `<div class="block">${findings}</div>`) : ''}
+      <div class="g2e">${others.map(s => block(esc(s.title), `<div class="panel pad md">${md(s.body)}</div>`)).join('')}</div>` };
+  });
+  const last = passes.length - 1;
+  views.review = `
+  <div class="head"><span class="eyebrow">Review</span><h1>Review</h1></div>
+  ${passes.length > 1 ? `<div class="seg" id="passes" role="group" aria-label="Review pass">${passes.map((p, i) => `<button aria-pressed="${i === last}" data-p="${i}">${esc(p.label)}</button>`).join('')}</div>` : ''}
+  ${passes.map((p, i) => `<div class="block" data-pass="${i}" ${i === last ? '' : 'hidden'} style="gap:24px">${p.html}</div>`).join('')}`;
+}
+
+/* ---------- mount ---------- */
+const main = $('#main');
+const VIEW_PHASE = { overview: 'overview', intent: 'spec', stories: 'spec', decisions: 'spec', design: 'design', plan: 'plan', build: 'build', review: 'review' };
+for (const [k, html] of Object.entries(views)) { const s = document.createElement('section'); s.className = 'view' + (k === 'design' ? ' wide' : ''); s.dataset.view = k; s.hidden = true; s.innerHTML = html; main.appendChild(s); }
+
+const ids = new Set([...main.querySelectorAll('[id]')].map(e => e.id));
+const REF = /\b(US-\d{3}|ADR-\d{2}|T-\d{3}|F-\d{1,2}|Q\d{1,2}|D\d{1,2})\b/g;
+const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT, { acceptNode: n => n.parentElement.closest('pre,code,a,.id,h1,button,.mx th') ? NodeFilter.FILTER_REJECT : REF.test(n.data) ? (REF.lastIndex = 0, NodeFilter.FILTER_ACCEPT) : NodeFilter.FILTER_SKIP });
+const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+nodes.forEach(n => {
+  const own = n.parentElement.closest('[id]')?.id;
+  const html = esc(n.data).replace(REF, r => ids.has(r) && r !== own ? `<a class="ref" href="#${r}">${r}</a>` : r);
+  const span = document.createElement('span'); span.innerHTML = html; n.replaceWith(...span.childNodes);
+});
+
+const stepper = $('#stepper');
+stepper.innerHTML = `<a class="step" data-p="overview" href="#overview"><span class="l"><span class="dot home"></span>Overview</span><span class="m">${esc(pf('Mode') || 'full')} lifecycle</span></a>` + PHASES.map(p => {
+  const i = phaseInfo[p], first = { spec: 'intent' }[p] || p;
+  const meta = [i.total ? dur(i.total) : '', i.asks ? `${i.asks} question rounds` : '', i.segs.length > 1 ? `${i.segs.length} passes` : ''].filter(Boolean).join(' · ') || 'not started';
+  return `<span class="conn"></span><a class="step" data-p="${p}" href="#${first}"><span class="l"><span class="dot ${i.state}"></span>${p[0].toUpperCase() + p.slice(1)}</span><span class="m">${meta}</span></a>`;
+}).join('');
+const subtabs = $('#subtabs');
+subtabs.innerHTML = [['intent', 'Intent'], ['stories', 'Stories'], ['decisions', 'Decisions']].map(([k, l]) => `<a href="#${k}" data-v="${k}">${l}</a>`).join('');
+
+function show() {
+  const h = decodeURIComponent(location.hash.slice(1)) || 'overview';
+  let v = main.querySelector(`[data-view="${CSS.escape(h)}"]`), target = null;
+  if (!v) { target = document.getElementById(h); v = target?.closest('[data-view]') || main.querySelector('[data-view="overview"]'); }
+  const pass = target?.closest('[data-pass]'); if (pass) selectPass(pass.dataset.pass);
+  main.querySelectorAll('[data-view]').forEach(x => x.hidden = x !== v);
+  const name = v.dataset.view, phase = VIEW_PHASE[name];
+  stepper.querySelectorAll('.step').forEach(s => s.dataset.p === phase ? s.setAttribute('aria-current', 'page') : s.removeAttribute('aria-current'));
+  subtabs.hidden = phase !== 'spec';
+  subtabs.querySelectorAll('a').forEach(a => a.dataset.v === name ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+  if (target) {
+    target.closest('details:not([open])')?.setAttribute('open', '');
+    if (target.matches('details')) target.open = true;
+    target.scrollIntoView({ block: 'start' });
+    target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
+  } else window.scrollTo(0, 0);
+}
+function selectPass(i) {
+  document.querySelectorAll('[data-pass]').forEach(b => b.hidden = b.dataset.pass !== String(i));
+  document.querySelectorAll('#passes button').forEach(b => b.setAttribute('aria-pressed', b.dataset.p === String(i)));
+}
+addEventListener('hashchange', show); show();
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('#passes button'); if (b) selectPass(b.dataset.p);
+  const q = e.target.closest('#qfilter button');
+  if (q) { q.parentElement.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === q)); main.querySelectorAll('.q').forEach(c => c.hidden = q.dataset.f !== 'all' && c.dataset.status !== q.dataset.f); }
+  const s = e.target.closest('.shot');
+  if (s) { const lb = $('#lightbox'); lb.querySelector('img').src = SHOTS[s.dataset.shot]; lb.querySelector('p').innerHTML = s.querySelector('.cap')?.innerHTML || ''; lb.hidden = false; }
+  if (e.target.closest('#lightbox')) $('#lightbox').hidden = true;
+});
+addEventListener('keydown', e => { if (e.key === 'Escape') $('#lightbox').hidden = true; });
+})();
+</script>
